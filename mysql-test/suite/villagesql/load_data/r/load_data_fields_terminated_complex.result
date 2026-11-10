@@ -1,0 +1,10 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/complex_term.dat' INTO TABLE t1 FIELDS TERMINATED BY '|';
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(2,3)
+3	(0,0)
+5	(-3,-4)
+8	(1.3e+14,14)
+DROP TABLE t1;

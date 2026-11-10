@@ -1,0 +1,33 @@
+# Test DROP TEMPORARY TABLES (plural) with COMPLEX columns
+# Grammar: DROP TEMPORARY TABLES table_list
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TEMPORARY TABLE temp1 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+);
+
+CREATE TEMPORARY TABLE temp2 (
+    id INT PRIMARY KEY,
+    data COMPLEX
+);
+
+INSERT INTO temp1 VALUES (1, '(1.0,2.0)');
+INSERT INTO temp2 VALUES (1, '(3.0,4.0)');
+
+SELECT * FROM temp1;
+SELECT * FROM temp2;
+
+DROP TEMPORARY TABLES temp1, temp2;
+
+# Verify temporary tables no longer exist
+--error ER_NO_SUCH_TABLE
+SELECT * FROM temp1;
+
+--error ER_NO_SUCH_TABLE
+SELECT * FROM temp2;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

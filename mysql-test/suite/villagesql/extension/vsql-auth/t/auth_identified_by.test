@@ -1,0 +1,22 @@
+# CREATE USER ... IDENTIFIED WITH vsql_auth_test BY '<pw>' must be REJECTED.
+#
+# IDENTIFIED BY '...' supplies a password for the method to turn into a stored
+# credential (what a MySQL plugin does via generate_authentication_string()).
+# The vsql_auth_test extension does not implement the BY clause, so the server
+# rejects it with ER_PASSWORD_FORMAT rather than silently storing the string as
+# the auth string. auth_basic.test only covers plain IDENTIFIED WITH (no BY/AS),
+# so this path was never exercised -- this test closes that gap.
+
+INSTALL EXTENSION vsql_auth_test;
+
+# Plain IDENTIFIED WITH is the valid bind form -> accepted.
+CREATE USER by_ok IDENTIFIED WITH vsql_auth_test;
+DROP USER by_ok;
+
+# The BY clause is rejected, and no account is created.
+--error ER_PASSWORD_FORMAT
+CREATE USER by_bad IDENTIFIED WITH vsql_auth_test BY 'pw';
+--error ER_CANNOT_USER
+DROP USER by_bad;
+
+UNINSTALL EXTENSION vsql_auth_test;

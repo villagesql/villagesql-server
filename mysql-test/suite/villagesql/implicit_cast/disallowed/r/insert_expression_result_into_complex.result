@@ -1,0 +1,19 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+INSERT INTO t_complex VALUES (7, CONCAT('(', '1', ',', '2', ')'));
+ERROR HY000: Incorrect COMPLEX value: cannot implicitly cast string expression. Use explicit conversion for column 'val' at row 1
+INSERT INTO t_complex VALUES (1, '(1,2)'), (2, '(3,4)');
+SELECT * FROM t_complex ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+INSERT INTO t_complex VALUES
+(3, '(5,6)'),
+(4, '(7,8)'),
+(5, CONCAT('(', '9', ',', '10', ')')),
+(6, '(11,12)');
+ERROR HY000: Incorrect COMPLEX value: cannot implicitly cast string expression. Use explicit conversion for column 'val' at row 3
+SELECT * FROM t_complex ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+DROP TABLE t_complex;

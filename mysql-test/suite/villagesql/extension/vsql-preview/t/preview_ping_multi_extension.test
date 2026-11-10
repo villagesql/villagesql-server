@@ -1,0 +1,22 @@
+# Test that two extension .so files with the same registration shape keep
+# independent SDK-side registration storage.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_preview_ping_test;
+INSTALL EXTENSION vsql_preview_ping_alt_test;
+
+--echo # Both extensions can call the same server-side ping capability.
+SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_alt_test.ping()
+  AS cross_extension_ping_increases;
+
+UNINSTALL EXTENSION vsql_preview_ping_alt_test;
+
+--echo # The first extension still works after the second is uninstalled.
+SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_test.ping()
+  AS first_extension_still_works;
+
+UNINSTALL EXTENSION vsql_preview_ping_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

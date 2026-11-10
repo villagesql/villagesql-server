@@ -1,0 +1,58 @@
+# tests the basic functionality of rocksdb_strict_collation,
+# rocksdb_strict_collation_exceptions, and my_regex functionality behind
+# rocksdb_strict_collation_exceptions
+--source include/have_rocksdb.inc
+
+call mtr.add_suppression("Invalid pattern");
+
+# ci non-indexed column is allowed
+CREATE TABLE t1 (id INT PRIMARY KEY, value VARCHAR(50), value2 VARBINARY(50), value3 TEXT) ENGINE=ROCKSDB CHARSET UTF8MB4;
+# ci indexed column is allowed
+ALTER TABLE t1 ADD INDEX (value);
+DROP TABLE t1;
+
+# ci indexed column is allowed
+CREATE TABLE t1 (id INT PRIMARY KEY, value VARCHAR(50), value2 VARBINARY(50), value3 TEXT, INDEX(value)) ENGINE=ROCKSDB CHARSET UTF8MB4;
+DROP TABLE t1;
+# ci indexed column is allowed
+CREATE TABLE t1 (id INT PRIMARY KEY, value VARCHAR(50), value2 VARBINARY(50), value3 TEXT, INDEX(value3(50))) ENGINE=ROCKSDB CHARSET UTF8MB4;
+DROP TABLE t1;
+
+# cs indexed column is allowed
+CREATE TABLE t1 (id INT PRIMARY KEY, value VARCHAR(50), value2 VARBINARY(50), value3 TEXT, INDEX(value2)) ENGINE=ROCKSDB CHARSET UTF8MB4;
+DROP TABLE t1;
+
+# cs latin1_bin is allowed
+CREATE TABLE t1 (id VARCHAR(20), value VARCHAR(50), value2 VARCHAR(50), value3 TEXT, PRIMARY KEY (id), INDEX(value, value2)) ENGINE=ROCKSDB CHARSET LATIN1 COLLATE LATIN1_BIN;
+--replace_regex /#sql-[0-9a-f_]*/#sqlx-nnnn_nnnn/i
+ALTER TABLE t1 MODIFY value VARCHAR(50) CHARACTER SET latin1 COLLATE latin1_german2_ci;
+DROP TABLE t1;
+
+# cs UTF8MB3_bin is allowed
+CREATE TABLE t1 (id VARCHAR(20), value VARCHAR(50), value2 VARCHAR(50), value3 TEXT, PRIMARY KEY (id), INDEX(value, value2)) ENGINE=ROCKSDB CHARSET UTF8MB3 COLLATE UTF8MB3_BIN;
+DROP TABLE t1;
+
+# cs mixed latin1_bin and UTF8_BIN is allowed
+CREATE TABLE t1 (id VARCHAR(20) COLLATE LATIN1_BIN, value VARCHAR(50) COLLATE UTF8_BIN, value2 VARCHAR(50) COLLATE LATIN1_BIN, value3 TEXT, PRIMARY KEY (id), INDEX(value, value2)) ENGINE=ROCKSDB CHARSET UTF8MB3;
+DROP TABLE t1;
+
+# test allowing alters to create temporary tables
+CREATE TABLE t1 (id INT PRIMARY KEY, value VARCHAR(50), INDEX(value)) ENGINE=ROCKSDB CHARSET UTF8MB4;
+ALTER TABLE t1 AUTO_INCREMENT=1, ALGORITHM=COPY;
+DROP TABLE t1;
+
+# ci indexed column is not optimal, should emit a warning
+CREATE TABLE t1 (id INT primary key, value varchar(50), value2 varbinary(50), value3 text, index(value)) engine=rocksdb charset UTF8MB4;
+DROP TABLE t1;
+
+# ci non-indexed column is allowed
+CREATE TABLE t1 (id INT primary key, value varchar(50), value2 varbinary(50), value3 text) engine=rocksdb charset UTF8MB4;
+# ci indexed column is not allowed, should emit an error
+ALTER TABLE t1 ADD INDEX (value);
+DROP TABLE t1;
+
+# cs latin1_bin is allowed
+CREATE TABLE t1 (id varchar(20), value varchar(50), value2 varchar(50), value3 text, primary key (id), index(value, value2)) engine=rocksdb charset latin1 collate latin1_bin;
+# THIS SHOULD ERROR BUT IT DOES NOT
+ALTER TABLE t1 collate=latin1_general_ci;
+DROP TABLE t1;

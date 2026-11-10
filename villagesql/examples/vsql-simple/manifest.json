@@ -1,0 +1,7 @@
+{
+  "name": "vsql_simple",
+  "version": "0.0.1",
+  "description": "VillageSQL extension demonstrating the extension.h API",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

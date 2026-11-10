@@ -1,0 +1,41 @@
+# Window functions ordered and partitioned by an indexed COMPLEX column.
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX, KEY k_val (val),
+                 KEY k_grp_val (grp, val));
+INSERT INTO t1 VALUES
+  (1, 1, '(2,1)'), (2, 1, '(-3,0)'), (3, 1, '(2,1)'), (4, 1, '(2,-5)'),
+  (5, 2, '(-1,-1)'), (6, 2, NULL), (7, 2, '(10,0)'), (8, 2, '(-1,-1)');
+ANALYZE TABLE t1;
+
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id, val, RANK() OVER (ORDER BY val) AS rnk FROM t1 FORCE INDEX (k_val)
+ORDER BY id;
+SELECT id, val, RANK() OVER (ORDER BY val) AS rnk FROM t1 FORCE INDEX (k_val)
+ORDER BY id;
+
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id, grp, val,
+  ROW_NUMBER() OVER (PARTITION BY grp ORDER BY val, id) AS rn,
+  LAG(val) OVER (PARTITION BY grp ORDER BY val, id) AS lag_v
+FROM t1 FORCE INDEX (k_grp_val) ORDER BY id;
+SELECT id, grp, val,
+  ROW_NUMBER() OVER (PARTITION BY grp ORDER BY val, id) AS rn,
+  LAG(val) OVER (PARTITION BY grp ORDER BY val, id) AS lag_v
+FROM t1 FORCE INDEX (k_grp_val) ORDER BY id;
+
+# Window over a range read through the index.
+# TODO(villagesql-general): EXPLAIN prints the COMPLEX range bound as raw key
+# bytes; it should print the value in the type's text form.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id, val, ROW_NUMBER() OVER (ORDER BY val, id) AS rn
+FROM t1 FORCE INDEX (k_val) WHERE val > '(0,0)' ORDER BY id;
+SELECT id, val, ROW_NUMBER() OVER (ORDER BY val, id) AS rn
+FROM t1 FORCE INDEX (k_val) WHERE val > '(0,0)' ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

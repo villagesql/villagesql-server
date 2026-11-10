@@ -1,0 +1,11 @@
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("resolve_params_vdf_name");
+# Attempt to install (should fail: v3 variable-length type without resolve_params)
+INSTALL EXTENSION vsql_bad_var_no_resolve_test;
+ERROR HY000: Failed to install extension 'vsql_bad_var_no_resolve_test': type 'BAD_VAR_NO_RESOLVE' failed validation
+# Verify extension was NOT installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_bad_var_no_resolve_test';
+EXTENSION_NAME	EXTENSION_VERSION
+# Verify the error log names the specific reason (missing resolve_params)
+Found resolve_params rejection message in error log

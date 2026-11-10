@@ -1,0 +1,91 @@
+# Copyright (c) 2026 VillageSQL Contributors
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+# Test extensions that use preview capabilities.
+# Each line adds an ExternalProject that builds via the shared CMakeLists.txt
+# template in test-extensions/shared/, so no per-extension CMakeLists.txt
+# is needed.
+#
+# To add a new test extension:
+#   1. Create villagesql/test-extensions/<dir-name>/src/extension.cc
+#   2. Create villagesql/test-extensions/<dir-name>/manifest.json
+#   3. Add a vsql_add_test_extension() line below.
+
+vsql_add_test_extension(vsql-preview-ping-test         vsql_preview_ping_test)
+vsql_add_test_extension(vsql-preview-ping-alt-test     vsql_preview_ping_alt_test)
+vsql_add_test_extension(vsql-preview-unknown-cap-test  vsql_preview_unknown_cap_test)
+vsql_add_test_extension(vsql-keyring-reader            vsql_keyring_reader)
+vsql_add_test_extension(vsql-auth-test                 vsql_auth_test)
+vsql_add_test_extension(vsql-lifecycle-test            vsql_lifecycle_test)
+vsql_add_test_extension(vsql-thread-worker-test        vsql_thread_worker_test)
+vsql_add_test_extension(vsql-preview-ping-no-cap-test  vsql_preview_ping_no_cap_test)
+vsql_add_test_extension(vsql-preview-ping-v2-test      vsql_preview_ping_v2_test)
+vsql_add_test_extension(vsql-sys-var-rollback-test     vsql_sys_var_rollback_test)
+vsql_add_test_extension(vsql-session-var-test          vsql_session_var_test)
+vsql_add_test_extension(vsql-noop-test                 vsql_noop_test)
+vsql_add_test_extension(vsql-on-init-test              vsql_on_init_test)
+vsql_add_test_extension(vsql-deinit-only-test          vsql_deinit_only_test)
+vsql_add_test_extension(vsql-init-only-test            vsql_init_only_test)
+vsql_add_test_extension(vsql-ext-index-test            vsql_ext_index_test)
+vsql_add_test_extension(vsql-exceptions-test           vsql_exceptions_test)
+
+# mysql_services capability test extensions consume raw MySQL component
+# services, so they need MySQL headers (MYSQL_HEADERS flag).
+vsql_add_test_extension(vsql-mysql-services-test         vsql_mysql_services_test         MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-missing-test vsql_mysql_services_missing_test MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-session-test vsql_mysql_services_session_test MYSQL_HEADERS)
+vsql_add_test_extension(vsql-mysql-services-errlog-test  vsql_mysql_services_errlog_test  MYSQL_HEADERS)
+
+# Built against the frozen stable v3 SDK so the variable-length type registers
+# at VEF_PROTOCOL_3 and is rejected by build_type_descriptor_v3 (missing
+# resolve_params) -- a path the current dev SDK can no longer produce.
+vsql_add_test_extension(vsql-bad-var-no-resolve-test   vsql_bad_var_no_resolve_test  ABI v3)
+# Each declares one custom type wider than a custom column can be backed by;
+# INSTALL EXTENSION must reject both (extension_length_too_big). They are separate
+# VEBs because registration stops at the first invalid type, so a shared VEB would
+# leave one of the two arms -- persisted_length via v3, max_persisted_length via
+# v4 -- unvalidated.
+vsql_add_test_extension(vsql-huge-fixed-test           vsql_huge_fixed_test)
+vsql_add_test_extension(vsql-huge-var-test             vsql_huge_var_test)
+vsql_add_test_extension(vsql-bitfield-test             vsql_bitfield_test)
+vsql_add_test_extension(vsql-tarray-test               vsql_tarray_test)
+vsql_add_test_extension(vsql-resolve-only-test         vsql_resolve_only_test)
+
+# update_test installable + three target variants exercise the pre-checks
+# of the extension version-update path. The VEB filename is
+# update_test-<version>.veb; the manifest inside each variant carries the
+# matching version string so the manifest/filename check passes.
+vsql_add_test_extension(update-test-v1                 update_test  VERSION 1.0.0)
+vsql_add_test_extension(update-test-v1.1               update_test  VERSION 1.1.0)
+vsql_add_test_extension(update-test-v1.2               update_test  VERSION 1.2.0)
+vsql_add_test_extension(update-test-v2                 update_test  VERSION 2.0.0)
+
+# update_length_test v1 installable + four target variants exercise the
+# retained-type storage-length pre-check: v1.1 shrinks and v1.2 grows a
+# variable-length type's max_persisted_length, v1.3 turns a fixed-length type
+# variable-length, and v1.4 turns a variable-length type fixed-length. They are
+# separate VEBs because the pre-check stops at the first incompatible type.
+vsql_add_test_extension(update-length-test-v1          update_length_test  VERSION 1.0.0)
+vsql_add_test_extension(update-length-test-v1.1        update_length_test  VERSION 1.1.0)
+vsql_add_test_extension(update-length-test-v1.2        update_length_test  VERSION 1.2.0)
+vsql_add_test_extension(update-length-test-v1.3        update_length_test  VERSION 1.3.0)
+vsql_add_test_extension(update-length-test-v1.4        update_length_test  VERSION 1.4.0)
+
+# update_schema_test v1/v2 exercise on-disk representation migration across
+# ALTER EXTENSION ... AT RESTART: v1 registers MYTYPE (4-byte int), v2 keeps
+# MYTYPE (backward-compatible) and adds MYTYPE_V2 (8-byte int) plus a
+# mytype_to_v2 conversion VDF.
+vsql_add_test_extension(update-schema-test-v1          update_schema_test  VERSION 1.0.0)
+vsql_add_test_extension(update-schema-test-v2          update_schema_test  VERSION 2.0.0)

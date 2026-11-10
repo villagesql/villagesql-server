@@ -1,0 +1,10 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t_complex VALUES (1, '(11.0,12.0)');
+INSERT INTO t_complex VALUES (1, '(13.0,14.0)')
+ON DUPLICATE KEY UPDATE val = VALUES(val);
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT val FROM t_complex WHERE id = 1;
+val
+(13,14)
+DROP TABLE t_complex;

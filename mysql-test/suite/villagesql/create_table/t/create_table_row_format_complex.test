@@ -1,0 +1,22 @@
+# Test CREATE TABLE with ROW_FORMAT and COMPLEX columns
+# Tests ROW_FORMAT table option with COMPLEX type
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_data COMPLEX
+) ROW_FORMAT=DYNAMIC;
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (1, '(10.0,20.0)');
+INSERT INTO t1 VALUES (2, '(30.0,40.0)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

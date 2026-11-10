@@ -1,0 +1,47 @@
+INSTALL EXTENSION vsql_test_only;
+# Lenient type: an unknown key in the parameter string is accepted and
+# silently ignored by resolve_params.
+CREATE TABLE t_lenient (id INT PRIMARY KEY, v LENIENT_PARAM_TYPE('length=3,bogus=9'));
+# The unknown key is preserved in the canonical parameters, so the long
+# form is shown.
+SHOW CREATE TABLE t_lenient;
+Table	Create Table
+t_lenient	CREATE TABLE `t_lenient` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.LENIENT_PARAM_TYPE('bogus=9,length=3') DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_lenient;
+# Strict type: an unknown key in the parameter string is rejected.
+CREATE TABLE t_strict (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4,bogus=1'));
+ERROR 42000: STRICT_PARAM_TYPE: unknown parameter 'bogus' near 'STRICT_PARAM_TYPE('length=4,bogus=1'))' at line 1
+# Strict type accepts the known key, via both the string and (N) forms.
+CREATE TABLE t_strict (id INT PRIMARY KEY, v STRICT_PARAM_TYPE('length=4'));
+SHOW CREATE TABLE t_strict;
+Table	Create Table
+t_strict	CREATE TABLE `t_strict` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.STRICT_PARAM_TYPE(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_strict;
+CREATE TABLE t_strict (id INT PRIMARY KEY, v STRICT_PARAM_TYPE(4));
+SHOW CREATE TABLE t_strict;
+Table	Create Table
+t_strict	CREATE TABLE `t_strict` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.STRICT_PARAM_TYPE(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_strict;
+# int_to_params emits an extra 'bogus' key. SHOW CREATE doesn't show it.
+CREATE TABLE t_extra (id INT PRIMARY KEY, v EXTRA_KEY_PARAM_TYPE(3));
+SHOW CREATE TABLE t_extra;
+Table	Create Table
+t_extra	CREATE TABLE `t_extra` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.EXTRA_KEY_PARAM_TYPE(3) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_extra;
+UNINSTALL EXTENSION vsql_test_only;

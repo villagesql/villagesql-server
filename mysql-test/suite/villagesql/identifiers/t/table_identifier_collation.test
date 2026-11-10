@@ -1,0 +1,31 @@
+# Table-identifier behavior and differences between builtin and custom types.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE test_collation;
+USE test_collation;
+
+# Builtin-type tables: names differing by accent or sharp-s vs ss are
+# distinct under every lower_case_table_names setting
+CREATE TABLE cafe (id INT);
+CREATE TABLE café (id INT);
+CREATE TABLE gross (id INT);
+CREATE TABLE groß (id INT);
+
+SHOW TABLES;
+DROP TABLE cafe, café, gross, groß;
+
+# Custom-type tables whose names differ only by accent or sharp-s folding
+# are distinct identifiers; each pair should be separate custom_columns rows.
+CREATE TABLE cafe (value COMPLEX);
+CREATE TABLE café (value COMPLEX);
+
+CREATE TABLE gross (value COMPLEX);
+CREATE TABLE groß (value COMPLEX);
+
+SHOW TABLES;
+DROP TABLE cafe, café, gross, groß;
+
+DROP DATABASE test_collation;
+
+--source include/villagesql/uninstall_complex_extension.inc

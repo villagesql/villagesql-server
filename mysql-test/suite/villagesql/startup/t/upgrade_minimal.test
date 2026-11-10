@@ -1,0 +1,60 @@
+# --upgrade=MINIMAL skips the server upgrades but must still run the
+# VillageSQL schema upgrades.
+
+--source include/villagesql/internal_schema_test.inc
+
+# MINIMAL logs that it skipped the server upgrades.
+call mtr.add_suppression("Server upgrade is required, but skipped");
+
+--let $build_version= `SELECT value FROM villagesql.properties WHERE name = 'version'`
+
+# Record the column metadata of the freshly installed system tables, so we can
+# check below that an upgraded datadir still matches a freshly created one.
+--disable_query_log
+--let $dd_columns_query= SELECT t.name, c.name, c.ordinal_position, c.type, c.is_nullable, c.char_length, c.collation_id, c.is_explicit_collation, c.has_no_default, c.comment, c.hidden, c.column_key, c.column_type_utf8 FROM mysql.columns c JOIN mysql.tables t ON c.table_id = t.id JOIN mysql.schemata s ON t.schema_id = s.id WHERE s.name = 'villagesql' ORDER BY t.name, c.ordinal_position
+--output $MYSQL_TMP_DIR/before_upgrade_dd_columns.sql
+--eval $dd_columns_query
+--enable_query_log
+
+# Pretend the datadir is at schema version 0.0.5 of this build's code base.
+# The code base is read from the build rather than written as a literal because
+# upgrade_villagesql_schema() refuses to upgrade across code bases: after a code
+# base port a stale literal would stop exercising the upgrade at all.
+UPDATE villagesql.properties
+   SET value = CONCAT(
+         SUBSTRING_INDEX(@@GLOBAL.villagesql_server_version, '_', 1),
+         '_0.0.5')
+ WHERE name = 'version';
+SELECT value FROM villagesql.properties WHERE name = 'version';
+
+--let $restart_parameters = restart: --upgrade=MINIMAL
+--source include/restart_mysqld.inc
+
+# The stored version is back at the build version iff the upgrades ran.
+--source include/villagesql/internal_schema_test.inc
+--disable_query_log
+# The stored version is printed too: a bare 0 cannot distinguish "the upgrades
+# did not run" from "they ran but stamped a different code base".
+--replace_result $build_version BUILD_VERSION
+--eval SELECT value = '$build_version' AS villagesql_upgrades_ran, value AS stored_version FROM villagesql.properties WHERE name = 'version'
+--enable_query_log
+
+--let $restart_parameters = restart
+--source include/restart_mysqld.inc
+
+# CONVERT TO is table-wide, so it also rewrites columns a fresh install leaves
+# alone: JSON columns pick up the table collation unless the upgrade restates
+# them.
+--disable_query_log
+--source include/villagesql/internal_schema_test.inc
+--output $MYSQL_TMP_DIR/after_upgrade_dd_columns.sql
+--eval $dd_columns_query
+--enable_query_log
+--diff_files $MYSQL_TMP_DIR/before_upgrade_dd_columns.sql $MYSQL_TMP_DIR/after_upgrade_dd_columns.sql
+--remove_file $MYSQL_TMP_DIR/before_upgrade_dd_columns.sql
+--remove_file $MYSQL_TMP_DIR/after_upgrade_dd_columns.sql
+
+# This test upgrades the shared datadir for real, so hand the next test a
+# reinstalled one rather than one carrying whatever state the upgrades left
+# behind (rebuilt tables, DD timestamps and ids).
+--source include/force_restart.inc

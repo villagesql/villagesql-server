@@ -1,0 +1,61 @@
+# Test basic INSTALL/UNINSTALL EXTENSION commands
+# This test verifies that the extension command syntax works and
+# properly registers/unregisters extensions in the system table
+
+--echo # Test Basic Extension Commands
+
+# Setup VEB directory for testing
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+--source include/villagesql/binlog_check_begin.inc
+
+# Create test extension 'foo' (uses VEF registration)
+--let $extension_name = foo
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Install an extension
+INSTALL EXTENSION foo;
+
+--echo # Verify extension was registered
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Verify direct access to villagesql.extensions is blocked
+--error ER_NO_SYSTEM_TABLE_ACCESS
+SELECT * FROM villagesql.extensions WHERE extension_name = 'foo';
+
+--echo # Try to install same extension again (should fail)
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION foo;
+
+--echo # Uninstall the extension
+UNINSTALL EXTENSION foo;
+
+--echo # Verify extension was removed (should return no rows)
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Try to uninstall non-existent extension (should fail)
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION foo;
+
+# Create test extension 'bar' (uses VEF registration)
+--let $extension_name = bar
+--let $extension_version = 2.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Install and uninstall a different extension
+INSTALL EXTENSION bar;
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+UNINSTALL EXTENSION bar;
+--echo # Verify bar was removed (should return no rows)
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--source include/villagesql/binlog_check_end.inc

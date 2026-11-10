@@ -1,0 +1,30 @@
+# Test Subquery with ALL quantifier for COMPLEX type
+# Grammar: SELECT ... WHERE expr op ALL (SELECT ...)
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(5.0,6.0)');
+
+CREATE TABLE t2 (val COMPLEX);
+INSERT INTO t2 VALUES ('(1.0,2.0)'), ('(2.0,3.0)');
+
+# > ALL comparison (requires comparison logic to be implemented)
+SELECT * FROM t1 WHERE val > ALL (SELECT val FROM t2);
+
+# = ALL with empty subquery (vacuously true - all rows match)
+SELECT * FROM t1 WHERE val = ALL (SELECT val FROM t2 WHERE val = '(9.0,9.0)');
+
+# = ALL with single-value subquery (only the matching row is returned)
+SELECT * FROM t1 WHERE val = ALL (SELECT val FROM t2 WHERE val = '(1.0,2.0)');
+
+# < ALL: rows strictly less than all values in t2 (empty result)
+SELECT * FROM t1 WHERE val < ALL (SELECT val FROM t2);
+
+# <> ALL: rows not equal to any value in t2 (equivalent to NOT IN)
+SELECT * FROM t1 WHERE val <> ALL (SELECT val FROM t2);
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

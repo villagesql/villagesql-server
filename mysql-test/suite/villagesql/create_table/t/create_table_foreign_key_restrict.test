@@ -1,0 +1,65 @@
+# Test CREATE TABLE with FOREIGN KEY RESTRICT behavior and COMPLEX columns
+# Tests default RESTRICT behavior - parent modifications blocked by child references
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create parent table with COMPLEX primary key
+CREATE TABLE signal_types (
+    type_id COMPLEX PRIMARY KEY,
+    type_name VARCHAR(100)
+);
+
+INSERT INTO signal_types VALUES ('(1.0,0.0)', 'unit_real');
+INSERT INTO signal_types VALUES ('(0.0,1.0)', 'unit_imaginary');
+INSERT INTO signal_types VALUES ('(1.0,1.0)', 'diagonal');
+
+# Create child table with FK using default RESTRICT behavior
+# RESTRICT is the default if no ON DELETE/ON UPDATE specified
+CREATE TABLE measurements (
+    measurement_id INT PRIMARY KEY,
+    signal_type COMPLEX,
+    amplitude DOUBLE,
+    FOREIGN KEY (signal_type) REFERENCES signal_types(type_id)
+);
+
+SHOW CREATE TABLE measurements;
+
+# Insert child rows that reference parent
+INSERT INTO measurements VALUES (1, '(1.0,0.0)', 15.6);
+INSERT INTO measurements VALUES (2, '(0.0,1.0)', 18.2);
+INSERT INTO measurements VALUES (3, '(1.0,1.0)', 22.1);
+
+SELECT * FROM measurements ORDER BY measurement_id;
+
+# Test RESTRICT on DELETE - should fail because child references exist
+--error ER_ROW_IS_REFERENCED_2
+DELETE FROM signal_types WHERE type_id = '(1.0,0.0)';
+
+# Verify parent row still exists
+SELECT * FROM signal_types WHERE type_id = '(1.0,0.0)';
+
+# Test RESTRICT on UPDATE - should fail because child references exist
+--error ER_ROW_IS_REFERENCED_2
+UPDATE signal_types SET type_id = '(2.0,0.0)' WHERE type_id = '(1.0,0.0)';
+
+# Verify parent row unchanged
+SELECT * FROM signal_types WHERE type_id = '(1.0,0.0)';
+
+# Delete child row first, then parent deletion should succeed
+DELETE FROM measurements WHERE signal_type = '(1.0,0.0)';
+DELETE FROM signal_types WHERE type_id = '(1.0,0.0)';
+
+# Verify parent row deleted
+SELECT COUNT(*) FROM signal_types WHERE type_id = '(1.0,0.0)';
+
+# Delete another child row, then its parent
+DELETE FROM measurements WHERE signal_type = '(0.0,1.0)';
+DELETE FROM signal_types WHERE type_id = '(0.0,1.0)';
+
+SELECT * FROM measurements ORDER BY measurement_id;
+SELECT * FROM signal_types ORDER BY type_id;
+
+DROP TABLE measurements;
+DROP TABLE signal_types;
+
+--source include/villagesql/uninstall_complex_extension.inc

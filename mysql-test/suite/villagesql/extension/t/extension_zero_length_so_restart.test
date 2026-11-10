@@ -1,0 +1,122 @@
+# Test that an unusable .so in the expansion cache is re-expanded from the VEB
+# rather than handed to dlopen.
+#
+# Expansion publishes by renaming a fully extracted, fsynced staging directory
+# into place, so a {sha256} directory made by this server is always complete.
+# Two things fall outside that guarantee and are covered here: a cache written
+# by a server older than the rename, whose .so may be a crash's leftovers, and
+# a cache damaged after it was written.
+#
+# Phase 1 - startup: the server re-expands and starts normally.
+# Phase 2 - INSTALL EXTENSION: expansion rebuilds instead of taking its
+#           "already expanded" shortcut.
+#
+# See extension_veb_staged_expansion.test for the staging and non-destructive
+# publish behavior, which needs a debug build.
+
+call mtr.add_suppression("has no usable .so");
+
+--source include/villagesql/install_complex_extension.inc
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+CREATE TABLE test_zero_so (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_zero_so VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_zero_so ORDER BY id;
+
+let MYSQLD_DATADIR= `SELECT @@datadir`;
+
+--echo #
+--echo # Phase 1: truncate the cached .so, then restart.
+--echo #
+
+# Replace the .so rather than truncate it in place. After UNINSTALL, glibc's
+# dlclose commonly leaves the library in the process link map, and truncating
+# the file under that live mapping invalidates its pages. The next dlopen of
+# the same path resolves to the poisoned mapping and dlsym dies with SIGBUS.
+# Unlinking first leaves the old inode intact for anyone still holding it and
+# puts a fresh zero-length file at the path, which is what the server must
+# notice.
+#
+# Create a CANARY file to verify repair. Expansion renames a complete staging
+# directory over the old one, so a file that was in the old expansion and is
+# not in the VEB must be gone afterwards. Extracting in place would leave it
+# behind.
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
+my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
+closedir($dh);
+my $sha_dir = "$ext_dir/$subdirs[0]";
+my $so_path = "$sha_dir/lib/vsql_complex.so";
+die "No .so at $so_path" unless -f $so_path;
+unlink($so_path) or die "Can't unlink $so_path: $!";
+open(my $fh, '>', $so_path) or die "Can't recreate $so_path: $!";
+close($fh);
+die "Replacement did not empty $so_path" unless -s $so_path == 0;
+open($fh, '>', "$sha_dir/CANARY") or die $!;
+print $fh "left over from the previous expansion\n";
+close($fh);
+print "Replaced cached .so with a zero-length file, planted canary\n";
+EOF
+
+--source include/restart_mysqld.inc
+
+--echo # Server started after re-expanding the VEB
+
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
+my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
+closedir($dh);
+my $sha_dir = "$ext_dir/$subdirs[0]";
+printf("Cached .so restored: %s\n",
+       (-s "$sha_dir/lib/vsql_complex.so") > 0 ? "yes" : "no");
+printf("Old expansion replaced wholesale (canary gone): %s\n",
+       (-e "$sha_dir/CANARY") ? "no" : "yes");
+EOF
+
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+SELECT id, c FROM test_zero_so ORDER BY id;
+INSERT INTO test_zero_so VALUES (2, '(3.5,4.5)');
+SELECT id, c FROM test_zero_so ORDER BY id;
+
+--echo # Extension usable and data intact
+
+--echo #
+--echo # Phase 2: truncate the cached .so again, then INSTALL EXTENSION.
+--echo #
+
+DROP TABLE test_zero_so;
+--source include/villagesql/uninstall_complex_extension.inc
+
+# UNINSTALL leaves the expansion cache behind; only startup sweeps orphans.
+--perl
+use strict;
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/vsql_complex";
+opendir(my $dh, $ext_dir) or die "Can't open $ext_dir: $!";
+my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
+closedir($dh);
+my $so_path = "$ext_dir/$subdirs[0]/lib/vsql_complex.so";
+die "No .so at $so_path" unless -f $so_path;
+unlink($so_path) or die "Can't unlink $so_path: $!";
+open(my $fh, '>', $so_path) or die "Can't recreate $so_path: $!";
+close($fh);
+print "Replaced cached .so with a zero-length file\n";
+EOF
+
+--source include/villagesql/install_complex_extension.inc
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+CREATE TABLE test_zero_so (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_zero_so VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_zero_so ORDER BY id;
+
+--echo # INSTALL re-expanded over the unusable expansion
+
+DROP TABLE test_zero_so;
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,29 @@
+# UNINSTALL EXTENSION must be blocked when a CHECK constraint references one
+# of the extension's VDFs, even after the table cache is flushed.
+#
+# Today the dependency check only finds VDFs via custom_columns. A CHECK
+# constraint that calls a VDF over built-in inputs leaves no persistent
+# dependency, so cold-cache UNINSTALL silently succeeds and the table
+# becomes unwritable. This test pins the desired behavior.
+
+--source include/villagesql/not_implemented.inc
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, v INT,
+                CHECK (vsql_complex.complex_real('(1,2)') + v >= 0));
+INSERT INTO t (id, v) VALUES (1, 10);
+
+--echo # While the table is open, use_count blocks UNINSTALL.
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+FLUSH TABLES;
+--echo # Cold-cache UNINSTALL must remain blocked — CHECK constraint depends
+--echo # on the VDF.
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Dropping the table clears the dependency; uninstall now succeeds.
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_complex;

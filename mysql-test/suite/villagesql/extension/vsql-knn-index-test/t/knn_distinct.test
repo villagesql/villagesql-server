@@ -1,0 +1,58 @@
+# DISTINCT combined with a KNN ORDER BY ... LIMIT.
+#
+# DISTINCT and the KNN "skip the sort, let the index provide the order"
+# optimization both want to control the result's ordering/set, so their
+# interaction is a known trouble spot.
+#
+# With DISTINCT, ORDER BY may only reference expressions in the SELECT list, so
+# the distance must be projected (as a column) to be a legal ordering. Ordering
+# by a distance over a non-selected column is rejected before the KNN path even
+# runs.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id  INT PRIMARY KEY,
+  grp INT,
+  v   KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, 10, '[1,0,0,0]'),
+  (2, 10, '[0,1,0,0]'),
+  (3, 20, '[0,0,1,0]'),
+  (4, 20, '[1,1,0,0]'),
+  (5, 30, '[2,0,0,0]');
+
+--echo # Ordering by a distance over a NON-selected column is incompatible with
+--echo # DISTINCT and is rejected up front (before any KNN routing).
+--error ER_FIELD_IN_ORDER_NOT_SELECT
+SELECT DISTINCT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--echo # Projecting the distance makes the ordering legal under DISTINCT. The
+--echo # distance column is in the SELECT list, so ORDER BY it is allowed and the
+--echo # KNN path can apply. Nearest 3 to [1,0,0,0]: ids 1(0), 4(1), 5(1).
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT DISTINCT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+ORDER BY d LIMIT 3;
+SELECT DISTINCT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+ORDER BY d LIMIT 3;
+
+--echo # DISTINCT over a non-unique projection (grp + distance): rows with the
+--echo # same (grp, d) collapse. Ordered by distance.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT DISTINCT grp, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+ORDER BY d LIMIT 3;
+SELECT DISTINCT grp, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
+FROM t
+ORDER BY d LIMIT 3;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

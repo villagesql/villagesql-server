@@ -1,0 +1,44 @@
+# Test INFORMATION_SCHEMA.EXTENSION_REGISTRATION view.
+# Verifies the table exists, shows no rows when no extensions are installed,
+# and shows correct metadata after install/uninstall.
+
+# sdk_version and extension_version are build-time; normalize to avoid churn.
+
+--echo # No extensions installed - table should be empty
+SELECT * FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION;
+
+--let $extension_name = foo
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Install both extensions and verify registration metadata
+INSTALL EXTENSION foo;
+--source include/villagesql/install_complex_extension.inc
+
+--replace_regex /"sdk_version":"[^"]*"/"sdk_version":"SDK_VERSION"/ /"extension_version":"[^"]*"/"extension_version":"EXT_VERSION"/
+SELECT * FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION ORDER BY EXTENSION_NAME;
+
+--echo # Verify requested and negotiated protocols match the server's VEF protocol version
+SELECT EXTENSION_NAME,
+       JSON_EXTRACT(REGISTRATION_JSON, '$.requested_protocol') = @@villagesql_vef_server_protocol AS requested_matches_server,
+       NEGOTIATED_PROTOCOL = @@villagesql_vef_server_protocol AS negotiated_matches_server
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION
+ORDER BY EXTENSION_NAME;
+
+--echo # Verify vsql_complex func signatures via JSON_TABLE
+SELECT jt.name, jt.return_type, jt.params
+FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION,
+JSON_TABLE(REGISTRATION_JSON, '$.funcs[*]' COLUMNS (
+  name        VARCHAR(64) PATH '$.name',
+  return_type VARCHAR(64) PATH '$.return_type',
+  params      JSON        PATH '$.params'
+)) AS jt
+WHERE EXTENSION_NAME = 'vsql_complex'
+ORDER BY jt.name;
+
+--echo # Uninstall and verify rows are removed
+UNINSTALL EXTENSION foo;
+--source include/villagesql/uninstall_complex_extension.inc
+
+SELECT * FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION;

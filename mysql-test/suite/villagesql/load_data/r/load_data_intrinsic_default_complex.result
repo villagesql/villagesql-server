@@ -1,0 +1,43 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val_double DOUBLE NOT NULL,
+val_complex COMPLEX NOT NULL
+);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/intrinsic_default_basic.dat' IGNORE INTO TABLE t1;
+Warnings:
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val_complex' at row 1
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val_double' at row 1
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val_double' at row 3
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val_complex' at row 4
+SELECT * FROM t1 ORDER BY id;
+id	val_double	val_complex
+1	0	(0,0)
+2	3.14	(1,2)
+3	0	(3,4)
+4	2.71	(0,0)
+DROP TABLE t1;
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+a COMPLEX NOT NULL,
+b COMPLEX NOT NULL
+);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/intrinsic_default_multi.dat' IGNORE INTO TABLE t2;
+Warnings:
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'a' at row 1
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'b' at row 1
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'b' at row 2
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'a' at row 3
+SELECT * FROM t2 ORDER BY id;
+id	a	b
+1	(0,0)	(0,0)
+2	(1,2)	(0,0)
+3	(0,0)	(3,4)
+4	(5,6)	(7,8)
+DROP TABLE t2;
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+val COMPLEX NOT NULL
+);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/intrinsic_default_noignore.dat' INTO TABLE t3;
+ERROR 22004: Column set to default value; NULL supplied to NOT NULL column 'val' at row 1
+DROP TABLE t3;

@@ -1,0 +1,9 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+LOAD XML INFILE 'MYSQLTEST_VARDIR/tmp/complex_ignore.xml' IGNORE INTO TABLE t1 ROWS IDENTIFIED BY '<row>';
+Warnings:
+Warning	1062	Duplicate entry '1' for key 't1.PRIMARY'
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+DROP TABLE t1;

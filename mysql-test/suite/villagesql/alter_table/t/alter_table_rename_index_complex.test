@@ -1,0 +1,32 @@
+# Test ALTER TABLE RENAME INDEX that includes COMPLEX column
+# Grammar: ALTER TABLE table_name RENAME INDEX old_name TO new_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    value COMPLEX,
+    INDEX old_complex_idx (value)
+);
+
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(3.5,-1.2)');
+
+SHOW CREATE TABLE t1;
+--replace_column 7 #
+SHOW INDEX FROM t1;
+
+ALTER TABLE t1 RENAME INDEX old_complex_idx TO new_complex_idx;
+
+SHOW CREATE TABLE t1;
+--replace_column 7 #
+SHOW INDEX FROM t1;
+
+SELECT * FROM t1 WHERE value = '(1.0,2.0)';
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

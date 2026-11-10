@@ -1,0 +1,71 @@
+# Test intrinsic default behavior for INSERT IGNORE / ON DUPLICATE KEY UPDATE
+# with COMPLEX type across multiple scenarios.
+
+--source include/villagesql/install_complex_extension.inc
+
+# Multi-row INSERT IGNORE: some rows have NULL, some have valid values.
+# Rows with NULL on NOT NULL COMPLEX should get (0,0); valid rows unchanged.
+CREATE TABLE t_multi (
+    id INT PRIMARY KEY,
+    val INT NOT NULL,
+    val_double DOUBLE NOT NULL,
+    val_complex COMPLEX NOT NULL
+);
+
+INSERT IGNORE INTO t_multi VALUES
+    (1, NULL,  NULL,  NULL),
+    (2, 42,    3.14,  '(1.0,2.0)'),
+    (3, NULL,  1.0,   '(3.0,4.0)'),
+    (4, 7,     NULL,  '(5.0,6.0)'),
+    (5, 8,     2.0,   NULL);
+
+# Row 1: all intrinsic defaults (0, 0.0, (0,0))
+# Row 2: unchanged
+# Row 3: val -> 0, others unchanged
+# Row 4: val_double -> 0.0, others unchanged
+# Row 5: val_complex -> (0,0), others unchanged
+SELECT * FROM t_multi ORDER BY id;
+DROP TABLE t_multi;
+
+# INSERT IGNORE with multiple NOT NULL COMPLEX columns — all NULLed at once.
+CREATE TABLE t_multi_complex (
+    id INT PRIMARY KEY,
+    a COMPLEX NOT NULL,
+    b COMPLEX NOT NULL,
+    c COMPLEX NOT NULL
+);
+
+INSERT IGNORE INTO t_multi_complex VALUES (1, NULL, NULL, NULL);
+INSERT IGNORE INTO t_multi_complex VALUES (2, '(1.0,2.0)', NULL, '(3.0,4.0)');
+INSERT IGNORE INTO t_multi_complex VALUES (3, '(5.0,6.0)', '(7.0,8.0)', '(9.0,10.0)');
+
+SELECT * FROM t_multi_complex ORDER BY id;
+DROP TABLE t_multi_complex;
+
+# ON DUPLICATE KEY UPDATE: setting a NOT NULL COMPLEX to NULL via IGNORE.
+# The IGNORE modifier applies to the UPDATE portion when there's a dup key.
+CREATE TABLE t_odku (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL
+);
+
+INSERT INTO t_odku VALUES (1, '(1.0,2.0)');
+
+# Without IGNORE: updating to NULL on duplicate should error
+--error 1048
+INSERT INTO t_odku VALUES (1, '(9.0,9.0)') ON DUPLICATE KEY UPDATE val = NULL;
+
+# Verify unchanged
+SELECT * FROM t_odku ORDER BY id;
+
+# With IGNORE: NULL on duplicate key update goes to intrinsic default (0,0)
+INSERT IGNORE INTO t_odku VALUES (1, '(9.0,9.0)') ON DUPLICATE KEY UPDATE val = NULL;
+SELECT * FROM t_odku ORDER BY id;
+
+# Non-duplicate: new row with NULL COMPLEX gets intrinsic default
+INSERT IGNORE INTO t_odku VALUES (2, NULL) ON DUPLICATE KEY UPDATE val = '(99.0,99.0)';
+SELECT * FROM t_odku ORDER BY id;
+
+DROP TABLE t_odku;
+
+--source include/villagesql/uninstall_complex_extension.inc

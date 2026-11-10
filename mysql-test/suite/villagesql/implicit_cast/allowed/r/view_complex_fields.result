@@ -1,0 +1,12 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t_complex VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)');
+CREATE VIEW complex_view AS
+SELECT id, val FROM t_complex WHERE id <= 2;
+SELECT * FROM complex_view ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+DROP TABLE t_complex;
+DROP VIEW complex_view;

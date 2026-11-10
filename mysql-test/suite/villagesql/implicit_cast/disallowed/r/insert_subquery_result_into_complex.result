@@ -1,0 +1,7 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+CREATE TABLE temp_strings (val VARCHAR(100));
+INSERT INTO temp_strings VALUES ('not_complex');
+INSERT INTO t_complex VALUES (10, (SELECT val FROM temp_strings LIMIT 1));
+ERROR HY000: Incorrect COMPLEX value: 'not_complex' for column 'val' at row 2
+DROP TABLE t_complex;
+DROP TABLE temp_strings;

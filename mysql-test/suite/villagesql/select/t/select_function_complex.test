@@ -1,0 +1,52 @@
+# Test SELECT ... with COMPLEX function call
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create table with different column types
+CREATE TABLE t1 (
+  complex_col COMPLEX,
+  complex2_col COMPLEX2,
+  str_col VARCHAR(100),
+  int_col INT
+);
+INSERT INTO t1 VALUES ('(1.0778787,2.71828)', '(2.5,3.5)', '(3.14159,1)', 42);
+INSERT INTO t1 VALUES ('(3.0,4.0)', '(6.5,7.5)', '(5.0,6.0)', 99);
+
+# Test 1: COMPLEX column
+SELECT vsql_complex.complex_real(complex_col) AS real_part FROM t1 ORDER BY complex_col;
+
+# Test 2: String constant (automatic conversion)
+SELECT vsql_complex.complex_real('(7.0,8.0)') AS real_part;
+
+# Test 3: Nested function call with string constant
+SELECT vsql_complex.complex_real(vsql_complex.COMPLEX::from_string('(9.0,10.0)')) AS real_part;
+
+# Test 4: String column converted through COMPLEX::from_string
+SELECT vsql_complex.complex_real(vsql_complex.COMPLEX::from_string(str_col)) AS real_part FROM t1 ORDER BY str_col;
+
+# Test 4b: VDF taking COMPLEX returned by another VDF (tests type_context propagation)
+SELECT vsql_complex.complex_imag(vsql_complex.complex_conjugate(complex_col)) AS conjugate_imag FROM t1 ORDER BY complex_col;
+
+# Test 5: COMPLEX2 column (incompatible custom type)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.complex_real(complex2_col) AS real_part FROM t1 ORDER BY complex2_col;
+
+# Test 6: String column without conversion
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.complex_real(str_col) AS real_part FROM t1 ORDER BY str_col;
+
+# Test 7: Integer column
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.complex_real(int_col) AS real_part FROM t1 ORDER BY int_col;
+
+# Test 8: Integer constant
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.complex_real(12) AS real_part;
+
+# Test 9: Invalid string format
+--error ER_WRONG_VALUE
+SELECT vsql_complex.complex_real('[1,1]') AS real_part;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

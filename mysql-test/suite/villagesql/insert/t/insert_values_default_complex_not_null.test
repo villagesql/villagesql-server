@@ -1,0 +1,22 @@
+# Test INSERT INTO ... VALUES with DEFAULT and COMPLEX type
+# Grammar: INSERT [INTO] tbl_name VALUES (..., DEFAULT, ...)
+#
+# Case: NOT NULL column without DEFAULT - should error
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL
+);
+
+--error ER_NO_DEFAULT_FOR_FIELD
+INSERT INTO t1 VALUES (1, DEFAULT);
+
+# Explicit value should work
+INSERT INTO t1 VALUES (2, '(2.0,2.0)');
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

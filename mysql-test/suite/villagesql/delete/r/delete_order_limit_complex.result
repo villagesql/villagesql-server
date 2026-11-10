@@ -1,0 +1,57 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(0,0)'),
+(3, '(-3.5,4.5)'),
+(4, '(-0,0)'),
+(5, '(5.0,-6.0)'),
+(6, '(0,-0)'),
+(7, '(-7.5,-8.5)'),
+(8, '(-0,-0)'),
+(9, '(9.0,10.0)'),
+(10, '(0,0)');
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	(0,0)
+9	(9,10)
+10	(0,0)
+DELETE FROM t1 ORDER BY id DESC LIMIT 1;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	(0,0)
+9	(9,10)
+DELETE FROM t1 ORDER BY id ASC LIMIT 2;
+SELECT * FROM t1 ORDER BY id;
+id	val
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	(0,0)
+9	(9,10)
+DELETE FROM t1 ORDER BY id DESC LIMIT 3;
+SELECT * FROM t1 ORDER BY id;
+id	val
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+6	(0,0)
+DROP TABLE t1;

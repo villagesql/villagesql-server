@@ -1,0 +1,41 @@
+# CREATE TABLE ... LIKE copies each custom index key part's index profile and
+# direction.
+#
+# Profiles from vsql_index_test, all binding dummy_index_hnsw to
+# dummy_type_vector:
+#   dummy_profile_hnsw_l2   - ASC, the default profile for the pair
+#   dummy_profile_hnsw_desc - DESC
+#   dummy_profile_hnsw_none - NONE (unordered)
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE TABLE src (id INT PRIMARY KEY,
+  a dummy_type_vector, b dummy_type_vector, c dummy_type_vector,
+  d dummy_type_vector,
+  INDEX i_default (a) USING EXTENDED(dummy_index_hnsw),
+  INDEX i_desc (b dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw),
+  INDEX i_desc_none (c dummy_profile_hnsw_desc) USING EXTENDED(dummy_index_hnsw),
+  INDEX i_none (d dummy_profile_hnsw_none) USING EXTENDED(dummy_index_hnsw));
+
+CREATE TABLE dst LIKE src;
+
+--echo # dst has the same profile on every key part as src.
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE dst;
+
+--echo # A rebuild of the copy keeps the profiles too.
+ALTER TABLE dst FORCE;
+--source include/villagesql/query_custom_indexes.inc
+
+DROP TABLE dst, src;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

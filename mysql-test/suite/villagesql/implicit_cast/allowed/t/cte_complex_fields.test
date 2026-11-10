@@ -1,0 +1,27 @@
+# Test CTE with COMPLEX fields
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES
+  (1, '(0,0)'),
+  (2, '(-0,0)'),
+  (3, '(-0,-0)'),
+  (4, '(0,-0)'),
+  (5, '(-1.0,-4.0)'),
+  (6, '(1.0,4.0)'),
+  (7, '(-1.0,4.0)'),
+  (8, '(1.0,-4.0)'),
+  (9, '(-0.01,7.0)'),
+  (10, '(0.01,-7.0)'),
+  (11, '(1,2)');
+
+WITH complex_cte AS (
+  SELECT id, val FROM t_complex WHERE id <= 10
+)
+SELECT * FROM complex_cte ORDER BY val, id;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

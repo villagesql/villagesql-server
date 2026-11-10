@@ -1,0 +1,12 @@
+# Test INSERT with arithmetic result into COMPLEX field
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_complex VALUES (9, 1 + 2);
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

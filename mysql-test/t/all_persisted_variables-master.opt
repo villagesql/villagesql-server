@@ -1,0 +1,3 @@
+$REFERENCE_CACHE_COMPONENT_OPT
+--loose-mysqlx=ON
+--loose-skip-rocksdb

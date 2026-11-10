@@ -1,0 +1,120 @@
+# Install vsql-complex extension
+INSTALL EXTENSION vsql_complex;
+
+########################################################################
+#
+# Test: UPDATE, REPLACE, and INSERT...ON DUPLICATE KEY UPDATE for COMPLEX type
+#
+########################################################################
+#
+# Test 1: Basic UPDATE operations
+#
+########################################################################
+
+CREATE TABLE test_update_basic (
+    id INT PRIMARY KEY,
+    complex_val COMPLEX NOT NULL DEFAULT '(0,0)'
+);
+
+# Setup data for updates
+INSERT INTO test_update_basic (id, complex_val) VALUES
+    (1, '(1,1)'),
+    (2, '(2,2)'),
+    (3, '(3,3)'),
+    (4, '(4,4)'),
+    (5, '(5,5)');
+
+SELECT id, complex_val FROM test_update_basic ORDER BY id;
+
+# Single record update
+UPDATE test_update_basic SET complex_val = '(10,10)' WHERE id = 1;
+
+# Multiple record update
+UPDATE test_update_basic SET complex_val = '(99,99)' WHERE id IN (2,3);
+
+# Conditional update based on complex value comparison
+UPDATE test_update_basic SET complex_val = '(0,0)' WHERE complex_val = '(4,4)';
+
+SELECT id, complex_val FROM test_update_basic ORDER BY id;
+
+########################################################################
+#
+# Test 2: UPDATE to NULL (where allowed)
+#
+########################################################################
+
+CREATE TABLE test_update_nulls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nullable_complex COMPLEX DEFAULT NULL,
+    not_null_complex COMPLEX NOT NULL DEFAULT '(1,1)'
+);
+
+INSERT INTO test_update_nulls (nullable_complex, not_null_complex) VALUES
+    ('(1,1)', '(2,2)'),
+    ('(3,3)', '(4,4)');
+
+# Update to NULL (where allowed)
+UPDATE test_update_nulls SET nullable_complex = NULL WHERE id = 1;
+
+SELECT id, nullable_complex, not_null_complex FROM test_update_nulls ORDER BY id;
+
+########################################################################
+#
+# Test 3: Batch UPDATE
+#
+########################################################################
+
+# Batch update
+UPDATE test_update_basic SET complex_val = '(88,88)' WHERE id >= 4;
+
+SELECT id, complex_val FROM test_update_basic ORDER BY id;
+
+########################################################################
+#
+# Test 4: REPLACE operations
+#
+########################################################################
+
+CREATE TABLE test_update_replace (
+    id INT PRIMARY KEY,
+    complex_val COMPLEX NOT NULL DEFAULT '(0,0)'
+);
+
+INSERT INTO test_update_replace (id, complex_val) VALUES (1, '(1,1)');
+
+SELECT id, complex_val FROM test_update_replace ORDER BY id;
+
+# REPLACE with existing primary key (will update)
+REPLACE INTO test_update_replace (id, complex_val) VALUES (1, '(100,100)');
+
+# REPLACE with new primary key (will insert)
+REPLACE INTO test_update_replace (id, complex_val) VALUES (10, '(200,200)');
+
+SELECT id, complex_val FROM test_update_replace ORDER BY id;
+
+########################################################################
+#
+# Test 5: INSERT ... ON DUPLICATE KEY UPDATE
+#
+########################################################################
+
+# Try to insert existing key - should update
+INSERT INTO test_update_replace (id, complex_val) VALUES (1, '(300,300)')
+ON DUPLICATE KEY UPDATE complex_val = '(400,400)';
+
+# Try to insert new key - should insert
+INSERT INTO test_update_replace (id, complex_val) VALUES (20, '(500,500)')
+ON DUPLICATE KEY UPDATE complex_val = '(600,600)';
+
+SELECT id, complex_val FROM test_update_replace WHERE id IN (1, 20) ORDER BY id;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE test_update_basic, test_update_nulls, test_update_replace;
+
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_complex;

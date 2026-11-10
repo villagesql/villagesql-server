@@ -1,0 +1,64 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(0.0,5.0)'),
+(4, '(6.0,0.0)');
+#
+# Test 1: VDF in WHERE clause
+#
+PREPARE stmt1 FROM 'SELECT id FROM t1 WHERE vsql_complex.complex_real(val) = ?';
+SET @real_val = 3.0;
+EXECUTE stmt1 USING @real_val;
+id
+2
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: VDF in WHERE clause with COMPLEX result comparison
+#
+PREPARE stmt2 FROM 'SELECT id FROM t1 WHERE vsql_complex.complex_conjugate(val) = ?';
+SET @conj = '(1.0,-2.0)';
+EXECUTE stmt2 USING @conj;
+id
+1
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: Nested VDF calls
+#
+PREPARE stmt3 FROM 'SELECT id, vsql_complex.complex_real(vsql_complex.complex_conjugate(val)) FROM t1 WHERE id = ?';
+SET @id = 2;
+EXECUTE stmt3 USING @id;
+id	vsql_complex.complex_real(vsql_complex.complex_conjugate(val))
+2	3
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: VDF in ORDER BY clause
+#
+PREPARE stmt4 FROM 'SELECT id, val, vsql_complex.complex_real(val) AS real_part FROM t1 WHERE id > ? ORDER BY vsql_complex.complex_real(val)';
+SET @min_id = 0;
+EXECUTE stmt4 USING @min_id;
+id	val	real_part
+3	(0,5)	0
+1	(1,2)	1
+2	(3,4)	3
+4	(6,0)	6
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: VDF in CASE expression
+#
+PREPARE stmt5 FROM 'SELECT id, CASE WHEN vsql_complex.complex_real(val) > ? THEN \'positive\' ELSE \'non-positive\' END AS sign FROM t1 WHERE id IN (?, ?)';
+SET @threshold = 2.0;
+SET @id1 = 1;
+SET @id2 = 3;
+EXECUTE stmt5 USING @threshold, @id1, @id2;
+id	sign
+1	non-positive
+3	non-positive
+DEALLOCATE PREPARE stmt5;
+#
+# Cleanup
+#
+DROP TABLE t1;

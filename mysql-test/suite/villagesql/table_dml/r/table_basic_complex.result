@@ -1,0 +1,11 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(3.0,4.0)');
+TABLE t1;
+val
+(1,2)
+(3,4)
+SELECT val, vsql_complex.complex_conjugate(val) as conjugate FROM t1;
+val	conjugate
+(1,2)	(1,-2)
+(3,4)	(3,-4)
+DROP TABLE t1;

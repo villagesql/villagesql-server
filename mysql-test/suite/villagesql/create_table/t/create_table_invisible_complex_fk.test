@@ -1,0 +1,105 @@
+# Test INVISIBLE COMPLEX columns with foreign keys
+
+--source include/villagesql/install_complex_extension.inc
+
+# Test FK referencing INVISIBLE COMPLEX column
+CREATE TABLE parent (
+    id INT PRIMARY KEY,
+    val COMPLEX INVISIBLE UNIQUE
+);
+
+CREATE TABLE child (
+    id INT PRIMARY KEY,
+    parent_val COMPLEX INVISIBLE,
+    FOREIGN KEY (parent_val) REFERENCES parent(val)
+);
+
+SHOW CREATE TABLE parent;
+SHOW CREATE TABLE child;
+
+INSERT INTO parent (id, val) VALUES (1, '(1.0,1.0)');
+INSERT INTO parent (id, val) VALUES (2, '(2.0,2.0)');
+
+# Valid FK insert
+INSERT INTO child (id, parent_val) VALUES (1, '(1.0,1.0)');
+INSERT INTO child (id, parent_val) VALUES (2, '(2.0,2.0)');
+
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO child (id, parent_val) VALUES (3, '(9.9,9.9)');
+
+# SELECT * should not show INVISIBLE FK columns
+SELECT * FROM parent ORDER BY id;
+SELECT * FROM child ORDER BY id;
+
+# Explicit SELECT shows INVISIBLE FK columns
+SELECT id, val FROM parent ORDER BY id;
+SELECT id, parent_val FROM child ORDER BY id;
+
+# Test ON DELETE CASCADE with INVISIBLE column
+DROP TABLE child;
+CREATE TABLE child (
+    id INT PRIMARY KEY,
+    parent_val COMPLEX INVISIBLE,
+    description VARCHAR(50),
+    FOREIGN KEY (parent_val) REFERENCES parent(val) ON DELETE CASCADE
+);
+
+INSERT INTO child (id, parent_val, description) VALUES (1, '(1.0,1.0)', 'child1');
+INSERT INTO child (id, parent_val, description) VALUES (2, '(1.0,1.0)', 'child2');
+
+SELECT * FROM child ORDER BY id;
+
+# Delete parent, children should cascade
+DELETE FROM parent WHERE val = '(1.0,1.0)';
+
+# Both children should be deleted
+SELECT * FROM child ORDER BY id;
+SELECT id, parent_val, description FROM child ORDER BY id;
+
+DROP TABLE child;
+DROP TABLE parent;
+
+# Test FK with composite key including INVISIBLE COMPLEX
+CREATE TABLE composite_parent (
+    sensor_id INT,
+    frequency COMPLEX INVISIBLE,
+    name VARCHAR(50),
+    PRIMARY KEY (sensor_id, frequency)
+);
+
+CREATE TABLE composite_child (
+    id INT PRIMARY KEY,
+    ref_sensor_id INT,
+    ref_frequency COMPLEX INVISIBLE,
+    signal_value DOUBLE,
+    FOREIGN KEY (ref_sensor_id, ref_frequency)
+        REFERENCES composite_parent(sensor_id, frequency)
+);
+
+SHOW CREATE TABLE composite_parent;
+SHOW CREATE TABLE composite_child;
+
+INSERT INTO composite_parent (sensor_id, frequency, name)
+VALUES (1, '(1.0,0.0)', 'fundamental');
+INSERT INTO composite_parent (sensor_id, frequency, name)
+VALUES (1, '(2.0,0.0)', 'harmonic');
+
+INSERT INTO composite_child (id, ref_sensor_id, ref_frequency, signal_value)
+VALUES (1, 1, '(1.0,0.0)', 5.5);
+
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO composite_child (id, ref_sensor_id, ref_frequency, signal_value)
+VALUES (2, 1, '(3.0,0.0)', 9.9);
+
+# SELECT * should not show INVISIBLE columns
+SELECT * FROM composite_parent ORDER BY sensor_id;
+SELECT * FROM composite_child ORDER BY id;
+
+# Explicit SELECT shows INVISIBLE columns
+SELECT sensor_id, frequency, name FROM composite_parent ORDER BY sensor_id, frequency;
+SELECT id, ref_sensor_id, ref_frequency, signal_value FROM composite_child ORDER BY id;
+
+DROP TABLE composite_child;
+DROP TABLE composite_parent;
+
+--source include/villagesql/uninstall_complex_extension.inc

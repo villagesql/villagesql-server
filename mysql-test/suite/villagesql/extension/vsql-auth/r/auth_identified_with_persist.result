@@ -1,0 +1,7 @@
+INSTALL EXTENSION vsql_auth_test;
+CREATE USER persist_user IDENTIFIED WITH vsql_auth_test;
+SELECT plugin FROM mysql.user WHERE user = 'persist_user';
+plugin
+vsql_auth_test
+DROP USER persist_user;
+UNINSTALL EXTENSION vsql_auth_test;

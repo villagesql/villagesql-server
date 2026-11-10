@@ -1,0 +1,35 @@
+# Test DML operations through filtered VIEW with COMPLEX column
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, description VARCHAR(100));
+
+INSERT INTO t1 VALUES
+  (1, '(1,2)', 'First'),
+  (2, '(3,4)', 'Second'),
+  (3, '(5,6)', 'Third');
+
+# Create view with WHERE clause (shows only id <= 2)
+CREATE VIEW v_filtered AS
+SELECT id, val, description FROM t1 WHERE id <= 2;
+
+# Verify initial filtered view contents
+SELECT COUNT(*) AS filtered_count FROM v_filtered;
+
+# INSERT through filtered view (inserts into base table)
+INSERT INTO v_filtered VALUES (4, '(7,8)', 'Fourth');
+
+# Verify row is in base table but not visible through filtered view
+SELECT COUNT(*) AS in_base FROM t1 WHERE id = 4;
+SELECT COUNT(*) AS in_view FROM v_filtered WHERE id = 4;
+
+# UPDATE through filtered view (only affects visible rows)
+UPDATE v_filtered SET description = 'Updated First' WHERE id = 1;
+
+# Verify update worked
+SELECT description FROM t1 WHERE id = 1;
+
+DROP VIEW v_filtered;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

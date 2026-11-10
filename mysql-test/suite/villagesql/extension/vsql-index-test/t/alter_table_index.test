@@ -1,0 +1,67 @@
+# Test ALTER TABLE ADD INDEX ... USING EXTENDED ... syntax paths
+# A failed ADD INDEX leaves the table and its existing indexes intact.
+# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# ADD INDEX USING EXTENDED -- unqualified type name
+ALTER TABLE t ADD INDEX idx (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# ADD INDEX USING EXTENDED -- qualified extension.type_name
+ALTER TABLE t ADD INDEX idx (a) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# ADD INDEX USING EXTENDED + WITH -- numeric and string params
+ALTER TABLE t ADD INDEX idx (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16, label = 'l2');
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# ADD INDEX WITH standalone -- exercises PT_index_with_options path in ALTER TABLE context
+ALTER TABLE t ADD INDEX idx (a) WITH (M = 16);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Column with index profile + USING EXTENDED
+ALTER TABLE t ADD INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Column with index profile + qualified type + WITH params
+ALTER TABLE t ADD INDEX idx (a dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, label = 'l2');
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Column with qualified extension.profile (extension.profile_name syntax)
+ALTER TABLE t ADD INDEX idx (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Qualified profile + qualified extension type + WITH params
+ALTER TABLE t ADD INDEX idx (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, label = 'l2');
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

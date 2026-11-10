@@ -1,0 +1,24 @@
+
+--source include/have_component_keyring_file.inc
+
+--source ./suite/component_keyring_file/inc/setup_component.inc
+
+CREATE DATABASE WL_11543_PERF_SCHEMA_KEYRING;
+USE WL_11543_PERF_SCHEMA_KEYRING;
+
+SELECT count(*) FROM performance_schema.keyring_keys;
+
+CREATE TABLE t1(c1 INT, c2 char(20)) ENGINE = InnoDB ENCRYPTION="Y";
+SELECT count(*) FROM performance_schema.keyring_keys;
+
+ALTER INSTANCE ROTATE INNODB MASTER KEY;
+SELECT count(*) FROM performance_schema.keyring_keys;
+
+--replace_column 1 SOME_KEY_ID
+SELECT * FROM performance_schema.keyring_keys;
+
+--echo # cleanup
+DROP TABLE t1;
+DROP DATABASE WL_11543_PERF_SCHEMA_KEYRING;
+
+--source ./suite/component_keyring_file/inc/teardown_component.inc

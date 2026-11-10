@@ -1,0 +1,79 @@
+# Regression test: the villagesql schema must survive remote clone provisioning.
+#
+# A remote clone with *replace* provisions a recipient by wiping its own data
+# (clone_drop_user_data() -> Fixup_data in storage/innobase/clone/clone0api.cc)
+# and adopting the donor's. That drop removes every schema Fixup_data does not
+# treat as a system schema. villagesql must be preserved there; before it was,
+# the recipient came back to a state where villagesql looked "missing", forced a
+# spurious server upgrade, and aborted with "Unknown database 'villagesql'" --
+# i.e. the recipient failed to restart.
+#
+# Note a LOCAL clone cannot exercise this: it never sets replace mode, so
+# clone_drop_user_data() is never called and villagesql is copied verbatim.
+# Hence this test uses the remote replace path (donor = default instance,
+# recipient = instance 2). No crash injection is needed, so unlike
+# clone.remote_dml_recovery this is not Linux-only.
+
+--source include/have_clone_plugin.inc
+--source include/have_log_bin.inc
+--source include/have_debug.inc
+
+# A replace clone makes the recipient restart itself; on non-Windows that is
+# driven by a mysqld_safe monitor (mysqld_safe ships on Linux and macOS).
+let $have_windows = `SELECT CONVERT(@@version_compile_os using latin1) IN ("Win32", "Win64", "Windows")`;
+if ($have_windows) {
+  --skip Needs mysqld_safe to auto-restart the recipient
+}
+--source include/have_mysqld_safe.inc
+
+--disable_query_log
+call mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Clone removing all user data for provisioning: .*");
+call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.*clone_check_recovery_crashpoint.*");
+--enable_query_log
+
+# Donor is the default server (instance 1).
+--let $HOST = 127.0.0.1
+--let $PORT = `SELECT @@port`
+--let $USER = root
+# Unused by replace mode, but clone_command.inc references it in --replace_result.
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--let inst_monitor = 1
+--let clone_remote_replace = 1
+--let clone_inst_number = 2
+
+# Donor must have the clone plugin loaded to serve a clone.
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+--echo # Donor has the villagesql schema
+SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'villagesql';
+
+# Connect to the recipient (instance 2) under a mysqld_safe monitor and install
+# the clone plugin there.
+--source ../../../clone/include/clone_connection_begin.inc
+
+--echo # Remote clone with replace, crashing during recovery. The recipient wipes
+--echo # its data, adopts the donor, crashes mid-recovery, then mysqld_safe restarts
+--echo # it to finish recovery. If villagesql was dropped and not re-established, the
+--echo # recipient aborts on that restart and never comes back (test fails here).
+--connection clone_conn_1
+--let clone_recovery_error = 1
+SET GLOBAL debug = '+d,clone_recovery_crash_point';
+--source ../../../clone/include/clone_command.inc
+SET GLOBAL debug = '-d,clone_recovery_crash_point';
+--let clone_recovery_error = 0
+
+--echo # Recipient is back up and still has the villagesql schema
+--connection clone_conn_1
+SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'villagesql';
+
+--echo # Cleanup: the crash leaves the clone in a "retry" state. Re-clone cleanly so
+--echo # the recipient is left consistent (this also restores MTR's helper 'mtr'
+--echo # schema, which the post-test check-warnings step needs).
+--connection clone_conn_1
+--source ../../../clone/include/clone_command.inc
+
+--source ../../../clone/include/clone_connection_end.inc
+
+--connection default
+UNINSTALL PLUGIN clone;

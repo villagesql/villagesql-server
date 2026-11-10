@@ -1,0 +1,387 @@
+/*
+  Copyright (c) 2018, 2026, Oracle and/or its affiliates.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#ifndef ROUTING_CONNECTION_INCLUDED
+#define ROUTING_CONNECTION_INCLUDED
+
+#include <chrono>
+#include <cstdint>  // size_t
+#include <functional>
+#include <memory>
+#include <optional>
+
+#include "basic_protocol_splicer.h"
+#include "context.h"
+#include "destination.h"  // RouteDestination
+#include "destination_error.h"
+#include "mysql/harness/net_ts/io_context.h"
+#include "mysql/harness/net_ts/timer.h"
+#include "mysql/harness/stdx/expected.h"
+#include "mysql/harness/stdx/monitor.h"
+
+class MySQLRoutingConnectionBase {
+ public:
+  MySQLRoutingConnectionBase(
+      MySQLRoutingContext &context,
+      std::function<void(MySQLRoutingConnectionBase *)> remove_callback)
+      : context_(context), remove_callback_(std::move(remove_callback)) {}
+
+  virtual ~MySQLRoutingConnectionBase() = default;
+
+  MySQLRoutingContext &context() { return context_; }
+  const MySQLRoutingContext &context() const { return context_; }
+
+  virtual std::string get_destination_id() const = 0;
+
+  virtual std::string read_only_destination_id() const {
+    return get_destination_id();
+  }
+
+  virtual std::string read_write_destination_id() const {
+    return get_destination_id();
+  }
+
+  virtual std::optional<net::ip::tcp::endpoint> destination_endpoint()
+      const = 0;
+
+  virtual std::optional<net::ip::tcp::endpoint> read_only_destination_endpoint()
+      const {
+    return destination_endpoint();
+  }
+
+  virtual std::optional<net::ip::tcp::endpoint>
+  read_write_destination_endpoint() const {
+    return destination_endpoint();
+  }
+
+  virtual net::impl::socket::native_handle_type get_client_fd() const = 0;
+
+  /**
+   * @brief Returns address of server to which connection is established.
+   *
+   * @return address of server
+   */
+  std::string get_server_address() const {
+    return stats_([](const Stats &stats) { return stats.server_address; });
+  }
+
+  void server_address(const std::string &dest) {
+    return stats_([&dest](Stats &stats) { stats.server_address = dest; });
+  }
+
+  virtual void disconnect() = 0;
+
+  /**
+   * @brief Returns address of client which connected to router
+   *
+   * @return address of client
+   */
+  std::string get_client_address() const {
+    return stats_([](const Stats &stats) { return stats.client_address; });
+  }
+
+  void client_address(const std::string &dest) {
+    return stats_([&dest](Stats &stats) { stats.client_address = dest; });
+  }
+
+  std::size_t get_bytes_up() const {
+    return stats_([](const Stats &stats) { return stats.bytes_up; });
+  }
+
+  std::size_t get_bytes_down() const {
+    return stats_([](const Stats &stats) { return stats.bytes_down; });
+  }
+
+  using clock_type = std::chrono::system_clock;
+  using time_point_type = clock_type::time_point;
+
+  time_point_type get_started() const {
+    return stats_([](const Stats &stats) { return stats.started; });
+  }
+
+  time_point_type get_connected_to_server() const {
+    return stats_([](const Stats &stats) { return stats.connected_to_server; });
+  }
+
+  time_point_type get_last_sent_to_server() const {
+    return stats_([](const Stats &stats) { return stats.last_sent_to_server; });
+  }
+
+  time_point_type get_last_received_from_server() const {
+    return stats_(
+        [](const Stats &stats) { return stats.last_received_from_server; });
+  }
+
+  struct Stats {
+    Stats() = default;
+
+    Stats(std::string client_address, std::string server_address,
+          std::size_t bytes_up, std::size_t bytes_down, time_point_type started,
+          time_point_type connected_to_server,
+          time_point_type last_sent_to_server,
+          time_point_type last_received_from_server)
+        : client_address(std::move(client_address)),
+          server_address(std::move(server_address)),
+          bytes_up(bytes_up),
+          bytes_down(bytes_down),
+          started(started),
+          connected_to_server(connected_to_server),
+          last_sent_to_server(last_sent_to_server),
+          last_received_from_server(last_received_from_server) {}
+
+    std::string client_address;
+    std::string server_address;
+
+    std::size_t bytes_up{0};
+    std::size_t bytes_down{0};
+
+    time_point_type started{clock_type::now()};
+    time_point_type connected_to_server;
+    time_point_type last_sent_to_server;
+    time_point_type last_received_from_server;
+  };
+
+  Stats get_stats() const {
+    return stats_([](const Stats &stats) { return stats; });
+  }
+
+  void transfered_to_server(size_t bytes) {
+    const auto now = clock_type::now();
+    stats_([bytes, now](Stats &stats) {
+      stats.last_sent_to_server = now;
+      stats.bytes_down += bytes;
+    });
+  }
+
+  void transfered_to_client(size_t bytes) {
+    const auto now = clock_type::now();
+    stats_([bytes, now](Stats &stats) {
+      stats.last_received_from_server = now;
+      stats.bytes_up += bytes;
+    });
+  }
+
+  void disassociate() { remove_callback_(this); }
+
+  void accepted();
+
+  virtual void connected();
+
+  template <class F>
+  auto disconnect_request(F &&f) {
+    return disconnect_(std::forward<F>(f));
+  }
+
+  bool disconnect_requested() const {
+    return disconnect_([](auto requested) { return requested; });
+  }
+
+ protected:
+  /** @brief wrapper for common data used by all routing threads */
+  MySQLRoutingContext &context_;
+  /** @brief callback that is called when thread of execution completes */
+  std::function<void(MySQLRoutingConnectionBase *)> remove_callback_;
+
+  Monitor<Stats> stats_{{}};
+
+  Monitor<bool> disconnect_{{}};
+
+  void log_connection_summary();
+
+ private:
+  net::impl::socket::native_handle_type client_fd_;
+};
+
+class ConnectorBase {
+ public:
+  using server_protocol_type = net::ip::tcp;
+
+  ConnectorBase(net::io_context &io_ctx, RouteDestination *route_destination,
+                Destinations &destinations)
+      : io_ctx_{io_ctx},
+        route_destination_{route_destination},
+        destinations_{destinations},
+        destinations_it_{destinations_.begin()} {}
+
+  enum class Function {
+    kInitDestination,
+    kConnectFinish,
+  };
+
+  server_protocol_type::socket &socket() { return server_sock_; }
+  server_protocol_type::endpoint &endpoint() { return server_endpoint_; }
+
+  net::steady_timer &timer() { return connect_timer_; }
+
+  void connect_timed_out(bool v) { connect_timed_out_ = v; }
+
+  bool connect_timed_out() const { return connect_timed_out_; }
+
+  void destination_id(std::string id) { destination_id_ = id; }
+  std::string destination_id() const { return destination_id_; }
+
+  void on_connect_failure(
+      std::function<void(std::string, uint16_t, std::error_code)> func) {
+    on_connect_failure_ = std::move(func);
+  }
+
+  void on_connect_success(std::function<void(std::string, uint16_t)> func) {
+    on_connect_success_ = std::move(func);
+  }
+
+  void on_is_destination_good(std::function<bool(std::string, uint16_t)> func) {
+    on_is_destination_good_ = std::move(func);
+  }
+
+  bool is_destination_good(const std::string &hostname, uint16_t port) const {
+    if (on_is_destination_good_) return on_is_destination_good_(hostname, port);
+
+    return true;
+  }
+
+ protected:
+  stdx::expected<void, std::error_code> resolve();
+  stdx::expected<void, std::error_code> init_destination();
+  stdx::expected<void, std::error_code> init_endpoint();
+  stdx::expected<void, std::error_code> next_endpoint();
+  stdx::expected<void, std::error_code> next_destination();
+  stdx::expected<void, std::error_code> connect_init();
+  stdx::expected<void, std::error_code> try_connect();
+  stdx::expected<void, std::error_code> connect_finish();
+  stdx::expected<void, std::error_code> connected();
+  stdx::expected<void, std::error_code> connect_failed(std::error_code ec);
+
+  net::io_context &io_ctx_;
+
+  net::ip::tcp::resolver resolver_{io_ctx_};
+  server_protocol_type::socket server_sock_{io_ctx_};
+  server_protocol_type::endpoint server_endpoint_;
+
+  RouteDestination *route_destination_;
+  Destinations &destinations_;
+  Destinations::iterator destinations_it_;
+  net::ip::tcp::resolver::results_type endpoints_;
+  net::ip::tcp::resolver::results_type::iterator endpoints_it_;
+
+  std::error_code last_ec_{make_error_code(DestinationsErrc::kNotSet)};
+
+  Function func_{Function::kInitDestination};
+
+  net::steady_timer connect_timer_{io_ctx_};
+
+  bool connect_timed_out_{false};
+  std::string destination_id_;
+
+  std::function<void(std::string, uint16_t, std::error_code)>
+      on_connect_failure_;
+  std::function<void(std::string, uint16_t)> on_connect_success_;
+  std::function<bool(std::string, uint16_t)> on_is_destination_good_;
+};
+
+template <class ConnectionType>
+class Connector : public ConnectorBase {
+ public:
+  using ConnectorBase::ConnectorBase;
+
+  stdx::expected<ConnectionType, std::error_code> connect() {
+    switch (func_) {
+      case Function::kInitDestination: {
+        auto init_res = init_destination();
+        if (!init_res) return stdx::unexpected(init_res.error());
+
+      } break;
+      case Function::kConnectFinish: {
+        auto connect_res = connect_finish();
+        if (!connect_res) return stdx::unexpected(connect_res.error());
+
+      } break;
+    }
+
+    if (destination_id().empty()) {
+      // stops at 'connect_init()
+      {
+        auto connect_res = try_connect();
+        if (!connect_res) return stdx::unexpected(connect_res.error());
+      }
+    }
+    using ret_type = stdx::expected<ConnectionType, std::error_code>;
+
+    return ret_type{std::in_place,
+                    std::make_unique<TcpConnection>(std::move(socket()),
+                                                    std::move(endpoint()))};
+  }
+};
+
+template <class ConnectionType>
+class PooledConnector : public ConnectorBase {
+ public:
+  using pool_lookup_cb = std::function<std::optional<ConnectionType>(
+      const server_protocol_type::endpoint &ep)>;
+
+  PooledConnector(net::io_context &io_ctx, RouteDestination *route_destination,
+                  Destinations &destinations, pool_lookup_cb pool_lookup)
+      : ConnectorBase{io_ctx, route_destination, destinations},
+        pool_lookup_{std::move(pool_lookup)} {}
+
+  stdx::expected<ConnectionType, std::error_code> connect() {
+    switch (func_) {
+      case Function::kInitDestination: {
+        auto init_res = init_destination();
+        if (!init_res) return stdx::unexpected(init_res.error());
+
+      } break;
+      case Function::kConnectFinish: {
+        auto connect_res = connect_finish();
+        if (!connect_res) return stdx::unexpected(connect_res.error());
+
+      } break;
+    }
+
+    if (destination_id().empty()) {
+      // stops at 'connect_init()
+      if (auto pool_res = probe_pool()) {
+        // return the pooled connection.
+        return std::move(pool_res.value());
+      }
+
+      {
+        auto connect_res = try_connect();
+        if (!connect_res) return stdx::unexpected(connect_res.error());
+      }
+    }
+
+    return {std::in_place, std::make_unique<TcpConnection>(
+                               std::move(socket()), std::move(endpoint()))};
+  }
+
+ private:
+  std::optional<ConnectionType> probe_pool() {
+    return pool_lookup_(server_endpoint_);
+  }
+
+  pool_lookup_cb pool_lookup_;
+};
+
+#endif /* ROUTING_CONNECTION_INCLUDED */

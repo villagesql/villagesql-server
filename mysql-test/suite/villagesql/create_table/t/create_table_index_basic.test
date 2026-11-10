@@ -1,0 +1,69 @@
+# Test CREATE TABLE with INDEX/KEY on COMPLEX columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_value COMPLEX,
+    INDEX idx_complex (complex_value)
+);
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES
+  (10, '(-0,-0)'),
+  (1, '(1,-0)'),
+  (17, '(0,0)'),
+  (333, '(0,1)'),
+  (14, '(-1.0,-1.0)');
+
+EXPLAIN SELECT * FROM t1 WHERE complex_value <= '(0,0)' ORDER BY id;
+SELECT * FROM t1 WHERE complex_value <= '(0,0)' ORDER BY id;
+
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    complex_data COMPLEX,
+    KEY key_complex (complex_data)
+);
+
+SHOW COLUMNS FROM t2;
+
+INSERT INTO t2 VALUES
+  (-10, '(0,0)'),
+  (-1, '(-1,0)'),
+  (-17, '(-0,-0)'),
+  (-333, '(-0,-1)'),
+  (-14, '(1.0,1.0)');
+
+EXPLAIN SELECT * FROM t2 WHERE complex_data <= '(0,0)' ORDER BY id;
+SELECT * FROM t2 WHERE complex_data <= '(0,0)' ORDER BY id;
+
+# Test that indexes work fine on other columns alongside COMPLEX
+CREATE TABLE indexed_table (
+    id INT PRIMARY KEY,
+    complex_value COMPLEX,
+    magnitude DOUBLE,
+    category VARCHAR(50),
+    # Index non-complex columns only
+    INDEX idx_magnitude (magnitude),
+    KEY key_category (category)
+);
+
+SHOW COLUMNS FROM indexed_table;
+
+INSERT INTO indexed_table VALUES (1, '(117.0,118.0)', 5.2, 'type_a');
+INSERT INTO indexed_table VALUES (2, '(119.0,120.0)', 8.7, 'type_b');
+
+SELECT * FROM indexed_table;
+
+# Test that indexes work on non-COMPLEX columns
+EXPLAIN SELECT * FROM indexed_table WHERE magnitude > 4.0;
+SELECT * FROM indexed_table WHERE magnitude > 4.0;
+
+DROP TABLE indexed_table;
+DROP TABLE t2;
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

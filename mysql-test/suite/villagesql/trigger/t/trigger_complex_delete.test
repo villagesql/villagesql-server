@@ -1,0 +1,53 @@
+# Test DELETE triggers with custom types
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  val COMPLEX
+);
+
+delimiter //;
+
+# BEFORE DELETE trigger reading custom column
+CREATE TRIGGER tr_before_delete BEFORE DELETE ON t1
+FOR EACH ROW
+BEGIN
+  SET @deleted_val = OLD.val;
+  SET @deleted_id = OLD.id;
+  SET @deleted_name = OLD.name;
+END//
+
+# AFTER DELETE trigger reading custom column
+CREATE TRIGGER tr_after_delete AFTER DELETE ON t1
+FOR EACH ROW
+BEGIN
+  SET @after_deleted_val = OLD.val;
+END//
+
+delimiter ;//
+
+# Insert test data
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(5.0,6.0)');
+
+# Verify DELETE trigger
+DELETE FROM t1 WHERE id = 2;
+SELECT @deleted_val, @deleted_id, @deleted_name, @after_deleted_val;
+
+# Verify table contents
+SELECT * FROM t1;
+
+# Cleanup
+DROP TRIGGER tr_before_delete;
+DROP TRIGGER tr_after_delete;
+DROP TABLE t1;
+
+# Clear user variables
+SET @deleted_val = NULL;
+SET @deleted_id = NULL;
+SET @deleted_name = NULL;
+SET @after_deleted_val = NULL;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,75 @@
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE test_delete_basic (
+id INT AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(50),
+complex_val COMPLEX
+);
+INSERT INTO test_delete_basic (name, complex_val) VALUES
+('test1', '(1,2)'),
+('test2', '(3.14,2.71)'),
+('test3', '(-5.5,-3.3)'),
+('multi1', '(10,20)'),
+('multi2', '(30,40)'),
+('multi3', '(50,60)');
+SELECT COUNT(*) as total_records FROM test_delete_basic;
+total_records
+6
+DELETE FROM test_delete_basic WHERE complex_val = '(1,2)';
+SELECT COUNT(*) as remaining_records FROM test_delete_basic;
+remaining_records
+5
+SELECT id, name, complex_val FROM test_delete_basic ORDER BY id;
+id	name	complex_val
+2	test2	(3.14,2.71)
+3	test3	(-5.5,-3.3)
+4	multi1	(10,20)
+5	multi2	(30,40)
+6	multi3	(50,60)
+DELETE FROM test_delete_basic WHERE name LIKE 'multi%';
+SELECT COUNT(*) as remaining_records FROM test_delete_basic;
+remaining_records
+2
+SELECT id, name, complex_val FROM test_delete_basic ORDER BY id;
+id	name	complex_val
+2	test2	(3.14,2.71)
+3	test3	(-5.5,-3.3)
+CREATE TABLE test_delete_nulls (
+id INT AUTO_INCREMENT PRIMARY KEY,
+nullable_complex COMPLEX DEFAULT NULL,
+not_null_complex COMPLEX NOT NULL DEFAULT '(1,1)'
+);
+INSERT INTO test_delete_nulls (nullable_complex, not_null_complex) VALUES
+(NULL, '(2,2)'),
+('(3,3)', '(4,4)'),
+(NULL, '(5,5)'),
+('(6,6)', '(7,7)');
+SELECT id, nullable_complex, not_null_complex FROM test_delete_nulls ORDER BY id;
+id	nullable_complex	not_null_complex
+1	NULL	(2,2)
+2	(3,3)	(4,4)
+3	NULL	(5,5)
+4	(6,6)	(7,7)
+DELETE FROM test_delete_nulls WHERE nullable_complex IS NULL;
+SELECT id, nullable_complex, not_null_complex FROM test_delete_nulls ORDER BY id;
+id	nullable_complex	not_null_complex
+2	(3,3)	(4,4)
+4	(6,6)	(7,7)
+INSERT INTO test_delete_basic (name, complex_val) VALUES
+('new1', '(100,100)'),
+('new2', '(200,200)'),
+('new3', '(300,300)');
+SELECT id, name, complex_val FROM test_delete_basic ORDER BY id;
+id	name	complex_val
+2	test2	(3.14,2.71)
+3	test3	(-5.5,-3.3)
+7	new1	(100,100)
+8	new2	(200,200)
+9	new3	(300,300)
+DELETE FROM test_delete_basic WHERE complex_val IN ('(100,100)', '(200,200)');
+SELECT id, name, complex_val FROM test_delete_basic ORDER BY id;
+id	name	complex_val
+2	test2	(3.14,2.71)
+3	test3	(-5.5,-3.3)
+9	new3	(300,300)
+DROP TABLE test_delete_basic, test_delete_nulls;
+UNINSTALL EXTENSION vsql_complex;

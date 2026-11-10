@@ -1,0 +1,30 @@
+# Verify the villagesql system tables disable persistent InnoDB statistics,
+# the way the mysql.* system tables do.
+#
+# These tables are small, so a single write puts them over InnoDB's
+# 10%-modified threshold for background statistics recalculation
+# (row_update_statistics_if_needed). The background stats thread then takes MDL
+# on the table. At startup that collides with dd::reset_tables_and_tablespaces(),
+# which takes MDL_EXCLUSIVE on every cached table with a one-year lock wait: the
+# pending extension-update apply writes these tables moments before, so losing
+# that race hangs the server on boot with no further error-log output.
+#
+# Reading the DD tables requires debug access, so this test is debug-only.
+--source include/villagesql/internal_schema_test.inc
+
+# Counted rather than listed per table, so adding a system table does not
+# require re-recording this test. A table that omits the option entirely
+# inherits innodb_stats_persistent (ON by default), so the check is "does not
+# say stats_persistent=0" rather than "says stats_persistent=1".
+--echo # No villagesql system table may leave persistent statistics enabled
+SELECT COUNT(*) AS tables_with_persistent_stats
+FROM mysql.tables t
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+  AND t.options NOT LIKE '%stats_persistent=0%';
+
+--echo # Sanity check: the query above matched a non-empty set of tables
+SELECT COUNT(*) > 0 AS villagesql_tables_present
+FROM mysql.tables t
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql';

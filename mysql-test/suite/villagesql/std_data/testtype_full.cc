@@ -1,0 +1,66 @@
+/* Copyright (c) 2026 VillageSQL Contributors
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ */
+
+// TESTTYPE implementation with full precision (%.17g format)
+// Stores two doubles (real and imaginary) as 16 bytes.
+
+#include <villagesql/vsql.h>
+
+#include <cstdio>
+#include <cstring>
+#include <string_view>
+
+static const size_t kTestTypeLen = 16;
+
+void encode_testtype(std::string_view from, vsql::CustomResult out) {
+  double real = 0, imag = 0;
+  char temp[256];
+  size_t copy_len =
+      from.size() < sizeof(temp) - 1 ? from.size() : sizeof(temp) - 1;
+  memcpy(temp, from.data(), copy_len);
+  temp[copy_len] = '\0';
+  sscanf(temp, " ( %lf , %lf )", &real, &imag);
+  auto to = out.buffer();
+  memcpy(to.data(), &real, 8);
+  memcpy(to.data() + 8, &imag, 8);
+  out.set_length(kTestTypeLen);
+}
+
+void decode_testtype_full(vsql::CustomArg in, vsql::StringResult out) {
+  auto from = in.value();
+  double real, imag;
+  memcpy(&real, from.data(), 8);
+  memcpy(&imag, from.data() + 8, 8);
+  auto to = out.buffer();
+  size_t len = snprintf(to.data(), to.size(), "(%.17g,%.17g)", real, imag);
+  out.set_length(len);
+}
+
+int cmp_testtype(vsql::CustomArg l, vsql::CustomArg r) {
+  return memcmp(l.value().data(), r.value().data(), kTestTypeLen);
+}
+
+static constexpr const char kTestTypeName[] = "TESTTYPE";
+
+constexpr auto TESTTYPE = vsql::make_type<kTestTypeName>()
+                              .persisted_length(kTestTypeLen)
+                              .max_decode_buffer_length(64)
+                              .from_string<&encode_testtype>()
+                              .to_string<&decode_testtype_full>()
+                              .compare<&cmp_testtype>()
+                              .build();
+
+VEF_GENERATE_ENTRY_POINTS(make_extension().type(TESTTYPE))

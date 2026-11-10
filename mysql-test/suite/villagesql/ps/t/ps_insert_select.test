@@ -1,0 +1,81 @@
+# Test INSERT SELECT operations with prepared statements and COMPLEX custom types
+# Covers: INSERT SELECT with parameters, INSERT SELECT with VDF
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test tables
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t2 VALUES (10, '(11.0,12.0)'), (11, '(13.0,14.0)');
+
+--echo #
+--echo # Test 1: INSERT SELECT from another table
+--echo #
+
+PREPARE stmt1 FROM 'INSERT INTO t1 SELECT id, val FROM t2 WHERE id = ?';
+SET @src_id = 10;
+EXECUTE stmt1 USING @src_id;
+SELECT * FROM t1 WHERE id = 10;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: INSERT SELECT with transformation
+--echo #
+
+PREPARE stmt2 FROM 'INSERT INTO t1 SELECT id, val FROM t2 WHERE id > ?';
+SET @min_id = 10;
+EXECUTE stmt2 USING @min_id;
+SELECT * FROM t1 WHERE id = 11;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: INSERT SELECT with VDF generating COMPLEX value
+--echo #
+
+CREATE TABLE t3 (id INT PRIMARY KEY, str_val VARCHAR(50));
+INSERT INTO t3 VALUES (1, '(30.0,31.0)'), (2, '(32.0,33.0)');
+
+PREPARE stmt3 FROM 'INSERT INTO t1 SELECT id + 100, vsql_complex.COMPLEX::from_string(str_val) FROM t3 WHERE id = ?';
+SET @src_id = 1;
+EXECUTE stmt3 USING @src_id;
+SELECT * FROM t1 WHERE id = 101;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: INSERT SELECT with multiple executions
+--echo #
+
+PREPARE stmt4 FROM 'INSERT INTO t1 SELECT id + ?, val FROM t2 WHERE id = ?';
+SET @offset = 20;
+SET @src_id = 10;
+EXECUTE stmt4 USING @offset, @src_id;
+SET @offset = 30;
+SET @src_id = 11;
+EXECUTE stmt4 USING @offset, @src_id;
+SELECT * FROM t1 WHERE id IN (30, 41) ORDER BY id;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: INSERT SELECT with ORDER BY and LIMIT
+--echo #
+
+INSERT INTO t2 VALUES (20, '(40.0,41.0)'), (21, '(42.0,43.0)'), (22, '(44.0,45.0)');
+
+PREPARE stmt5 FROM 'INSERT INTO t1 SELECT id + ?, val FROM t2 WHERE id >= ? ORDER BY id LIMIT ?';
+SET @offset = 50;
+SET @min_id = 20;
+SET @lim = 2;
+EXECUTE stmt5 USING @offset, @min_id, @lim;
+SELECT * FROM t1 WHERE id >= 70 ORDER BY id;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1, t2, t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

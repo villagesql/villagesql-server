@@ -1,0 +1,3 @@
+--let $keyring_restart_param=restart: $PLUGIN_DIR_OPT
+--let $keyring_file_test=1
+--source include/table_encrypt_debug.inc

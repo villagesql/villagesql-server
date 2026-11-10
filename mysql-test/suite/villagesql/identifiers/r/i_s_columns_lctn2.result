@@ -1,0 +1,24 @@
+CREATE DATABASE MixedDb;
+USE MixedDb;
+CREATE TABLE MixedTab (MixedCol vsql_complex.COMPLEX, plain INT);
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+mixeddb	mixedtab	MixedCol	vsql_complex	0.0.1	COMPLEX	{}
+SHOW FIELDS FROM MixedTab;
+Field	Type	Null	Key	Default	Extra
+MixedCol	vsql_complex.COMPLEX	YES		NULL	
+plain	int	YES		NULL	
+SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'mixeddb'
+  ORDER BY COLUMN_NAME;
+TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	DATA_TYPE	COLUMN_TYPE
+MixedDb	MixedTab	MixedCol	vsql_complex.COMPLEX	vsql_complex.COMPLEX
+MixedDb	MixedTab	plain	int	int
+ALTER TABLE mixedtab ADD COLUMN Extra vsql_complex.COMPLEX;
+SHOW FIELDS FROM MixedTab;
+Field	Type	Null	Key	Default	Extra
+MixedCol	vsql_complex.COMPLEX	YES		NULL	
+plain	int	YES		NULL	
+Extra	vsql_complex.COMPLEX	YES		NULL	
+DROP DATABASE MixedDb;

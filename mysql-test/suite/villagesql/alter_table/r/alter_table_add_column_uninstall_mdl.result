@@ -1,0 +1,76 @@
+#
+# Test Case 1: ALTER TABLE ADD COLUMN waits for UNINSTALL, fails after uninstall
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50)) ENGINE=InnoDB;
+# Connection con1: UNINSTALL paused after acquiring MDL X lock
+SET DEBUG_SYNC= 'uninstall_after_extension_lock SIGNAL uninstall_has_lock WAIT_FOR continue_uninstall';
+UNINSTALL EXTENSION vsql_complex;
+# Connection default: Wait for UNINSTALL to acquire exclusive lock
+SET DEBUG_SYNC= 'now WAIT_FOR uninstall_has_lock';
+# Connection default: Start ALTER TABLE ADD COLUMN (will block waiting for MDL)
+# Connection con2: Skip refcount to test pure MDL protection
+SET SESSION debug = '+d,skip_victionary_refcount';
+SET DEBUG_SYNC='mdl_acquire_lock_wait SIGNAL alter_waiting';
+ALTER TABLE t1 ADD COLUMN val COMPLEX;
+# Connection default: Wait for ALTER TABLE to block on MDL
+SET DEBUG_SYNC='now WAIT_FOR alter_waiting';
+# Connection default: Check MDL locks - UNINSTALL holds EXCLUSIVE, ALTER waits
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex'
+ORDER BY LOCK_STATUS DESC;
+OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
+EXTENSION	NULL	vsql_complex	SHARED	PENDING
+EXTENSION	NULL	vsql_complex	EXCLUSIVE	GRANTED
+# Connection default: Signal UNINSTALL to continue and complete
+SET DEBUG_SYNC= 'now SIGNAL continue_uninstall';
+# Connection con1: Reaping UNINSTALL (should succeed)
+# Connection con2: Reaping ALTER TABLE (should fail - extension uninstalled)
+ERROR HY000: Custom type 'COMPLEX' from extension 'vsql_complex' version '0.0.1' not found
+SET SESSION debug = '-d,skip_victionary_refcount';
+DROP TABLE t1;
+SET DEBUG_SYNC= 'RESET';
+#
+# Test Case 2: UNINSTALL blocked when ALTER TABLE ADD COLUMN holds extension lock
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50)) ENGINE=InnoDB;
+# Connection con1: ALTER TABLE ADD COLUMN paused AFTER acquiring extension lock
+SET DEBUG_SYNC= 'metadata_after_extension_lock SIGNAL lock_acquired WAIT_FOR continue_alter';
+ALTER TABLE t1 ADD COLUMN val COMPLEX;
+# Connection default: Wait for ALTER TABLE to acquire extension lock
+SET DEBUG_SYNC= 'now WAIT_FOR lock_acquired';
+# Connection default: Start UNINSTALL EXTENSION (will block on MDL)
+SET DEBUG_SYNC='mdl_acquire_lock_wait SIGNAL uninstall_waiting';
+UNINSTALL EXTENSION vsql_complex;
+# Connection default: Wait for UNINSTALL to block on MDL
+SET DEBUG_SYNC='now WAIT_FOR uninstall_waiting';
+# Connection default: Check MDL locks in performance_schema
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex'
+ORDER BY LOCK_STATUS;
+OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
+EXTENSION	NULL	vsql_complex	SHARED	GRANTED
+EXTENSION	NULL	vsql_complex	EXCLUSIVE	PENDING
+# Connection default: Signal ALTER TABLE to continue
+SET DEBUG_SYNC= 'now SIGNAL continue_alter';
+# Connection con1: Reaping ALTER TABLE (should succeed)
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `name` varchar(50) DEFAULT NULL,
+  `val` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	val	vsql_complex	0.0.1	COMPLEX	{}
+# Connection con2: Reaping UNINSTALL (should fail - table t1 uses the type)
+ERROR HY000: Cannot drop extension `vsql_complex` as 1 column(s) depend on it, e.g. test.t1.val has type COMPLEX
+# Connection con1: DROP TABLE to remove dependency
+DROP TABLE t1;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+# Connection default: Now UNINSTALL should succeed
+SET DEBUG_SYNC= 'RESET';

@@ -1,0 +1,54 @@
+# Test UNION / UNION ALL with COMPLEX type
+# Grammar: ... UNION ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)');
+
+CREATE TABLE t2 (val COMPLEX);
+INSERT INTO t2 VALUES ('(3.0,4.0)');
+
+SELECT val FROM t1 UNION SELECT val FROM t2;
+SELECT val FROM t1 UNION ALL SELECT val FROM t2;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+--echo #
+--echo # Test COMPLEX with -0 values (canonicalized on encode)
+--echo #
+
+CREATE TABLE t_zero (val COMPLEX);
+# COMPLEX canonicalizes -0 to +0 during encode
+INSERT INTO t_zero VALUES ('(0,0)'), ('(0,-0)'), ('(-0,0)'), ('(-0,-0)');
+
+--echo # All values should show as (0,0) due to encode canonicalization
+SELECT val FROM t_zero;
+
+--echo # UNION DISTINCT should deduplicate to single row
+SELECT val FROM t_zero UNION DISTINCT SELECT val FROM t_zero;
+
+DROP TABLE t_zero;
+
+--source include/villagesql/uninstall_complex_extension.inc
+
+--echo #
+--echo # Test COMPLEX2 with -0 values (preserved, hash canonicalizes on the fly)
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t2_zero (val COMPLEX2);
+# COMPLEX2 does NOT canonicalize -0 during encode (preserves -0)
+INSERT INTO t2_zero VALUES ('(0,0)'), ('(0,-0)'), ('(-0,0)'), ('(-0,-0)');
+
+--echo # Values should preserve -0 in output
+SELECT val FROM t2_zero;
+
+--echo # UNION DISTINCT should still deduplicate (custom hash canonicalizes)
+SELECT val FROM t2_zero UNION DISTINCT SELECT val FROM t2_zero;
+
+DROP TABLE t2_zero;
+
+--source include/villagesql/uninstall_complex_extension.inc

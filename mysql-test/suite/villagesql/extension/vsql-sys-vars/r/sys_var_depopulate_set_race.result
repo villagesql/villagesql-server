@@ -1,0 +1,27 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+# Give label a heap-allocated value, so there is an old buffer to free
+SET GLOBAL vsql_range_clamp_test.label = 'first';
+SELECT @@global.vsql_range_clamp_test.label;
+@@global.vsql_range_clamp_test.label
+first
+# con_uninstall: park UNINSTALL just after the g_sys_vars entries go
+SET DEBUG_SYNC = 'vef_sys_var_after_depopulate_erase SIGNAL erased WAIT_FOR continue_uninstall';
+UNINSTALL EXTENSION vsql_range_clamp_test;
+SET DEBUG_SYNC = 'now WAIT_FOR erased';
+# con_set: SET GLOBAL with the entry gone but the variable still
+# registered; the trampoline runs and its lookup misses
+SET GLOBAL vsql_range_clamp_test.label = 'second';
+# The new value must have been stored, not dropped
+SELECT @@global.vsql_range_clamp_test.label;
+@@global.vsql_range_clamp_test.label
+second
+# Let UNINSTALL finish: it frees the string the storage points at
+SET DEBUG_SYNC = 'now SIGNAL continue_uninstall';
+SET DEBUG_SYNC = 'RESET';
+# The extension's variables are gone
+SELECT @@global.vsql_range_clamp_test.label;
+ERROR HY000: Unknown system variable 'vsql_range_clamp_test.label'
+SET DEBUG_SYNC = 'RESET';
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

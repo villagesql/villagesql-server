@@ -1,0 +1,203 @@
+# Copyright (c) 2026 VillageSQL Contributors
+# Test that different upgrade paths result in equivalent final state
+#
+# This test verifies that:
+# 1. Fresh install on current datadir (fresh)
+# 2. Installing VillageSQL on vanilla MySQL 8.4.6 (from_vanilla)
+# Both result in the same final schema state (except timestamps)
+
+--source include/big_test.inc
+--source include/villagesql/internal_schema_test.inc
+
+--echo # Detect lower_case_table_names setting
+let $lctn= `SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'lower_case_table_names'`;
+
+let DDIR_FROM_VANILLA=$MYSQL_TMP_DIR/villagesql_mysql_8.4.6_test;
+let MYSQLD_LOG_FROM_VANILLA=$MYSQL_TMP_DIR/upgrade_from_vanilla.log;
+
+--echo # ========== Fresh install (current datadir) ==========
+
+--echo # Create fresh VillageSQL installation
+CREATE DATABASE fresh_test;
+
+--echo # Verify VillageSQL schema exists and check what tables we have
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id;
+
+--echo # Dump fresh state (excluding timestamp columns)
+--output $MYSQL_TMP_DIR/fresh_dump.sql
+SELECT * FROM villagesql.properties
+WHERE name NOT IN ('created', 'mysql_version_at_creation')
+ORDER BY name;
+
+--output $MYSQL_TMP_DIR/fresh_custom_columns.sql
+SELECT * FROM villagesql.custom_columns
+ORDER BY extension_name, extension_version, type_name;
+
+--echo # Verify INFORMATION_SCHEMA.EXTENSIONS view exists and is queryable
+--output $MYSQL_TMP_DIR/fresh_is_extensions.sql
+SELECT COUNT(*) AS view_row_count FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Verify INFORMATION_SCHEMA.COLUMNS view depends on villagesql.custom_columns
+SET debug = '+d,fetch_system_view_definition';
+--output $MYSQL_TMP_DIR/fresh_is_columns.sql
+SELECT TABLE_COMMENT
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA='information_schema' AND TABLE_NAME='columns';
+SET debug = '-d,fetch_system_view_definition';
+
+--echo # Dump DD tables for villagesql schema
+--output $MYSQL_TMP_DIR/fresh_dd_tables.sql
+SELECT t.name, t.type, t.engine, t.row_format, t.collation_id,
+       t.comment, t.hidden, t.options, t.mysql_version_id
+FROM mysql.tables t
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name;
+
+--output $MYSQL_TMP_DIR/fresh_dd_columns.sql
+SELECT t.name AS table_name, c.name AS col_name, c.ordinal_position,
+       c.type, c.is_nullable, c.is_zerofill, c.is_unsigned,
+       c.char_length, c.numeric_precision, c.numeric_scale,
+       c.datetime_precision, c.collation_id, c.has_no_default,
+       c.default_value_utf8, c.default_option, c.update_option,
+       c.is_auto_increment, c.is_virtual, c.generation_expression_utf8,
+       c.comment, c.hidden, c.options, c.column_key, c.column_type_utf8
+FROM mysql.columns c
+JOIN mysql.tables t ON c.table_id = t.id
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name, c.ordinal_position;
+
+--output $MYSQL_TMP_DIR/fresh_dd_indexes.sql
+SELECT t.name AS table_name, idx.name AS idx_name, idx.type,
+       idx.algorithm, idx.is_visible, idx.is_generated, idx.hidden,
+       idx.ordinal_position, idx.comment, idx.options, idx.engine
+FROM mysql.indexes idx
+JOIN mysql.tables t ON idx.table_id = t.id
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name, idx.ordinal_position;
+
+--echo # Cleanup test database
+DROP DATABASE fresh_test;
+
+--echo # ========== Install on vanilla MySQL 8.4.6 ==========
+
+--echo # Extract vanilla MySQL 8.4.6 datadir
+--copy_file $MYSQL_TEST_DIR/suite/villagesql/std_data/upgrade/mysql_8.4.6_lctn$lctn.zip $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip
+# unset LD_PRELOAD so unzip does not run under the LD_PRELOAD'd ASan runtime on
+# sanitizer builds; otherwise uninstrumented unzip trips LeakSanitizer on its
+# own allocations and fails with exitcode=42 (see
+# include/villagesql/create_extension_sdk.inc for the full explanation).
+--exec unset LD_PRELOAD && unzip -qo $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip -d $MYSQL_TMP_DIR
+--file_exists $DDIR_FROM_VANILLA
+
+--echo # Restart with vanilla MySQL datadir (VillageSQL auto-installs)
+--let $wait_counter= 10000
+--let $restart_parameters= restart:--datadir=$DDIR_FROM_VANILLA --log-error=$MYSQLD_LOG_FROM_VANILLA --log-error-verbosity=3
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld.inc
+
+--source include/villagesql/internal_schema_test.inc
+--echo # Verify VillageSQL schema exists and check what tables we have
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id;
+
+--echo # Dump fresh install state (excluding timestamp columns)
+--output $MYSQL_TMP_DIR/from_vanilla_dump.sql
+SELECT * FROM villagesql.properties
+WHERE name NOT IN ('created', 'mysql_version_at_creation')
+ORDER BY name;
+
+--output $MYSQL_TMP_DIR/from_vanilla_custom_columns.sql
+SELECT * FROM villagesql.custom_columns
+ORDER BY extension_name, extension_version, type_name;
+
+--echo # Verify INFORMATION_SCHEMA.EXTENSIONS view exists and is queryable
+--output $MYSQL_TMP_DIR/from_vanilla_is_extensions.sql
+SELECT COUNT(*) AS view_row_count FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Verify INFORMATION_SCHEMA.COLUMNS view depends on villagesql.custom_columns
+SET debug = '+d,fetch_system_view_definition';
+--output $MYSQL_TMP_DIR/from_vanilla_is_columns.sql
+SELECT TABLE_COMMENT
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA='information_schema' AND TABLE_NAME='columns';
+SET debug = '-d,fetch_system_view_definition';
+
+--echo # Dump DD tables for villagesql schema
+--output $MYSQL_TMP_DIR/from_vanilla_dd_tables.sql
+SELECT t.name, t.type, t.engine, t.row_format, t.collation_id,
+       t.comment, t.hidden, t.options, t.mysql_version_id
+FROM mysql.tables t
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name;
+
+--output $MYSQL_TMP_DIR/from_vanilla_dd_columns.sql
+SELECT t.name AS table_name, c.name AS col_name, c.ordinal_position,
+       c.type, c.is_nullable, c.is_zerofill, c.is_unsigned,
+       c.char_length, c.numeric_precision, c.numeric_scale,
+       c.datetime_precision, c.collation_id, c.has_no_default,
+       c.default_value_utf8, c.default_option, c.update_option,
+       c.is_auto_increment, c.is_virtual, c.generation_expression_utf8,
+       c.comment, c.hidden, c.options, c.column_key, c.column_type_utf8
+FROM mysql.columns c
+JOIN mysql.tables t ON c.table_id = t.id
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name, c.ordinal_position;
+
+--output $MYSQL_TMP_DIR/from_vanilla_dd_indexes.sql
+SELECT t.name AS table_name, idx.name AS idx_name, idx.type,
+       idx.algorithm, idx.is_visible, idx.is_generated, idx.hidden,
+       idx.ordinal_position, idx.comment, idx.options, idx.engine
+FROM mysql.indexes idx
+JOIN mysql.tables t ON idx.table_id = t.id
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name, idx.ordinal_position;
+
+--echo # Shutdown and cleanup
+--source include/shutdown_mysqld.inc
+--remove_file $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip
+--force-rmdir $DDIR_FROM_VANILLA
+
+--echo # ========== Restart with original datadir ==========
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+--echo # ========== Compare results ==========
+
+--echo # Compare the dumps (should be identical)
+--diff_files $MYSQL_TMP_DIR/fresh_dump.sql $MYSQL_TMP_DIR/from_vanilla_dump.sql
+--diff_files $MYSQL_TMP_DIR/fresh_custom_columns.sql $MYSQL_TMP_DIR/from_vanilla_custom_columns.sql
+--diff_files $MYSQL_TMP_DIR/fresh_is_extensions.sql $MYSQL_TMP_DIR/from_vanilla_is_extensions.sql
+--diff_files $MYSQL_TMP_DIR/fresh_is_columns.sql $MYSQL_TMP_DIR/from_vanilla_is_columns.sql
+--diff_files $MYSQL_TMP_DIR/fresh_dd_tables.sql $MYSQL_TMP_DIR/from_vanilla_dd_tables.sql
+--diff_files $MYSQL_TMP_DIR/fresh_dd_columns.sql $MYSQL_TMP_DIR/from_vanilla_dd_columns.sql
+--diff_files $MYSQL_TMP_DIR/fresh_dd_indexes.sql $MYSQL_TMP_DIR/from_vanilla_dd_indexes.sql
+
+--echo # Cleanup
+--remove_file $MYSQL_TMP_DIR/fresh_dump.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_dump.sql
+--remove_file $MYSQL_TMP_DIR/fresh_custom_columns.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_custom_columns.sql
+--remove_file $MYSQL_TMP_DIR/fresh_is_extensions.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_is_extensions.sql
+--remove_file $MYSQL_TMP_DIR/fresh_is_columns.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_is_columns.sql
+--remove_file $MYSQL_TMP_DIR/fresh_dd_tables.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_dd_tables.sql
+--remove_file $MYSQL_TMP_DIR/fresh_dd_columns.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_dd_columns.sql
+--remove_file $MYSQL_TMP_DIR/fresh_dd_indexes.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_dd_indexes.sql
+--remove_file $MYSQLD_LOG_FROM_VANILLA
+
+--echo # Test passed - both upgrade paths result in equivalent state!

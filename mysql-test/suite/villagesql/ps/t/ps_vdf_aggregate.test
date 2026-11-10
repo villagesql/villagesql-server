@@ -1,0 +1,51 @@
+# Test VDFs with aggregate functions and grouping
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(0.0,5.0)'),
+  (4, '(6.0,0.0)'),
+  (5, '(1.0,99.0)'),
+  (6, '(3.0,88.0)');
+
+--echo #
+--echo # Test 1: VDF in GROUP BY clause
+--echo #
+
+PREPARE stmt1 FROM 'SELECT vsql_complex.complex_real(val) AS real_part, COUNT(*) FROM t1 WHERE id > ? GROUP BY vsql_complex.complex_real(val)';
+SET @min_id = 0;
+EXECUTE stmt1 USING @min_id;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: VDF in HAVING clause
+--echo #
+
+PREPARE stmt2 FROM 'SELECT vsql_complex.complex_real(val) AS real_part, COUNT(*) AS cnt FROM t1 GROUP BY vsql_complex.complex_real(val) HAVING cnt > ?';
+SET @min_cnt = 1;
+EXECUTE stmt2 USING @min_cnt;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: VDF with aggregate function
+--echo #
+
+PREPARE stmt3 FROM 'SELECT COUNT(DISTINCT vsql_complex.complex_real(val)) FROM t1 WHERE id > ?';
+SET @min_id = 0;
+EXECUTE stmt3 USING @min_id;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

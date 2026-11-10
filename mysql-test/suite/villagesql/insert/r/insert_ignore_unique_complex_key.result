@@ -1,0 +1,46 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX,
+UNIQUE KEY uk_val (val)
+);
+INSERT INTO t1 VALUES (1, '(1,2)'), (2, '(0,0)');
+INSERT IGNORE INTO t1 VALUES (3, '(1.0,2.0)');
+Warnings:
+Warning	1062	Duplicate entry '(1,2)' for key 't1.uk_val'
+INSERT IGNORE INTO t1 VALUES (4, '(-0,0)');
+Warnings:
+Warning	1062	Duplicate entry '(0,0)' for key 't1.uk_val'
+INSERT IGNORE INTO t1 VALUES
+(5, '(5,5)'),
+(6, '(1,2)'),
+(7, '(5,5)'),
+(8, NULL),
+(9, NULL),
+(10, '(-5,5)');
+affected rows: 4
+info: Records: 6  Duplicates: 2  Warnings: 2
+Warnings:
+Warning	1062	Duplicate entry '(1,2)' for key 't1.uk_val'
+Warning	1062	Duplicate entry '(5,5)' for key 't1.uk_val'
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+5	(5,5)
+8	NULL
+9	NULL
+10	(-5,5)
+INSERT INTO t1 VALUES (11, '(5,5)');
+ERROR 23000: Duplicate entry '(5,5)' for key 't1.uk_val'
+INSERT IGNORE INTO t1 VALUES (12, '(1,2)') ON DUPLICATE KEY UPDATE val = '(5,5)';
+Warnings:
+Warning	1062	Duplicate entry '(5,5)' for key 't1.uk_val'
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+5	(5,5)
+8	NULL
+9	NULL
+10	(-5,5)
+DROP TABLE t1;

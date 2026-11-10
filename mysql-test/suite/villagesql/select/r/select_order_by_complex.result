@@ -1,0 +1,121 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES
+('(3.0,4.0)'),
+('(1.0,2.0)'),
+('(-1.0,-2.0)'),     # negative values
+('(0.0,0.0)'),       # zero
+('(1.0,1.99)'),      # close to existing value
+('(100.0,200.0)');
+SELECT * FROM t1 ORDER BY val ASC;
+val
+(-1,-2)
+(0,0)
+(1,1.99)
+(1,2)
+(3,4)
+(100,200)
+SELECT * FROM t1 ORDER BY val DESC;
+val
+(100,200)
+(3,4)
+(1,2)
+(1,1.99)
+(0,0)
+(-1,-2)
+DROP TABLE t1;
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+val COMPLEX,
+INDEX idx_val (val)
+);
+INSERT INTO t2 VALUES
+(1, '(5.0,6.0)'),
+(2, '(1.0,2.0)'),
+(3, '(3.0,4.0)'),
+(4, '(7.0,8.0)'),
+(5, '(-10.0,5.0)'),    # negative real part
+(6, '(0.0,0.0)'),      # zero
+(7, '(1.0,1.99)');
+SELECT val FROM t2 ORDER BY val ASC;
+val
+(-10,5)
+(0,0)
+(1,1.99)
+(1,2)
+(3,4)
+(5,6)
+(7,8)
+SELECT val FROM t2 ORDER BY val DESC;
+val
+(7,8)
+(5,6)
+(3,4)
+(1,2)
+(1,1.99)
+(0,0)
+(-10,5)
+DROP TABLE t2;
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+INSERT INTO t3 VALUES
+(1, '(9.0,10.0)'),
+(2, '(1.0,2.0)'),
+(3, '(5.0,6.0)'),
+(4, '(3.0,4.0)'),
+(5, '(7.0,8.0)'),
+(6, '(-5.0,-10.0)'),   # both negative
+(7, '(0.0,1.0)'),      # zero real part
+(8, '(1.0,0.0)'),      # zero imaginary part
+(9, '(1.0,1.0)'),      # equal real and imaginary
+(10, '(999.0,999.0)');
+SELECT val FROM t3 ORDER BY val ASC;
+val
+(-5,-10)
+(0,1)
+(1,0)
+(1,1)
+(1,2)
+(3,4)
+(5,6)
+(7,8)
+(9,10)
+(999,999)
+SELECT val FROM t3 ORDER BY val DESC;
+val
+(999,999)
+(9,10)
+(7,8)
+(5,6)
+(3,4)
+(1,2)
+(1,1)
+(1,0)
+(0,1)
+(-5,-10)
+SELECT id, val FROM t3 ORDER BY val ASC, id ASC;
+id	val
+6	(-5,-10)
+7	(0,1)
+8	(1,0)
+9	(1,1)
+2	(1,2)
+4	(3,4)
+3	(5,6)
+5	(7,8)
+1	(9,10)
+10	(999,999)
+SELECT id, val FROM t3 ORDER BY val DESC, id DESC;
+id	val
+10	(999,999)
+1	(9,10)
+5	(7,8)
+3	(5,6)
+4	(3,4)
+2	(1,2)
+9	(1,1)
+8	(1,0)
+7	(0,1)
+6	(-5,-10)
+DROP TABLE t3;

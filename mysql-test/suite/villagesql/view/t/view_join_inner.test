@@ -1,0 +1,29 @@
+# Test VIEW with INNER JOIN on COMPLEX column
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, description VARCHAR(50));
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX, category VARCHAR(50));
+
+INSERT INTO t1 VALUES
+  (1, '(1,2)', 'First value'),
+  (2, '(3,4)', 'Second value'),
+  (3, '(5,6)', 'Third value');
+
+INSERT INTO t2 VALUES
+  (10, '(1,2)', 'Category A'),
+  (20, '(3,4)', 'Category B'),
+  (30, '(7,8)', 'Category C');
+
+# View with INNER JOIN on COMPLEX column
+CREATE VIEW v_inner_join AS
+SELECT t1.id AS t1_id, t1.val, t1.description, t2.id AS t2_id, t2.category
+FROM t1 INNER JOIN t2 ON t1.val = t2.val;
+
+SELECT * FROM v_inner_join ORDER BY t1_id;
+
+DROP VIEW v_inner_join;
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

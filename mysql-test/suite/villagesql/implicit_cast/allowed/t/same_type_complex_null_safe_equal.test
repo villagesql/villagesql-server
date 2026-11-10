@@ -1,0 +1,19 @@
+# Test same-type COMPLEX comparisons (null-safe equal)
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_mixed (id INT, val1 COMPLEX, val2 COMPLEX);
+
+INSERT INTO t_mixed VALUES
+  (1, '(1.0,1.0)', '(2.0,2.0)'),
+  (2, '(3.0,3.0)', '(4.0,4.0)'),
+  (3, NULL, NULL),
+  (4, NULL, '(2.0,2.0)'),
+  (5, '(1.0,1.0)', NULL),
+  (6, '(-1.0,7.0)', '(-1.0,7.0)');
+
+SELECT * FROM t_mixed WHERE val1 <=> val2;
+
+DROP TABLE t_mixed;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,22 @@
+# Test CREATE TABLE with AUTO_INCREMENT column and COMPLEX columns
+# Tests AUTO_INCREMENT column alongside COMPLEX type
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    complex_field COMPLEX
+) AUTO_INCREMENT=100;
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 (complex_field) VALUES ('(1.1,2.2)');
+INSERT INTO t1 (complex_field) VALUES ('(3.3,4.4)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

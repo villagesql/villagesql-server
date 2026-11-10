@@ -1,0 +1,40 @@
+# Test JOIN between nested VIEWs with COMPLEX columns
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX, description VARCHAR(100));
+
+INSERT INTO t1 VALUES
+  (1, '(1,2)', 100.50),
+  (2, '(3,4)', 200.75),
+  (3, '(5,6)', 150.25);
+
+INSERT INTO t2 VALUES
+  (1, '(1,2)', 'Standard value'),
+  (2, '(3,4)', 'Alternative value');
+
+# Create nested views
+CREATE VIEW v1 AS
+SELECT id, val, amount FROM t1;
+
+CREATE VIEW v2 AS
+SELECT id, val, description FROM t2;
+
+# Create view joining nested views
+CREATE VIEW v_joined AS
+SELECT v1.id, v1.val, v1.amount, v2.description
+FROM v1
+LEFT JOIN v2 ON v1.val = v2.val;
+
+# Select specific rows for deterministic output
+# Note: Cannot ORDER BY when result includes COMPLEX columns from joined views
+SELECT * FROM v_joined WHERE id <= 2;
+
+DROP VIEW v_joined;
+DROP VIEW v2;
+DROP VIEW v1;
+DROP TABLE t2;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

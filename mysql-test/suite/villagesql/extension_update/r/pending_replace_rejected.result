@@ -1,0 +1,13 @@
+INSTALL EXTENSION update_test VERSION '1.0.0';
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'update_test';
+PENDING_VERSION
+2.0.0
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+ERROR HY000: Extension 'update_test' already has a pending update; clear it with ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART before queueing a different version
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'update_test';
+PENDING_VERSION
+2.0.0
+UNINSTALL EXTENSION update_test;

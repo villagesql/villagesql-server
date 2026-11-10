@@ -1,0 +1,98 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+# Two indexes on the same column: one L2 (the default profile), one cosine
+# (a non-default profile, named in the column parens).
+CREATE INDEX idx_l2  ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+CREATE INDEX idx_cos ON t (v kvec_profile_cos)
+USING EXTENDED(vsql_knn_index_test.kvec_cos);
+Warnings:
+Warning	1831	Duplicate index 'idx_cos' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+# Data chosen so L2 and cosine rank differently. Relative to [1,0,0,0]:
+#   id 1 [1,0,0,0]  : both metrics distance 0
+#   id 2 [10,0,0,0] : same direction -> cosine 0 (nearest), but L2 far
+#   id 3 [1,1,0,0]  : L2 ~1.41, cosine ~0.29
+#   id 4 [0,1,0,0]  : L2 ~1.41, cosine 1 (orthogonal)
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[10,0,0,0]'),
+(3, '[1,1,0,0]'),
+(4, '[0,1,0,0]');
+# Every row was inserted into BOTH indexes: 4 rows x 2 indexes = 8 inserts.
+SELECT vsql_knn_index_test.kvec_insert_count() AS inserts;
+inserts
+8
+# L2 query is served by the L2 index; nearest-first by Euclidean distance.
+# id 2 ([10,0,0,0]) is FARTHEST here.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+EXPLAIN
+-> Limit: 4 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_l2  (cost=COST rows=ROWS)
+
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+id
+1
+3
+4
+2
+# Cosine query is served by the cosine index; nearest-first by cosine
+# distance. id 2 ([10,0,0,0]) is now among the NEAREST (same direction),
+# the opposite of its L2 rank -- proving the cosine index, not the L2 one,
+# answered this query.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
+EXPLAIN
+-> Limit: 4 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_cos  (cost=COST rows=ROWS)
+
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
+id
+1
+2
+3
+4
+# Dropping one index leaves the other working.
+DROP INDEX idx_cos ON t;
+# L2 query still served by the surviving L2 index.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+EXPLAIN
+-> Limit: 4 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_l2  (cost=COST rows=ROWS)
+
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+id
+1
+3
+4
+2
+# The cosine ordering no longer has an index: it falls back to a plain
+# scan + sort (no distance scan), and must NOT be answered by the surviving
+# L2 index. It still returns the correct cosine order.
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
+EXPLAIN
+-> Limit: 4 row(s)
+    -> Sort: vsql_knn_index_test.kvec_cos_distance(t.v,'[1,0,0,0]'), limit input to 4 row(s) per chunk
+        -> Stream results  (cost=COST rows=ROWS)
+            -> Table scan on t  (cost=COST rows=ROWS)
+
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
+id
+1
+2
+3
+4
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

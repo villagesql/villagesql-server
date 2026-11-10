@@ -1,0 +1,33 @@
+# Restart-time apply resolves VDFs against the target version's registered
+# function table, not just the type descriptor.
+#
+# pending_apply_success covers type-descriptor resolution via to_string.
+# This test covers the broader VDF-lookup path: a distinct VDF whose
+# implementation changed across versions must resolve to the target's
+# implementation after restart.
+#
+# v1's counter_double returns N*2; v2's returns N*3. Same on-disk COUNTER
+# bytes; the number that comes back changes because the VDF pointer in
+# the registered function table now points at v2's implementation.
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+CREATE TABLE t (id INT PRIMARY KEY, val update_test.COUNTER);
+INSERT INTO t VALUES (1, '10'), (2, '20'), (3, '5');
+
+# Before the update, counter_double resolves to v1 (returns N*2).
+SELECT id, update_test.counter_double(val) AS doubled FROM t ORDER BY id;
+
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+
+--source include/restart_mysqld.inc
+
+# Installed version is now 2.0.0.
+SELECT extension_name, extension_version, pending_version, pending_last_error
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+# Same on-disk bytes; counter_double now resolves to v2 (returns N*3).
+SELECT id, update_test.counter_double(val) AS doubled FROM t ORDER BY id;
+
+DROP TABLE t;
+UNINSTALL EXTENSION update_test;

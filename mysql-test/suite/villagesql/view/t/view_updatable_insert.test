@@ -1,0 +1,27 @@
+# Test INSERT through updatable VIEW with COMPLEX column
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, description VARCHAR(100));
+
+INSERT INTO t1 VALUES
+  (1, '(1,2)', 'First'),
+  (2, '(3,4)', 'Second');
+
+# Create simple updatable view
+CREATE VIEW v1 AS
+SELECT id, val, description FROM t1;
+
+# Test INSERT through view
+INSERT INTO v1 VALUES (3, '(5,6)', 'Third');
+
+# Verify insert worked
+SELECT * FROM v1 WHERE id = 3;
+
+# Verify data is in base table
+SELECT * FROM t1 WHERE id = 3;
+
+DROP VIEW v1;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,5 @@
+CREATE TABLE t_complex (id INT, val COMPLEX);
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+UPDATE t_complex SET val = 'invalid_complex' WHERE id = 1;
+ERROR HY000: Incorrect COMPLEX value: 'invalid_complex' for column 'val' at row 1
+DROP TABLE t_complex;

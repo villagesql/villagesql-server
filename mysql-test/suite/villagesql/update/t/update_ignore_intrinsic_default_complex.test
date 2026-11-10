@@ -1,0 +1,90 @@
+# Test intrinsic default behavior for UPDATE IGNORE with COMPLEX type across
+# multiple scenarios: indexed columns, subquery sources, mixed columns, joins.
+
+--source include/villagesql/install_complex_extension.inc
+
+# UPDATE IGNORE on a table with a COMPLEX index.
+# Verify the index entry is updated to the default value, not left stale.
+CREATE TABLE t_indexed (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL,
+    INDEX idx_val (val)
+);
+
+INSERT INTO t_indexed VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(3.0,4.0)'),
+    (3, '(5.0,6.0)');
+
+UPDATE IGNORE t_indexed SET val = NULL WHERE id = 2;
+SELECT * FROM t_indexed ORDER BY id;
+
+# Verify the index still works after the update-to-default
+SELECT * FROM t_indexed WHERE val = '(0,0)';
+SELECT * FROM t_indexed WHERE val = '(3.0,4.0)';
+
+DROP TABLE t_indexed;
+
+# UPDATE IGNORE with a subquery producing NULL as the new value.
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL
+);
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(5.0,6.0)');
+
+# Subquery returns NULL — should trigger intrinsic default
+UPDATE IGNORE t1 SET val = (SELECT NULL) WHERE id = 1;
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+# Mixed-column UPDATE IGNORE: one column succeeds, one goes to intrinsic default.
+# Verify each column independently.
+CREATE TABLE t_mixed (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL,
+    score DOUBLE NOT NULL,
+    name VARCHAR(50)
+);
+
+INSERT INTO t_mixed VALUES
+    (1, '(1.0,2.0)', 9.9, 'alpha'),
+    (2, '(3.0,4.0)', 7.7, 'beta'),
+    (3, '(5.0,6.0)', 5.5, 'gamma');
+
+# val -> intrinsic default (0,0), score -> intrinsic default 0.0, name -> NULL ok
+UPDATE IGNORE t_mixed SET val = NULL, score = NULL, name = NULL WHERE id = 1;
+SELECT * FROM t_mixed ORDER BY id;
+
+# Only val goes to intrinsic default; score and name are valid
+UPDATE IGNORE t_mixed SET val = NULL, score = 1.23, name = 'updated' WHERE id = 2;
+SELECT * FROM t_mixed ORDER BY id;
+
+DROP TABLE t_mixed;
+
+# UPDATE IGNORE on a JOIN: NULLing a NOT NULL COMPLEX column via join condition.
+CREATE TABLE t_main (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL
+);
+
+CREATE TABLE t_flags (
+    id INT PRIMARY KEY,
+    should_null TINYINT
+);
+
+INSERT INTO t_main VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(5.0,6.0)');
+INSERT INTO t_flags VALUES (1, 1), (2, 0), (3, 1);
+
+UPDATE IGNORE t_main
+    JOIN t_flags ON t_main.id = t_flags.id
+    SET t_main.val = NULL
+    WHERE t_flags.should_null = 1;
+
+SELECT * FROM t_main ORDER BY id;
+
+DROP TABLE t_main;
+DROP TABLE t_flags;
+
+--source include/villagesql/uninstall_complex_extension.inc

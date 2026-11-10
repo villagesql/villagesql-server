@@ -1,0 +1,31 @@
+# Test VDF argument count validation
+#
+# VDFs should reject calls with wrong number of arguments.
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Argument count validation
+--echo #
+
+--echo # complex_real expects 1 argument (COMPLEX), try calling with 0
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.complex_real();
+
+--echo # complex_real expects 1 argument (COMPLEX), try calling with 2
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.complex_real('(1,2)', '(3,4)');
+
+--echo # complex_add expects 2 arguments (COMPLEX, COMPLEX), try calling with 1
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.complex_add('(1,2)');
+
+--echo # complex_add expects 2 arguments, try calling with 3
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_complex.complex_add('(1,2)', '(3,4)', '(5,6)');
+
+--echo # Correct usage should still work
+SELECT vsql_complex.complex_real('(1,2)') AS real_part;
+SELECT vsql_complex.complex_add('(1,2)', '(3,4)') AS sum;
+
+--source include/villagesql/uninstall_complex_extension.inc

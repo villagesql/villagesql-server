@@ -1,0 +1,15 @@
+# Test REPLACE with valid COMPLEX value
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES
+  (1, '(1.0,2.0)');
+
+REPLACE INTO t_complex VALUES (1, '(11.0,12.0)');
+SELECT val FROM t_complex WHERE id = 1;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

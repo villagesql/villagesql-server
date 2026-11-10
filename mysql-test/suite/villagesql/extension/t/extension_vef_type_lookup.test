@@ -1,0 +1,42 @@
+# Test that COMPLEX3 type looks up its encode function from the extension's UDF
+# This verifies the wiring between custom types and VEF functions
+
+--echo # Test VEF encode function lookup for COMPLEX3 type
+
+# Setup VEB directory
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # Create test extension with COMPLEX3 type and VEF functions (uses VEF registration)
+--let $extension_name = complex3_ext
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/complex3_encode.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Install extension
+INSTALL EXTENSION complex3_ext;
+
+--echo # Verify extension installed
+--source include/villagesql/query_extensions.inc
+
+--echo # Create table with COMPLEX3 column
+CREATE TABLE test_complex3 (id INT, val COMPLEX3);
+
+--echo # Insert data - this should call the COMPLEX::from_string function via VEF lookup
+INSERT INTO test_complex3 VALUES (1, '(1.0,2.0)');
+
+--echo # Verify data was stored and can be read back
+SELECT id, val FROM test_complex3;
+
+--echo # Cleanup
+DROP TABLE test_complex3;
+UNINSTALL EXTENSION complex3_ext;
+
+--source include/villagesql/binlog_check_end.inc

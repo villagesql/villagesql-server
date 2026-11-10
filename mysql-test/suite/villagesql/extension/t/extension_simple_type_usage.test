@@ -1,0 +1,94 @@
+# Test using the BYTEARRAY type and functions from vsql_simple extension
+# Exercises new-style registration with actual type and function usage
+
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # Install vsql_simple extension
+INSTALL EXTENSION vsql_simple;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Create a table with BYTEARRAY column
+CREATE TABLE test_bytearray (
+  id INT PRIMARY KEY,
+  data BYTEARRAY
+);
+
+--echo # Insert data using the type
+INSERT INTO test_bytearray VALUES (1, 'hello');
+INSERT INTO test_bytearray VALUES (2, 'world123');
+INSERT INTO test_bytearray VALUES (3, 'abcdefgh');
+
+--echo # Query the data
+SELECT id, data FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data FROM test_bytearray ORDER BY id;
+
+--echo # Test rot13 function
+SELECT id, data, vsql_simple.rot13(data) as rotated FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") as rotated FROM test_bytearray ORDER BY id;
+
+--echo # Test even_chars function (extracts bytes at positions 0, 2, 4, 6)
+SELECT id, data, vsql_simple.even_chars(data) as even FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.even_chars(data)), "'") as even FROM test_bytearray ORDER BY id;
+
+--echo # Test odd_chars function (extracts bytes at positions 1, 3, 5, 7)
+SELECT id, data, vsql_simple.odd_chars(data) as odd FROM test_bytearray ORDER BY id;
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.odd_chars(data)), "'") as odd FROM test_bytearray ORDER BY id;
+
+--echo # Test ba_concat function (returns STRING, not BYTEARRAY)
+SELECT vsql_simple.ba_concat(t1.data, t2.data) as concatenated
+FROM test_bytearray t1, test_bytearray t2
+WHERE t1.id = 1 AND t2.id = 2;
+SELECT CONCAT("'", vsql_simple.ba_concat(t1.data, t2.data), "'") as concatenated
+FROM test_bytearray t1, test_bytearray t2
+WHERE t1.id = 1 AND t2.id = 2;
+
+--echo # Test ba_len function (zero-arity, returns a constant)
+SELECT vsql_simple.ba_len() AS len;
+
+--echo # ba_concat (declared with two params) rejects a single-arg call
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_simple.ba_concat(t.data) FROM test_bytearray t WHERE t.id = 1;
+
+--echo # Test ba_concat_all function (varargs, returns STRING)
+SELECT vsql_simple.ba_concat_all(t.data) AS one
+FROM test_bytearray t WHERE t.id = 1;
+SELECT vsql_simple.ba_concat_all(t1.data, t2.data, t3.data) AS three
+FROM test_bytearray t1, test_bytearray t2, test_bytearray t3
+WHERE t1.id = 1 AND t2.id = 2 AND t3.id = 3;
+SELECT CONCAT("'", vsql_simple.ba_concat_all(t1.data, t2.data, t3.data), "'") AS three
+FROM test_bytearray t1, test_bytearray t2, test_bytearray t3
+WHERE t1.id = 1 AND t2.id = 2 AND t3.id = 3;
+
+--echo # ba_concat_all rejects zero arguments via prerun
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_simple.ba_concat_all();
+
+--echo # ba_concat_all rejects non-BYTEARRAY arguments via prerun
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_simple.ba_concat_all(1);
+
+--echo # ba_concat_all propagates NULL
+SELECT vsql_simple.ba_concat_all(t1.data, NULL) AS with_null
+FROM test_bytearray t1 WHERE t1.id = 1;
+
+--echo # ba_concat_all rejects a STRING literal via prerun, which tells it apart
+--echo # from a constant NULL
+--error ER_CANT_INITIALIZE_UDF
+SELECT vsql_simple.ba_concat_all(t1.data, 'abc') AS with_str
+FROM test_bytearray t1 WHERE t1.id = 1;
+
+--echo # Test ba_call_index (exercises typed prerun/postrun + state-passing VDF)
+SELECT vsql_simple.ba_call_index() as idx FROM test_bytearray ORDER BY id;
+
+--echo # Clean up
+DROP TABLE test_bytearray;
+
+--echo # Uninstall the extension
+UNINSTALL EXTENSION vsql_simple;
+
+--echo # Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--source include/villagesql/binlog_check_end.inc

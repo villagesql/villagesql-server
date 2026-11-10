@@ -1,0 +1,137 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX,
+description VARCHAR(100)
+);
+INSERT INTO t1 VALUES
+(1, '(1e10,1e-10)', 'scientific'),
+(2, '(1e100,1e-100)', 'scientific'),
+(3, '(1.0,2.0)', 'normal'),
+(4, '(3.0,4.0)', 'whitespace'),
+(5, '(5.0, 6.0)', 'whitespace'),
+(6, NULL, 'null'),
+(7, NULL, 'null'),
+(8, '(0,0)', 'zero'),
+(9, '(-0,0)', 'zero'),
+(10, '(0,-0)', 'zero');
+SELECT COUNT(*) as initial_count FROM t1;
+initial_count
+10
+DELETE FROM t1 WHERE val = '(1e10,1e-10)';
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+9
+DELETE FROM t1 WHERE val = '( 3.0 , 4.0 )';
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+8
+DELETE FROM t1 WHERE val IS NULL;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+6
+DELETE FROM t1 WHERE val = '(0,0)';
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+SELECT * FROM t1 ORDER BY id;
+id	val	description
+2	(1e+100,1e-100)	scientific
+3	(1,2)	normal
+5	(5,6)	whitespace
+DELETE FROM t1;
+INSERT INTO t1 VALUES
+(11, '(11.0,11.0)', 'batch'), (12, '(12.0,12.0)', 'batch'), (13, '(13.0,13.0)', 'batch'),
+(14, '(14.0,14.0)', 'batch'), (15, '(15.0,15.0)', 'batch'), (16, '(16.0,16.0)', 'batch'),
+(17, '(17.0,17.0)', 'batch'), (18, '(18.0,18.0)', 'batch'), (19, '(19.0,19.0)', 'batch'),
+(20, '(20.0,20.0)', 'batch'), (21, '(21.0,21.0)', 'batch'), (22, '(22.0,22.0)', 'batch'),
+(23, '(23.0,23.0)', 'batch'), (24, '(24.0,24.0)', 'batch'), (25, '(25.0,25.0)', 'batch'),
+(26, '(26.0,26.0)', 'batch'), (27, '(27.0,27.0)', 'batch'), (28, '(28.0,28.0)', 'batch'),
+(29, '(29.0,29.0)', 'batch'), (30, '(30.0,30.0)', 'batch'), (31, '(31.0,31.0)', 'batch'),
+(32, '(32.0,32.0)', 'batch'), (33, '(33.0,33.0)', 'batch'), (34, '(34.0,34.0)', 'batch'),
+(35, '(35.0,35.0)', 'batch'), (36, '(36.0,36.0)', 'batch'), (37, '(37.0,37.0)', 'batch'),
+(38, '(38.0,38.0)', 'batch'), (39, '(39.0,39.0)', 'batch'), (40, '(40.0,40.0)', 'batch'),
+(41, '(41.0,41.0)', 'batch'), (42, '(42.0,42.0)', 'batch'), (43, '(43.0,43.0)', 'batch'),
+(44, '(44.0,44.0)', 'batch'), (45, '(45.0,45.0)', 'batch'), (46, '(46.0,46.0)', 'batch'),
+(47, '(47.0,47.0)', 'batch'), (48, '(48.0,48.0)', 'batch'), (49, '(49.0,49.0)', 'batch'),
+(50, '(50.0,50.0)', 'batch'), (51, '(51.0,51.0)', 'batch'), (52, '(52.0,52.0)', 'batch'),
+(53, '(53.0,53.0)', 'batch'), (54, '(54.0,54.0)', 'batch'), (55, '(55.0,55.0)', 'batch'),
+(56, '(56.0,56.0)', 'batch'), (57, '(57.0,57.0)', 'batch'), (58, '(58.0,58.0)', 'batch'),
+(59, '(59.0,59.0)', 'batch'), (60, '(60.0,60.0)', 'batch');
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+50
+DELETE FROM t1 WHERE id <= 50;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+10
+SELECT * FROM t1 WHERE id IN (51, 55, 60) ORDER BY id;
+id	val	description
+51	(51,51)	batch
+55	(55,55)	batch
+60	(60,60)	batch
+INSERT INTO t1 VALUES
+(70, '(1.0,2.0)', 'test'),
+(71, '(0,0)', 'test'),
+(72, NULL, 'test'),
+(73, '(3.0,4.0)', 'test');
+DELETE FROM t1 WHERE id >= 70 AND (val = '(0,0)' OR val IS NULL);
+SELECT * FROM t1 WHERE id >= 70 ORDER BY id;
+id	val	description
+70	(1,2)	test
+73	(3,4)	test
+DELETE FROM t1 WHERE id BETWEEN 55 AND 58;
+SELECT * FROM t1 WHERE id >= 51 ORDER BY id;
+id	val	description
+51	(51,51)	batch
+52	(52,52)	batch
+53	(53,53)	batch
+54	(54,54)	batch
+59	(59,59)	batch
+60	(60,60)	batch
+70	(1,2)	test
+73	(3,4)	test
+INSERT INTO t1 VALUES
+(80, '(0,0)', 'limit_test'),
+(81, '(1,1)', 'limit_test'),
+(82, '(2,2)', 'limit_test'),
+(83, '(3,3)', 'limit_test'),
+(84, '(4,4)', 'limit_test');
+DELETE FROM t1 WHERE id >= 80 ORDER BY id DESC LIMIT 2;
+SELECT * FROM t1 WHERE id >= 80 ORDER BY id;
+id	val	description
+80	(0,0)	limit_test
+81	(1,1)	limit_test
+82	(2,2)	limit_test
+DELETE FROM t1 WHERE val = '(999,999)';
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+11
+DELETE FROM t1 WHERE id = 82;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+10
+DELETE FROM t1 WHERE id IN (80, 81);
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+8
+INSERT INTO t1 VALUES (90, '(90,90)', 'not_in'), (91, '(91,91)', 'not_in'), (92, '(92,92)', 'not_in');
+DELETE FROM t1 WHERE id NOT IN (90, 91);
+SELECT * FROM t1 ORDER BY id;
+id	val	description
+90	(90,90)	not_in
+91	(91,91)	not_in
+DELETE FROM t1;
+INSERT INTO t1 VALUES
+(100, '(999999999.123456789,-999999999.987654321)', 'large'),
+(101, '(0.000000001,0.000000002)', 'small'),
+(102, '(-0.000000001,-0.000000002)', 'small');
+DELETE FROM t1 WHERE val = '(999999999.123456789,-999999999.987654321)';
+SELECT * FROM t1 ORDER BY id;
+id	val	description
+101	(1e-09,2e-09)	small
+102	(-1e-09,-2e-09)	small
+DELETE FROM t1;
+SELECT COUNT(*) as should_be_zero FROM t1;
+should_be_zero
+0
+DROP TABLE t1;

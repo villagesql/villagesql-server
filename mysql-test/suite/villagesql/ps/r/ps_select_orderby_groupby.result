@@ -1,0 +1,56 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(5.0,6.0)'), (4, '(1.0,2.0)');
+#
+# Test 1: SELECT with ORDER BY on COMPLEX column
+#
+PREPARE stmt1 FROM 'SELECT id, val FROM t1 ORDER BY val';
+EXECUTE stmt1;
+id	val
+1	(1,2)
+4	(1,2)
+2	(3,4)
+3	(5,6)
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: SELECT with ORDER BY and LIMIT using parameter
+#
+PREPARE stmt2 FROM 'SELECT id, val FROM t1 ORDER BY id LIMIT ?';
+SET @lim = 2;
+EXECUTE stmt2 USING @lim;
+id	val
+1	(1,2)
+2	(3,4)
+SET @lim = 3;
+EXECUTE stmt2 USING @lim;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: SELECT DISTINCT with COMPLEX column
+#
+PREPARE stmt3 FROM 'SELECT DISTINCT val FROM t1 ORDER BY val';
+EXECUTE stmt3;
+val
+(1,2)
+(3,4)
+(5,6)
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: SELECT with GROUP BY on COMPLEX column
+#
+PREPARE stmt4 FROM 'SELECT val, COUNT(*) FROM t1 GROUP BY val ORDER BY val';
+EXECUTE stmt4;
+val	COUNT(*)
+(1,2)	2
+(3,4)	1
+(5,6)	1
+DEALLOCATE PREPARE stmt4;
+#
+# Cleanup
+#
+DROP TABLE t1;

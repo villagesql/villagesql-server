@@ -1,0 +1,44 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX DEFAULT '(0.0,0.0)',
+name VARCHAR(50)
+);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)', 'one'),
+(2, '(3.0,4.0)', 'two'),
+(3, '(-5.0,-6.0)', 'three'),
+(4, '(7.0,8.0)', 'four'),
+(5, '(9.0,10.0)', 'five');
+UPDATE t1 SET val = DEFAULT WHERE id = 1;
+SELECT * FROM t1 ORDER BY id;
+id	val	name
+1	(0,0)	one
+2	(3,4)	two
+3	(-5,-6)	three
+4	(7,8)	four
+5	(9,10)	five
+UPDATE t1 SET val = DEFAULT WHERE id IN (2, 3);
+SELECT * FROM t1 ORDER BY id;
+id	val	name
+1	(0,0)	one
+2	(0,0)	two
+3	(0,0)	three
+4	(7,8)	four
+5	(9,10)	five
+UPDATE t1 SET val = DEFAULT, name = 'updated' WHERE id = 4;
+SELECT * FROM t1 ORDER BY id;
+id	val	name
+1	(0,0)	one
+2	(0,0)	two
+3	(0,0)	three
+4	(0,0)	updated
+5	(9,10)	five
+UPDATE t1 SET val = DEFAULT;
+SELECT * FROM t1 ORDER BY id;
+id	val	name
+1	(0,0)	one
+2	(0,0)	two
+3	(0,0)	three
+4	(0,0)	updated
+5	(0,0)	five
+DROP TABLE t1;

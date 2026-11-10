@@ -1,0 +1,12 @@
+# Test INSERT with type conversion
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT, val COMPLEX);
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t_complex VALUES (4, 'not_a_complex_value');
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

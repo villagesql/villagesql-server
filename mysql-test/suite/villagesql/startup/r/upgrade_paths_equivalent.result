@@ -1,0 +1,44 @@
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Detect lower_case_table_names setting
+# ========== Fresh install (current datadir) ==========
+# Create fresh VillageSQL installation
+CREATE DATABASE fresh_test;
+# Verify VillageSQL schema exists and check what tables we have
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id;
+properties_table_exists
+6
+# Dump fresh state (excluding timestamp columns)
+# Verify INFORMATION_SCHEMA.EXTENSIONS view exists and is queryable
+# Verify INFORMATION_SCHEMA.COLUMNS view depends on villagesql.custom_columns
+SET debug = '+d,fetch_system_view_definition';
+SET debug = '-d,fetch_system_view_definition';
+# Dump DD tables for villagesql schema
+# Cleanup test database
+DROP DATABASE fresh_test;
+# ========== Install on vanilla MySQL 8.4.6 ==========
+# Extract vanilla MySQL 8.4.6 datadir
+# Restart with vanilla MySQL datadir (VillageSQL auto-installs)
+# restart:--datadir=MYSQL_TMP_DIR/villagesql_mysql_8.4.6_test --log-error=MYSQL_TMP_DIR/upgrade_from_vanilla.log --log-error-verbosity=3
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Verify VillageSQL schema exists and check what tables we have
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id;
+properties_table_exists
+6
+# Dump fresh install state (excluding timestamp columns)
+# Verify INFORMATION_SCHEMA.EXTENSIONS view exists and is queryable
+# Verify INFORMATION_SCHEMA.COLUMNS view depends on villagesql.custom_columns
+SET debug = '+d,fetch_system_view_definition';
+SET debug = '-d,fetch_system_view_definition';
+# Dump DD tables for villagesql schema
+# Shutdown and cleanup
+# ========== Restart with original datadir ==========
+# ========== Compare results ==========
+# Compare the dumps (should be identical)
+# Cleanup
+# Test passed - both upgrade paths result in equivalent state!

@@ -1,0 +1,58 @@
+# Verify that the POSTEXECUTE statement event fires for DDL and GRANT/REVOKE
+# statements, not only for DML. Uses threshold_ms=0 so every statement is
+# logged regardless of duration.
+
+--let $slow_log = $MYSQLTEST_VARDIR/tmp/vsql_slow_ddl.log
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--error 0,1
+--remove_file $slow_log
+
+INSTALL EXTENSION vsql_slow_query_log;
+
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SET GLOBAL vsql_slow_query_log.log_file = '$slow_log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+
+--echo # DDL: CREATE TABLE
+CREATE TABLE vsql_hook_ddl_test (id INT PRIMARY KEY, val VARCHAR(32));
+
+--echo # DDL: ALTER TABLE
+ALTER TABLE vsql_hook_ddl_test ADD COLUMN extra INT;
+
+--echo # DDL: DROP TABLE
+DROP TABLE vsql_hook_ddl_test;
+
+--echo # GRANT
+CREATE USER IF NOT EXISTS 'vsql_hook_test_user'@'localhost';
+GRANT SELECT ON *.* TO 'vsql_hook_test_user'@'localhost';
+
+--echo # REVOKE
+REVOKE SELECT ON *.* FROM 'vsql_hook_test_user'@'localhost';
+DROP USER 'vsql_hook_test_user'@'localhost';
+
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+
+--echo # CREATE TABLE was logged
+--exec sh -c "grep -c 'CREATE TABLE vsql_hook_ddl_test' $slow_log; true"
+
+--echo # ALTER TABLE was logged
+--exec sh -c "grep -c 'ALTER TABLE vsql_hook_ddl_test' $slow_log; true"
+
+--echo # DROP TABLE was logged
+--exec sh -c "grep -c 'DROP TABLE vsql_hook_ddl_test' $slow_log; true"
+
+--echo # GRANT was logged
+--exec sh -c "grep -c 'GRANT SELECT' $slow_log; true"
+
+--echo # REVOKE was logged
+--exec sh -c "grep -c 'REVOKE SELECT' $slow_log; true"
+
+UNINSTALL EXTENSION vsql_slow_query_log;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+
+--remove_file $slow_log

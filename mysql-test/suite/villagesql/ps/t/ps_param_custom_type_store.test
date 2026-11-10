@@ -1,0 +1,114 @@
+# Test a prepared-statement parameter stored into a custom-type column.
+#
+# Only a string parameter reaches the type's encoder, which validates the
+# value; an integer, double or decimal is rejected before it can be stored in
+# its plain form. A NULL parameter is stored as NULL, subject to the column's
+# nullability.
+
+--source include/villagesql/install_tvector_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t3 (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO t3 VALUES (1, '[1,0,0]'), (2, '[0,2,0]');
+
+CREATE TABLE t4 (id INT PRIMARY KEY, vec TVECTOR(3) NULL);
+
+--echo #
+--echo # Test 1: an integer literal is rejected
+--echo #
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t3 VALUES (9, 42);
+
+--echo #
+--echo # Test 2: an integer parameter, the same value through EXECUTE
+--echo #
+
+PREPARE p FROM 'INSERT INTO t3 VALUES (9, ?)';
+SET @n = 42;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE p USING @n;
+
+--echo # The table still reads back
+SELECT id, vec FROM t3 ORDER BY id;
+
+--echo #
+--echo # Test 3: a double parameter
+--echo #
+
+SET @d = 1.5e0;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE p USING @d;
+
+--echo #
+--echo # Test 4: a decimal parameter
+--echo #
+
+SET @m = 1.5;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE p USING @m;
+
+--echo #
+--echo # Test 5: a string parameter still encodes
+--echo #
+
+SET @s = '[1,2,3]';
+EXECUTE p USING @s;
+SELECT id, vec FROM t3 ORDER BY id;
+
+--echo #
+--echo # Test 6: a string parameter whose dimension does not match the column
+--echo #
+--echo # The encoder rejects the value, so this fails differently from a
+--echo # parameter that never reaches it.
+
+SET @w = '[1,1]';
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE p USING @w;
+
+DEALLOCATE PREPARE p;
+
+--echo #
+--echo # Test 7: a NULL parameter where the same statement last took a string
+--echo #
+
+PREPARE pn FROM 'INSERT INTO t4 VALUES (?, ?)';
+SET @i = 1;
+SET @z = '[4,5,6]';
+EXECUTE pn USING @i, @z;
+SET @i = 2;
+SET @z = NULL;
+EXECUTE pn USING @i, @z;
+SELECT id, vec FROM t4 ORDER BY id;
+DEALLOCATE PREPARE pn;
+
+--echo #
+--echo # Test 8: a NULL parameter into a NOT NULL column
+--echo #
+
+PREPARE pnn FROM 'INSERT INTO t3 VALUES (11, ?)';
+SET @z = NULL;
+--error ER_BAD_NULL_ERROR
+EXECUTE pnn USING @z;
+DEALLOCATE PREPARE pnn;
+
+--echo #
+--echo # Test 9: a non-string parameter in UPDATE
+--echo #
+
+PREPARE u FROM 'UPDATE t3 SET vec = ? WHERE id = 1';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE u USING @n;
+SELECT id, vec FROM t3 ORDER BY id;
+DEALLOCATE PREPARE u;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t3, t4;
+
+--source include/villagesql/uninstall_tvector_extension.inc

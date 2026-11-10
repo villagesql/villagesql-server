@@ -1,0 +1,46 @@
+# Test CREATE TABLE with FOREIGN KEY CASCADE options and COMPLEX columns
+# Tests ON DELETE CASCADE and ON UPDATE CASCADE with COMPLEX data
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+# Create parent table
+CREATE TABLE signal_sources (
+    source_id INT PRIMARY KEY,
+    source_name VARCHAR(100)
+);
+
+INSERT INTO signal_sources VALUES (1, 'generator_1');
+INSERT INTO signal_sources VALUES (2, 'generator_2');
+
+# Create child table with CASCADE options
+CREATE TABLE signal_readings (
+    reading_id INT PRIMARY KEY,
+    source_id INT,
+    complex_signal COMPLEX,
+    amplitude DOUBLE,
+    FOREIGN KEY (source_id) REFERENCES signal_sources(source_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+SHOW COLUMNS FROM signal_readings;
+
+INSERT INTO signal_readings VALUES (1, 1, '(111.0,112.0)', 15.6);
+INSERT INTO signal_readings VALUES (2, 1, '(113.0,114.0)', 18.2);
+INSERT INTO signal_readings VALUES (3, 2, '(115.0,116.0)', 22.1);
+
+SELECT * FROM signal_readings ORDER BY reading_id;
+
+# Test CASCADE UPDATE
+UPDATE signal_sources SET source_id = 10 WHERE source_id = 1;
+SELECT * FROM signal_readings ORDER BY reading_id;
+
+# Test CASCADE DELETE
+DELETE FROM signal_sources WHERE source_id = 2;
+SELECT * FROM signal_readings ORDER BY reading_id;
+
+DROP TABLE signal_readings;
+DROP TABLE signal_sources;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

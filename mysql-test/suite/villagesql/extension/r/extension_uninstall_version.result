@@ -1,0 +1,24 @@
+# Install vsql_simple
+INSTALL EXTENSION vsql_simple;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_simple	0.0.1
+# UNINSTALL with wrong VERSION must fail and leave the extension in place
+UNINSTALL EXTENSION vsql_simple VERSION '9.9.9';
+ERROR HY000: Cannot uninstall extension 'vsql_simple': installed version is '0.0.1' but VERSION '9.9.9' was specified
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_simple	0.0.1
+# UNINSTALL with matching VERSION succeeds
+UNINSTALL EXTENSION vsql_simple VERSION '0.0.1';
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+# UNINSTALL with VERSION when not installed fails as before
+UNINSTALL EXTENSION vsql_simple VERSION '0.0.1';
+ERROR HY000: Extension 'vsql_simple' is not installed
+# Reinstall, then UNINSTALL without VERSION still works (backward compat)
+INSTALL EXTENSION vsql_simple;
+UNINSTALL EXTENSION vsql_simple;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+include/rpl/deprecated/show_binlog_events.inc

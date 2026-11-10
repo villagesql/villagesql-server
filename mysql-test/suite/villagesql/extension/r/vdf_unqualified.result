@@ -1,0 +1,51 @@
+# Test Unqualified VDF Calls
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension test_vdf_ext using SDK...
+Created test_vdf_ext.veb
+# Install first extension
+INSTALL EXTENSION test_vdf_ext;
+# Test 1: Basic unqualified call works when single extension provides function
+SELECT simple_int_func() AS result;
+result
+42
+SELECT simple_string_func() AS result;
+result
+Hello from UDF
+SELECT simple_test('hello') AS result;
+result
+5
+# Test 2: Qualified call still works
+SELECT test_vdf_ext.simple_int_func() AS result;
+result
+42
+Creating extension test_vdf_alt using SDK...
+Created test_vdf_alt.veb
+# Install second extension (has same simple_int_func name)
+INSTALL EXTENSION test_vdf_alt;
+# Test 3: Unqualified call for unique function in second extension works
+SELECT alt_string_func() AS result;
+result
+Hello from alt extension
+# Test 4: Ambiguity error when two extensions provide same function name
+SELECT simple_int_func() AS result;
+ERROR HY000: Ambiguous VDF 'simple_int_func' - provided by multiple extensions: test_vdf_alt, test_vdf_ext. Use qualified name (extension.function).
+# Test 5: Qualified calls still work when unqualified is ambiguous
+SELECT test_vdf_ext.simple_int_func() AS result;
+result
+42
+SELECT test_vdf_alt.simple_int_func() AS result;
+result
+99
+# Test 6: Uninstall second extension only
+UNINSTALL EXTENSION test_vdf_alt;
+# Test 7: Now unqualified call should work again (only one extension provides it)
+SELECT simple_int_func() AS result;
+result
+42
+# Test 8: Uninstall remaining extension
+UNINSTALL EXTENSION test_vdf_ext;
+# Test 9: After uninstall, unqualified call fails
+SELECT simple_int_func() AS result;
+ERROR 42000: FUNCTION test.simple_int_func does not exist
+include/rpl/deprecated/show_binlog_events.inc

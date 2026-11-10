@@ -1,0 +1,12 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t_complex VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)');
+CREATE TABLE test_ctas AS
+SELECT id, val FROM t_complex WHERE id <= 2;
+SELECT * FROM test_ctas ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+DROP TABLE t_complex;
+DROP TABLE test_ctas;

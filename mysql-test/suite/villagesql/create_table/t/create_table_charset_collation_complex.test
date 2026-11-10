@@ -1,0 +1,23 @@
+# Test CREATE TABLE with CHARACTER SET and COLLATION alongside COMPLEX columns
+# Tests charset/collation options with COMPLEX type
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    complex_value COMPLEX
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 VALUES (1, 'test_αβγ', '(2.5,3.5)');
+INSERT INTO t1 VALUES (2, 'test_δεζ', '(4.5,5.5)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

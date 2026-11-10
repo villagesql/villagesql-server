@@ -1,0 +1,93 @@
+# A prepared-statement parameter ('?') inside an expression passed to a VDF,
+# e.g. tvector_dim(CONCAT(?, '')), rather than passed directly.
+#
+# At PREPARE the parameter has no value yet. The expression around it is
+# constant for the execution, so the bind_and_check_types hook should not
+# read it at PREPARE. The hook waits for EXECUTE, as for a parameter passed
+# directly, and judges the call with the value bound.
+#
+# A TVECTOR argument must be a TVECTOR or a string literal, so these calls are
+# rejected also without a prepared statement, and at EXECUTE.
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*TVECTOR.*TVECTOR has no dimension");
+
+INSTALL EXTENSION vsql_tvector;
+
+--echo #
+--echo # bind_and_check_types hook, parameter inside CONCAT
+--echo #
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_dim(CONCAT('[1,2,', '3]')) AS d;
+SET @v = '[1,2,3]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_dim(CONCAT(@v, '')) AS d;
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(CONCAT(?, '''')) AS d';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # Other expressions around the parameter
+--echo #
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(TRIM(?)) AS d';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(CAST(? AS CHAR)) AS d';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(COALESCE(?, ''[0]'')) AS d';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+--echo # A parameter inside a subquery
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim((SELECT CONCAT(?, ''''))) AS d';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # Varargs hook
+--echo #
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tvector.tvector_concat_all(CONCAT(@v, ''), '[4]') AS c;
+PREPARE s FROM
+  'SELECT vsql_tvector.tvector_concat_all(CONCAT(?, ''''), ''[4]'') AS c';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+--echo # With a direct parameter next to it
+PREPARE s FROM
+  'SELECT vsql_tvector.tvector_concat_all(CONCAT(?, ''''), ?) AS c';
+SET @w = '[4]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # from_string inference, parameter inside CONCAT
+--echo #
+--echo # from_string cannot find the dimension of a CONCAT result, so this
+--echo # fails also without a prepared statement.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_string(CONCAT(@v, '')) AS v;
+PREPARE s FROM 'SELECT TVECTOR::from_string(CONCAT(?, '''')) AS v';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t VALUES (1, TVECTOR::from_string(CONCAT(@v, '')));
+PREPARE s FROM
+  'INSERT INTO t VALUES (2, TVECTOR::from_string(CONCAT(?, '''')))';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+SELECT id, v FROM t ORDER BY id;
+DROP TABLE t;
+
+SET @v = NULL, @w = NULL;
+
+UNINSTALL EXTENSION vsql_tvector;

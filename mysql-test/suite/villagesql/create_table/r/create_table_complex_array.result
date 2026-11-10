@@ -1,0 +1,15 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+signal_array COMPLEX[]
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '[]
+)' at line 3
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+fixed_array COMPLEX[3]
+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '[3]
+)' at line 3
+SHOW TABLES LIKE 't_';
+Tables_in_test (t_)
+include/rpl/deprecated/show_binlog_events.inc

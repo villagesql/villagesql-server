@@ -1,0 +1,7 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/complex_basic.dat' INTO TABLE t1;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+DROP TABLE t1;

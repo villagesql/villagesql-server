@@ -1,0 +1,23 @@
+# Test CASE with COMPLEX comparison in condition
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(0.0,0.0)'),
+  (4, '(-1.0,4.0)'),
+  (5, '(0.0,-1.0)'),
+  (6, '(0.1,-1.0)'),
+  (7, '(-1.0,4.0)'),
+  (8, '(0.0,-1.0)'),
+  (9, '(0.1,-1.0)');
+
+SELECT id, CASE WHEN val > '(0,0)' THEN 'positive' ELSE 'zero_or_negative' END as result
+FROM t_complex WHERE id <= 6;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

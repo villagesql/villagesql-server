@@ -1,0 +1,26 @@
+# Regression test: ALTER EXTENSION ... AT RESTART called my_ok() before
+# committing the transaction, so a failed commit raised an error on top of
+# an already-set OK status and aborted debug builds. The OK status must be
+# set only after a successful commit, and a failed commit must leave no
+# pending action recorded.
+
+--source include/have_debug.inc
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+--echo # Force the transaction commit inside ALTER EXTENSION to fail
+SET SESSION DEBUG="+d,pre_commit_error";
+--error ER_UNKNOWN_ERROR
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SET SESSION DEBUG="-d,pre_commit_error";
+
+--echo # The failed statement rolled back: no pending update is recorded
+SELECT extension_name, extension_version, pending_version
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+--echo # Recording the pending update must now succeed
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version
+  FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+
+UNINSTALL EXTENSION update_test;
