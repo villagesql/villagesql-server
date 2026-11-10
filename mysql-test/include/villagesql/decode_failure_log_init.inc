@@ -7,7 +7,7 @@
 #   ... trigger decode failure ...
 #   --source include/villagesql/decode_failure_log_print.inc
 #   ... cleanup ...
-#   --remove_file $MYSQLTEST_VARDIR/tmp/decode_fail_log_pos.txt
+#   --source include/villagesql/decode_failure_log_end.inc
 
 --perl
 use strict;

@@ -34,6 +34,7 @@
 #include <type_traits>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/detail/exceptions.h>
 
 // Forward-declare materialize_func_desc in vsql::func_builder.  The definition
 // lives in vef_register.h.  The using-declaration below makes
@@ -177,8 +178,16 @@ struct FromStringWrapper {
     }
 
     size_t length;
-    bool failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
-                       arg.str_len, &length);
+    bool failed = true;
+
+    VDF_EXCEPTIONS_TRY {
+      failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
+                    arg.str_len, &length);
+    }
+    VDF_EXCEPTIONS_CATCH(result);
+
+    // Exception was thrown; result reflects that to the caller.
+    if (VEF_RESULT_ERROR == result->type) return;
 
     if (failed) {
       result->type = VEF_RESULT_WARNING;
