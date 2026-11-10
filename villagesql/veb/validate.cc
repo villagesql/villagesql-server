@@ -282,7 +282,7 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
   ValidatedPreviewCapabilities result;
   const vef_registration_t *reg = ext_reg.registration;
 
-  if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_2 ||
+  if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_3 ||
       reg->required_capability_count == 0) {
     return result;
   }
