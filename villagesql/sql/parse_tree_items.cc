@@ -70,8 +70,10 @@ static void emit_type_method_error(std::string_view ext_name,
   }
 
   std::set<std::string> type_exts;
+  bool types_use_protocol_1 = true;
   for (const auto *t : results) {
     type_exts.insert(villagesql::canonical_extension_name(t->extension_name()));
+    if (t->protocol() != VEF_PROTOCOL_1) types_use_protocol_1 = false;
   }
 
   const std::string type_prefix =
@@ -117,7 +119,14 @@ static void emit_type_method_error(std::string_view ext_name,
     const std::string methods = join_names_bounded(method_list, budget);
 
     if (methods.empty()) {
-      villagesql_error("%s", MYF(0), head.c_str());
+      if (types_use_protocol_1) {
+        villagesql_error(
+            "Type '%s' method '%s' does not support '::' syntax "
+            "(not registered with a '::' name)",
+            MYF(0), type_name.c_str(), method_name.c_str());
+      } else {
+        villagesql_error("%s", MYF(0), head.c_str());
+      }
     } else {
       villagesql_error("%s%s", MYF(0), (head + ". Valid methods: ").c_str(),
                        methods.c_str());
