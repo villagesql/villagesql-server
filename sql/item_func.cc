@@ -4568,7 +4568,9 @@ void udf_handler::cleanup() {
     udf_handler::fix_fields() will be used in execution.
   */
   THD *thd = current_thd;
-  if (thd->stmt_arena->is_stmt_prepare() && thd->stmt_arena->is_repreparing)
+  // VillageSQL: a reprepare that fails discards its items, so clean them up.
+  if (thd->stmt_arena->is_stmt_prepare() && thd->stmt_arena->is_repreparing &&
+      !thd->is_error())
     return;
 
   if (m_vdf) {
