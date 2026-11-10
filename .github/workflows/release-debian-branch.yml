@@ -5,9 +5,10 @@ name: Release Debian Branch
 # a clean container, and attaches them to an existing GitHub Release.
 #
 # Each target is built inside its own distro image by
-# villagesql/bld_tools/build_deb_docker.sh, which can be run the same way
-# outside CI. The release gets one tarball per target, holding that target's
-# .deb files, plus one tarball holding the source package (.dsc + .tar.xz).
+# packaging/villagesql-deb/bld_tools/build_deb_docker.sh, which can be run the
+# same way outside CI. The release gets one tarball per target, holding that
+# target's .deb files, plus one tarball holding the source package
+# (.dsc + .tar.xz).
 # The DEBs are bundled because each target produces the same file names.
 
 on:
@@ -116,7 +117,7 @@ jobs:
       - name: Build source package
         run: |
           export SOURCE_DATE_EPOCH="$(git -C source log -1 --format=%ct)"
-          source/villagesql/bld_tools/build_deb_docker.sh --source-only
+          source/packaging/villagesql-deb/bld_tools/build_deb_docker.sh --source-only
 
       - name: Bundle source package
         id: bundle
@@ -172,10 +173,10 @@ jobs:
         run: |
           rm -rf "${OUTPUT_DIR:?}"
           export SOURCE_DATE_EPOCH="$(git -C source log -1 --format=%ct)"
-          source/villagesql/bld_tools/build_deb_docker.sh --binary-only
+          source/packaging/villagesql-deb/bld_tools/build_deb_docker.sh --binary-only
 
       - name: Smoke test packages
-        run: source/villagesql/bld_tools/smoke_test_debs.sh "$OUTPUT_DIR"
+        run: source/packaging/villagesql-deb/bld_tools/smoke_test_debs.sh "$OUTPUT_DIR"
 
       - name: Bundle packages
         id: bundle

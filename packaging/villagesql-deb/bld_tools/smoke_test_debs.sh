@@ -12,15 +12,15 @@
 #   IMAGE           Distro image to install into; use the one the DEBs were
 #                   built in (default: ubuntu:24.04)
 #   DOCKER_PLATFORM Docker --platform, e.g. linux/arm64 (default: the host's)
-#   SOURCE_DIR      Source root (default: two levels up from this script)
+#   SOURCE_DIR      Source root (default: three levels up from this script)
 #
 # Usage:
-#   villagesql/bld_tools/smoke_test_debs.sh <deb-dir>
+#   packaging/villagesql-deb/bld_tools/smoke_test_debs.sh <deb-dir>
 
 set -euo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../.." && pwd)}"
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../../.." && pwd)}"
 
 source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
@@ -65,4 +65,4 @@ fi
 
 log_step "Smoke testing DEBs in $IMAGE"
 docker run "${DOCKER_ARGS[@]}" "$IMAGE" \
-    /src/villagesql/bld_tools/smoke_test_debs.sh --in-container
+    /src/packaging/villagesql-deb/bld_tools/smoke_test_debs.sh --in-container

@@ -4,24 +4,24 @@
 # Build VillageSQL Debian packages from a source tree.
 #
 # Mirrors build_rpm.sh: stages the source, materializes debian/ from the
-# templates in packaging/villagesql-deb, and runs dpkg-buildpackage. Like the
-# RPM driver it does NOT require a prior cmake configure -- every substitution
-# comes from VSQL_VERSION and MYSQL_VERSION.
+# templates in packaging/villagesql-deb/debian, and runs dpkg-buildpackage.
+# Like the RPM driver it does NOT require a prior cmake configure -- every
+# substitution comes from VSQL_VERSION and MYSQL_VERSION.
 #
 # Environment:
-#   SOURCE_DIR   Source root (default: two levels up from this script)
+#   SOURCE_DIR   Source root (default: three levels up from this script)
 #   OUTPUT_DIR   Where .deb files are copied (default: $PWD/debs)
 #   WORK_DIR     Staging root (default: a mktemp dir)
 #   VSQL_PRE_RELEASE_VERSION
 #                Override the pre-release suffix; set empty for a release build
 #
 # Usage:
-#   villagesql/bld_tools/build_deb.sh [--worktree] [--source-only]
+#   packaging/villagesql-deb/bld_tools/build_deb.sh [--worktree] [--source-only]
 
 set -euo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../.." && pwd)}"
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../../.." && pwd)}"
 
 # vsql_script_utils.sh provides log_*/die; vsql_parse_version() and friends
 # live in build_info.sh, which expects the utilities to be sourced first.
@@ -84,7 +84,7 @@ log_info "Upstream code base:  $VSQL_CODE_BASE"
 log_info "MySQL base:          $MYSQL_BASE_VERSION"
 log_info "Source directory:    $SOURCE_DIR"
 
-DEB_TEMPLATE_DIR="$SOURCE_DIR/packaging/villagesql-deb"
+DEB_TEMPLATE_DIR="$SOURCE_DIR/packaging/villagesql-deb/debian"
 [[ -d "$DEB_TEMPLATE_DIR" ]] || die "Missing $DEB_TEMPLATE_DIR"
 
 WORK_DIR="${WORK_DIR:-$(mktemp -d)}"
@@ -139,7 +139,7 @@ REQUIRED_PATHS=(
     "extra/boost/boost_1_84_0/boost/version.hpp"
     "sql/mysqld.cc"
     "villagesql/CMakeLists.txt"
-    "packaging/villagesql-deb/control.in"
+    "packaging/villagesql-deb/debian/control.in"
     "VSQL_VERSION"
     "MYSQL_VERSION"
 )
@@ -152,15 +152,9 @@ log_info "Staged source tree passed completeness check"
 
 log_step "Materializing debian/"
 mkdir -p "$STAGE/debian"
-# Copy every template except the .in files, which are substituted below.
-for f in "$DEB_TEMPLATE_DIR"/*; do
-    base="$(basename "$f")"
-    case "$base" in
-        *.in) continue ;;
-        source) cp -r "$f" "$STAGE/debian/" ;;
-        *) cp "$f" "$STAGE/debian/$base" ;;
-    esac
-done
+# Copy every template, then drop the .in files, which are substituted below.
+cp -r "$DEB_TEMPLATE_DIR/." "$STAGE/debian/"
+rm -f "$STAGE"/debian/*.in
 
 sed -e "s|@MYSQL_BASE_VERSION@|${MYSQL_BASE_VERSION}|g" \
     -e "s|@VSQL_CODE_BASE@|${VSQL_CODE_BASE}|g" \

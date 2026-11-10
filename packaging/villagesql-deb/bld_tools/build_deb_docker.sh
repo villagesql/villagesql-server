@@ -4,10 +4,10 @@
 # Build VillageSQL Debian packages inside a Debian or Ubuntu container.
 #
 # build_deb.sh needs a Debian-family host: dpkg-buildpackage, the build
-# dependencies from packaging/villagesql-deb/control.in, and GNU coreutils.
-# This wrapper supplies all three from a stock distro image, so the packages
-# can be built from any host with Docker (macOS included) and are built against
-# the distro they will be installed on.
+# dependencies from packaging/villagesql-deb/debian/control.in, and GNU
+# coreutils. This wrapper supplies all three from a stock distro image, so the
+# packages can be built from any host with Docker (macOS included) and are
+# built against the distro they will be installed on.
 #
 # The source tree is mounted read-only. Packages land in OUTPUT_DIR on the
 # host. Every argument is passed through to build_deb.sh.
@@ -15,19 +15,19 @@
 # Environment:
 #   IMAGE           Distro image to build in (default: ubuntu:24.04)
 #   DOCKER_PLATFORM Docker --platform, e.g. linux/arm64 (default: the host's)
-#   SOURCE_DIR      Source root (default: two levels up from this script)
+#   SOURCE_DIR      Source root (default: three levels up from this script)
 #   OUTPUT_DIR      Where packages are copied (default: $PWD/debs)
 #   VSQL_PRE_RELEASE_VERSION, SOURCE_DATE_EPOCH
 #                   Passed through to build_deb.sh when set
 #
 # Usage:
-#   villagesql/bld_tools/build_deb_docker.sh [build_deb.sh options]
-#   IMAGE=debian:12 villagesql/bld_tools/build_deb_docker.sh --binary-only
+#   packaging/villagesql-deb/bld_tools/build_deb_docker.sh [build_deb.sh options]
+#   IMAGE=debian:12 packaging/villagesql-deb/bld_tools/build_deb_docker.sh --binary-only
 
 set -euo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../.." && pwd)}"
+SOURCE_DIR="${SOURCE_DIR:-$(cd "$TOOLS_DIR/../../.." && pwd)}"
 
 source "$SOURCE_DIR/villagesql/scripts/vsql_script_utils.sh"
 
@@ -43,12 +43,13 @@ if [[ "${1:-}" == "--in-container" ]]; then
     # mk-build-deps reads Build-Depends straight from the template; the
     # placeholders left in it are only in package descriptions.
     DEPS_DIR="$(mktemp -d)"
-    cp /src/packaging/villagesql-deb/control.in "$DEPS_DIR/control"
+    cp /src/packaging/villagesql-deb/debian/control.in "$DEPS_DIR/control"
     (cd "$DEPS_DIR" && mk-build-deps --install --remove \
         --tool 'apt-get -y -qq --no-install-recommends' control)
     rm -rf "$DEPS_DIR"
 
-    SOURCE_DIR=/src OUTPUT_DIR=/out /src/villagesql/bld_tools/build_deb.sh "$@"
+    SOURCE_DIR=/src OUTPUT_DIR=/out \
+        /src/packaging/villagesql-deb/bld_tools/build_deb.sh "$@"
     if [[ -n "${HOST_UID:-}" ]]; then
         chown -R "$HOST_UID:$HOST_GID" /out
     fi
@@ -81,4 +82,4 @@ log_step "Building DEBs in $IMAGE"
 log_info "Source directory:    $SOURCE_DIR"
 log_info "Output directory:    $OUTPUT_DIR"
 docker run "${DOCKER_ARGS[@]}" "$IMAGE" \
-    /src/villagesql/bld_tools/build_deb_docker.sh --in-container "$@"
+    /src/packaging/villagesql-deb/bld_tools/build_deb_docker.sh --in-container "$@"
