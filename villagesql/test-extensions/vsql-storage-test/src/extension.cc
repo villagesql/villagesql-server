@@ -34,7 +34,7 @@
 //   HEADER_SIZE + 0  [8 bytes] — encoded integer value (as written by
 //                                 from_string)
 //   HEADER_SIZE + 8  [8 bytes] — rowid_prefix (zero-padded to 8 bytes)
-//   HEADER_SIZE + 16 [8 bytes] — last-writer trx_ref
+//   HEADER_SIZE + 16 [8 bytes] — last-writer trx_ref (6 bytes used)
 //   HEADER_SIZE + 24 [6 bytes] — deleting trx_ref (0 = live)
 
 #include <villagesql/preview/storage_api.h>
@@ -237,7 +237,7 @@ bool stored_int_insert(Ctx *ctx, storage::MtrCtx::Ref mctx,
   if (rowid_copy > 0) memcpy(rowid_buf, rowid_prefix.data, rowid_copy);
   data_page.write_string(kRowidOff, rowid_buf, 8, mctx);
 
-  data_page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
+  data_page.write_trx_id(kTrxOff, static_cast<uint64_t>(trx), mctx);
   data_page.clear_trx_id(kDelTrxOff, mctx);
 
   *col_ref = static_cast<storage::Column::Ref>(data_page.get_ref());
@@ -269,7 +269,7 @@ bool stored_int_select(Ctx *ctx, storage::MtrCtx::Ref mctx,
   rowid_prefix->data = base + kRowidOff;
   rowid_prefix->length = 8;
   *trx_ref =
-      static_cast<storage::Segment::TrxRef>(page.read_integer_8(kTrxOff));
+      static_cast<storage::Segment::TrxRef>(page.read_trx_id(kTrxOff));
   *delete_trx_ref =
       static_cast<storage::Segment::TrxRef>(page.read_trx_id(kDelTrxOff));
   return false;
@@ -323,7 +323,7 @@ bool stored_int_mark_delete(Ctx *ctx, storage::MtrCtx::Ref mctx,
   } else {
     page.clear_trx_id(kDelTrxOff, mctx);
   }
-  page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
+  page.write_trx_id(kTrxOff, static_cast<uint64_t>(trx), mctx);
   return false;
 }
 
