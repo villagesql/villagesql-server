@@ -222,7 +222,7 @@ bool wide_blob_insert(StoreCtx *ctx, storage::MtrCtx::Ref mctx,
   if (rowid_copy > 0) memcpy(rowid_buf, rowid_prefix.data, rowid_copy);
   data_page.write_string(kRowidOff, rowid_buf, 8, mctx);
 
-  data_page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
+  data_page.write_trx_id(kTrxOff, static_cast<uint64_t>(trx), mctx);
   data_page.clear_trx_id(kDelTrxOff, mctx);
 
   *col_ref = static_cast<storage::Column::Ref>(data_page.get_ref());
@@ -253,7 +253,7 @@ bool wide_blob_select(StoreCtx *ctx, storage::MtrCtx::Ref mctx,
   rowid_prefix->data = base + kRowidOff;
   rowid_prefix->length = 8;
   *trx_ref =
-      static_cast<storage::Segment::TrxRef>(page.read_integer_8(kTrxOff));
+      static_cast<storage::Segment::TrxRef>(page.read_trx_id(kTrxOff));
   *delete_trx_ref =
       static_cast<storage::Segment::TrxRef>(page.read_trx_id(kDelTrxOff));
   return false;
@@ -276,7 +276,7 @@ bool wide_blob_mark_delete(StoreCtx *ctx, storage::MtrCtx::Ref mctx,
   } else {
     page.clear_trx_id(kDelTrxOff, mctx);
   }
-  page.write_integer_8(kTrxOff, static_cast<uint64_t>(trx), mctx);
+  page.write_trx_id(kTrxOff, static_cast<uint64_t>(trx), mctx);
   return false;
 }
 
