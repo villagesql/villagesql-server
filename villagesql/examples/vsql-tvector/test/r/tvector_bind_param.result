@@ -1,4 +1,59 @@
 INSTALL EXTENSION vsql_tvector;
 PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(?)';
-ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+vsql_tvector.tvector_dim(?)
+3
+SET @v = 'not a vector';
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 is not a vector literal
+DEALLOCATE PREPARE s;
+# A varargs function with bind_and_check_types.
+PREPARE s FROM 'SELECT vsql_tvector.tvector_sum_all(?, ?, ?, ?) AS s';
+SET @a = '[1,2,3]', @b = '[4,5]', @c = 10, @d = 2.5e0;
+EXECUTE s USING @a, @b, @c, @d;
+s
+27.5
+SET @a = 1, @b = 2, @c = '[3,4,5,6]', @d = '[7]';
+EXECUTE s USING @a, @b, @c, @d;
+s
+28
+SET @b = 'not a vector';
+EXECUTE s USING @a, @b, @c, @d;
+ERROR HY000: Cannot initialize function 'tvector_sum_all': argument 2 is not a vector literal
+DEALLOCATE PREPARE s;
+# Parameters mixed with a literal
+PREPARE s FROM 'SELECT vsql_tvector.tvector_concat_all(?, ''[6,2]'', ?, ?) AS c';
+SET @a = '[1]', @b = '[3,4]', @c = '[5,6,7]';
+EXECUTE s USING @a, @b, @c;
+c
+[1,6,2,3,4,5,6,7]
+DEALLOCATE PREPARE s;
+# Parameters mixed with a column and a literal: the result's dimension is
+# the sum of all of them, worked out at EXECUTE
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]');
+PREPARE s FROM 'SELECT vsql_tvector.tvector_concat_all(v, ?, ''[7,8]'', ?, ?) AS c
+                FROM t';
+SET @a = '[4]', @b = '[5,6]', @c = '[9]';
+EXECUTE s USING @a, @b, @c;
+c
+[1,2,3,4,7,8,5,6,9]
+SET @a = '[4,4,4]';
+EXECUTE s USING @a, @b, @c;
+c
+[1,2,3,4,4,4,7,8,5,6,9]
+SET @a = 5;
+EXECUTE s USING @a, @b, @c;
+ERROR HY000: Cannot initialize function 'tvector_concat_all': argument 2 must be a TVECTOR or a constant vector literal
+DEALLOCATE PREPARE s;
+# The column between parameters
+PREPARE s FROM 'SELECT vsql_tvector.tvector_concat_all(?, ?, v, ?) AS c FROM t';
+SET @a = '[4]', @b = '[5,6]', @c = '[9]';
+EXECUTE s USING @a, @b, @c;
+c
+[4,5,6,1,2,3,9]
+DEALLOCATE PREPARE s;
+DROP TABLE t;
+SET @v = NULL, @a = NULL, @b = NULL, @c = NULL, @d = NULL;
 UNINSTALL EXTENSION vsql_tvector;

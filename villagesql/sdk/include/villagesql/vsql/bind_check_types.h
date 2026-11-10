@@ -22,10 +22,12 @@
 //
 //   void(BindArgs, BindResult)
 //
-// Called once at resolution time, before any row is read, for a function whose
+// Called at resolution time, before any row is read, for a function whose
 // return-type parameters the built-in rules cannot work out. The hook reads the
 // arguments and answers with the parameters for the return type and, where
 // it needs to, for individual arguments.
+// At PREPARE, when an argument has a ? with no value yet, the hook is not
+// called; it runs at EXECUTE, when the values are bound.
 
 #include <cstddef>
 #include <cstring>

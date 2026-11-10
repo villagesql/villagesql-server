@@ -1,0 +1,51 @@
+# A VDF with a bind_and_check_types hook, prerun and postrun, called with a
+# prepared-statement parameter. The parameter has no value at PREPARE, so the
+# hook is postponed, and with it prerun: neither runs at PREPARE. Every
+# EXECUTE prepares the statement again with the value, and runs the hook,
+# prerun and postrun once each.
+
+--let $extension_name = vdf_postrun_leak
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_postrun_leak.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION vdf_postrun_leak;
+
+CREATE TABLE t (id INT PRIMARY KEY);
+INSERT INTO t VALUES (1), (2), (3);
+
+--let $counts = SELECT vdf_postrun_leak.bind_count() AS bind, vdf_postrun_leak.prerun_count() AS pre, vdf_postrun_leak.postrun_count() AS post, vdf_postrun_leak.live_state_count() AS live
+
+--echo # Baseline
+--eval $counts
+
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.hooked_probe(?) AS r FROM t ORDER BY id';
+--echo # After PREPARE: neither the hook nor prerun has run
+--eval $counts
+
+SET @v = 'a';
+EXECUTE s USING @v;
+--echo # After the first EXECUTE
+--eval $counts
+
+SET @v = 'bc';
+EXECUTE s USING @v;
+--echo # After the second EXECUTE
+--eval $counts
+
+DEALLOCATE PREPARE s;
+--echo # After DEALLOCATE: every prerun has had its postrun
+--eval $counts
+
+--echo # Without a parameter, the hook and prerun run at PREPARE as well
+PREPARE s FROM 'SELECT vdf_postrun_leak.hooked_probe(''x'') AS r';
+--echo # After PREPARE
+--eval $counts
+EXECUTE s;
+DEALLOCATE PREPARE s;
+--echo # After EXECUTE and DEALLOCATE
+--eval $counts
+
+SET @v = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vdf_postrun_leak;
