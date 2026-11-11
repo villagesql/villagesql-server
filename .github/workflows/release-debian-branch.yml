@@ -4,7 +4,9 @@ name: Release Debian Branch
 # villagesql/bld_matrix/json_deb.sh, smoke tests each set by installing it into
 # a clean container, and attaches them to an existing GitHub Release.
 #
-# Each target is built inside its own distro image by
+# The source package is built first, with the bundled extensions cloned into
+# it, and every target builds its binary packages from that source package, so
+# all of them match it. Each target is built inside its own distro image by
 # packaging/villagesql-deb/bld_tools/build_deb_docker.sh, which can be run the
 # same way outside CI. The release gets one tarball per target, holding that
 # target's .deb files, plus one tarball holding the source package
@@ -98,7 +100,8 @@ jobs:
           echo "target-matrix=$(jq -c '{include: .}' <<<"$TARGETS")" >> "$GITHUB_OUTPUT"
 
   # The source package is the same for every target, so it is built once. It
-  # needs no compile, only the build dependencies dpkg-buildpackage checks for.
+  # needs no compile, only the build dependencies dpkg-buildpackage checks for,
+  # but it clones the bundled extensions, so it needs the network.
   source-package:
     name: Source Package
     needs: report-parameters
@@ -138,10 +141,11 @@ jobs:
           path: ${{ steps.bundle.outputs.bundle }}
 
   # One build per row of the table, each native to its architecture and run in
-  # its distro's image.
+  # its distro's image. The checkout supplies only the build scripts; what is
+  # built is the source package.
   build:
     name: Build (${{ matrix.distro }}-${{ matrix.arch }})
-    needs: report-parameters
+    needs: [report-parameters, source-package]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.report-parameters.outputs.target-matrix) }}
@@ -169,11 +173,19 @@ jobs:
           path: source
           ref: ${{ inputs.ref }}
 
+      - name: Download source package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: deb-source
+          path: deb-source/
+
       - name: Build binary packages
         run: |
           rm -rf "${OUTPUT_DIR:?}"
+          tar -C deb-source -xf deb-source/*-deb-source.tar
           export SOURCE_DATE_EPOCH="$(git -C source log -1 --format=%ct)"
-          source/packaging/villagesql-deb/bld_tools/build_deb_docker.sh --binary-only
+          source/packaging/villagesql-deb/bld_tools/build_deb_docker.sh \
+            --dsc "$(ls deb-source/*.dsc)"
 
       - name: Smoke test packages
         run: source/packaging/villagesql-deb/bld_tools/smoke_test_debs.sh "$OUTPUT_DIR"
