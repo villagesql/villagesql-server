@@ -16,6 +16,7 @@
 
 #include "villagesql/sql/metadata_modifier.h"
 
+#include <map>
 #include <unordered_set>
 #include <utility>
 
@@ -442,15 +443,31 @@ bool Metadata_modifier::rename_columns_table(
                                                       new_table, MDL_SHARED));
 
   auto guard = vclient.get_read_lock();
-  auto custom_columns = vclient.GetCustomColumnsForTable(old_db, old_table);
+
+  // The table's columns as the renames already staged here leave them, so
+  // that a RENAME TABLE pair can rename a table an earlier pair of the same
+  // statement produced. Staged renames apply in order, so each new rename
+  // starts from the key the previous one gave the column.
+  const std::string old_prefix = ColumnKeyPrefix(old_db, old_table).str();
+  std::map<std::string, const ColumnEntry *> custom_columns;
+  for (const ColumnEntry *col :
+       vclient.GetCustomColumnsForTable(old_db, old_table)) {
+    if (col) custom_columns[col->key().str()] = col;
+  }
+  for (const auto &[staged_entry, staged_old_key] : to_rename_) {
+    custom_columns.erase(staged_old_key.str());
+    const std::string staged_key = staged_entry.key().str();
+    if (staged_key.compare(0, old_prefix.size(), old_prefix) == 0)
+      custom_columns[staged_key] = &staged_entry;
+  }
 
   if (custom_columns.empty()) {
     return false;  // No custom columns to rename.
   }
 
-  for (const ColumnEntry *old_col : custom_columns) {
-    if (!old_col) continue;
-
+  // Built apart from to_rename_, which custom_columns may point into.
+  std::vector<std::pair<ColumnEntry, ColumnKey>> renames;
+  for (const auto &[_, old_col] : custom_columns) {
     // The caller stages its own operation for these, keyed by new_name
     // already. Renaming them here too would race that operation for the row.
     if (skip_columns != nullptr &&
@@ -461,8 +478,9 @@ bool Metadata_modifier::rename_columns_table(
                           old_col->extension_name, old_col->extension_version,
                           old_col->type_name, old_col->type_parameters);
 
-    to_rename_.emplace_back(new_entry, old_col->key());
+    renames.emplace_back(new_entry, old_col->key());
   }
+  for (auto &rename : renames) to_rename_.push_back(std::move(rename));
 
   return false;
 }

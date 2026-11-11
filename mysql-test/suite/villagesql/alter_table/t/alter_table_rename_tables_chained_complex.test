@@ -1,0 +1,86 @@
+# RENAME TABLE with several pairs applies them in order, so a pair can rename
+# a table that an earlier pair of the same statement produced. The
+# custom_columns entries must follow each table through the chain: swaps
+# through a temporary name, and a table renamed twice in one statement.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+);
+
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    value DOUBLE
+);
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t2 VALUES (2, '3.0');
+
+--source include/villagesql/query_custom_columns.inc
+
+--echo # Swap t1 and t2 through a temporary name.
+RENAME TABLE t1 TO tmp, t2 TO t1, tmp TO t2;
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t2;
+
+--echo # Rename t2 twice in one statement.
+RENAME TABLE t2 TO t3, t3 TO t4;
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW CREATE TABLE t4;
+SELECT * FROM t4;
+
+--echo # Swap two tables that both have a custom column of the same name.
+CREATE TABLE t5 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+);
+INSERT INTO t5 VALUES (5, '(5.0,6.0)');
+RENAME TABLE t4 TO tmp, t5 TO t4, tmp TO t5;
+
+--source include/villagesql/query_custom_columns.inc
+
+SELECT * FROM t4;
+SELECT * FROM t5;
+
+DROP TABLE t1, t4, t5;
+
+--source include/villagesql/query_custom_columns.inc
+
+--echo # Swap a table with two custom columns and a plain one with a table
+--echo # where c1 is a plain column and only c2 is custom.
+CREATE TABLE t6 (
+    id INT PRIMARY KEY,
+    c1 COMPLEX,
+    c2 COMPLEX,
+    name VARCHAR(10)
+);
+CREATE TABLE t7 (
+    id INT PRIMARY KEY,
+    c1 DOUBLE,
+    c2 COMPLEX
+);
+INSERT INTO t6 VALUES (6, '(1.0,1.0)', '(2.0,2.0)', 'six');
+INSERT INTO t7 VALUES (7, 3.5, '(4.0,4.0)');
+RENAME TABLE t6 TO tmp, t7 TO t6, tmp TO t7;
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW CREATE TABLE t6;
+SELECT * FROM t6;
+SHOW CREATE TABLE t7;
+SELECT * FROM t7;
+
+DROP TABLE t6, t7;
+
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/uninstall_complex_extension.inc
