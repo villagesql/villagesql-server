@@ -38,6 +38,8 @@ mark the issue fixed here.
 | KNN-24 | With an HNSW index, entries a READ COMMITTED locking KNN read rejects use up the LIMIT (too few rows) | open, #1398 | locking/hnsw_current_entry_after_change, locking/hnsw_lock_wait_then_delete, locking/hnsw_lock_wait_then_vector_update |
 | KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | fixed in /42 | rollback/hnsw_crash_recovery |
 | KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | open | delete/hnsw_many_deleted |
+| KNN-27 | With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows | open | delete/hnsw_purge_scattered |
+| KNN-28 | Rollback at recovery of a prepared transaction that updated an HNSW vector asserts | open | rollback/hnsw_recovery_prepared_rollback |
 
 ## Not implemented yet
 
@@ -627,3 +629,44 @@ still not implemented on /40.
   seen with inserts only, vector updates only, or inserts balancing deletes.
 - Expected: the query returns LIMIT rows when the table has them.
 - Wrong results (too few rows), silently.
+
+## KNN-27: With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows
+
+- Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
+  vsql-vector deb/hnsw_index/33 (ce25b42).
+- Repro: HNSW index on 3000 rows, row i at `[i,0,0,0]`.
+  `DELETE FROM t WHERE id % 10 = 0`, let purge finish
+  (`wait_innodb_all_purged.inc`), then
+  `SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1.3,0,0,0]') LIMIT 5`
+  returns `261 262 263 264 265`; expected `1 2 3 4 5`. 5 of 6 query points
+  return wrong rows, each a run of rows next to a deleted id (for example
+  `1489 ... 1485` for `[1500.3,0,0,0]`).
+- The same queries are right before the delete, and after it while purge is
+  stopped (`innodb_purge_stop_now`, debug build). With 3000 random
+  4-dimensional rows all three stages are right.
+- delete/hnsw_many_deleted (one contiguous block deleted on a line) is right
+  after purge.
+- Expected: the query returns the nearest rows, as with IGNORE INDEX.
+- Wrong results, silently.
+
+## KNN-28: Rollback at recovery of a prepared transaction that updated an HNSW vector asserts
+
+- Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
+  vsql-vector deb/hnsw_index/33 (ce25b42), debug build, binary log on.
+- Repro: HNSW index on the standard 8 rows. In one transaction an INSERT, a
+  DELETE and `UPDATE t SET v = '[9,9,9,9]' WHERE id = 1`; then
+  `SET SESSION debug = '+d,crash_after_flush_engine_log'` and COMMIT, so the
+  server dies with the transaction prepared in InnoDB but not in the binary
+  log. The restart fails: "Found 1 prepared transaction(s) in InnoDB", then
+  `Record in index idx_v of table test.t was not found on rollback, trying to
+  insert` and `Assertion failure: dict0mem.h:790:(prtype | DATA_VIRTUAL) ==
+  8960 == 9475 == (type->prtype | DATA_VIRTUAL)`. Stack:
+  innobase_rollback_by_xid, trx_rollback_for_mysql, row_undo_mod,
+  row_undo_mod_upd_exist_sec, row_undo_mod_del_unmark_sec_and_undo_update,
+  btr_cur_optimistic_insert, rec_get_converted_size,
+  dict_col_t::assert_equal.
+- The same changes left in an active (not prepared) transaction are rolled
+  back at restart (rollback/hnsw_crash_recovery, the crash_commit_before case
+  of rollback/hnsw_recovery_commit_crash).
+- Expected: the server recovers and rolls the transaction back.
+- The server cannot start.
