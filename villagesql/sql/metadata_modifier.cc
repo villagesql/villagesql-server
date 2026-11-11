@@ -457,7 +457,7 @@ bool Metadata_modifier::rename_columns_table(
   for (const auto &[staged_entry, staged_old_key] : to_rename_) {
     custom_columns.erase(staged_old_key.str());
     const std::string staged_key = staged_entry.key().str();
-    if (staged_key.compare(0, old_prefix.size(), old_prefix) == 0)
+    if (staged_key.starts_with(old_prefix))
       custom_columns[staged_key] = &staged_entry;
   }
 
@@ -467,6 +467,7 @@ bool Metadata_modifier::rename_columns_table(
 
   // Built apart from to_rename_, which custom_columns may point into.
   std::vector<std::pair<ColumnEntry, ColumnKey>> renames;
+  renames.reserve(custom_columns.size());
   for (const auto &[_, old_col] : custom_columns) {
     // The caller stages its own operation for these, keyed by new_name
     // already. Renaming them here too would race that operation for the row.

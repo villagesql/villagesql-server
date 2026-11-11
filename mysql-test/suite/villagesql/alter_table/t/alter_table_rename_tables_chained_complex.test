@@ -79,7 +79,18 @@ SELECT * FROM t6;
 SHOW CREATE TABLE t7;
 SELECT * FROM t7;
 
-DROP TABLE t6, t7;
+--echo # A chain whose last pair fails renames nothing.
+CREATE TABLE t8 (id INT PRIMARY KEY);
+--error ER_TABLE_EXISTS_ERROR
+RENAME TABLE t6 TO tmp, t7 TO t6, tmp TO t8;
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW TABLES;
+SELECT * FROM t6;
+SELECT * FROM t7;
+
+DROP TABLE t6, t7, t8;
 
 --source include/villagesql/query_custom_columns.inc
 
