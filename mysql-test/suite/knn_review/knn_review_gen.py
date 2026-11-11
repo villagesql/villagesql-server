@@ -34,6 +34,7 @@ KNOWN_ISSUES = {
     "locking/hnsw_lock_wait_then_delete": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_vector_update": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "rollback/hnsw_crash_recovery": "KNN-25 Restart after a crash asserts in redo recovery on a PK mapping B-tree record",
+    "delete/hnsw_many_deleted": "KNN-26 With HNSW and most rows deleted, a KNN query returns too few rows",
 }
 LOCK_NOWAIT = ("ER_LOCK_NOWAIT", "ERROR HY000: Statement aborted because "
                "lock(s) could not be acquired immediately and NOWAIT is set.")
@@ -2345,6 +2346,32 @@ hnsw_lock_wait_then("hnsw_lock_wait_then_vector_update",
                     HLW.format(what="has moved away from the query point"),
                     "UPDATE t SET v = '[9,9,9,9]' WHERE id = 1",
                     with_vec(BASE, 1, "[9,9,9,9]"))
+
+
+t = T("delete", "hnsw_many_deleted", """
+With an HNSW index (vsql-vector), a KNN query with LIMIT 10 returns the 10
+nearest rows also when most rows are deleted and their entries are still in
+the index. Rows lie on a line; the rows between the nearest one and the rest
+are deleted. Purge is stopped (debug build) so it can't remove the deleted
+entries first; once it runs, the query is checked again.""")
+t.raw(["--source include/have_debug.inc", ""])
+t.sql("INSTALL EXTENSION vsql_vector")
+t.sql("CREATE TABLE t (id INT PRIMARY KEY, v SVECTOR(4))")
+t.sql("CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw)")
+t.sql("INSERT INTO t VALUES " + ",".join(f"({i},'[{i},0,0,0]')" for i in range(1, 101)))
+t.sql("SET GLOBAL innodb_purge_stop_now = ON")
+t.sql("DELETE FROM t WHERE id BETWEEN 2 AND 90")
+NEAR10 = ["1"] + [str(i) for i in range(91, 100)]
+for hint in ("", " IGNORE INDEX (idx_v)"):
+    t.sql(f"SELECT id FROM t{hint} ORDER BY {HD}(v, '[0,0,0,0]') LIMIT 10",
+          rows=NEAR10)
+t.sql("SET GLOBAL innodb_purge_run_now = ON")
+t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.echo("After purge")
+t.sql(f"SELECT id FROM t ORDER BY {HD}(v, '[0,0,0,0]') LIMIT 10", rows=NEAR10)
+t.sql("DROP TABLE t")
+t.sql("UNINSTALL EXTENSION vsql_vector")
+tests.append(t)
 
 for t in tests:
     t.write()
