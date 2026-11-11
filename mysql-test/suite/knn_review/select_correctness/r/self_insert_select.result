@@ -1,0 +1,17 @@
+INSTALL EXTENSION vsql_knn_index_test;
+INSERT INTO t SELECT id + 100, grp, pay, v FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t WHERE id > 100 ORDER BY id;
+id
+101
+104
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+id
+1
+101
+104
+4
+SELECT COUNT(*) FROM t;
+COUNT(*)
+10
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

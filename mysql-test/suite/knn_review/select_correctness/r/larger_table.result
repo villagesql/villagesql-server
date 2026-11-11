@@ -1,0 +1,26 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE b (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON b (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+# A computed string is not implicitly cast to the custom type
+INSERT INTO b WITH RECURSIVE s (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM s WHERE i < 300) SELECT i, CONCAT('[', i % 17, ',', (i * 7) % 13, ',', (i * 3) % 11, ',0]') FROM s;
+ERROR HY000: Incorrect kvector value: cannot implicitly cast string expression. Use explicit conversion for column 'v' at row 1
+INSERT INTO b WITH RECURSIVE s (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM s WHERE i < 300) SELECT i, vsql_knn_index_test.KVECTOR::from_string(CONCAT('[', i % 17, ',', (i * 7) % 13, ',', (i * 3) % 11, ',0]')) FROM s;
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b ORDER BY d LIMIT 10) s;
+sq
+1,2,2,3,4,5,5,6,6,9
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 10) s;
+sq
+1,2,2,3,4,5,5,6,6,9
+DELETE FROM b WHERE id % 3 = 0;
+UPDATE b SET v = '[5,5,5,1]' WHERE id % 50 = 1;
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b ORDER BY d LIMIT 10) s;
+sq
+1,1,1,1,2,3,5,6,9,10
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 10) s;
+sq
+1,1,1,1,2,3,5,6,9,10
+SELECT COUNT(*) FROM b;
+COUNT(*)
+200
+DROP TABLE b;
+UNINSTALL EXTENSION vsql_knn_index_test;

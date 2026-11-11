@@ -1,0 +1,87 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE b (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON b (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO b WITH RECURSIVE s (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM s WHERE i < 300) SELECT i, vsql_knn_index_test.KVECTOR::from_string(CONCAT('[', i % 17, ',', (i * 7) % 13, ',', (i * 3) % 11, ',0]')) FROM s;
+# Round 1
+UPDATE b SET v = vsql_knn_index_test.KVECTOR::from_string(CONCAT('[', (id * 3) % 17, ',', id % 13, ',', (id + 0) % 11, ',1]')) WHERE id % 7 = 0;
+DELETE FROM b WHERE id % 11 = 0;
+INSERT INTO b WITH RECURSIVE s (i) AS (SELECT 11 UNION ALL SELECT i + 22 FROM s WHERE i < 280) SELECT i, vsql_knn_index_test.KVECTOR::from_string(CONCAT('[', i % 5, ',', i % 7, ',', i % 3, ',2]')) FROM s;
+START TRANSACTION;
+UPDATE b SET v = '[5,5,5,0]' WHERE id % 13 = 0;
+DELETE FROM b WHERE id % 17 = 1;
+ROLLBACK;
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+1,2,2,3,3,4,5,5,6,9,9,9
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+1,2,2,3,3,4,5,5,6,9,9,9
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+5,5,6,7,9,10,10,11,12,12,15,17
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+5,5,6,7,9,10,10,11,12,12,15,17
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[16,12,10,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+0,5,8,9,10,19,20,21,22,25,25,26
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[16,12,10,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+0,5,8,9,10,19,20,21,22,25,25,26
+# Round 2
+UPDATE b SET v = vsql_knn_index_test.KVECTOR::from_string(CONCAT('[', (id * 4) % 17, ',', id % 13, ',', (id + 1) % 11, ',1]')) WHERE id % 8 = 1;
+DELETE FROM b WHERE id % 12 = 0;
+INSERT INTO b WITH RECURSIVE s (i) AS (SELECT 12 UNION ALL SELECT i + 24 FROM s WHERE i < 280) SELECT i, vsql_knn_index_test.KVECTOR::from_string(CONCAT('[', i % 5, ',', i % 7, ',', i % 3, ',2]')) FROM s;
+START TRANSACTION;
+UPDATE b SET v = '[5,5,5,0]' WHERE id % 13 = 1;
+DELETE FROM b WHERE id % 17 = 1;
+ROLLBACK;
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+2,2,3,3,3,4,5,5,6,7,9,9
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+2,2,3,3,3,4,5,5,6,7,9,9
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+5,5,6,6,7,8,9,9,10,11,12,12
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+5,5,6,6,7,8,9,9,10,11,12,12
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[16,12,10,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+0,5,8,9,10,19,20,21,22,25,25,26
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[16,12,10,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+0,5,8,9,10,19,20,21,22,25,25,26
+# Round 3
+UPDATE b SET v = vsql_knn_index_test.KVECTOR::from_string(CONCAT('[', (id * 5) % 17, ',', id % 13, ',', (id + 2) % 11, ',1]')) WHERE id % 9 = 2;
+DELETE FROM b WHERE id % 13 = 0;
+INSERT INTO b WITH RECURSIVE s (i) AS (SELECT 13 UNION ALL SELECT i + 26 FROM s WHERE i < 280) SELECT i, vsql_knn_index_test.KVECTOR::from_string(CONCAT('[', i % 5, ',', i % 7, ',', i % 3, ',2]')) FROM s;
+START TRANSACTION;
+UPDATE b SET v = '[5,5,5,0]' WHERE id % 13 = 2;
+DELETE FROM b WHERE id % 17 = 1;
+ROLLBACK;
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+2,2,3,3,3,4,5,5,6,9,9,9
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[5,5,5,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+2,2,3,3,3,4,5,5,6,9,9,9
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+5,5,6,6,7,8,10,12,12,12,13,13
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+5,5,6,6,7,8,10,12,12,12,13,13
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[16,12,10,0]') AS d FROM b ORDER BY d LIMIT 12) s;
+sq
+0,5,8,9,10,19,20,21,22,25,25,26
+SELECT GROUP_CONCAT(ROUND(d * d) ORDER BY d) AS sq FROM (SELECT vsql_knn_index_test.kvec_l2_distance(v, '[16,12,10,0]') AS d FROM b IGNORE INDEX (idx_v) ORDER BY d LIMIT 12) s;
+sq
+0,5,8,9,10,19,20,21,22,25,25,26
+SELECT COUNT(*) FROM b;
+COUNT(*)
+267
+DROP TABLE b;
+UNINSTALL EXTENSION vsql_knn_index_test;

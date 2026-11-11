@@ -1,0 +1,8 @@
+INSTALL EXTENSION vsql_knn_index_test;
+entries_change
+8
+DROP INDEX idx_v ON t;
+entries_change
+0
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
