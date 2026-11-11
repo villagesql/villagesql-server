@@ -1,8 +1,8 @@
-# knn_review: status (parked 2026-11-11)
+# knn_review: status (2026-11-11)
 
-Review suite for the custom-index work on deb/custom-index/40 (25df4f5).
+Review suite for the custom-index work on deb/custom-index/42 (b9315d6).
 
-- Branch: `tomas/knn-review-stack-40`. It holds /40, the test extension
+- Branch: `tomas/knn-review-stack-40`. It holds /42, the test extension
   (`villagesql/test-extensions/vsql-knn-index-test`), this suite, temporary
   table support and helper_fn_name.
 - Issues: `ISSUES.md` (KNN-n, NYI-n). It also explains how a test is skipped
@@ -31,10 +31,10 @@ Review suite for the custom-index work on deb/custom-index/40 (25df4f5).
   - KNN-23 → #1382
 - Open, not filed:
   - KNN-4, 5, 7, 8, 10, 20, 22
-  - KNN-25: crash recovery asserts in `parse_index_fields` on a PK mapping
-    B-tree redo record, from 4318c9a
   - KNN-26: with HNSW and most rows deleted (entries not purged yet), a plain
     KNN query returns too few rows, mostly 1
+- Fixed in /42: KNN-25 (crash recovery asserted on a PK mapping B-tree redo
+  record). rollback/hnsw_crash_recovery passes.
 - KNN-12 also happens on main: #1541. Fixed by #1544, which is stacked on
   #1543; #1546 is stacked on #1544.
 
@@ -53,8 +53,6 @@ Purge timing:
 
 Restart and recovery (these need vsql-vector; the test extension keeps its
 entries in memory, so a restart empties its index):
-- Rollback of HNSW changes during crash recovery. hnsw_crash_recovery covers
-  this once KNN-25 is fixed.
 - Purge after a restart. Commit deletes, restart before purge runs, then purge.
   The delete-marked entries have to survive the restart and be removed
   afterwards.

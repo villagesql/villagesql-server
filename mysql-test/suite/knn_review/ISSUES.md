@@ -36,7 +36,7 @@ mark the issue fixed here.
 | KNN-22 | A REPEATABLE READ locking KNN read takes no gap locks, so another session can insert a phantom | open | locking/phantom_for_update, locking/phantom_for_share |
 | KNN-23 | EXPLAIN of a KNN-ordered DELETE or UPDATE shows a plain index scan | open, #1382 | select_plan/dml_explain |
 | KNN-24 | With an HNSW index, entries a READ COMMITTED locking KNN read rejects use up the LIMIT (too few rows) | open, #1398 | locking/hnsw_current_entry_after_change, locking/hnsw_lock_wait_then_delete, locking/hnsw_lock_wait_then_vector_update |
-| KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | open | rollback/hnsw_crash_recovery |
+| KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | fixed in /42 | rollback/hnsw_crash_recovery |
 | KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | open | delete/hnsw_many_deleted |
 
 ## Not implemented yet
@@ -586,6 +586,8 @@ still not implemented on /40.
 
 ## KNN-25: Restart after a crash asserts in redo recovery on a PK mapping B-tree record
 
+- Fixed in deb/custom-index/42: 129bdbd "Fix recovery redo apply" and b9315d6
+  "Fix recovery rollback". rollback/hnsw_crash_recovery passes.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/40 25df4f5) with
   vsql-vector deb/hnsw_index/33 (ce25b42).
 - Repro: HNSW index on the standard 8 rows. Another session runs an

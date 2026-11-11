@@ -3,9 +3,6 @@
 # delete and a vector update. KNN reads afterwards return the table as it was
 # before the transaction.
 
---let $knn_issue = KNN-25 Restart after a crash asserts in redo recovery on a PK mapping B-tree record
---source suite/knn_review/include/known_issue.inc
-
 INSTALL EXTENSION vsql_vector;
 CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
 CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
