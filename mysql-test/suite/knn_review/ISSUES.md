@@ -37,6 +37,7 @@ mark the issue fixed here.
 | KNN-23 | EXPLAIN of a KNN-ordered DELETE or UPDATE shows a plain index scan | open, #1382 | select_plan/dml_explain |
 | KNN-24 | With an HNSW index, entries a READ COMMITTED locking KNN read rejects use up the LIMIT (too few rows) | open, #1398 | locking/hnsw_current_entry_after_change, locking/hnsw_lock_wait_then_delete, locking/hnsw_lock_wait_then_vector_update |
 | KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | open | rollback/hnsw_crash_recovery |
+| KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | open | delete/hnsw_many_deleted |
 
 ## Not implemented yet
 
@@ -605,3 +606,22 @@ still not implemented on /40.
 - Rollback of the HNSW changes at recovery is not reached, so not tested yet.
 - Expected: the server recovers, rolls back the open transaction, and KNN
   reads return the table as it was before it.
+
+## KNN-26: With an HNSW index and most rows deleted, a KNN query returns too few rows
+
+- Seen on: tomas/knn-review-stack-40 (deb/custom-index/40 25df4f5) with
+  vsql-vector deb/hnsw_index/33 (ce25b42).
+- Repro: HNSW index on 100 rows, row i at `[i,0,0,0]`. Purge stopped
+  (`innodb_purge_stop_now`, debug build), so the deleted entries stay.
+  `DELETE FROM t WHERE id BETWEEN 2 AND 90`, then a plain (non-locking)
+  `SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[0,0,0,0]') LIMIT 10`
+  returns `1`; expected `1 91 92 ... 99` (as with IGNORE INDEX). Same in every
+  run. Once purge has run, the query returns the 10 rows.
+- With random data (1000 rows of SVECTOR(4), 95% deleted), 22-27 of 300 query
+  points returned fewer than 10 rows, mostly 1.
+- Also seen in vector-dev-bench rw_bench (release build, 20000 rows, dim 32,
+  ef_search 100): with net deletes of more than half the rows, 0.05-0.08% of
+  queries returned 1 row, during the deletes and after them until purge. Not
+  seen with inserts only, vector updates only, or inserts balancing deletes.
+- Expected: the query returns LIMIT rows when the table has them.
+- Wrong results (too few rows), silently.
