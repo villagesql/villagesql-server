@@ -223,7 +223,8 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   return CheckFieldLengthMatchesType(field, tc);
 }
 
-bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
+bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo,
+                            bool use_alter_target) {
   if (should_assert_if_null(thd)) {
     LogVSQL(ERROR_LEVEL, "thd is null in MaybeInjectCustomIndex");
     return true;
@@ -242,13 +243,16 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
   std::string index_name(keyinfo->name);
 
   // An ALTER TABLE rebuild opens the table under a #sql-xxx name that matches
-  // nothing in the victionary. Resolve against the real target table instead;
-  // its entries (unchanged ones committed, added/redefined ones staged
-  // uncommitted) are all keyed under the real name and visible to get() below.
+  // nothing in the victionary, and an in-place ALTER's keys (use_alter_target)
+  // come with the old name, which a RENAME has moved the entries away from.
+  // Resolve against the real target table instead;
+  // its entries (unchanged ones committed, or staged under the new name when
+  // the ALTER renames the table; added/redefined ones staged uncommitted) are
+  // all keyed under the real name and visible to get() below.
   // TODO(villagesql-general): investigate a cleaner way to bridge the #sql-xxx
   // temp name, e.g. staging the rebuild table's victionary entries uncommitted
   // and unstaging them before commit, as explored for custom-type ALTER.
-  if (is_alter_rebuild_table(share) &&
+  if ((use_alter_target || is_alter_rebuild_table(share)) &&
       !thd->villagesql_alter_target_table.empty()) {
     db_name = thd->villagesql_alter_target_db;
     table_name = thd->villagesql_alter_target_table;
@@ -1893,15 +1897,15 @@ bool PrepareAlterCustomFields(THD *thd, const Alter_info *alter_info,
   return false;
 }
 
-void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table) {
-  if (should_assert_if_null(thd) || should_assert_if_null(old_table)) {
+void SetAlterTargetForCustomIndexes(THD *thd, const char *db,
+                                    const char *table_name) {
+  if (should_assert_if_null(thd) || should_assert_if_null(db) ||
+      should_assert_if_null(table_name)) {
     LogVSQL(ERROR_LEVEL, "null argument in SetAlterTargetForCustomIndexes");
     return;
   }
-  thd->villagesql_alter_target_db.assign(old_table->s->db.str,
-                                         old_table->s->db.length);
-  thd->villagesql_alter_target_table.assign(old_table->s->table_name.str,
-                                            old_table->s->table_name.length);
+  thd->villagesql_alter_target_db.assign(db);
+  thd->villagesql_alter_target_table.assign(table_name);
 }
 
 bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,

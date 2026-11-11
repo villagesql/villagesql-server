@@ -1,0 +1,79 @@
+# Renaming a table keeps its custom indexes. The rows in
+# villagesql.custom_indexes follow the table to its new name, for RENAME TABLE
+# (also chained pairs and across databases) and ALTER TABLE ... RENAME (also
+# with a rebuild and with indexes added or dropped by the same statement). No
+# row is left under the old name, so the old name can be reused and the
+# extension can be uninstalled once the tables are dropped.
+
+# TODO(villagesql-indexing): Remove have_debug.inc and the debug flag below once
+# custom index execution is fully implemented and the guard in
+# PT_custom_index_type::do_contextualize() is removed.
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+SET SESSION debug='+d,villagesql_custom_index_proceed';
+
+CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector,
+  INDEX i_a (a) USING EXTENDED(dummy_index_hnsw));
+CREATE TABLE t2 (id INT PRIMARY KEY, b dummy_type_vector,
+  INDEX i_b (b dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw));
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # RENAME TABLE moves the index metadata to the new name.
+RENAME TABLE t1 TO r1;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE r1;
+
+--echo # ALTER TABLE ... RENAME moves it too.
+ALTER TABLE r1 RENAME TO r2;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # Also when the ALTER rebuilds the table.
+ALTER TABLE r2 RENAME TO r3, FORCE;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE r3;
+--echo # The rebuild re-created i_a as a custom index: a later in-place ALTER,
+--echo # which writes every index's storage reference back, succeeds.
+ALTER TABLE r3 ADD INDEX i_id (id), ALGORITHM=INPLACE;
+ALTER TABLE r3 DROP INDEX i_id, ALGORITHM=INPLACE;
+
+--echo # A RENAME TABLE that swaps two tables swaps their indexes.
+RENAME TABLE r3 TO tmp, t2 TO r3, tmp TO t2;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE r3;
+SHOW CREATE TABLE t2;
+
+--echo # RENAME TABLE to another database.
+CREATE DATABASE db2;
+RENAME TABLE t2 TO db2.t2;
+--source include/villagesql/query_custom_indexes.inc
+USE db2;
+--source include/villagesql/query_custom_indexes.inc
+USE test;
+SHOW CREATE TABLE db2.t2;
+
+--echo # The old name can be reused with the same index name.
+CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector,
+  INDEX i_a (a) USING EXTENDED(dummy_index_hnsw));
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # An index added by an ALTER that renames the table is filed under the
+--echo # new name.
+ALTER TABLE t1 RENAME TO r4, ADD COLUMN c dummy_type_vector,
+  ADD INDEX i_c (c) USING EXTENDED(dummy_index_hnsw);
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE r4;
+
+--echo # An index dropped by an ALTER that renames the table is removed.
+ALTER TABLE r4 RENAME TO r5, DROP INDEX i_a;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE r5;
+
+--echo # With every table dropped, the extension can be uninstalled.
+DROP TABLE r3, r5;
+DROP DATABASE db2;
+SET SESSION debug='-d,villagesql_custom_index_proceed';
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
