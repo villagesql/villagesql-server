@@ -1,0 +1,11 @@
+# DELETE and UPDATE ordered by distance, rolled back, leave the table as it was.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+START TRANSACTION;
+DELETE FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+UPDATE t SET v = '[9,9,9,9]' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+ROLLBACK;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

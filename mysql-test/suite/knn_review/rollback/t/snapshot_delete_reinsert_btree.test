@@ -1,0 +1,26 @@
+# A REPEATABLE READ snapshot keeps seeing the table as it was when another session
+# deletes a row and inserts it again with another vector and commits after the snapshot started: the old index entries stay
+# usable and the new ones are not seen. A new snapshot sees the change.
+# The index type stores no primary key (REF_LOOKUP).
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--let $knn_index_type = kvec_l2_btree
+--let $knn_profile = kvec_profile_l2_btree
+--source suite/knn_review/include/require_index_type.inc
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v KVECTOR, KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v kvec_profile_l2_btree) USING EXTENDED(vsql_knn_index_test.kvec_l2_btree);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+--connect (con1, localhost, root,,)
+DELETE FROM t WHERE id = 4;
+INSERT INTO t VALUES (4, 2, 'd', '[9,9,9,9]');
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+COMMIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+--disconnect con1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

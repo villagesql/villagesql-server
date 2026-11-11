@@ -1,0 +1,16 @@
+# A row deleted and inserted again twice in one transaction, with a different
+# vector each time, is in KNN results once, at its last vector.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+START TRANSACTION;
+DELETE FROM t WHERE id = 1;
+INSERT INTO t VALUES (1, 1, 'a', '[3,0,0,0]');
+DELETE FROM t WHERE id = 1;
+INSERT INTO t VALUES (1, 1, 'a', '[1.5,0,0,0]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+COMMIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+SELECT COUNT(*) FROM t;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

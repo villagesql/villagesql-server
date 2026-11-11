@@ -1,0 +1,12 @@
+# INSERT ... SELECT that copies the nearest rows of a table into the same table
+# copies exactly those rows; the copies are found by KNN queries afterwards.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+INSERT INTO t SELECT id + 100, grp, pay, v FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t WHERE id > 100 ORDER BY id;
+--sorted_result
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+SELECT COUNT(*) FROM t;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

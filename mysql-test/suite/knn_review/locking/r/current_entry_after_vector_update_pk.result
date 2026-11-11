@@ -1,0 +1,39 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+4
+8
+2
+UPDATE t SET v = '[1,0,0,0.1]' WHERE id = 6;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+6
+4
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8 FOR SHARE;
+id
+6
+4
+8
+2
+5
+3
+7
+1
+COMMIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8 FOR UPDATE;
+id
+6
+4
+8
+2
+5
+3
+7
+1
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

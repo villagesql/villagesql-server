@@ -1,0 +1,13 @@
+INSTALL EXTENSION vsql_knn_index_test;
+entries_change
+8
+DROP TABLE t;
+entries_change
+0
+# With a delete and a vector update committed but not purged
+DELETE FROM t WHERE id = 7;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 6;
+DROP TABLE t;
+entries_change
+0
+UNINSTALL EXTENSION vsql_knn_index_test;

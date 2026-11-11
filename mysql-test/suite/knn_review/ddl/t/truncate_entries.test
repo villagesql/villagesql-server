@@ -1,0 +1,27 @@
+# TRUNCATE TABLE releases the entries of the KNN index: the extension's entry
+# count afterwards counts only rows inserted after it.
+
+--let $knn_issue = KNN-20 DROP TABLE does not call the custom index drop callback
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--let $knn_function = kvec_entry_count
+--source suite/knn_review/include/require_function.inc
+--let $base = `SELECT vsql_knn_index_test.kvec_entry_count()`
+CREATE TABLE t (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES (1, '[1,0,0,0]'), (2, '[0,1,0,0]');
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+TRUNCATE TABLE t;
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+INSERT INTO t VALUES (1, '[1,0,0,0]');
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

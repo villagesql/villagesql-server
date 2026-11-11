@@ -1,0 +1,20 @@
+# A REPEATABLE READ snapshot keeps seeing the table as it was when another session
+# deletes a row and inserts it again with another vector and commits after the snapshot started: the old index entries stay
+# usable and the new ones are not seen. A new snapshot sees the change.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+--connect (con1, localhost, root,,)
+DELETE FROM t WHERE id = 4;
+INSERT INTO t VALUES (4, 2, 'd', '[9,9,9,9]');
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+COMMIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+--disconnect con1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

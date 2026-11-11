@@ -1,0 +1,16 @@
+# A prepared KNN query executed again after INSERT, UPDATE and DELETE returns the
+# nearest rows of the table as it is now.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+PREPARE ps FROM "SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2";
+EXECUTE ps;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+EXECUTE ps;
+DELETE FROM t WHERE id = 4;
+EXECUTE ps;
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]');
+EXECUTE ps;
+DEALLOCATE PREPARE ps;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

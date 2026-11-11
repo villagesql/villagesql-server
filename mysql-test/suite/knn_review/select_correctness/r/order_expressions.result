@@ -1,0 +1,33 @@
+INSTALL EXTENSION vsql_knn_index_test;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') + 0 LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') * 2 LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t ORDER BY -vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') DESC LIMIT 3;
+id
+1
+4
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance('[1,0,0,0]', v) LIMIT 3;
+id
+1
+4
+8
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') FROM t ORDER BY 2 LIMIT 3;
+id	vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]')
+1	0
+4	1
+8	1.2000000476837158
+SELECT a.id FROM t AS a JOIN t AS b ON b.id = 1 ORDER BY vsql_knn_index_test.kvec_l2_distance(a.v, b.v) LIMIT 3;
+id
+1
+4
+8
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

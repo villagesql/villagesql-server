@@ -1,0 +1,25 @@
+# A table with a KNN index on each of two vector columns: changing one column
+# moves the row only in that column's KNN results.
+
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (id INT PRIMARY KEY, v KVECTOR, w KVECTOR);
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+CREATE INDEX idx_w ON t (w) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES (1, '[1,0,0,0]', '[1,0,1.2,0]'), (2, '[0,1,0,0]', '[0,0,0,3]'), (3, '[0,0,2,0]', '[4,0,0,0]'), (4, '[1,1,0,0]', '[2.5,0,0,0]'), (5, '[2.5,0,0,0]', '[1,1,0,0]'), (6, '[4,0,0,0]', '[0,0,2,0]'), (7, '[0,0,0,3]', '[0,1,0,0]'), (8, '[1,0,1.2,0]', '[1,0,0,0]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(w, '[1,0,0,0]') LIMIT 8;
+UPDATE t SET w = '[9,9,9,9]' WHERE id = 8;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(w, '[1,0,0,0]') LIMIT 8;
+START TRANSACTION;
+UPDATE t SET v = '[9,9,9,9]', w = '[1,0,0,0.1]' WHERE id = 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(w, '[1,0,0,0]') LIMIT 8;
+ROLLBACK;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(w, '[1,0,0,0]') LIMIT 8;
+DELETE FROM t WHERE id = 4;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 7;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(w, '[1,0,0,0]') LIMIT 7;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

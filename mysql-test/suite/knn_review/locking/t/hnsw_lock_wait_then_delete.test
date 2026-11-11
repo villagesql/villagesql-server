@@ -1,0 +1,32 @@
+# A READ COMMITTED locking KNN read with an HNSW index (vsql-vector) waits for
+# the lock on a row another session has deleted; once that session commits, the read
+# returns the nearest rows as they are now.
+
+--let $knn_issue = KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT
+--source suite/knn_review/include/known_issue.inc
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+--connect (con1, localhost, root,,)
+START TRANSACTION;
+DELETE FROM t WHERE id = 1;
+--connection default
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+--send SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE
+--connection con1
+--let $wait_condition = SELECT COUNT(*) = 1 FROM information_schema.innodb_trx WHERE trx_state = 'LOCK WAIT'
+--source include/wait_condition.inc
+COMMIT;
+--connection default
+--reap
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+--disconnect con1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;
+--source include/wait_until_count_sessions.inc

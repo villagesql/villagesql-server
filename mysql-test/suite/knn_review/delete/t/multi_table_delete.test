@@ -1,0 +1,11 @@
+# A multi-table DELETE removes the rows it matched from KNN results.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+CREATE TABLE g (grp INT PRIMARY KEY, name VARCHAR(10));
+INSERT INTO g VALUES (1,'one'),(2,'two'),(3,'three');
+DELETE t FROM t JOIN g ON t.grp = g.grp WHERE g.name = 'one';
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE g;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

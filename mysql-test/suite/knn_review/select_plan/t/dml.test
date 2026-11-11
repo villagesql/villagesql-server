@@ -1,0 +1,46 @@
+# DELETE and UPDATE ordered by distance with a LIMIT run the KNN scan, like a
+# SELECT: not with DESC, without a LIMIT, or when another index serves the
+# WHERE. The rows left are checked after each statement.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+DELETE FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+UPDATE t SET pay = 'x' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+SELECT id FROM t WHERE pay = 'x' ORDER BY id;
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+UPDATE t SET pay = 'y' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') DESC LIMIT 1;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+SELECT id FROM t WHERE pay = 'y';
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+DELETE FROM t WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+UPDATE t SET pay = 'z' WHERE pay <> 'x' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]');
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

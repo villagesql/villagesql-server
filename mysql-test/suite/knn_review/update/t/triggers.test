@@ -1,0 +1,19 @@
+# A vector set by a BEFORE INSERT trigger is the one indexed, and a vector copied
+# by an AFTER DELETE trigger into another table with a KNN index is found
+# there.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+CREATE TABLE arch (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON arch (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+CREATE TRIGGER bi BEFORE INSERT ON t FOR EACH ROW SET NEW.v = '[1,0,0,0.3]';
+CREATE TRIGGER ad AFTER DELETE ON t FOR EACH ROW INSERT INTO arch VALUES (OLD.id, OLD.v);
+INSERT INTO t VALUES (9, 1, 'i', '[9,9,9,9]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DELETE FROM t WHERE id IN (4, 6);
+SELECT id FROM arch ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TRIGGER bi;
+DROP TRIGGER ad;
+DROP TABLE arch;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

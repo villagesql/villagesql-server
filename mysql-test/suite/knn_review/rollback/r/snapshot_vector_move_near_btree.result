@@ -1,0 +1,29 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v KVECTOR, KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v kvec_profile_l2_btree) USING EXTENDED(vsql_knn_index_test.kvec_l2_btree);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+UPDATE t SET v = '[1,0,0,0.1]' WHERE id = 7;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+COMMIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+7
+4
+8
+2
+5
+3
+6
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

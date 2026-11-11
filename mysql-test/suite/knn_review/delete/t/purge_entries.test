@@ -1,0 +1,22 @@
+# After a committed DELETE or vector UPDATE is purged, the index holds one entry
+# per row again: purge removes the entries of deleted rows and the old entries
+# of updated vectors.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_function = kvec_entry_count
+--source suite/knn_review/include/require_function.inc
+--let $base = `SELECT vsql_knn_index_test.kvec_entry_count()`
+DELETE FROM t WHERE id = 7;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 6;
+# wait_innodb_all_purged.inc can return before purge has removed the
+# index entries, so wait for the entry count itself.
+--let $wait_timeout = 60
+--let $wait_condition = SELECT vsql_knn_index_test.kvec_entry_count() - $base = -1
+--source include/wait_condition.inc
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

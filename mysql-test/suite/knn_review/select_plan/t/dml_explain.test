@@ -1,0 +1,14 @@
+# EXPLAIN of a DELETE or UPDATE ordered by distance with a LIMIT shows the KNN
+# scan it runs, as for a SELECT.
+
+--let $knn_issue = KNN-23 EXPLAIN of a KNN-ordered DELETE or UPDATE shows a plain index scan
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_query = DELETE FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1
+--source suite/knn_review/include/plan_check.inc
+--let $knn_query = UPDATE t SET pay = 'x' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2
+--source suite/knn_review/include/plan_check.inc
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

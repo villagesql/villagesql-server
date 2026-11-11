@@ -1,0 +1,17 @@
+# DROP INDEX releases the entries of the KNN index: the extension's entry count
+# returns to what it was before the index was built.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--let $knn_function = kvec_entry_count
+--source suite/knn_review/include/require_function.inc
+--let $base = `SELECT vsql_knn_index_test.kvec_entry_count()`
+--source suite/knn_review/include/knn_table.inc
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+DROP INDEX idx_v ON t;
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

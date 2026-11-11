@@ -1,0 +1,25 @@
+INSTALL EXTENSION vsql_knn_index_test;
+START TRANSACTION;
+INSERT INTO t WITH RECURSIVE s (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM s WHERE i < 200) SELECT 1000 + i, 1, 'z', vsql_knn_index_test.KVECTOR::from_string(CONCAT('[1,0,0,', i / 1000, ']')) FROM s;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+1001
+1002
+entries_change
+200
+ROLLBACK;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+entries_change
+0
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

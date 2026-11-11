@@ -1,0 +1,15 @@
+# UPDATE ... ORDER BY distance LIMIT n that changes the vector updates the n rows
+# that were nearest when it started: a row it moves is not found again, whether
+# it moves away from the query point or toward it.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+UPDATE t SET v = '[9,9,9,9]', pay = 'far' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t WHERE pay = 'far' ORDER BY id;
+UPDATE t SET v = '[1,0,0,0.01]', pay = 'near' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t WHERE pay = 'near' ORDER BY id;
+--sorted_result
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT COUNT(*) FROM t;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

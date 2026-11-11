@@ -1,0 +1,16 @@
+INSTALL EXTENSION vsql_knn_index_test;
+ALTER TABLE t RENAME TO t2;
+SELECT id FROM t2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+CREATE DATABASE d2;
+ALTER TABLE t2 RENAME TO d2.t3;
+SELECT id FROM d2.t3 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+DROP DATABASE d2;
+UNINSTALL EXTENSION vsql_knn_index_test;
