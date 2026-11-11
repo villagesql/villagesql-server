@@ -10,7 +10,8 @@
 # built against the distro they will be installed on.
 #
 # The source tree is mounted read-only. Packages land in OUTPUT_DIR on the
-# host. Every argument is passed through to build_deb.sh.
+# host. Every argument is passed through to build_deb.sh; for --dsc, the
+# source package's directory is mounted too.
 #
 # Environment:
 #   IMAGE           Distro image to build in (default: ubuntu:24.04)
@@ -23,6 +24,7 @@
 # Usage:
 #   packaging/villagesql-deb/bld_tools/build_deb_docker.sh [build_deb.sh options]
 #   IMAGE=debian:12 packaging/villagesql-deb/bld_tools/build_deb_docker.sh --binary-only
+#   IMAGE=debian:12 packaging/villagesql-deb/bld_tools/build_deb_docker.sh --dsc <file.dsc>
 
 set -euo pipefail
 
@@ -39,7 +41,7 @@ if [[ "${1:-}" == "--in-container" ]]; then
     log_step "Installing build dependencies"
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends \
-        ca-certificates git dpkg-dev devscripts equivs >/dev/null
+        ca-certificates git jq dpkg-dev devscripts equivs >/dev/null
     # mk-build-deps reads Build-Depends straight from the template; the
     # placeholders left in it are only in package descriptions.
     DEPS_DIR="$(mktemp -d)"
@@ -78,8 +80,24 @@ for v in VSQL_PRE_RELEASE_VERSION SOURCE_DATE_EPOCH; do
     fi
 done
 
+# Mount the --dsc source package's directory and name the file by its path in
+# the container. Every other argument passes through as given.
+BUILD_ARGS=()
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--dsc" ]]; then
+        DSC_DIR="$(cd "$(dirname "${2:?--dsc needs a .dsc file}")" && pwd)"
+        DOCKER_ARGS+=(-v "$DSC_DIR:/dsc:ro")
+        BUILD_ARGS+=(--dsc "/dsc/$(basename "$2")")
+        shift 2
+    else
+        BUILD_ARGS+=("$1")
+        shift
+    fi
+done
+
 log_step "Building DEBs in $IMAGE"
 log_info "Source directory:    $SOURCE_DIR"
 log_info "Output directory:    $OUTPUT_DIR"
 docker run "${DOCKER_ARGS[@]}" "$IMAGE" \
-    /src/packaging/villagesql-deb/bld_tools/build_deb_docker.sh --in-container "$@"
+    /src/packaging/villagesql-deb/bld_tools/build_deb_docker.sh --in-container \
+    ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"}

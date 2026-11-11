@@ -8,6 +8,15 @@
 # Like the RPM driver it does NOT require a prior cmake configure -- every
 # substitution comes from VSQL_VERSION and MYSQL_VERSION.
 #
+# The staged tree, and so the source package, holds debian/, the server source
+# in server/, and the bundled extensions (villagesql/dev_server/
+# bundled_extensions.txt) cloned into exts/, and what those extensions would
+# download while building (packaging/villagesql-deb/prefetch_repos.txt) in
+# repos/. Staging needs the network; the package build itself does not.
+#
+# With --dsc, nothing is staged: the given source package is unpacked and its
+# binary packages built, so they match that source package exactly.
+#
 # Environment:
 #   SOURCE_DIR   Source root (default: three levels up from this script)
 #   OUTPUT_DIR   Where .deb files are copied (default: $PWD/debs)
@@ -17,6 +26,7 @@
 #
 # Usage:
 #   packaging/villagesql-deb/bld_tools/build_deb.sh [--worktree] [--source-only]
+#   packaging/villagesql-deb/bld_tools/build_deb.sh --dsc <file.dsc>
 
 set -euo pipefail
 
@@ -34,14 +44,16 @@ USE_WORKTREE=0
 STAGE_ONLY=0
 SOURCE_ONLY=0
 BINARY_ONLY=0
+DSC_FILE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --worktree)    USE_WORKTREE=1; shift ;;
         --stage-only)  STAGE_ONLY=1; shift ;;
         --source-only) SOURCE_ONLY=1; shift ;;
         --binary-only) BINARY_ONLY=1; shift ;;
+        --dsc)         DSC_FILE="${2:?--dsc needs a .dsc file}"; shift 2 ;;
         -h|--help)
-            sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+            sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
             exit 0
             ;;
         *) die "Unknown option: $1" ;;
@@ -51,6 +63,34 @@ done
 [[ -f "$SOURCE_DIR/CMakeLists.txt" ]] || die "Not a source tree: $SOURCE_DIR"
 command -v dpkg-buildpackage >/dev/null || \
     die "dpkg-buildpackage not found; this needs a Debian-family host. Use build_deb_docker.sh elsewhere."
+
+# dpkg-buildpackage leaves its results beside the tree it built, in WORK_DIR.
+collect_packages() {
+    mkdir -p "$OUTPUT_DIR"
+    find "$WORK_DIR" -maxdepth 1 \
+        \( -name '*.deb' -o -name '*.dsc' -o -name '*.tar.xz' -o -name '*.tar.gz' \
+           -o -name '*.buildinfo' -o -name '*.changes' \) \
+        -exec cp {} "$OUTPUT_DIR/" \;
+
+    log_step "Done"
+    log_info "Packages in $OUTPUT_DIR:"
+    for f in "$OUTPUT_DIR"/*; do log_info "  $(basename "$f")"; done
+}
+
+if [[ -n "$DSC_FILE" ]]; then
+    [[ -f "$DSC_FILE" ]] || die "Source package not found: $DSC_FILE"
+    DSC_FILE="$(cd "$(dirname "$DSC_FILE")" && pwd)/$(basename "$DSC_FILE")"
+    log_step "VillageSQL DEB Build from $(basename "$DSC_FILE")"
+
+    WORK_DIR="${WORK_DIR:-$(mktemp -d)}"
+    trap 'if [[ -z "${KEEP_WORK:-}" ]]; then rm -rf "$WORK_DIR"; fi' EXIT
+    dpkg-source -x "$DSC_FILE" "$WORK_DIR/villagesql"
+
+    cd "$WORK_DIR/villagesql"
+    dpkg-buildpackage -us -uc -b -j"$(getconf _NPROCESSORS_ONLN)"
+    collect_packages
+    exit 0
+fi
 
 log_step "VillageSQL DEB Build"
 
@@ -104,7 +144,8 @@ trap 'if [[ -z "${KEEP_WORK:-}" ]]; then rm -rf "$WORK_DIR"; fi' EXIT
 log_info "Staging root:        $STAGE"
 
 log_step "Staging source"
-mkdir -p "$STAGE"
+SERVER_STAGE="$STAGE/server"
+mkdir -p "$SERVER_STAGE"
 GIT="git -c safe.directory=$SOURCE_DIR -C $SOURCE_DIR"
 if [[ $USE_WORKTREE -eq 0 ]] && $GIT rev-parse --git-dir >/dev/null 2>&1; then
     if ! $GIT diff-index --quiet HEAD -- 2>/dev/null || \
@@ -112,7 +153,7 @@ if [[ $USE_WORKTREE -eq 0 ]] && $GIT rev-parse --git-dir >/dev/null 2>&1; then
         log_warn "Working tree has uncommitted changes; packaging HEAD anyway."
         log_warn "Use --worktree to package what is on disk instead."
     fi
-    $GIT archive --format=tar HEAD | (cd "$STAGE" && tar xf -)
+    $GIT archive --format=tar HEAD | (cd "$SERVER_STAGE" && tar xf -)
 else
     log_info "Copying working tree"
     # Excludes are anchored with './' on purpose: an unanchored 'build*' also
@@ -125,8 +166,14 @@ else
         --exclude='./rpms' \
         --exclude='*.deb' \
         --exclude='*.rpm' \
-        -cf - . | tar -C "$STAGE" -xf -
+        -cf - . | tar -C "$SERVER_STAGE" -xf -
 fi
+
+# CMake reads the pre-release suffix from VSQL_VERSION, not the environment.
+# Write the resolved one into the staged copy so the binaries report the same
+# version as the packages, and so the source package carries it.
+sed -i "s/^VSQL_PRE_RELEASE_VERSION=.*/VSQL_PRE_RELEASE_VERSION=${VSQL_PRE}/" \
+    "$SERVER_STAGE/VSQL_VERSION"
 
 # Fail fast on a staged tree missing build inputs. Without this, an over-broad
 # exclude surfaces as an unrelated-looking cmake error minutes into the build.
@@ -145,10 +192,35 @@ REQUIRED_PATHS=(
 )
 MISSING=0
 for p in "${REQUIRED_PATHS[@]}"; do
-    [[ -e "$STAGE/$p" ]] || { log_error "Missing from staged source: $p"; MISSING=1; }
+    [[ -e "$SERVER_STAGE/$p" ]] || { log_error "Missing from staged source: $p"; MISSING=1; }
 done
 [[ $MISSING -eq 0 ]] || die "Staged source tree is incomplete; check the tar excludes"
 log_info "Staged source tree passed completeness check"
+
+log_step "Cloning bundled extensions"
+EXTS_STAGE="$STAGE/exts"
+mkdir -p "$EXTS_STAGE"
+"$SERVER_STAGE/villagesql/bld_tools/checkout_bundled_extensions.sh" "$EXTS_STAGE"
+# The manifest names branches, so record the commit each clone got. The .git
+# directories stay out of the source package.
+for d in "$EXTS_STAGE"/*/; do
+    printf '%s %s\n' "$(basename "$d")" "$(git -C "$d" rev-parse HEAD)"
+done > "$EXTS_STAGE/bundled_extensions.lock"
+rm -rf "${EXTS_STAGE:?}"/*/.git
+log_info "Extension commits:"
+while read -r line; do log_info "  $line"; done < "$EXTS_STAGE/bundled_extensions.lock"
+
+log_step "Fetching extension dependencies"
+REPOS_STAGE="$STAGE/repos"
+mkdir -p "$REPOS_STAGE"
+while read -r NAME URL COMMIT; do
+    [[ -z "$NAME" || "$NAME" == \#* ]] && continue
+    log_info "$NAME ($URL @ $COMMIT)"
+    git -c init.defaultBranch=main init -q "$REPOS_STAGE/$NAME"
+    git -C "$REPOS_STAGE/$NAME" fetch -q --depth=1 "$URL" "$COMMIT"
+    git -C "$REPOS_STAGE/$NAME" checkout -q FETCH_HEAD
+    rm -rf "${REPOS_STAGE:?}/${NAME:?}/.git"
+done < "$SERVER_STAGE/packaging/villagesql-deb/prefetch_repos.txt"
 
 log_step "Materializing debian/"
 mkdir -p "$STAGE/debian"
@@ -200,13 +272,4 @@ fi
 
 cd "$STAGE"
 dpkg-buildpackage -us -uc "$DPKG_MODE" -j"$(getconf _NPROCESSORS_ONLN)"
-
-mkdir -p "$OUTPUT_DIR"
-find "$WORK_DIR" -maxdepth 1 \
-    \( -name '*.deb' -o -name '*.dsc' -o -name '*.tar.xz' -o -name '*.tar.gz' \
-       -o -name '*.buildinfo' -o -name '*.changes' \) \
-    -exec cp {} "$OUTPUT_DIR/" \;
-
-log_step "Done"
-log_info "Packages in $OUTPUT_DIR:"
-for f in "$OUTPUT_DIR"/*; do log_info "  $(basename "$f")"; done
+collect_packages

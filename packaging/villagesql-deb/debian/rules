@@ -5,6 +5,10 @@
 
 export DH_VERBOSE=1
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+# debhelper hands the build flags only to the commands it runs; export them so
+# the bundled extension builds get them too.
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
 
 DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
@@ -27,8 +31,10 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 # Hence the "systemd-dev | systemd" alternative in Build-Depends -- naming only
 # systemd-dev makes the source package unbuildable on Debian 12.
 
+# The server source is in server/ and the bundled extensions in exts/. The
+# build directory is named so the extension build can find the staged SDK.
 %:
-	dh $@ --buildsystem=cmake
+	dh $@ --buildsystem=cmake --sourcedirectory=server --builddirectory=obj
 
 # INSTALL_LAYOUT=DEB owns the install paths. Only INSTALL_LIBDIR is overridden,
 # to place the shared client library in the multiarch directory as Debian
@@ -44,7 +50,7 @@ override_dh_auto_configure:
 		-DINSTALL_LIBDIR=lib/$(DEB_HOST_MULTIARCH) \
 		-DSYSCONFDIR=/etc/mysql \
 		-DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
-		-DWITH_BOOST=$(CURDIR)/extra/boost \
+		-DWITH_BOOST=$(CURDIR)/server/extra/boost \
 		-DWITH_SSL=system \
 		-DWITH_ZLIB=system \
 		-DWITH_SYSTEMD=1 \
@@ -68,6 +74,23 @@ override_dh_auto_configure:
 # server, which is not available in a build chroot. Run it separately with
 # mysql-test-run.pl against the installed packages.
 override_dh_auto_test:
+
+# Each directory in repos/ is a FetchContent dependency of an extension, fetched
+# while staging. Point FetchContent at those copies and forbid downloads, so an
+# extension that adds a new one fails here instead of reaching the network.
+FETCHCONTENT_FLAGS = -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+	$(foreach r,$(notdir $(wildcard repos/*)),\
+		-DFETCHCONTENT_SOURCE_DIR_$(shell echo $(r) | tr a-z A-Z)=$(CURDIR)/repos/$(r))
+
+# The bundled extensions build against the SDK the server build staged. Their
+# tests (test_extension_vebs.sh) need a running server, so they are not run.
+override_dh_auto_build:
+	dh_auto_build
+	CMAKE_EXTRA_FLAGS="$(FETCHCONTENT_FLAGS)" \
+	server/villagesql/bld_tools/build_bundled_extensions.sh \
+		$(CURDIR)/exts \
+		"$$(echo $(CURDIR)/obj/villagesql-extension-sdk-*)" \
+		$(CURDIR)/obj/bundled_vebs
 
 override_dh_installsystemd:
 	dh_installsystemd --name=mysqld --no-start --no-enable
@@ -102,3 +125,8 @@ override_dh_auto_install:
 		rm -rf debian/tmp/lib/systemd; \
 		rmdir --ignore-fail-on-non-empty debian/tmp/lib; \
 	fi
+	# Bundled extensions go straight into their package rather than through
+	# debian/tmp, so the examples package's *.veb glob does not pick them up.
+	mkdir -p debian/villagesql-extensions/usr/lib/mysql/veb
+	server/villagesql/bld_tools/include_bundled_extensions.sh \
+		debian/villagesql-extensions/usr/lib/mysql/veb obj/bundled_vebs

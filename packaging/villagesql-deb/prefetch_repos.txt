@@ -1,0 +1,15 @@
+# Sources the bundled extensions download at configure time with CMake
+# FetchContent. build_deb.sh fetches each into repos/<name> in the source
+# package, and debian/rules points FetchContent at those copies and turns
+# downloading off, so the package builds without the network.
+#
+# Format: <name> <git-url> <commit>
+#   name:   the name the extension passes to FetchContent_Declare
+#   commit: the commit the extension pins; keep the two in step
+#
+# Add a Files: repos/<name>/* stanza to debian/copyright for each entry.
+#
+# Comments and blank lines are ignored.
+
+# vsql-oauth2
+jwt-cpp https://github.com/Thalhammer/jwt-cpp.git 0a503e75084cfdb48cc2186e6b961444eb819007
