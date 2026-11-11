@@ -1147,6 +1147,10 @@ struct dict_index_t {
   /** true if the index is clustered index and table has row versions */
   unsigned row_versions : 1;
 
+  /** true if the index is a custom index - set from DD even when
+  the custom index context is not loaded (e.g., during recovery) */
+  unsigned is_custom_index : 1;
+
   /** true if the custom index has a mapping B-tree */
   unsigned mapping_btree : 1;
 

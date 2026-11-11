@@ -502,8 +502,13 @@ bool Custom_index::needs_mapping_key(const dict_index_t *index) {
 }
 
 uint32_t Custom_index::n_extra_fields(const dict_index_t *index) {
-  if (!is_custom(index)) return 0;
+  if (index == nullptr) return 0;
 
+  if (index->custom_index == nullptr) {
+    // Recovery: the context is not loaded yet. Reserve the maximum;
+    // load_all() trims the surplus.
+    return index->is_custom_index ? MAX_EXTRA_FIELDS : 0;
+  }
   const vef_type_index_intf_t &intf = index->custom_index->interface();
   return (intf.storage_props & VEF_INDEX_STORAGE_REF_LOOKUP) ? 1 : 0;
 }
@@ -579,7 +584,13 @@ ulong Custom_index::flags(const IndexContext *meta) {
 
 dberr_t Custom_index::attach(dict_index_t *index, const IndexContext *meta,
                              const dd::Index *dd_index) {
-  if (meta == nullptr) return DB_SUCCESS;
+  if (meta == nullptr) {
+    // Recovery: identify a custom index by its storage reference in DD.
+    const char *store_key = dd_index_key_strings[DD_INDEX_EXTENDED_STORAGE_REF];
+    index->is_custom_index =
+        dd_index != nullptr && dd_index->se_private_data().exists(store_key);
+    return DB_SUCCESS;
+  }
 
   auto ic = AcquireIndexContextClientManaged(meta);
   if (ic == nullptr) {
@@ -598,6 +609,7 @@ dberr_t Custom_index::attach(dict_index_t *index, const IndexContext *meta,
   // AHI (Adaptive Hash Index) is tightly coupled to B-tree. Custom index types
   // do not currently support AHI.
   index->disable_ahi = true;
+  index->is_custom_index = true;
 
   if (dd_index == nullptr) return DB_SUCCESS;
 
@@ -641,6 +653,39 @@ dberr_t Custom_index::add_profile(dict_index_t *index,
   return DB_SUCCESS;
 }
 
+// Returns the number of trailing extra fields. These fields are not part
+// of the table's column definitions.
+static uint32_t trailing_extra_fields(const dict_index_t *index) {
+  const dict_table_t *table = index->table;
+  uint32_t n = 0;
+  while (n < index->n_def) {
+    const dict_col_t *col = index->get_field(index->n_def - 1 - n)->col;
+    if (col->is_virtual() || &table->cols[col->ind] == col) break;
+    n++;
+  }
+  return n;
+}
+
+// Removes trailing extra fields reserved at index creation but not needed
+// by the actual index type.
+static void trim_extra_fields(dict_index_t *index) {
+  const uint32_t built = trailing_extra_fields(index);
+  const uint32_t actual = Custom_index::n_extra_fields(index);
+  // Missing fields cannot be added to an already built index.
+  ut_a(actual <= built);
+  const uint32_t surplus = built - actual;
+  if (surplus == 0) return;
+
+  ut_a(index->n_def >= surplus);
+  index->n_def -= surplus;
+
+  ut_a(index->n_fields >= surplus);
+  index->n_fields -= surplus;
+
+  ut_a(index->n_total_fields >= surplus);
+  index->n_total_fields -= surplus;
+}
+
 dberr_t Custom_index::load(dict_index_t *new_index,
                            const dict_index_t *old_index) {
   if (!is_custom(old_index)) return DB_SUCCESS;
@@ -649,6 +694,10 @@ dberr_t Custom_index::load(dict_index_t *new_index,
   dberr_t err =
       attach(new_index, old_custom_index->index_meta().get(), nullptr);
   if (err != DB_SUCCESS) return err;
+
+  // The index is expected to be built with the exact number of extra fields.
+  ut_ad(trailing_extra_fields(new_index) == n_extra_fields(new_index));
+  trim_extra_fields(new_index);
 
   const auto &key_profiles = old_index->custom_index->key_profiles_;
   for (uint32_t i = 0; i < key_profiles.size(); i++) {
@@ -739,6 +788,7 @@ void Custom_index::load_all(dict_table_t *table, const dd::Table *dd_table,
 
     fix_index_fields(index);
     dberr_t err = attach(index, key->custom_index_context, dd_index);
+    if (err == DB_SUCCESS) trim_extra_fields(index);
     for (uint i = 0; err == DB_SUCCESS && i < key->user_defined_key_parts;
          i++) {
       err = add_profile(index, key->key_part[i].custom_index_profile, i);
