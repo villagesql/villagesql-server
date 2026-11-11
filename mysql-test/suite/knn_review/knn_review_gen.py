@@ -33,7 +33,6 @@ KNOWN_ISSUES = {
     "locking/hnsw_current_entry_after_change": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_delete": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_vector_update": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
-    "rollback/hnsw_crash_recovery": "KNN-25 Restart after a crash asserts in redo recovery on a PK mapping B-tree record",
     "delete/hnsw_many_deleted": "KNN-26 With HNSW and most rows deleted, a KNN query returns too few rows",
 }
 LOCK_NOWAIT = ("ER_LOCK_NOWAIT", "ERROR HY000: Statement aborted because "
@@ -2319,7 +2318,8 @@ t.raw(["--connection default", "--source include/kill_and_restart_mysqld.inc",
        "--disconnect con1",
        "--let $wait_timeout = 60",
        "--let $wait_condition = SELECT COUNT(*) = 0 FROM information_schema.innodb_trx",
-       "--source include/wait_condition.inc"])
+       "--source include/wait_condition.inc"],
+      ["# Kill and restart"])
 t.sql("SELECT COUNT(*) AS n FROM t", rows=["8"], header="n")
 hknn(t, 8, rows=ALL8)
 hknn(t, rows=near(BASE))
