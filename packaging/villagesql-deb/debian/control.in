@@ -4,6 +4,8 @@ Priority: optional
 Maintainer: VillageSQL Contributors <info@villagesql.com>
 Homepage: https://villagesql.com
 Standards-Version: 4.6.2
+# The bundled extensions build with what scripts/setup_linux_ext_deps.sh
+# installs, which this list must keep covering; jq reads their manifest.
 Build-Depends: debhelper-compat (= 13),
                cmake (>= 3.14.3),
                g++,
@@ -18,7 +20,8 @@ Build-Depends: debhelper-compat (= 13),
                libsystemd-dev,
                systemd-dev | systemd,
                pkg-config,
-               perl
+               perl,
+               jq
 
 Package: villagesql-server
 Architecture: any
@@ -141,6 +144,23 @@ Description: Example VillageSQL extension bundles
  .
  Installed into /usr/lib/mysql/veb and enabled per-database with, for example,
  "INSTALL EXTENSION vsql_complex;".
+
+# A .veb is a tar archive, so dh_shlibdeps cannot see the libraries inside and
+# their runtime dependencies are listed by hand: vsql_http links libcurl.
+# libcurl4t64 is the Ubuntu 24.04 name, libcurl4 the Debian 12 one.
+Package: villagesql-extensions
+Architecture: any
+Depends: villagesql-server (= ${binary:Version}),
+         libcurl4t64 | libcurl4,
+         ${misc:Depends}
+Description: Bundled VillageSQL extensions
+ The extension bundles VillageSQL ships alongside the server, built from the
+ repositories listed in villagesql/dev_server/bundled_extensions.txt. The
+ commit each one was built from is recorded in exts/bundled_extensions.lock in
+ the source package.
+ .
+ Installed into /usr/lib/mysql/veb and enabled per-database with, for example,
+ "INSTALL EXTENSION vsql_uuid;".
 
 Package: villagesql-test
 Architecture: any
