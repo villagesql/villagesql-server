@@ -1,0 +1,38 @@
+INSTALL EXTENSION vsql_knn_index_test;
+DELETE FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+knn_scan_ran
+1
+UPDATE t SET pay = 'x' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+knn_scan_ran
+1
+SELECT id FROM t WHERE pay = 'x' ORDER BY id;
+id
+4
+8
+UPDATE t SET pay = 'y' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') DESC LIMIT 1;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+knn_scan_ran
+0
+SELECT id FROM t WHERE pay = 'y';
+id
+7
+DELETE FROM t WHERE grp = 2 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1;
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+knn_scan_ran
+0
+UPDATE t SET pay = 'z' WHERE pay <> 'x' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]');
+SELECT vsql_knn_index_test.kvec_scan_begin_count() > 0 AS knn_scan_ran;
+knn_scan_ran
+0
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+8
+2
+5
+3
+6
+7
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

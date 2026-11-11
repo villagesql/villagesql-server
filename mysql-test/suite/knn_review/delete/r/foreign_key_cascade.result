@@ -1,0 +1,51 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE p (grp INT PRIMARY KEY);
+INSERT INTO p VALUES (1), (2), (3);
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v KVECTOR, FOREIGN KEY (grp) REFERENCES p (grp) ON DELETE CASCADE ON UPDATE CASCADE);
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+START TRANSACTION;
+DELETE FROM p WHERE grp = 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+3
+7
+ROLLBACK;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+DELETE FROM p WHERE grp = 2;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+2
+5
+6
+7
+UPDATE p SET grp = 5 WHERE grp = 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+2
+5
+6
+7
+SELECT id FROM t WHERE grp = 5 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+2
+7
+DROP TABLE t;
+DROP TABLE p;
+UNINSTALL EXTENSION vsql_knn_index_test;

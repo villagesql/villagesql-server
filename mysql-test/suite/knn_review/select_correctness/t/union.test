@@ -1,0 +1,13 @@
+# Two KNN queries with different query points combined with UNION ALL and UNION
+# each return their own nearest rows.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--sorted_result
+(SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2) UNION ALL (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,3]') LIMIT 1);
+--sorted_result
+(SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2) UNION (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,3]') LIMIT 1);
+--sorted_result
+(SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2) UNION (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3);
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,56 @@
+INSTALL EXTENSION vsql_knn_index_test;
+XA START 'x1';
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]');
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 4;
+XA END 'x1';
+XA PREPARE 'x1';
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+XA ROLLBACK 'x1';
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 9;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+XA START 'x2';
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]');
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 4;
+XA END 'x2';
+XA PREPARE 'x2';
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+XA COMMIT 'x2';
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 9;
+id
+1
+9
+8
+2
+5
+3
+6
+7
+4
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,14 @@
+# INSERT ... ON DUPLICATE KEY UPDATE and REPLACE that change the vector move the
+# row in KNN results; on a new key they insert it.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+INSERT INTO t VALUES (1, 1, 'a', '[9,9,9,9]') AS new ON DUPLICATE KEY UPDATE v = new.v;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+REPLACE INTO t VALUES (4, 2, 'd', '[1,0,0,0.2]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]') AS new ON DUPLICATE KEY UPDATE v = new.v;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 9;
+SELECT COUNT(*) FROM t;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

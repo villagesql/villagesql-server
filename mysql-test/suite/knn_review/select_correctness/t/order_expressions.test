@@ -1,0 +1,14 @@
+# ORDER BY forms that are not a plain distance call (an expression of it, the
+# operands swapped, a select-list position, the distance to another column)
+# return the right rows, whether or not they use the KNN scan.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') + 0 LIMIT 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') * 2 LIMIT 3;
+SELECT id FROM t ORDER BY -vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') DESC LIMIT 3;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance('[1,0,0,0]', v) LIMIT 3;
+SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') FROM t ORDER BY 2 LIMIT 3;
+SELECT a.id FROM t AS a JOIN t AS b ON b.id = 1 ORDER BY vsql_knn_index_test.kvec_l2_distance(a.v, b.v) LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

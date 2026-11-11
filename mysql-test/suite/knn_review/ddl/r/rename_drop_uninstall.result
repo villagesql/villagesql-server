@@ -1,0 +1,4 @@
+INSTALL EXTENSION vsql_knn_index_test;
+RENAME TABLE t TO t2;
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_knn_index_test;

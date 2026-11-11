@@ -1,0 +1,40 @@
+INSTALL EXTENSION vsql_knn_index_test;
+INSERT INTO t VALUES (1, 1, 'a', '[9,9,9,9]') AS new ON DUPLICATE KEY UPDATE v = new.v;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+4
+8
+2
+5
+3
+6
+7
+1
+REPLACE INTO t VALUES (4, 2, 'd', '[1,0,0,0.2]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+4
+8
+2
+5
+3
+6
+7
+1
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]') AS new ON DUPLICATE KEY UPDATE v = new.v;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 9;
+id
+9
+4
+8
+2
+5
+3
+6
+7
+1
+SELECT COUNT(*) FROM t;
+COUNT(*)
+9
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

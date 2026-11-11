@@ -1,0 +1,25 @@
+# A SERIALIZABLE transaction's locking KNN read (FOR UPDATE) is repeatable:
+# another session cannot insert a row that would become one of the nearest
+# rows while the transaction is open.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+--connect (con1, localhost, root,,)
+SET SESSION innodb_lock_wait_timeout = 1;
+# The insert must wait for the reader (it would change the reader's
+# nearest rows), so it times out.
+--error ER_LOCK_WAIT_TIMEOUT
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]');
+--disconnect con1
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

@@ -1,0 +1,9 @@
+# INSERT IGNORE skips the rows with a duplicate key and inserts the others, which
+# KNN queries find.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+INSERT IGNORE INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]'), (1, 1, 'a', '[9,9,9,9]'), (10, 1, 'j', '[1,0,0,0.2]');
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 10;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,18 @@
+INSTALL EXTENSION vsql_knn_index_test;
+INSERT IGNORE INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]'), (1, 1, 'a', '[9,9,9,9]'), (10, 1, 'j', '[1,0,0,0.2]');
+Warnings:
+Warning	1062	Duplicate entry '1' for key 't.PRIMARY'
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 10;
+id
+1
+9
+10
+4
+8
+2
+5
+3
+6
+7
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

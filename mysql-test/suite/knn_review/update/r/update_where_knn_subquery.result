@@ -1,0 +1,25 @@
+INSTALL EXTENSION vsql_knn_index_test;
+UPDATE t SET pay = 'x' WHERE id IN (SELECT id FROM (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2) AS s);
+SELECT id FROM t WHERE pay = 'x' ORDER BY id;
+id
+1
+4
+UPDATE t SET v = '[9,9,9,9]' WHERE id IN (SELECT id FROM (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2) AS s);
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 6;
+id
+8
+2
+5
+3
+6
+7
+DELETE FROM t WHERE id IN (SELECT id FROM (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1) AS s);
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 5;
+id
+2
+5
+3
+6
+7
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

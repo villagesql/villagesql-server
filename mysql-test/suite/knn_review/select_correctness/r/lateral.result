@@ -1,0 +1,16 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE g (grp INT PRIMARY KEY, name VARCHAR(10));
+INSERT INTO g VALUES (1,'one'),(2,'two'),(3,'three');
+SELECT g.grp, s.id FROM g, LATERAL (SELECT id FROM t WHERE t.grp = g.grp ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1) AS s ORDER BY g.grp;
+grp	id
+1	1
+2	4
+3	5
+SELECT g.grp, s.id FROM g, LATERAL (SELECT id FROM t IGNORE INDEX (k_grp) WHERE t.grp = g.grp ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 1) AS s ORDER BY g.grp;
+grp	id
+1	1
+2	4
+3	5
+DROP TABLE g;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
