@@ -1066,7 +1066,9 @@ static const byte *parse_index_fields(const byte *ptr, const byte *end_ptr,
   dict_table_add_system_columns(table, table->heap);
 
   /* Identify DB_TRX_ID and DB_ROLL_PTR in the index. */
-  if (is_versioned || (n_uniq != n)) {
+  // VillageSQL: A mapping B-tree is not a clustered index and has no
+  // DB_TRX_ID or DB_ROLL_PTR.
+  if (is_versioned || (!ind->has_mapping_btree() && n_uniq != n)) {
     size_t i = 0;
     i = DATA_TRX_ID - 1 + n_uniq;
     ut_a(DATA_TRX_ID_LEN == ind->get_col(i)->len);
