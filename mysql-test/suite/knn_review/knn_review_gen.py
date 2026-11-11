@@ -34,7 +34,9 @@ KNOWN_ISSUES = {
     "locking/hnsw_lock_wait_then_delete": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_vector_update": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "delete/hnsw_many_deleted": "KNN-26 With HNSW and most rows deleted, a KNN query returns too few rows",
-    "rollback/hnsw_recovery_prepared_rollback": "KNN-28 Rollback at recovery of a prepared transaction that updated an HNSW vector asserts",
+    "rollback/hnsw_recovery_prepared_rollback": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
+    "rollback/hnsw_recovery_prepared_rollback_insert": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
+    "rollback/hnsw_recovery_prepared_rollback_delete": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
     "delete/hnsw_purge_scattered": "KNN-27 With HNSW, after purge of scattered deletes a KNN query on collinear rows returns wrong rows",
 }
 LOCK_NOWAIT = ("ER_LOCK_NOWAIT", "ERROR HY000: Statement aborted because "
@@ -2442,31 +2444,27 @@ def knn_points(t, rows, qs, k=5):
 
 t = T("delete", "hnsw_purge_scattered", """
 With an HNSW index (vsql-vector), KNN reads return the nearest rows after
-scattered deletes (every 10th row), before and after purge removes their
-entries. Purge is stopped (debug build) until the second check. Once with rows
-on a line, v = [id,0,0,0], and once with random 4-dimensional vectors.""")
+scattered deletes and their purge. 100 rows on a line, v = [id,0,0,0]; every
+10th row is deleted. Purge is stopped (debug build) for the first check and
+runs before the second.""")
 t.raw(["--source include/have_debug.inc", ""])
 t.sql("INSTALL EXTENSION vsql_vector")
-for name, rows, qs in (
-        ("line", line_rows(range(1, 3001)),
-         [(x, 0, 0, 0) for x in (1.3, 250.3, 999.3, 1500.3, 2222.3, 2999.3)]),
-        ("random", rand_rows(range(1, 3001), 7), rand_points(6, 100))):
-    t.echo(f"Rows: {name}")
-    t.sql("CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), "
-          "v SVECTOR(4), KEY k_grp (grp))")
-    t.sql("CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw)")
-    quiet(t, insert_stmts(rows), "Insert 3000 rows")
-    knn_points(t, rows, qs)
-    t.sql("SET GLOBAL innodb_purge_stop_now = ON")
-    t.sql("DELETE FROM t WHERE id % 10 = 0")
-    rows = {i: r for i, r in rows.items() if i % 10}
-    t.echo("Deleted, not purged")
-    knn_points(t, rows, qs)
-    t.sql("SET GLOBAL innodb_purge_run_now = ON")
-    t.raw(["--source include/wait_innodb_all_purged.inc"])
-    t.echo("Purged")
-    knn_points(t, rows, qs)
-    t.sql("DROP TABLE t")
+t.sql("CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), "
+      "v SVECTOR(4), KEY k_grp (grp))")
+t.sql("CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw)")
+rows = line_rows(range(1, 101))
+t.sql(insert_stmts(rows)[0])
+t.sql("SET GLOBAL innodb_purge_stop_now = ON")
+t.sql("DELETE FROM t WHERE id % 10 = 0")
+rows = {i: r for i, r in rows.items() if i % 10}
+qs = [(x, 0, 0, 0) for x in (1.3, 45.3, 98.3)]
+t.echo("Deleted, not purged")
+knn_points(t, rows, qs)
+t.sql("SET GLOBAL innodb_purge_run_now = ON")
+t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.echo("Purged")
+knn_points(t, rows, qs)
+t.sql("DROP TABLE t")
 t.sql("UNINSTALL EXTENSION vsql_vector")
 tests.append(t)
 
@@ -2591,12 +2589,36 @@ index (vsql-vector): an insert, a delete and a vector update.
              (("crash_commit_before", False), ("crash_after_flush_binlog", True),
               ("crash_commit_after", True)))
 
-commit_crash("hnsw_recovery_prepared_rollback", """
-The server is killed at COMMIT of a transaction that changed an HNSW index
-(vsql-vector), after it is prepared in InnoDB and before it is written to the
-binary log (crash_after_flush_engine_log). Recovery rolls the prepared
-transaction back: an insert, a delete and a vector update.""",
-             (("crash_after_flush_engine_log", False),))
+def prepared_rollback(name, what, stmt):
+    t = T("rollback", name, f"""
+A transaction with {what} on a table with an HNSW index (vsql-vector) is
+prepared in InnoDB and not yet in the binary log when the server is killed
+(crash_after_flush_engine_log). Recovery rolls it back; KNN reads afterwards
+return the table as it was.""")
+    t.raw(["--source include/have_debug.inc", "--source include/have_log_bin.inc", ""])
+    t.sql("INSTALL EXTENSION vsql_vector")
+    t.sql("CREATE TABLE t (id INT PRIMARY KEY, v SVECTOR(4))")
+    t.sql("CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw)")
+    t.sql("INSERT INTO t VALUES (1, '[1,0,0,0]'), (2, '[0,1,0,0]')")
+    t.sql("START TRANSACTION")
+    t.sql(stmt)
+    t.raw(["--source include/expect_crash.inc"])
+    t.sql("SET SESSION debug = '+d,crash_after_flush_engine_log'")
+    t.sql("COMMIT", error=("2013", "ERROR HY000: Lost connection to MySQL server during query"))
+    t.raw(["--source include/start_mysqld.inc"] + WAIT_NO_TRX, ["# restart"])
+    t.sql("SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY id", rows=["1", "2"])
+    t.sql(f"SELECT id FROM t ORDER BY {HD}(v, '[1,0,0,0]') LIMIT 3", rows=["1", "2"])
+    t.sql("DROP TABLE t")
+    t.sql("UNINSTALL EXTENSION vsql_vector")
+    tests.append(t)
+
+
+prepared_rollback("hnsw_recovery_prepared_rollback", "a vector update",
+                  "UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
+prepared_rollback("hnsw_recovery_prepared_rollback_insert", "an insert",
+                  "INSERT INTO t VALUES (3, '[1,0,0,0.1]')")
+prepared_rollback("hnsw_recovery_prepared_rollback_delete", "a delete",
+                  "DELETE FROM t WHERE id = 1")
 
 
 HLW = """

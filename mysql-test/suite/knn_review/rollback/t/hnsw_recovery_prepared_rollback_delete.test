@@ -1,0 +1,29 @@
+# A transaction with a delete on a table with an HNSW index (vsql-vector) is
+# prepared in InnoDB and not yet in the binary log when the server is killed
+# (crash_after_flush_engine_log). Recovery rolls it back; KNN reads afterwards
+# return the table as it was.
+
+--let $knn_issue = KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails
+--source suite/knn_review/include/known_issue.inc
+
+--source include/have_debug.inc
+--source include/have_log_bin.inc
+
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, v SVECTOR(4));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, '[1,0,0,0]'), (2, '[0,1,0,0]');
+START TRANSACTION;
+DELETE FROM t WHERE id = 1;
+--source include/expect_crash.inc
+SET SESSION debug = '+d,crash_after_flush_engine_log';
+--error 2013
+COMMIT;
+--source include/start_mysqld.inc
+--let $wait_timeout = 120
+--let $wait_condition = SELECT COUNT(*) = 0 FROM information_schema.innodb_trx
+--source include/wait_condition.inc
+SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY id;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;

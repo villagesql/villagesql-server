@@ -36,7 +36,8 @@ Review suite for the custom-index work on deb/custom-index/42 (b9315d6).
   - KNN-27: with HNSW, after purge of scattered deletes, a KNN query on rows
     on a line returns wrong rows
   - KNN-28: rollback at recovery of a prepared transaction (binary log on)
-    that updated an HNSW vector asserts in row_undo_mod_upd_exist_sec
+    that changed an HNSW index fails: UPDATE and DELETE assert, a rolled-back
+    INSERT stays in KNN results
 - Fixed in /42: KNN-25 (crash recovery asserted on a PK mapping B-tree redo
   record). rollback/hnsw_crash_recovery passes.
 - KNN-12 also happens on main: #1541. Fixed by #1544, which is stacked on

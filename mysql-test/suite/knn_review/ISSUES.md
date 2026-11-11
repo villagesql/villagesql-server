@@ -39,7 +39,7 @@ mark the issue fixed here.
 | KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | fixed in /42 | rollback/hnsw_crash_recovery |
 | KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | open | delete/hnsw_many_deleted |
 | KNN-27 | With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows | open | delete/hnsw_purge_scattered |
-| KNN-28 | Rollback at recovery of a prepared transaction that updated an HNSW vector asserts | open | rollback/hnsw_recovery_prepared_rollback |
+| KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | open | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
 
 ## Not implemented yet
 
@@ -634,39 +634,47 @@ still not implemented on /40.
 
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
   vsql-vector deb/hnsw_index/33 (ce25b42).
-- Repro: HNSW index on 3000 rows, row i at `[i,0,0,0]`.
-  `DELETE FROM t WHERE id % 10 = 0`, let purge finish
-  (`wait_innodb_all_purged.inc`), then
-  `SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1.3,0,0,0]') LIMIT 5`
-  returns `261 262 263 264 265`; expected `1 2 3 4 5`. 5 of 6 query points
-  return wrong rows, each a run of rows next to a deleted id (for example
-  `1489 ... 1485` for `[1500.3,0,0,0]`).
-- The same queries are right before the delete, and after it while purge is
-  stopped (`innodb_purge_stop_now`, debug build). With 3000 random
-  4-dimensional rows all three stages are right.
-- delete/hnsw_many_deleted (one contiguous block deleted on a line) is right
+- Repro: HNSW index on 100 rows, row i at `[i,0,0,0]`. Purge stopped
+  (`innodb_purge_stop_now`, debug build), `DELETE FROM t WHERE id % 10 = 0`.
+  KNN reads at `[1.3,0,0,0]`, `[45.3,0,0,0]` and `[98.3,0,0,0]` with LIMIT 5
+  return the nearest rows. After `innodb_purge_run_now` and
+  `wait_innodb_all_purged.inc`, `[45.3,0,0,0]` returns `19 18 17 16 15`
+  (expected `45 46 44 47 43`) and `[98.3,0,0,0]` returns `89 88 87 86 85`
+  (expected `98 99 97 96 95`). Which reads go wrong changes from run to run;
+  each wrong answer ends next to a deleted id.
+- With 3000 random 4-dimensional rows the same steps give the right rows.
+  delete/hnsw_many_deleted (one contiguous block deleted on a line) is right
   after purge.
 - Expected: the query returns the nearest rows, as with IGNORE INDEX.
 - Wrong results, silently.
 
-## KNN-28: Rollback at recovery of a prepared transaction that updated an HNSW vector asserts
+## KNN-28: Rollback at recovery of a prepared transaction that changed an HNSW index fails
 
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
   vsql-vector deb/hnsw_index/33 (ce25b42), debug build, binary log on.
-- Repro: HNSW index on the standard 8 rows. In one transaction an INSERT, a
-  DELETE and `UPDATE t SET v = '[9,9,9,9]' WHERE id = 1`; then
-  `SET SESSION debug = '+d,crash_after_flush_engine_log'` and COMMIT, so the
-  server dies with the transaction prepared in InnoDB but not in the binary
-  log. The restart fails: "Found 1 prepared transaction(s) in InnoDB", then
-  `Record in index idx_v of table test.t was not found on rollback, trying to
-  insert` and `Assertion failure: dict0mem.h:790:(prtype | DATA_VIRTUAL) ==
-  8960 == 9475 == (type->prtype | DATA_VIRTUAL)`. Stack:
-  innobase_rollback_by_xid, trx_rollback_for_mysql, row_undo_mod,
-  row_undo_mod_upd_exist_sec, row_undo_mod_del_unmark_sec_and_undo_update,
-  btr_cur_optimistic_insert, rec_get_converted_size,
-  dict_col_t::assert_equal.
-- The same changes left in an active (not prepared) transaction are rolled
-  back at restart (rollback/hnsw_crash_recovery, the crash_commit_before case
-  of rollback/hnsw_recovery_commit_crash).
+- Repro: table `t (id INT PRIMARY KEY, v SVECTOR(4))` with an HNSW index and
+  rows `(1,'[1,0,0,0]'), (2,'[0,1,0,0]')`. START TRANSACTION, one statement,
+  then `SET SESSION debug = '+d,crash_after_flush_engine_log'` and COMMIT, so
+  the server dies with the transaction prepared in InnoDB but not in the
+  binary log. At restart: "Found 1 prepared transaction(s) in InnoDB", and
+  recovery rolls it back (innobase_rollback_by_xid).
+  - `UPDATE t SET v = '[9,9,9,9]' WHERE id = 1`: `Record in index idx_v of
+    table test.t was not found on rollback, trying to insert`, then
+    `Assertion failure: dict0mem.h:790:(prtype | DATA_VIRTUAL) == 8960 ==
+    9475 == (type->prtype | DATA_VIRTUAL)`. Stack: row_undo_mod,
+    row_undo_mod_upd_exist_sec, row_undo_mod_del_unmark_sec_and_undo_update,
+    btr_cur_optimistic_insert, rec_get_converted_size,
+    dict_col_t::assert_equal.
+  - `DELETE FROM t WHERE id = 1`: the same warning, then `Assertion failure:
+    rem0rec.cc:413:len <= col->len || ...`. Stack: row_undo_mod,
+    row_undo_mod_del_mark_sec, row_undo_mod_del_unmark_sec_and_undo_update,
+    btr_cur_optimistic_insert, rec_get_converted_size.
+  - `INSERT INTO t VALUES (3, '[1,0,0,0.1]')`: the server starts and
+    `SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY id` returns `1 2`, but
+    `SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3`
+    returns `1 3 2`; expected `1 2`.
+- The same changes in an active (not prepared) transaction are rolled back at
+  restart (rollback/hnsw_crash_recovery, the crash_commit_before case of
+  rollback/hnsw_recovery_commit_crash).
 - Expected: the server recovers and rolls the transaction back.
-- The server cannot start.
+- UPDATE and DELETE: the server cannot start. INSERT: wrong results.
