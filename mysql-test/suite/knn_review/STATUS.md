@@ -33,6 +33,8 @@ Review suite for the custom-index work on deb/custom-index/40 (25df4f5).
   - KNN-4, 5, 7, 8, 10, 20, 22
   - KNN-25: crash recovery asserts in `parse_index_fields` on a PK mapping
     B-tree redo record, from 4318c9a
+  - KNN-26: with HNSW and most rows deleted (entries not purged yet), a plain
+    KNN query returns too few rows, mostly 1
 - KNN-12 also happens on main: #1541. Fixed by #1544, which is stacked on
   #1543; #1546 is stacked on #1544.
 
