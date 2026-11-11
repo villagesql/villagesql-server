@@ -1,6 +1,5 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector,
 INDEX i_a (a) USING EXTENDED(dummy_index_hnsw));
 CREATE TABLE t2 (id INT PRIMARY KEY, b dummy_type_vector,
@@ -151,7 +150,6 @@ r5	CREATE TABLE `r5` (
 # With every table dropped, the extension can be uninstalled.
 DROP TABLE r3, r5;
 DROP DATABASE db2;
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;
