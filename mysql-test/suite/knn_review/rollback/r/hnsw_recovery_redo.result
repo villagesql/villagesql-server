@@ -1,0 +1,232 @@
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+# Insert rows 1 to 1500
+SET GLOBAL innodb_log_checkpoint_now = ON;
+SET GLOBAL innodb_page_cleaner_disabled_debug = ON;
+SET GLOBAL innodb_checkpoint_disabled = ON;
+# Insert rows 1501 to 3000
+START TRANSACTION;
+DELETE FROM t WHERE id % 10 = 0;
+UPDATE t SET grp = 2 WHERE id % 7 = 0;
+# Move the vectors of rows 101 to 120 to [4000 + id,0,0,0]
+UPDATE t SET id = id + 100000 WHERE id BETWEEN 501 AND 520;
+COMMIT;
+SELECT COUNT(*) AS n, SUM(id) AS sid, SUM(grp) AS sgrp FROM t;
+n	sid	sgrp
+2700	5850000	3086
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[45.24,55.98,92.42,46.57]') LIMIT 5;
+id
+2057
+286
+415
+1291
+1387
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[50.78,58.74,18.47,51.19]') LIMIT 5;
+id
+2029
+2782
+1361
+2948
+493
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[62.99,79.3,9.41,30.34]') LIMIT 5;
+id
+1531
+1797
+2139
+657
+279
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[9.07,80.96,69.34,4.19]') LIMIT 5;
+id
+2362
+2961
+1116
+31
+1583
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[98.22,96.48,65.39,61.56]') LIMIT 5;
+id
+1803
+1809
+1218
+394
+595
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[15.75,1.5,52.84,5.96]') LIMIT 5;
+id
+2558
+1681
+829
+1481
+912
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[13.44,84.74,76.38,25.51]') LIMIT 5;
+id
+1
+1583
+1215
+1653
+1997
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[5.38,46.83,93.05,46.53]') LIMIT 5;
+id
+100505
+1796
+6
+1352
+2665
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[50.83,8.57,35.59,94.65]') LIMIT 5;
+id
+1445
+2235
+328
+854
+2764
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[2.24,63.75,90.26,72.62]') LIMIT 5;
+id
+2222
+2589
+593
+1693
+1704
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[82.34,37.75,78.75,69.37]') LIMIT 5;
+id
+2999
+2184
+2749
+2841
+297
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[4105.3,0,0,0]') LIMIT 5;
+id
+105
+106
+104
+107
+103
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[4119.3,0,0,0]') LIMIT 5;
+id
+119
+118
+117
+116
+115
+# Kill and restart
+SELECT COUNT(*) AS n, SUM(id) AS sid, SUM(grp) AS sgrp FROM t;
+n	sid	sgrp
+2700	5850000	3086
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[45.24,55.98,92.42,46.57]') LIMIT 5;
+id
+2057
+286
+415
+1291
+1387
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[50.78,58.74,18.47,51.19]') LIMIT 5;
+id
+2029
+2782
+1361
+2948
+493
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[62.99,79.3,9.41,30.34]') LIMIT 5;
+id
+1531
+1797
+2139
+657
+279
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[9.07,80.96,69.34,4.19]') LIMIT 5;
+id
+2362
+2961
+1116
+31
+1583
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[98.22,96.48,65.39,61.56]') LIMIT 5;
+id
+1803
+1809
+1218
+394
+595
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[15.75,1.5,52.84,5.96]') LIMIT 5;
+id
+2558
+1681
+829
+1481
+912
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[13.44,84.74,76.38,25.51]') LIMIT 5;
+id
+1
+1583
+1215
+1653
+1997
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[5.38,46.83,93.05,46.53]') LIMIT 5;
+id
+100505
+1796
+6
+1352
+2665
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[50.83,8.57,35.59,94.65]') LIMIT 5;
+id
+1445
+2235
+328
+854
+2764
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[2.24,63.75,90.26,72.62]') LIMIT 5;
+id
+2222
+2589
+593
+1693
+1704
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[82.34,37.75,78.75,69.37]') LIMIT 5;
+id
+2999
+2184
+2749
+2841
+297
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[4105.3,0,0,0]') LIMIT 5;
+id
+105
+106
+104
+107
+103
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[4119.3,0,0,0]') LIMIT 5;
+id
+119
+118
+117
+116
+115
+SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_vector.l2_distance(v, '[45.24,55.98,92.42,46.57]') LIMIT 5;
+id
+2057
+286
+415
+1291
+1387
+# The index takes new changes after recovery
+INSERT INTO t VALUES (9000, 1, 'x', '[13.45,84.74,76.38,25.51]');
+DELETE FROM t WHERE id = 2;
+SELECT COUNT(*) AS n, SUM(id) AS sid, SUM(grp) AS sgrp FROM t;
+n	sid	sgrp
+2700	5858998	3086
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[13.44,84.74,76.38,25.51]') LIMIT 5;
+id
+1
+9000
+1583
+1215
+1653
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[49.54,44.95,65.16,78.87]') LIMIT 5;
+id
+1133
+2945
+2766
+724
+1844
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;

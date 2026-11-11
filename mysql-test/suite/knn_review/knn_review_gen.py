@@ -34,6 +34,8 @@ KNOWN_ISSUES = {
     "locking/hnsw_lock_wait_then_delete": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_vector_update": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "delete/hnsw_many_deleted": "KNN-26 With HNSW and most rows deleted, a KNN query returns too few rows",
+    "rollback/hnsw_recovery_prepared_rollback": "KNN-28 Rollback at recovery of a prepared transaction that updated an HNSW vector asserts",
+    "delete/hnsw_purge_scattered": "KNN-27 With HNSW, after purge of scattered deletes a KNN query on collinear rows returns wrong rows",
 }
 LOCK_NOWAIT = ("ER_LOCK_NOWAIT", "ERROR HY000: Statement aborted because "
                "lock(s) could not be acquired immediately and NOWAIT is set.")
@@ -2334,6 +2336,267 @@ t.sql("DELETE FROM t WHERE id = 4")
 hknn(t, rows=near(with_vec(model(r4=None), 1, "[1,0,0,0]") | {9: (1, "i", (1, 0, 0, 0.1))}))
 hnsw_uninstall(t)
 tests.append(t)
+
+
+
+# Recovery with more data: random 4-dimensional rows, so the nearest rows to a
+# query point are known exactly and no tie decides them. (Rows on a line would
+# hit KNN-27 once purge runs.) The statements that load and change the rows are
+# long, so they run with the query log off and an echo says what they do.
+KILL_RESTART = (["--source include/kill_and_restart_mysqld.inc"], ["# Kill and restart"])
+WAIT_NO_TRX = ["--let $wait_timeout = 120",
+               "--let $wait_condition = SELECT COUNT(*) = 0 FROM information_schema.innodb_trx",
+               "--source include/wait_condition.inc"]
+
+
+def vlit(v):
+    return "[" + ",".join(f"{x:g}" for x in v) + "]"
+
+
+def line_rows(ids):
+    return {i: (1, "x", (float(i), 0, 0, 0)) for i in ids}
+
+
+def quiet(t, stmts, text):
+    t.echo(text)
+    t.raw(["--disable_query_log"] + [s + ";" for s in stmts] + ["--enable_query_log"])
+
+
+def insert_stmts(rows, chunk=500):
+    ids = sorted(rows)
+    return ["INSERT INTO t VALUES " + ",".join(
+                f"({i},{rows[i][0]},'{rows[i][1]}','{vlit(rows[i][2])}')"
+                for i in ids[n:n + chunk])
+            for n in range(0, len(ids), chunk)]
+
+
+def rand_rows(ids, seed, shift=0):
+    import random
+    r = random.Random(seed)
+    return {i: (1, "x", (round(r.uniform(0, 100), 2) + shift,)
+                + tuple(round(r.uniform(0, 100), 2) for _ in range(3)))
+            for i in ids}
+
+
+def rand_points(n, seed, shift=0):
+    return [v for _, _, v in rand_rows(range(n), seed, shift).values()]
+
+
+def line_check(t, rows, qs, k=5, extra=""):
+    t.sql("SELECT COUNT(*) AS n, SUM(id) AS sid, SUM(grp) AS sgrp FROM t",
+          header="n\tsid\tsgrp",
+          rows=[f"{len(rows)}\t{sum(rows)}\t{sum(r[0] for r in rows.values())}"])
+    for q in qs:
+        t.sql(f"SELECT id FROM t ORDER BY {HD}(v, '{vlit(q)}') LIMIT {k}{extra}",
+              rows=near(rows, k, q))
+
+
+def line_changes(t, rows, deleted, regrouped, moved, pk_moved):
+    """Deletes, a grp update, vector moves and primary key updates, applied to
+    the table and to the model rows."""
+    t.sql(f"DELETE FROM t WHERE {deleted[0]}")
+    rows = {i: r for i, r in rows.items() if not deleted[1](i)}
+    t.sql(f"UPDATE t SET grp = 2 WHERE {regrouped[0]}")
+    rows = {i: ((2,) + r[1:] if regrouped[1](i) else r) for i, r in rows.items()}
+    stmts = []
+    for i in moved:
+        if i in rows:
+            v = (4000.0 + i, 0, 0, 0)
+            stmts.append(f"UPDATE t SET v = '{vlit(v)}' WHERE id = {i}")
+            rows[i] = rows[i][:2] + (v,)
+    quiet(t, stmts, f"Move the vectors of rows {moved[0]} to {moved[-1]} to [4000 + id,0,0,0]")
+    lo, hi = pk_moved
+    t.sql(f"UPDATE t SET id = id + 100000 WHERE id BETWEEN {lo} AND {hi}")
+    rows = {(i + 100000 if lo <= i <= hi else i): r for i, r in rows.items()}
+    return rows
+
+
+def line_new_changes(t, rows):
+    t.echo("The index takes new changes after recovery")
+    v2 = rows[2][2]
+    v = (round(rows[1][2][0] + 0.01, 2),) + rows[1][2][1:]
+    t.sql(f"INSERT INTO t VALUES (9000, 1, 'x', '{vlit(v)}')")
+    t.sql("DELETE FROM t WHERE id = 2")
+    rows = dict(rows)
+    rows[9000] = (1, "x", v)
+    rows.pop(2)
+    line_check(t, rows, [rows[1][2], v2])
+
+
+MOVED = list(range(101, 121))
+
+
+def recovery_points(rows, ids):
+    """Random points, the vectors of some rows, and points among the moved
+    vectors."""
+    return (rand_points(6, 11) + [rows[i][2] for i in ids if i in rows]
+            + [(4105.3, 0, 0, 0), (4119.3, 0, 0, 0)])
+
+
+def knn_points(t, rows, qs, k=5):
+    t.sql("SELECT COUNT(*) AS n FROM t", rows=[str(len(rows))], header="n")
+    for q in qs:
+        t.sql(f"SELECT id FROM t ORDER BY {HD}(v, '{vlit(q)}') LIMIT {k}",
+              rows=near(rows, k, q))
+
+
+t = T("delete", "hnsw_purge_scattered", """
+With an HNSW index (vsql-vector), KNN reads return the nearest rows after
+scattered deletes (every 10th row), before and after purge removes their
+entries. Purge is stopped (debug build) until the second check. Once with rows
+on a line, v = [id,0,0,0], and once with random 4-dimensional vectors.""")
+t.raw(["--source include/have_debug.inc", ""])
+t.sql("INSTALL EXTENSION vsql_vector")
+for name, rows, qs in (
+        ("line", line_rows(range(1, 3001)),
+         [(x, 0, 0, 0) for x in (1.3, 250.3, 999.3, 1500.3, 2222.3, 2999.3)]),
+        ("random", rand_rows(range(1, 3001), 7), rand_points(6, 100))):
+    t.echo(f"Rows: {name}")
+    t.sql("CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), "
+          "v SVECTOR(4), KEY k_grp (grp))")
+    t.sql("CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw)")
+    quiet(t, insert_stmts(rows), "Insert 3000 rows")
+    knn_points(t, rows, qs)
+    t.sql("SET GLOBAL innodb_purge_stop_now = ON")
+    t.sql("DELETE FROM t WHERE id % 10 = 0")
+    rows = {i: r for i, r in rows.items() if i % 10}
+    t.echo("Deleted, not purged")
+    knn_points(t, rows, qs)
+    t.sql("SET GLOBAL innodb_purge_run_now = ON")
+    t.raw(["--source include/wait_innodb_all_purged.inc"])
+    t.echo("Purged")
+    knn_points(t, rows, qs)
+    t.sql("DROP TABLE t")
+t.sql("UNINSTALL EXTENSION vsql_vector")
+tests.append(t)
+
+
+t = T("rollback", "hnsw_recovery_redo", """
+Committed changes to an HNSW index (vsql-vector) are redone at restart from the
+redo log alone: checkpoints and the page cleaner are stopped (debug build)
+before the changes, so none of their pages reach disk before the kill. The
+changes are 1500 inserts on top of 1500 rows, deletes, a grp update, vector
+moves and primary key updates; purge runs before the kill. After restart the
+row totals and KNN reads match the committed table.""")
+t.raw(["--source include/have_debug.inc", ""])
+t.sql("INSTALL EXTENSION vsql_vector")
+t.sql("CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), "
+      "v SVECTOR(4), KEY k_grp (grp))")
+t.sql("CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw)")
+rows = rand_rows(range(1, 1501), 1)
+quiet(t, insert_stmts(rows), "Insert rows 1 to 1500")
+t.sql("SET GLOBAL innodb_log_checkpoint_now = ON")
+t.sql("SET GLOBAL innodb_page_cleaner_disabled_debug = ON")
+t.sql("SET GLOBAL innodb_checkpoint_disabled = ON")
+more = rand_rows(range(1501, 3001), 2)
+quiet(t, insert_stmts(more), "Insert rows 1501 to 3000")
+rows |= more
+QR = recovery_points(rows, (1, 505, 1500, 2222, 2999))
+t.sql("START TRANSACTION")
+rows = line_changes(t, rows, ("id % 10 = 0", lambda i: i % 10 == 0),
+                    ("id % 7 = 0", lambda i: i % 7 == 0), MOVED, (501, 520))
+t.sql("COMMIT")
+t.raw(["--source include/wait_innodb_all_purged.inc"])
+line_check(t, rows, QR)
+t.raw(*KILL_RESTART)
+line_check(t, rows, QR)
+t.sql(f"SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY {HD}(v, '{vlit(QR[0])}') LIMIT 5",
+      rows=near(rows, 5, QR[0]))
+line_new_changes(t, rows)
+hnsw_uninstall(t)
+tests.append(t)
+
+
+t = T("rollback", "hnsw_recovery_large_rollback", """
+A large transaction that is open when the server is killed is rolled back at
+restart, in the HNSW index (vsql-vector) too: 2000 inserts on top of 1000 rows,
+deletes, a grp update, vector moves and primary key updates. InnoDB rolls back
+recovered transactions in the background, so KNN reads right after the restart
+can run while it is still going; they see the committed table. The server is
+then killed again before the rollback is waited for, and the second restart
+finishes it.""")
+t.sql("INSTALL EXTENSION vsql_vector")
+t.sql("CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), "
+      "v SVECTOR(4), KEY k_grp (grp))")
+t.sql("CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw)")
+base = rand_rows(range(1, 1001), 3)
+# Points among the committed rows only: KNN reads far outside the rows are
+# approximate (they differ from the exact nearest rows already before the
+# transaction), so they would not show what the recovery did.
+QB = rand_points(6, 11) + [base[i][2] for i in (1, 101, 119, 505, 999)]
+quiet(t, insert_stmts(base), "Insert rows 1 to 1000")
+t.echo("Before the transaction")
+line_check(t, base, QB)
+t.raw(["--connect (con1, localhost, root,,)"])
+t.sql("START TRANSACTION")
+added = rand_rows(range(1001, 3001), 4, shift=1000)
+quiet(t, insert_stmts(added), "Insert rows 1001 to 3000, apart from the others (first coordinate + 1000)")
+line_changes(t, dict(base) | added,
+             ("id % 3 = 0", lambda i: i % 3 == 0),
+             ("id % 7 = 0", lambda i: i % 7 == 0), MOVED, (501, 520))
+t.raw(["--connection default"])
+t.raw(*KILL_RESTART)
+t.raw(["--disconnect con1"])
+t.echo("Right after the restart; the rollback may still be running")
+line_check(t, base, QB)
+t.raw(*KILL_RESTART)
+t.raw(WAIT_NO_TRX)
+line_check(t, base, QB)
+t.sql("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+t.sql("START TRANSACTION")
+t.sql(f"SELECT id FROM t ORDER BY {HD}(v, '{vlit(QB[0])}') LIMIT 5 FOR UPDATE",
+      rows=near(base, 5, QB[0]))
+t.sql("COMMIT")
+t.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+line_new_changes(t, base)
+hnsw_uninstall(t)
+tests.append(t)
+
+
+def commit_crash(name, header, points):
+    t = T("rollback", name, header + """
+KNN reads after each restart match the outcome.""")
+    t.raw(["--source include/have_debug.inc", "--source include/have_log_bin.inc", ""])
+    hnsw_install(t)
+    changed = with_vec(model(r4=None), 1, "[9,9,9,9]") | {9: (1, "i", (1, 0, 0, 0.1))}
+    for point, committed in points:
+        t.echo(f"Kill at {point}")
+        t.sql("START TRANSACTION")
+        t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
+        t.sql("DELETE FROM t WHERE id = 4")
+        t.sql("UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
+        t.raw(["--source include/expect_crash.inc"])
+        t.sql(f"SET SESSION debug = '+d,{point}'")
+        t.sql("COMMIT", error=("2013", "ERROR HY000: Lost connection to MySQL server during query"))
+        t.raw(["--source include/start_mysqld.inc"] + WAIT_NO_TRX, ["# restart"])
+        m = changed if committed else BASE
+        t.sql("SELECT COUNT(*) AS n FROM t", rows=[str(len(m))], header="n")
+        hknn(t, len(m), rows=near(m, len(m)))
+        if committed:
+            t.sql("DELETE FROM t WHERE id = 9")
+            t.sql("INSERT INTO t VALUES (4, 2, 'd', '[1,1,0,0]')")
+            t.sql("UPDATE t SET v = '[1,0,0,0]' WHERE id = 1")
+            hknn(t, 8, rows=ALL8)
+    hnsw_uninstall(t)
+    tests.append(t)
+
+
+commit_crash("hnsw_recovery_commit_crash", """
+The server is killed at points of COMMIT of a transaction that changed an HNSW
+index (vsql-vector): an insert, a delete and a vector update.
+- crash_commit_before: before the commit starts; rolled back.
+- crash_after_flush_binlog: prepared in InnoDB and in the binary log;
+  committed at recovery.
+- crash_commit_after: committed.""",
+             (("crash_commit_before", False), ("crash_after_flush_binlog", True),
+              ("crash_commit_after", True)))
+
+commit_crash("hnsw_recovery_prepared_rollback", """
+The server is killed at COMMIT of a transaction that changed an HNSW index
+(vsql-vector), after it is prepared in InnoDB and before it is written to the
+binary log (crash_after_flush_engine_log). Recovery rolls the prepared
+transaction back: an insert, a delete and a vector update.""",
+             (("crash_after_flush_engine_log", False),))
 
 
 HLW = """

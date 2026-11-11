@@ -1,0 +1,292 @@
+INSTALL EXTENSION vsql_vector;
+# Rows: line
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+# Insert 3000 rows
+SELECT COUNT(*) AS n FROM t;
+n
+3000
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1.3,0,0,0]') LIMIT 5;
+id
+1
+2
+3
+4
+5
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[250.3,0,0,0]') LIMIT 5;
+id
+250
+251
+249
+252
+248
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[999.3,0,0,0]') LIMIT 5;
+id
+999
+1000
+998
+1001
+997
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1500.3,0,0,0]') LIMIT 5;
+id
+1500
+1501
+1499
+1502
+1498
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[2222.3,0,0,0]') LIMIT 5;
+id
+2222
+2223
+2221
+2224
+2220
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[2999.3,0,0,0]') LIMIT 5;
+id
+2999
+3000
+2998
+2997
+2996
+SET GLOBAL innodb_purge_stop_now = ON;
+DELETE FROM t WHERE id % 10 = 0;
+# Deleted, not purged
+SELECT COUNT(*) AS n FROM t;
+n
+2700
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1.3,0,0,0]') LIMIT 5;
+id
+1
+2
+3
+4
+5
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[250.3,0,0,0]') LIMIT 5;
+id
+251
+249
+252
+248
+253
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[999.3,0,0,0]') LIMIT 5;
+id
+999
+998
+1001
+997
+1002
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1500.3,0,0,0]') LIMIT 5;
+id
+1501
+1499
+1502
+1498
+1503
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[2222.3,0,0,0]') LIMIT 5;
+id
+2222
+2223
+2221
+2224
+2225
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[2999.3,0,0,0]') LIMIT 5;
+id
+2999
+2998
+2997
+2996
+2995
+SET GLOBAL innodb_purge_run_now = ON;
+# Purged
+SELECT COUNT(*) AS n FROM t;
+n
+2700
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1.3,0,0,0]') LIMIT 5;
+id
+1
+2
+3
+4
+5
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[250.3,0,0,0]') LIMIT 5;
+id
+251
+249
+252
+248
+253
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[999.3,0,0,0]') LIMIT 5;
+id
+999
+998
+1001
+997
+1002
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1500.3,0,0,0]') LIMIT 5;
+id
+1501
+1499
+1502
+1498
+1503
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[2222.3,0,0,0]') LIMIT 5;
+id
+2222
+2223
+2221
+2224
+2225
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[2999.3,0,0,0]') LIMIT 5;
+id
+2999
+2998
+2997
+2996
+2995
+DROP TABLE t;
+# Rows: random
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+# Insert 3000 rows
+SELECT COUNT(*) AS n FROM t;
+n
+3000
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[14.57,45.49,77.08,70.55]') LIMIT 5;
+id
+339
+1855
+1001
+1900
+2133
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[73.2,43.35,80,53.29]') LIMIT 5;
+id
+2273
+2043
+1695
+2389
+654
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[8.02,45.59,4.79,93.3]') LIMIT 5;
+id
+1115
+1613
+1236
+34
+1955
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[94.71,33.54,30.94,76.8]') LIMIT 5;
+id
+606
+698
+2820
+217
+2791
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[20.39,17.85,18.86,34.7]') LIMIT 5;
+id
+2145
+2898
+766
+588
+2306
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[62.63,96.33,21.08,95.61]') LIMIT 5;
+id
+2765
+1607
+2556
+2220
+1515
+SET GLOBAL innodb_purge_stop_now = ON;
+DELETE FROM t WHERE id % 10 = 0;
+# Deleted, not purged
+SELECT COUNT(*) AS n FROM t;
+n
+2700
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[14.57,45.49,77.08,70.55]') LIMIT 5;
+id
+339
+1855
+1001
+2133
+775
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[73.2,43.35,80,53.29]') LIMIT 5;
+id
+2273
+2043
+1695
+2389
+654
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[8.02,45.59,4.79,93.3]') LIMIT 5;
+id
+1115
+1613
+1236
+34
+1955
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[94.71,33.54,30.94,76.8]') LIMIT 5;
+id
+606
+698
+217
+2791
+1102
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[20.39,17.85,18.86,34.7]') LIMIT 5;
+id
+2145
+2898
+766
+588
+2306
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[62.63,96.33,21.08,95.61]') LIMIT 5;
+id
+2765
+1607
+2556
+1515
+252
+SET GLOBAL innodb_purge_run_now = ON;
+# Purged
+SELECT COUNT(*) AS n FROM t;
+n
+2700
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[14.57,45.49,77.08,70.55]') LIMIT 5;
+id
+339
+1855
+1001
+2133
+775
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[73.2,43.35,80,53.29]') LIMIT 5;
+id
+2273
+2043
+1695
+2389
+654
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[8.02,45.59,4.79,93.3]') LIMIT 5;
+id
+1115
+1613
+1236
+34
+1955
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[94.71,33.54,30.94,76.8]') LIMIT 5;
+id
+606
+698
+217
+2791
+1102
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[20.39,17.85,18.86,34.7]') LIMIT 5;
+id
+2145
+2898
+766
+588
+2306
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[62.63,96.33,21.08,95.61]') LIMIT 5;
+id
+2765
+1607
+2556
+1515
+252
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;

@@ -1,0 +1,33 @@
+# The server is killed at COMMIT of a transaction that changed an HNSW index
+# (vsql-vector), after it is prepared in InnoDB and before it is written to the
+# binary log (crash_after_flush_engine_log). Recovery rolls the prepared
+# transaction back: an insert, a delete and a vector update.
+# KNN reads after each restart match the outcome.
+
+--let $knn_issue = KNN-28 Rollback at recovery of a prepared transaction that updated an HNSW vector asserts
+--source suite/knn_review/include/known_issue.inc
+
+--source include/have_debug.inc
+--source include/have_log_bin.inc
+
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+--echo # Kill at crash_after_flush_engine_log
+START TRANSACTION;
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]');
+DELETE FROM t WHERE id = 4;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+--source include/expect_crash.inc
+SET SESSION debug = '+d,crash_after_flush_engine_log';
+--error 2013
+COMMIT;
+--source include/start_mysqld.inc
+--let $wait_timeout = 120
+--let $wait_condition = SELECT COUNT(*) = 0 FROM information_schema.innodb_trx
+--source include/wait_condition.inc
+SELECT COUNT(*) AS n FROM t;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;
