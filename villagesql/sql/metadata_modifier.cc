@@ -488,7 +488,8 @@ bool Metadata_modifier::rename_columns_table(
 
 bool Metadata_modifier::rename_indexes_table(
     THD *thd [[maybe_unused]], Table_name old_name, Table_name new_name,
-    const std::unordered_set<std::string> *skip_indexes) {
+    const std::unordered_set<std::string> *skip_indexes,
+    const std::map<std::string, std::string> *index_renames) {
   if (should_assert_if_null(old_name.first) ||
       should_assert_if_null(old_name.second) ||
       should_assert_if_null(new_name.first) ||
@@ -534,16 +535,24 @@ bool Metadata_modifier::rename_indexes_table(
   std::vector<std::pair<IndexEntry, IndexKey>> renames;
   renames.reserve(custom_indexes.size());
   for (const auto &[_, old_index] : custom_indexes) {
-    if (skip_indexes != nullptr &&
-        skip_indexes->count(canonical_index_name(old_index->index_name())) > 0)
+    const std::string old_index_name =
+        canonical_index_name(old_index->index_name());
+    if (skip_indexes != nullptr && skip_indexes->count(old_index_name) > 0)
       continue;
 
+    std::string new_index_name = old_index->index_name();
+    if (index_renames != nullptr) {
+      auto it = index_renames->find(old_index_name);
+      if (it != index_renames->end()) new_index_name = it->second;
+    }
+    IndexKey new_key(new_db, new_table, new_index_name);
+    if (new_key.str() == old_index->key().str()) continue;
+
     // index_id stays, so the index's custom_index_columns rows still apply.
-    IndexEntry new_entry(IndexKey(new_db, new_table, old_index->index_name()),
-                         old_index->index_id, old_index->extension_name,
-                         old_index->extension_version,
-                         old_index->index_type_name,
-                         old_index->index_type_parameters);
+    IndexEntry new_entry(
+        std::move(new_key), old_index->index_id, old_index->extension_name,
+        old_index->extension_version, old_index->index_type_name,
+        old_index->index_type_parameters);
     renames.emplace_back(std::move(new_entry), old_index->key());
   }
   for (auto &rename : renames) to_rename_indexes_.push_back(std::move(rename));
@@ -1344,13 +1353,18 @@ bool Metadata_modifier::process_alter(THD *thd,
     return true;
   }
 
-  if (renaming_table) {
+  std::map<std::string, std::string> index_renames;
+  for (const Alter_rename_key *rename_key : alter_info->alter_rename_key_list)
+    index_renames[canonical_index_name(rename_key->old_name)] =
+        rename_key->new_name;
+
+  if (renaming_table || !index_renames.empty()) {
     std::unordered_set<std::string> dropped_indexes;
     for (const IndexEntry &entry : custom_modifier.to_remove_indexes_)
       dropped_indexes.insert(canonical_index_name(entry.index_name()));
-    if (custom_modifier.rename_indexes_table(thd, {db, table_name},
-                                             {new_db, new_table_name},
-                                             &dropped_indexes)) {
+    if (custom_modifier.rename_indexes_table(
+            thd, {db, table_name}, {new_db, new_table_name}, &dropped_indexes,
+            &index_renames)) {
       return true;
     }
   }
