@@ -1,0 +1,24 @@
+INSTALL EXTENSION vsql_knn_index_test;
+PREPARE ps FROM "SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2";
+EXECUTE ps;
+id
+1
+4
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+EXECUTE ps;
+id
+4
+8
+DELETE FROM t WHERE id = 4;
+EXECUTE ps;
+id
+8
+2
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]');
+EXECUTE ps;
+id
+9
+8
+DEALLOCATE PREPARE ps;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

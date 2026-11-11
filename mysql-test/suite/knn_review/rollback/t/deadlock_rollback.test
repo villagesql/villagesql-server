@@ -1,0 +1,32 @@
+# The transaction rolled back to break a deadlock has its vector update undone;
+# the other transaction's changes commit.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--connect (con1, localhost, root,,)
+START TRANSACTION;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+--connection default
+START TRANSACTION;
+# More undo than con1, so con1 is the one rolled back.
+INSERT INTO t VALUES (20, 1, 'p', '[7,7,7,7]'), (21, 1, 'q', '[7,7,7,8]'), (22, 1, 'r', '[7,7,8,7]');
+UPDATE t SET v = '[8,8,8,8]' WHERE id = 4;
+--connection con1
+--send UPDATE t SET pay = 'x' WHERE id = 4
+--connection default
+--let $wait_condition = SELECT COUNT(*) = 1 FROM information_schema.innodb_trx WHERE trx_state = 'LOCK WAIT'
+--source include/wait_condition.inc
+UPDATE t SET pay = 'y' WHERE id = 1;
+--connection con1
+--error ER_LOCK_DEADLOCK
+--reap
+--connection default
+COMMIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 7;
+SELECT id, pay FROM t WHERE id IN (1, 4) ORDER BY id;
+--disconnect con1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

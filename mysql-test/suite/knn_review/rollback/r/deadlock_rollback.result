@@ -1,0 +1,25 @@
+INSTALL EXTENSION vsql_knn_index_test;
+START TRANSACTION;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+START TRANSACTION;
+INSERT INTO t VALUES (20, 1, 'p', '[7,7,7,7]'), (21, 1, 'q', '[7,7,7,8]'), (22, 1, 'r', '[7,7,8,7]');
+UPDATE t SET v = '[8,8,8,8]' WHERE id = 4;
+UPDATE t SET pay = 'x' WHERE id = 4;
+UPDATE t SET pay = 'y' WHERE id = 1;
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+COMMIT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 7;
+id
+1
+8
+2
+5
+3
+6
+7
+SELECT id, pay FROM t WHERE id IN (1, 4) ORDER BY id;
+id	pay
+1	y
+4	d
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,24 @@
+INSTALL EXTENSION vsql_knn_index_test;
+UPDATE t SET v = NULL WHERE id = 2;
+SELECT id FROM t WHERE v IS NOT NULL ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+5
+3
+6
+7
+UPDATE t SET v = '[1,0,0,0.5]' WHERE id = 2;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+2
+4
+8
+5
+3
+6
+7
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

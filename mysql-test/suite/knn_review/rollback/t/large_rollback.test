@@ -1,0 +1,21 @@
+# A transaction that inserts 200 rows sees them in KNN results, and its rollback
+# removes all their index entries.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_function = kvec_entry_count
+--source suite/knn_review/include/require_function.inc
+--let $base = `SELECT vsql_knn_index_test.kvec_entry_count()`
+START TRANSACTION;
+INSERT INTO t WITH RECURSIVE s (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM s WHERE i < 200) SELECT 1000 + i, 1, 'z', vsql_knn_index_test.KVECTOR::from_string(CONCAT('[1,0,0,', i / 1000, ']')) FROM s;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+ROLLBACK;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

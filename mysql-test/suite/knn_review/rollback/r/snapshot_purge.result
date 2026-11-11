@@ -1,0 +1,41 @@
+INSTALL EXTENSION vsql_knn_index_test;
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+DELETE FROM t WHERE id = 1;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 4;
+SET GLOBAL innodb_purge_run_now = ON;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+1
+4
+8
+2
+5
+3
+6
+7
+entries_change
+1
+COMMIT;
+entries_change
+-1
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+id
+8
+2
+5
+3
+6
+7
+4
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

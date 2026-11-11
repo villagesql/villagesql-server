@@ -1,0 +1,28 @@
+# DROP TABLE releases the entries of the table's KNN index, including entries
+# of deleted and updated rows not purged yet: the extension's entry count is
+# the same before CREATE TABLE and after DROP TABLE.
+
+--let $knn_issue = KNN-20 DROP TABLE does not call the custom index drop callback
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--let $knn_function = kvec_entry_count
+--source suite/knn_review/include/require_function.inc
+--let $base = `SELECT vsql_knn_index_test.kvec_entry_count()`
+--source suite/knn_review/include/knn_table.inc
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+DROP TABLE t;
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+--echo # With a delete and a vector update committed but not purged
+--source suite/knn_review/include/knn_table.inc
+DELETE FROM t WHERE id = 7;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 6;
+DROP TABLE t;
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+UNINSTALL EXTENSION vsql_knn_index_test;

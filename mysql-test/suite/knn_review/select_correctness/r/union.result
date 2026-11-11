@@ -1,0 +1,18 @@
+INSTALL EXTENSION vsql_knn_index_test;
+(SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2) UNION ALL (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,3]') LIMIT 1);
+id
+1
+4
+7
+(SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2) UNION (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,3]') LIMIT 1);
+id
+1
+4
+7
+(SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2) UNION (SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3);
+id
+1
+4
+8
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,29 @@
+# Purge removes only the entries it should when a row is back at a vector it
+# had before: a vector moved away and back, and a row deleted and inserted again
+# with the same key and vector, each in separate transactions. After purge the
+# index holds one entry per row and both rows are found at their place.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_function = kvec_entry_count
+--source suite/knn_review/include/require_function.inc
+--let $base = `SELECT vsql_knn_index_test.kvec_entry_count()`
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+UPDATE t SET v = '[1,0,0,0]' WHERE id = 1;
+DELETE FROM t WHERE id = 2;
+INSERT INTO t VALUES (2, 1, 'b', '[0,1,0,0]');
+--source include/wait_innodb_all_purged.inc
+--let $wait_timeout = 60
+--let $wait_condition = SELECT vsql_knn_index_test.kvec_entry_count() - $base <= 0
+--source include/wait_condition.inc
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 5 FOR UPDATE;
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

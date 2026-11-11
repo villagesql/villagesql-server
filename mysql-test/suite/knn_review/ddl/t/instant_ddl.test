@@ -1,0 +1,22 @@
+# ALTER TABLE operations that do not rebuild the table (instant ADD and DROP
+# COLUMN, RENAME COLUMN, an in-place secondary index) leave the KNN index
+# working, also for rows written after them.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+ALTER TABLE t ADD COLUMN extra INT, ALGORITHM=INSTANT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]', 5);
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ALTER TABLE t RENAME COLUMN pay TO pay2, ALGORITHM=INSTANT;
+SELECT id, pay2 FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ALTER TABLE t ADD INDEX k_pay (pay2), ALGORITHM=INPLACE;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+ALTER TABLE t DROP COLUMN extra, ALGORITHM=INSTANT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DELETE FROM t WHERE id = 9;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

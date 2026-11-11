@@ -1,0 +1,36 @@
+# Purge keeps the index entries an open REPEATABLE READ snapshot still needs.
+# Another session deletes a row and moves another one's vector and commits after
+# the snapshot started; while the snapshot is open the old entries stay, and its
+# KNN reads return the table as it was. Once it ends, purge removes them.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--let $knn_function = kvec_entry_count
+--source suite/knn_review/include/require_function.inc
+--let $base = `SELECT vsql_knn_index_test.kvec_entry_count()`
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+--connect (con1, localhost, root,,)
+DELETE FROM t WHERE id = 1;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 4;
+SET GLOBAL innodb_purge_run_now = ON;
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+COMMIT;
+--source include/wait_innodb_all_purged.inc
+--let $wait_timeout = 60
+--let $wait_condition = SELECT vsql_knn_index_test.kvec_entry_count() - $base <= -1
+--source include/wait_condition.inc
+--disable_query_log
+--eval SELECT vsql_knn_index_test.kvec_entry_count() - $base AS entries_change
+--enable_query_log
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+--disconnect con1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

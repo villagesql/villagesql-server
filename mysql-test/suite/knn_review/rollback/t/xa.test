@@ -1,0 +1,37 @@
+# Changes of a prepared XA transaction are invisible to KNN reads of other
+# sessions; XA ROLLBACK undoes them and XA COMMIT makes them visible.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--connect (con1, localhost, root,,)
+--connection con1
+XA START 'x1';
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]');
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 4;
+XA END 'x1';
+XA PREPARE 'x1';
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+--connection con1
+XA ROLLBACK 'x1';
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 9;
+--connection con1
+XA START 'x2';
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0.1,0]');
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 4;
+XA END 'x2';
+XA PREPARE 'x2';
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+--connection con1
+XA COMMIT 'x2';
+--connection default
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 9;
+--disconnect con1
+--connection default
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

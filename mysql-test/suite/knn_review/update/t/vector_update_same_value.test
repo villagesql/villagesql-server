@@ -1,0 +1,14 @@
+# An UPDATE that sets the vector to its current value, or to an equal one,
+# leaves the row once in KNN results at the same place.
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+UPDATE t SET v = v WHERE id = 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+UPDATE t SET v = '[1,0,0,0]' WHERE id = 1;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+UPDATE t SET v = v;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 8;
+SELECT COUNT(*) FROM t;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

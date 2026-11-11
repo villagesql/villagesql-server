@@ -1,0 +1,22 @@
+INSTALL EXTENSION vsql_knn_index_test;
+UPDATE t SET v = '[9,9,9,9]', pay = 'far' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 2;
+SELECT id FROM t WHERE pay = 'far' ORDER BY id;
+id
+1
+4
+UPDATE t SET v = '[1,0,0,0.01]', pay = 'near' ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t WHERE pay = 'near' ORDER BY id;
+id
+2
+5
+8
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+2
+5
+8
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

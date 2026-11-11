@@ -1,0 +1,28 @@
+# READ COMMITTED locking KNN reads with an HNSW index (vsql-vector) skip the old
+# entry of a row whose vector was updated and the entry of a deleted row, and
+# find the updated row at its new place, in this session's transaction and
+# after it.
+
+--let $knn_issue = KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+DELETE FROM t WHERE id = 4;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+START TRANSACTION;
+UPDATE t SET v = '[1,0,0,0.1]' WHERE id = 6;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+DELETE FROM t WHERE id = 8;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 8 FOR SHARE;
+COMMIT;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 8 FOR UPDATE;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;
