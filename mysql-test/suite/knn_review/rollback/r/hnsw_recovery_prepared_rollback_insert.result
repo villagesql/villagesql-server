@@ -1,0 +1,20 @@
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, v SVECTOR(4));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, '[1,0,0,0]'), (2, '[0,1,0,0]');
+START TRANSACTION;
+INSERT INTO t VALUES (3, '[1,0,0,0.1]');
+SET SESSION debug = '+d,crash_after_flush_engine_log';
+COMMIT;
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY id;
+id
+1
+2
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+2
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;
