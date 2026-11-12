@@ -185,6 +185,14 @@ class TypeDescriptor {
   // Protocol version this type was registered with.
   vef_protocol_t protocol() const { return protocol_; }
 
+  // Protocol the type's extension negotiated: the protocol of the SDK it was
+  // built with, capped at the server's. protocol() is lower when the type
+  // uses no feature of a later protocol.
+  vef_protocol_t extension_protocol() const { return extension_protocol_; }
+  void set_extension_protocol(vef_protocol_t protocol) {
+    extension_protocol_ = protocol;
+  }
+
   // Type implementation details
   unsigned char implementation_type() const { return implementation_type_; }
   int64_t persisted_length() const { return persisted_length_; }
@@ -288,6 +296,7 @@ class TypeDescriptor {
   TypeDescriptorKey key_;
 
   vef_protocol_t protocol_{VEF_PROTOCOL_1};
+  vef_protocol_t extension_protocol_{VEF_PROTOCOL_1};
 
   // Type implementation details
   unsigned char implementation_type_{0};

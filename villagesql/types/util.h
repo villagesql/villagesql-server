@@ -229,10 +229,12 @@ enum class EncodeStatus {
 };
 
 // Encodes a string for storage in a custom type field, with error reporting.
-// The TypeContext and field name are taken from the field itself. Returns the
-// encoded String*, or nullptr with status saying why. On kBadValue a warning
-// has been pushed, so the caller only has to decide whether to promote it to
-// an error.
+// A string in the binary charset is the type's binary form, and an error for a
+// type without an encode from it; any other is its text form, converted to
+// utf8mb4. The TypeContext and field name are taken from the field itself.
+// Returns the encoded String*, or nullptr with status saying why. On kBadValue
+// a warning has been pushed, so the caller only has to decide whether to
+// promote it to an error.
 extern String *EncodeStringForField(Field *field, const String &from,
                                     EncodeStatus &status);
 

@@ -284,7 +284,8 @@ SELECT @total AS total;
 DEALLOCATE PREPARE s;
 
 --echo #
---echo # A ? as a VDF argument, bound with text and with binary in turn
+--echo # A ? as a VDF argument, bound with text and with binary in turn.
+--echo # COMPLEX has no from_binary, so a binary value is rejected.
 --echo #
 
 PREPARE s FROM 'SELECT complex_real(?) AS r';
@@ -292,10 +293,12 @@ PREPARE s FROM 'SELECT complex_real(?) AS r';
 SET @c = '(7.0,8.0)';
 EXECUTE s USING @c;
 SET @c = CAST('(9.0,1.0)' AS BINARY);
+--error ER_VILLAGESQL_GENERIC_ERROR
 EXECUTE s USING @c;
 SET @c = '(2.0,3.0)';
 EXECUTE s USING @c;
 SET @c = X'28362E302C312E3029';
+--error ER_VILLAGESQL_GENERIC_ERROR
 EXECUTE s USING @c;
 --let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
 --disable_query_log
@@ -308,6 +311,7 @@ PREPARE s FROM 'INSERT INTO tb VALUES (?, ?)';
 SET @id = 1, @c = '(1.0,1.0)';
 EXECUTE s USING @id, @c;
 SET @id = 2, @c = CAST('(2.0,2.0)' AS BINARY);
+--error ER_VILLAGESQL_GENERIC_ERROR
 EXECUTE s USING @id, @c;
 SET @id = 3, @c = '(3.0,3.0)';
 EXECUTE s USING @id, @c;

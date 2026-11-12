@@ -122,6 +122,7 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         error_out = "type '" + type_name + "' failed validation";
         return std::nullopt;
       }
+      maybe_descriptor->set_extension_protocol(ext_reg.negotiated_protocol);
 
       // A fixed non-parameterized type declares persisted_length
       // (max_persisted_length stays 0); parameterized and variable-length types
