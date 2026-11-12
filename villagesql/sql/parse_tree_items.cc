@@ -263,13 +263,13 @@ bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
 
 constexpr std::string_view separator = ", ";
 constexpr std::string_view suffixPrefix = ", and ";
-constexpr std::string_view suffixSuffix = " more methods";
+constexpr std::string_view suffixPostfix = " more methods";
 
 // Length of ", and N more methods", or 0 when nothing is omitted.
 size_t omitted_suffix_len(size_t omitted_count) {
   if (omitted_count == 0) return 0;
   return suffixPrefix.size() + std::to_string(omitted_count).size() +
-         suffixSuffix.size();
+         suffixPostfix.size();
 }
 
 // Length of the first `name_count` names joined with the separator.
@@ -336,5 +336,5 @@ std::string join_names_bounded(const std::vector<std::string> &names,
 
   const size_t omitted_count = total_names - shown_count;
   return join_first(names, shown_count) + std::string(suffixPrefix) +
-         std::to_string(omitted_count) + std::string(suffixSuffix);
+         std::to_string(omitted_count) + std::string(suffixPostfix);
 }
