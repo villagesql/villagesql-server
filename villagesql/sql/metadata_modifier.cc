@@ -486,6 +486,71 @@ bool Metadata_modifier::rename_columns_table(
   return false;
 }
 
+bool Metadata_modifier::rename_indexes_table(
+    THD *thd [[maybe_unused]], Table_name old_name, Table_name new_name,
+    const std::unordered_set<std::string> *skip_indexes) {
+  if (should_assert_if_null(old_name.first) ||
+      should_assert_if_null(old_name.second) ||
+      should_assert_if_null(new_name.first) ||
+      should_assert_if_null(new_name.second)) {
+    villagesql_error(error_uninitialized_name, MYF(0));
+    return true;
+  }
+
+  const char *old_db = old_name.first;
+  const char *old_table = old_name.second;
+  const char *new_db = new_name.first;
+  const char *new_table = new_name.second;
+
+  if (is_system_schema(old_db)) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+  // We must already have locked the table to make sure that the
+  // table indexes are not altered.
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, old_db,
+                                                      old_table, MDL_SHARED));
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, new_db,
+                                                      new_table, MDL_SHARED));
+
+  auto guard = vclient.get_read_lock();
+
+  // The table's indexes as the renames already staged here leave them, as in
+  // rename_columns_table().
+  const std::string old_prefix = IndexKeyPrefix(old_db, old_table).str();
+  std::map<std::string, const IndexEntry *> custom_indexes;
+  for (const IndexEntry *entry :
+       vclient.GetCustomIndexesForTable(old_db, old_table)) {
+    if (entry) custom_indexes[entry->key().str()] = entry;
+  }
+  for (const auto &[staged_entry, staged_old_key] : to_rename_indexes_) {
+    custom_indexes.erase(staged_old_key.str());
+    const std::string staged_key = staged_entry.key().str();
+    if (staged_key.starts_with(old_prefix))
+      custom_indexes[staged_key] = &staged_entry;
+  }
+
+  // Built apart from to_rename_indexes_, which custom_indexes may point into.
+  std::vector<std::pair<IndexEntry, IndexKey>> renames;
+  renames.reserve(custom_indexes.size());
+  for (const auto &[_, old_index] : custom_indexes) {
+    if (skip_indexes != nullptr &&
+        skip_indexes->count(canonical_index_name(old_index->index_name())) > 0)
+      continue;
+
+    // index_id stays, so the index's custom_index_columns rows still apply.
+    IndexEntry new_entry(IndexKey(new_db, new_table, old_index->index_name()),
+                         old_index->index_id, old_index->extension_name,
+                         old_index->extension_version,
+                         old_index->index_type_name,
+                         old_index->index_type_parameters);
+    renames.emplace_back(std::move(new_entry), old_index->key());
+  }
+  for (auto &rename : renames) to_rename_indexes_.push_back(std::move(rename));
+
+  return false;
+}
+
 bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
                                       Table_ref *table_ref,
                                       const Alter_info *alter_info) {
@@ -860,6 +925,13 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
     }
   }
 
+  for (const auto &[new_entry, old_key] : to_rename_indexes_) {
+    assert(!new_entry.extension_name.empty());
+    if (add_mdl_request(new_entry.extension_name)) {
+      return true;
+    }
+  }
+
   if (mdl_requests.is_empty()) {
     return false;
   }
@@ -1053,6 +1125,16 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   }
   to_remove_indexes_.clear();
 
+  // 5b. Process custom index renames (updates with old key).
+  for (auto &[new_entry, old_key] : to_rename_indexes_) {
+    if (vclient.custom_indexes().MarkForUpdate(*thd, std::move(new_entry),
+                                               std::move(old_key))) {
+      return true;
+    }
+    marked_index = true;
+  }
+  to_rename_indexes_.clear();
+
   // 6. Process custom index additions. custom_indexes must be staged before
   // custom_index_columns so the parent row exists when child rows reference it.
   for (IndexEntry &entry : to_add_indexes_) {
@@ -1242,12 +1324,35 @@ bool Metadata_modifier::process_alter(THD *thd,
 
   const char *db = table_list->db;
   const char *table_name = table_list->table_name;
-  if (custom_modifier.add_indexes(thd, db, table_name, alter_info)) {
+
+  // The names the table carries once this ALTER completes. Indexes it adds are
+  // filed under them and the ones it keeps move to them; the ones it drops are
+  // deleted under the old names, as in alter_columns().
+  const bool renaming_table = (alter_info->flags & Alter_info::ALTER_RENAME) &&
+                              alter_info->new_table_name.str != nullptr;
+  const char *new_db = (renaming_table && alter_info->new_db_name.str)
+                           ? alter_info->new_db_name.str
+                           : db;
+  const char *new_table_name =
+      renaming_table ? alter_info->new_table_name.str : table_name;
+
+  if (custom_modifier.add_indexes(thd, new_db, new_table_name, alter_info)) {
     return true;
   }
 
   if (custom_modifier.remove_indexes(thd, db, table_name, alter_info)) {
     return true;
+  }
+
+  if (renaming_table) {
+    std::unordered_set<std::string> dropped_indexes;
+    for (const IndexEntry &entry : custom_modifier.to_remove_indexes_)
+      dropped_indexes.insert(canonical_index_name(entry.index_name()));
+    if (custom_modifier.rename_indexes_table(thd, {db, table_name},
+                                             {new_db, new_table_name},
+                                             &dropped_indexes)) {
+      return true;
+    }
   }
 
   // Reject any ALTER that combines custom column changes with an engine change.
@@ -1314,6 +1419,10 @@ bool Metadata_modifier::process_rename(THD *thd, Table_ref *table_list) {
     Table_name new_table = {new_ref->db, new_ref->table_name};
 
     if (custom_modifier.rename_columns_table(thd, old_table, new_table)) {
+      return true;
+    }
+
+    if (custom_modifier.rename_indexes_table(thd, old_table, new_table)) {
       return true;
     }
   }

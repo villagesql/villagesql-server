@@ -163,7 +163,7 @@ class Metadata_modifier {
     return !to_add_.empty() || !to_remove_.empty() || !to_rename_.empty() ||
            !to_call_.empty() || !to_add_indexes_.empty() ||
            !to_add_index_columns_.empty() || !to_remove_indexes_.empty() ||
-           !to_remove_index_columns_.empty();
+           !to_remove_index_columns_.empty() || !to_rename_indexes_.empty();
   }
 
  private:
@@ -204,6 +204,14 @@ class Metadata_modifier {
   bool rename_columns_table(
       THD *thd, Table_name old_name, Table_name new_name,
       const std::unordered_set<std::string> *skip_columns = nullptr);
+
+  // Update the table name associated with custom indexes from old_name to
+  // new_name. Canonical index names in skip_indexes are left alone: the caller
+  // stages their removal under old_name.
+  // Returns false on success, true on error.
+  bool rename_indexes_table(
+      THD *thd, Table_name old_name, Table_name new_name,
+      const std::unordered_set<std::string> *skip_indexes = nullptr);
 
   // Modify column entries based on alter_info. table_ref is the table being
   // altered.
@@ -255,6 +263,8 @@ class Metadata_modifier {
   // Custom index entries staged for deletion
   std::vector<IndexEntry> to_remove_indexes_;
   std::vector<IndexColumnEntry> to_remove_index_columns_;
+  // Pair of (new_entry, old_key) for custom indexes moved to another table name
+  std::vector<std::pair<IndexEntry, IndexKey>> to_rename_indexes_;
   // Number of VillageSQL system tables opened by add_system_tables().
   uint system_tables_opened_ = 0;
 };

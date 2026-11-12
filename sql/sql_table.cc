@@ -17697,8 +17697,10 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
 
   // VillageSQL: stash the real target table name so the #sql-xxx rebuild table
   // can resolve its custom indexes against the victionary under that name (the
-  // #sql-xxx name matches nothing there).
-  villagesql::SetAlterTargetForCustomIndexes(thd, table);
+  // #sql-xxx name matches nothing there). With RENAME it is the new name, which
+  // the table's custom indexes are staged under.
+  villagesql::SetAlterTargetForCustomIndexes(thd, alter_ctx.new_db,
+                                             alter_ctx.new_name);
 
   if (alter_info->requested_algorithm !=
       Alter_info::ALTER_TABLE_ALGORITHM_COPY) {
@@ -17713,10 +17715,12 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
 
     // VillageSQL: Inject custom context here for both newly added custom
-    // indexes and pre-existing ones (needed in rebuild path).
+    // indexes and pre-existing ones (needed in rebuild path). Resolve them
+    // under the ALTER's target name, which differs from table's with RENAME.
     for (uint j = 0; j < ha_alter_info.key_count; j++) {
       if (villagesql::MaybeInjectCustomIndex(thd, *table->s,
-                                             &ha_alter_info.key_info_buffer[j]))
+                                             &ha_alter_info.key_info_buffer[j],
+                                             /*use_alter_target=*/true))
         goto err_new_table_cleanup;
     }
 

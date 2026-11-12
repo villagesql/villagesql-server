@@ -76,8 +76,12 @@ extern bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field);
 // share.mem_root) and sets custom_index_profile on each KEY_PART_INFO from
 // the per-column IndexColumnEntry profile bindings.
 // Only operates on committed entries (existing tables opened from DD).
+// With use_alter_target, or for an ALTER TABLE rebuild (#sql-xxx) table, the
+// key is resolved under the ALTER's target name set by
+// SetAlterTargetForCustomIndexes instead of the share's name.
 // Returns true on error, false on success (including when not a custom index).
-extern bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo);
+extern bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo,
+                                   bool use_alter_target = false);
 
 // True if the ALTER changes the primary key of a table that has a custom
 // (USING EXTENDED) index -- its column set, order, or any column's definition.
@@ -165,11 +169,12 @@ extern void RemoveTmpTableMetadata(THD *thd, TABLE *table);
 extern bool PrepareAlterCustomFields(THD *thd, const Alter_info *alter_info,
                                      const HA_CREATE_INFO *create_info);
 
-// Stash old_table's real (db, table) on the THD so MaybeInjectCustomIndex can
-// resolve the #sql-xxx rebuild table's custom indexes against the victionary
-// under the real name. Called from mysql_alter_table before the rebuild table
-// is opened.
-extern void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table);
+// Stash the (db, table) name the altered table carries once the ALTER
+// completes on the THD, so MaybeInjectCustomIndex can resolve the #sql-xxx
+// rebuild table's custom indexes against the victionary under that name.
+// Called from mysql_alter_table before the rebuild table is opened.
+extern void SetAlterTargetForCustomIndexes(THD *thd, const char *db,
+                                           const char *table_name);
 
 // Carry a custom (USING EXTENDED) index's type and extension names from the old
 // key's IndexContext onto key_create_info, so key_create_info.is_custom_index()
