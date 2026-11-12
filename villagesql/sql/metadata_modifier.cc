@@ -527,9 +527,13 @@ bool Metadata_modifier::rename_indexes_table(
        vclient.GetCustomIndexesForTable(old_db, old_table)) {
     if (entry) custom_indexes[entry->key().str()] = {entry, not_staged};
   }
-  for (size_t i = 0; i < to_rename_indexes_.size(); ++i) {
-    const auto &[staged_entry, staged_old_key] = to_rename_indexes_[i];
+  // Each staged rename runs from a committed key to the index's current key,
+  // and they all apply at once. So drop every old key before adding any
+  // current one, since one rename's current key may be another's old key.
+  for (const auto &[_, staged_old_key] : to_rename_indexes_)
     custom_indexes.erase(staged_old_key.str());
+  for (size_t i = 0; i < to_rename_indexes_.size(); ++i) {
+    const IndexEntry &staged_entry = to_rename_indexes_[i].first;
     const std::string staged_key = staged_entry.key().str();
     if (staged_key.starts_with(old_prefix))
       custom_indexes[staged_key] = {&staged_entry, i};
