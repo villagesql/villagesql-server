@@ -5153,7 +5153,7 @@ bool Item_udf_func::do_itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::do_itemize(pc, res)) return true;
   // VillageSQL: a VDF marks the statement for a reprepare at each EXECUTE
-  // only when it needs one (see vdf_handler::fix_fields).
+  // only when it needs one (see MarkVdfStatementForReprepare).
   if (is_vdf())
     pc->thd->lex->set_has_vdf();
   else

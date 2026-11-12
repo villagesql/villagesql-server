@@ -533,8 +533,7 @@ extern bool ValidateAndConvertVDFArguments(
 // leaves the check. Returns false otherwise, and the check must be made now.
 //
 // A statement calling a VDF is prepared once and reused by every EXECUTE
-// unless something marks it: this, or a VDF that keeps per-execution state
-// (see MarkVdfStatementForReprepare).
+// unless something marks it with MarkVdfStatementForReprepare.
 extern bool DeferUntilReprepare(THD *thd);
 
 // Marks the statement being prepared to be prepared again at every EXECUTE.
