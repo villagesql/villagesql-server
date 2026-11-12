@@ -1,0 +1,10 @@
+# A deterministic varargs VDF returning a parameterized type, with no
+# bind_and_check_types hook, reaches the constant inference path when called
+# with one string constant. A varargs signature has no parameter list, so
+# inference must not read one to decide how to pass the constant.
+
+INSTALL EXTENSION vsql_bitfield_test;
+
+SELECT vsql_bitfield_test.bitfield_from_args('A') IS NOT NULL AS computed;
+
+UNINSTALL EXTENSION vsql_bitfield_test;

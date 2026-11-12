@@ -262,6 +262,24 @@ void bitfield_popcount(vsql::CustomArg in, vsql::IntResult out) {
   out.set(count);
 }
 
+// Every bit of the bytes, MSB-first, so N bytes give a value of 8*N bits.
+static void store_bytes_as_bits(const unsigned char *bytes, size_t len,
+                                vsql::CustomResult out) {
+  const size_t nbits = len * 8;
+  if (static_cast<int64_t>(nbits) > kBitfieldMaxBits) {
+    out.warning("BITFIELD: value exceeds max_number_of_bits");
+    return;
+  }
+  auto buf = out.buffer();
+  if (kBitfieldHeaderLen + len > buf.size()) {
+    out.warning("BITFIELD: value exceeds max length");
+    return;
+  }
+  store_bit_count(buf.data(), nbits);
+  memcpy(buf.data() + kBitfieldHeaderLen, bytes, len);
+  out.set_length(kBitfieldHeaderLen + len);
+}
+
 // BINARY -> BITFIELD: every bit of the bytes, MSB-first, so N bytes give a
 // value of 8*N bits.
 void bitfield_from_bytes(vsql::BinaryArg in, vsql::CustomResult out) {
@@ -270,19 +288,67 @@ void bitfield_from_bytes(vsql::BinaryArg in, vsql::CustomResult out) {
     return;
   }
   auto bytes = in.value();
-  const size_t nbits = bytes.size() * 8;
-  if (static_cast<int64_t>(nbits) > kBitfieldMaxBits) {
-    out.warning("BITFIELD: value exceeds max_number_of_bits");
+  store_bytes_as_bits(bytes.data(), bytes.size(), out);
+}
+
+// STRING, ... -> BITFIELD: the bits of the strings' bytes, concatenated, as
+// bitfield_from_bytes.
+//
+// A varargs signature carries no parameter list, and with neither a prerun nor
+// a bind_and_check_types hook, a call on one string constant reaches the
+// server's constant inference path. With no parameter type to go by, inference
+// passes the constant as STRING, as a varargs call marshals it at row time.
+void bitfield_from_args(vsql::VarArgs args, vsql::CustomResult out) {
+  std::string bytes;
+  for (size_t i = 0; i < args.size(); i++) {
+    const vsql::AnyArg arg = args[i];
+    if (arg.is_null()) {
+      out.set_null();
+      return;
+    }
+    if (!arg.is_str()) {
+      out.error("bitfield_from_args: arguments must be strings");
+      return;
+    }
+    bytes += arg.as_str();
+  }
+  store_bytes_as_bits(reinterpret_cast<const unsigned char *>(bytes.data()),
+                      bytes.size(), out);
+}
+
+// Per-statement state for the counted encoders below, allocated in prerun.
+struct CallCounter {
+  long long n = 0;
+};
+
+void bitfield_counted_prerun(vsql::PrerunArgs, vsql::PrerunResult out) {
+  out.set_user_data(new CallCounter{});
+}
+
+void bitfield_counted_postrun(vsql::PostrunArgs args) {
+  args.delete_state<CallCounter>();
+}
+
+// BINARY -> BITFIELD as bitfield_from_bytes, counting its calls in state that
+// only exists once prerun has run.
+void bitfield_from_bytes_counted(CallCounter &state, vsql::BinaryArg in,
+                                 vsql::CustomResult out) {
+  state.n++;
+  bitfield_from_bytes(in, out);
+}
+
+// STRING -> BITFIELD: the bits of the text's bytes, counting its calls in
+// state that only exists once prerun has run.
+void bitfield_from_text_counted(CallCounter &state, vsql::StringArg in,
+                                vsql::CustomResult out) {
+  state.n++;
+  if (in.is_null()) {
+    out.set_null();
     return;
   }
-  auto buf = out.buffer();
-  if (kBitfieldHeaderLen + bytes.size() > buf.size()) {
-    out.warning("BITFIELD: value exceeds max length");
-    return;
-  }
-  store_bit_count(buf.data(), nbits);
-  memcpy(buf.data() + kBitfieldHeaderLen, bytes.data(), bytes.size());
-  out.set_length(kBitfieldHeaderLen + bytes.size());
+  const std::string_view text = in.value();
+  store_bytes_as_bits(reinterpret_cast<const unsigned char *>(text.data()),
+                      text.size(), out);
 }
 
 static constexpr const char kBitfieldTypeName[] = "BITFIELD";
@@ -318,4 +384,25 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(BITFIELD)
                   .param(BINARY)
                   .deterministic()
-                  .build()))
+                  .build())
+        .func(make_func<&bitfield_from_args>("bitfield_from_args")
+                  .returns(BITFIELD)
+                  .varargs()
+                  .deterministic()
+                  .build())
+        .func(make_func<&bitfield_from_bytes_counted>(
+                  "bitfield_from_bytes_counted")
+                  .returns(BITFIELD)
+                  .param(BINARY)
+                  .prerun<&bitfield_counted_prerun>()
+                  .postrun<&bitfield_counted_postrun>()
+                  .deterministic()
+                  .build())
+        .func(
+            make_func<&bitfield_from_text_counted>("bitfield_from_text_counted")
+                .returns(BITFIELD)
+                .param(STRING)
+                .prerun<&bitfield_counted_prerun>()
+                .postrun<&bitfield_counted_postrun>()
+                .deterministic()
+                .build()))

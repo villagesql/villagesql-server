@@ -56,6 +56,7 @@
 //
 // VDF names are auto-generated from the type name at compile time:
 //   .from_string<&fn>()      ->  VDF name "MYTYPE::from_string"  (SQL-callable)
+//   .from_binary<&fn>()      ->  VDF name "MYTYPE::from_binary"  (SQL-callable)
 //   .to_string<&fn>()        ->  VDF name "MYTYPE::to_string"    (SQL-callable)
 //   .compare<&fn>()          ->  VDF name "MYTYPE::compare"      (SQL-callable)
 //   .hash<&fn>()             ->  VDF name "MYTYPE::hash"         (SQL-callable)
@@ -95,10 +96,10 @@ namespace vsql {
 // TypeObject — the built type, usable as a type reference
 // =============================================================================
 //
-// EmbeddedFuncsTuple holds SQL-callable VDFs (from_string/to_string/compare/
-// hash/int_to_params/resolve_params) that are automatically registered
-// alongside the type when passed to ExtensionBuilder::type(). These are
-// produced by the template methods on TypeBuilder.
+// EmbeddedFuncsTuple holds SQL-callable VDFs (from_string/from_binary/
+// to_string/compare/hash/int_to_params/resolve_params) that are automatically
+// registered alongside the type when passed to ExtensionBuilder::type(). These
+// are produced by the template methods on TypeBuilder.
 
 template <typename EmbeddedFuncsTuple = std::tuple<>>
 struct TypeObject {
@@ -321,6 +322,35 @@ class TypeBuilder {
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<true, HasToString, HasCompare, ParamsType,
+                       HasIntToParams, HasResolveParams, HasMaxPersistedLength,
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
+                       decltype(new_embedded), Name>{s, new_embedded};
+  }
+
+  // from_binary: optional encode from the type's binary form. Its function
+  // takes the bytes as Span<const unsigned char> where from_string takes
+  // std::string_view, and otherwise has the same contract.
+  template <auto Func>
+  constexpr auto from_binary() const {
+    using namespace detail;
+    using OpP =
+        typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
+    static_assert(
+        std::is_same_v<OpP, ParamsType>,
+        "vsql::TypeBuilder::from_binary(): function params type is "
+        "inconsistent with the declared params type — if the type uses "
+        ".params<P>(), from_binary must use TypeEncodeBinaryWithParamsFunc<P>; "
+        "otherwise use TypeEncodeBinaryFunc");
+    constexpr const char *vdf_name =
+        kTypeOpVdfName<Name, TypeOp::kEncodeBinary>.buf;
+    auto inner = func_builder::make_type_encode_binary<Func>(
+        vdf_name, state_.desc.vef_desc.name);
+    TypeBuilderState s = state_;
+    s.desc.vef_desc.from_binary_vdf_name = vdf_name;
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_4);
+    auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        HasVariableLength, HasPersistedLength,
                        HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
