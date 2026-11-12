@@ -655,18 +655,37 @@ static TypeEncoder *GetTypeEncoderFor(Item *item) {
   return encoder;
 }
 
+// Binary input to a STRING callback must already contain valid UTF-8.
+// Copy before relabelling so the source expression keeps its charset.
+static bool CopyBinaryAsUtf8mb4(const String &from, String *buffer,
+                                EncodeStatus &status) {
+  if (buffer->copy(from)) {
+    status = EncodeStatus::kOom;
+    return true;
+  }
+  if (!buffer->is_valid_string(&my_charset_utf8mb4_bin)) {
+    status = EncodeStatus::kBadValue;
+    return true;
+  }
+  buffer->set_charset(&my_charset_utf8mb4_bin);
+  return false;
+}
+
 // Put from into utf8mb4 for a type's encode, which parses text and so
 // needs to know which charset the bytes are in. Returns from itself when it
 // is already utf8mb4, the usual case since that is the default connection
 // charset, and otherwise converts it into *converted and returns that.
-// Converting does not decide validity: the type still accepts or rejects the
-// value.
+// Binary input must already be valid UTF-8. The type still decides
+// whether the text is valid in its own syntax.
 //
 // Returns nullptr with status set on failure: kOom (my_error already called),
 // or kBadValue when from is not valid in its own charset. For kBadValue,
 // *converted holds what the conversion made of it, to quote in the error.
 static const String *ConvertToUtf8mb4(const String &from, String *converted,
                                       EncodeStatus &status) {
+  if (from.charset() == &my_charset_bin) {
+    return CopyBinaryAsUtf8mb4(from, converted, status) ? nullptr : converted;
+  }
   // Already utf8mb4 under any collation, which is the usual case. The encode
   // reads the bytes as text and never consults the collation, so only the
   // character set has to match, and every utf8mb4 collation shares one
@@ -692,7 +711,7 @@ static const String *ConvertToUtf8mb4(const String &from, String *converted,
 // Encode from for item's custom type, converting it to utf8mb4 first. Returns
 // the encoded String*, or nullptr with status saying why. *given is set to the
 // value the type was given, held in from or *converted, so an error message
-// can quote the value as the user wrote it.
+// can quote it. Binary input keeps its original label for escaping.
 static String *EncodeForItem(Item *item, const String &from, String *converted,
                              const String **given, EncodeStatus &status) {
   *given = &from;
@@ -706,7 +725,8 @@ static String *EncodeForItem(Item *item, const String &from, String *converted,
     if (status == EncodeStatus::kBadValue) *given = converted;
     return nullptr;
   }
-  *given = value;
+  // Binary diagnostics must escape NUL instead of truncating the message.
+  *given = from.charset() == &my_charset_bin ? &from : value;
   EncodeOutcome outcome;
   String *encoded = encoder->encode(*value, outcome);
   if (encoded == nullptr) status = EncodeStatus::kBadValue;
@@ -770,7 +790,9 @@ String *EncodeStringForField(Field *field, const String &from,
   // TODO(villagesql-general): an extension's own warning() message is dropped
   // here; only the standard ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366) reaches
   // the user.
-  ReportBadCustomFieldValue(field, *value);
+  // Keep the original binary label so diagnostics escape embedded NUL.
+  ReportBadCustomFieldValue(field,
+                            from.charset() == &my_charset_bin ? from : *value);
   status = EncodeStatus::kBadValue;
   return nullptr;
 }
@@ -2464,11 +2486,12 @@ String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer) {
   StringBuffer<STRING_BUFFER_USUAL_SIZE> local(nullptr, 0, &my_charset_bin);
   String *res = arg->val_str(&local);
   if (res == nullptr) return nullptr;
-  if (!res->is_valid_string(to_cs)) {
-    report_conversion_error(to_cs, res->ptr(), res->length(), res->charset());
+  EncodeStatus status = EncodeStatus::kBadValue;
+  if (CopyBinaryAsUtf8mb4(*res, buffer, status)) {
+    if (status == EncodeStatus::kBadValue)
+      report_conversion_error(to_cs, res->ptr(), res->length(), res->charset());
     return nullptr;
   }
-  if (buffer->copy(res->ptr(), res->length(), to_cs)) return nullptr;
   return buffer;
 }
 
