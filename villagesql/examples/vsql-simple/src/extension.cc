@@ -187,7 +187,9 @@ void ba_concat_all(VarArgs args, StringResult out) {
       return;
     }
     auto bytes = a.as_custom();
-    if ((off + bytes.size()) <= dst.size()) {
+    // When it doesn't fit, keep counting: the server grows the buffer to
+    // the reported length and re-invokes.
+    if (off + bytes.size() <= dst.size()) {
       memcpy(dst.data() + off, bytes.data(), bytes.size());
     }
     off += bytes.size();
