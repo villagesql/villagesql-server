@@ -1,0 +1,19 @@
+# Test Parenthesized Query Expressions with COMPLEX type
+# Grammar: ( SELECT ... ) [ORDER BY ... LIMIT ...]
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(3.0,4.0)');
+
+# Parenthesized query
+(SELECT val FROM t1) ORDER BY val DESC;
+
+# Parenthesized UNION
+(SELECT val FROM t1) UNION (SELECT val FROM t1) ORDER BY val;
+
+(SELECT val FROM t1) UNION ALL (SELECT val FROM t1) ORDER BY val DESC;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

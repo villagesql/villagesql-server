@@ -1,0 +1,92 @@
+CREATE TABLE t_source (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+INSERT INTO t_source VALUES
+(1, '(1.0,2.0)'),
+(2, '(0,0)'),
+(3, '(-3.5,4.5)'),
+(4, NULL),
+(5, '(5.0,-6.0)'),
+(6, '(0,-0)'),
+(7, '(-7.5,-8.5)'),
+(8, NULL),
+(9, '(9.0,10.0)'),
+(10, '(0,0)');
+SELECT * FROM t_source ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+3	(-3.5,4.5)
+4	NULL
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	NULL
+9	(9,10)
+10	(0,0)
+CREATE TABLE t_target (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+INSERT INTO t_target VALUES (1, '(11.0,12.0)'), (3, '(13.0,14.0)'), (5, '(15.0,16.0)');
+SELECT * FROM t_target ORDER BY id;
+id	val
+1	(11,12)
+3	(13,14)
+5	(15,16)
+REPLACE INTO t_target (id, val)
+SELECT id, val FROM t_source ORDER BY id;
+SELECT * FROM t_target ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+3	(-3.5,4.5)
+4	NULL
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	NULL
+9	(9,10)
+10	(0,0)
+REPLACE INTO t_target
+SELECT id + 10 AS id, val FROM t_source WHERE id <= 5 ORDER BY id;
+SELECT * FROM t_target ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+3	(-3.5,4.5)
+4	NULL
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	NULL
+9	(9,10)
+10	(0,0)
+11	(1,2)
+12	(0,0)
+13	(-3.5,4.5)
+14	NULL
+15	(5,-6)
+DELETE FROM t_target;
+INSERT INTO t_target VALUES (2, '(20.0,20.0)'), (4, '(40.0,40.0)');
+REPLACE INTO t_target
+SELECT id, val FROM t_source WHERE val IS NOT NULL ORDER BY val ASC, id ASC LIMIT 5;
+SELECT * FROM t_target ORDER BY id;
+id	val
+2	(0,0)
+3	(-3.5,4.5)
+4	(40,40)
+6	(0,0)
+7	(-7.5,-8.5)
+10	(0,0)
+DELETE FROM t_target;
+INSERT INTO t_target VALUES (4, '(44.0,44.0)'), (8, '(88.0,88.0)');
+REPLACE INTO t_target
+SELECT id, val FROM t_source WHERE id IN (4, 8);
+SELECT * FROM t_target ORDER BY id;
+id	val
+4	NULL
+8	NULL
+DROP TABLE t_source;
+DROP TABLE t_target;

@@ -1,0 +1,42 @@
+# Test CREATE TEMPORARY TABLE IF NOT EXISTS LIKE with COMPLEX type
+# Grammar: CREATE TEMPORARY TABLE IF NOT EXISTS table_name LIKE other_table
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE source_table (
+    id INT PRIMARY KEY,
+    `signal` COMPLEX
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO source_table VALUES (1, '(9.0,10.0)');
+
+# Create temporary table with IF NOT EXISTS LIKE
+CREATE TEMPORARY TABLE IF NOT EXISTS temp_safe LIKE source_table;
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW COLUMNS FROM temp_safe;
+
+INSERT INTO temp_safe VALUES (2, '(11.0,12.0)');
+
+SELECT * FROM temp_safe;
+
+# Second create should not fail
+CREATE TEMPORARY TABLE IF NOT EXISTS temp_safe LIKE source_table;
+
+--source include/villagesql/query_custom_columns.inc
+
+DROP TABLE temp_safe;
+
+--error ER_NO_SUCH_TABLE
+SELECT * FROM temp_safe;
+
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE source_table;
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

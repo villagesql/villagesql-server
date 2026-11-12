@@ -1,0 +1,48 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)');
+CREATE TABLE t2 (val COMPLEX);
+INSERT INTO t2 VALUES ('(3.0,4.0)');
+SELECT val FROM t1 UNION SELECT val FROM t2;
+val
+(1,2)
+(3,4)
+SELECT val FROM t1 UNION ALL SELECT val FROM t2;
+val
+(1,2)
+(3,4)
+DROP TABLE t1;
+DROP TABLE t2;
+#
+# Test COMPLEX with -0 values (canonicalized on encode)
+#
+CREATE TABLE t_zero (val COMPLEX);
+INSERT INTO t_zero VALUES ('(0,0)'), ('(0,-0)'), ('(-0,0)'), ('(-0,-0)');
+# All values should show as (0,0) due to encode canonicalization
+SELECT val FROM t_zero;
+val
+(0,0)
+(0,0)
+(0,0)
+(0,0)
+# UNION DISTINCT should deduplicate to single row
+SELECT val FROM t_zero UNION DISTINCT SELECT val FROM t_zero;
+val
+(0,0)
+DROP TABLE t_zero;
+#
+# Test COMPLEX2 with -0 values (preserved, hash canonicalizes on the fly)
+#
+CREATE TABLE t2_zero (val COMPLEX2);
+INSERT INTO t2_zero VALUES ('(0,0)'), ('(0,-0)'), ('(-0,0)'), ('(-0,-0)');
+# Values should preserve -0 in output
+SELECT val FROM t2_zero;
+val
+(0,0)
+(0,-0)
+(-0,0)
+(-0,-0)
+# UNION DISTINCT should still deduplicate (custom hash canonicalizes)
+SELECT val FROM t2_zero UNION DISTINCT SELECT val FROM t2_zero;
+val
+(0,0)
+DROP TABLE t2_zero;

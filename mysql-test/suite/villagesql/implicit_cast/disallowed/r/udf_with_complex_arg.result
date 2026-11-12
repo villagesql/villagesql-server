@@ -1,0 +1,7 @@
+CREATE FUNCTION metaphon RETURNS STRING SONAME "UDF_EXAMPLE_LIB";
+CREATE TABLE t_complex (id INT, val COMPLEX);
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+SELECT metaphon(val) FROM t_complex WHERE id = 1;
+ERROR HY000: Incorrect usage of metaphon and COMPLEX
+DROP TABLE t_complex;
+DROP FUNCTION metaphon;

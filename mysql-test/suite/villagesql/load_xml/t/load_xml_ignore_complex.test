@@ -1,0 +1,26 @@
+# Test LOAD XML IGNORE with COMPLEX type
+# Grammar: LOAD XML ... IGNORE ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+
+--write_file $MYSQLTEST_VARDIR/tmp/complex_ignore.xml
+<rows>
+  <row>
+    <id>1</id>
+    <val>(5.0,6.0)</val>
+  </row>
+</rows>
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD XML INFILE '$MYSQLTEST_VARDIR/tmp/complex_ignore.xml' IGNORE INTO TABLE t1 ROWS IDENTIFIED BY '<row>'
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex_ignore.xml
+
+--source include/villagesql/uninstall_complex_extension.inc

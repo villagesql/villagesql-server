@@ -1,0 +1,8 @@
+CREATE TABLE t_complex_default (
+id INT,
+complex_col COMPLEX DEFAULT '(0.0,0.0)',
+string_col VARCHAR(100) DEFAULT 'default_string'
+);
+INSERT INTO t_complex_default (id, complex_col, string_col) VALUES (1, DEFAULT(string_col), 'test');
+ERROR HY000: Incorrect COMPLEX value: 'default_string' for column 'complex_col' at row 1
+DROP TABLE t_complex_default;

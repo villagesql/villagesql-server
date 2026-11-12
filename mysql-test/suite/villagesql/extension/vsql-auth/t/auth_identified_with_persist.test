@@ -1,0 +1,23 @@
+# Regression test: CREATE USER ... IDENTIFIED WITH <vef-method> must persist the
+# VEF auth-method name in the account's mysql.user.plugin column.
+#
+# A VEF extension auth method is not a loaded MySQL plugin, so the CREATE USER
+# path accepts the name via the VEF layer and skips credential hashing. The bug:
+# that accept path cleared what_to_set (NONE_ATTR), which also dropped the
+# PLUGIN_ATTR bit, so the row writer skipped the plugin column and the account
+# was persisted with the table default (caching_sha2_password) instead of the
+# method name. The account is then unable to authenticate on its next login.
+#
+# This asserts the durable outcome -- the persisted plugin column -- for a plain
+# IDENTIFIED WITH (no BY, no AS). vsql_auth_test is the method registered by the
+# vsql_auth_test extension.
+
+INSTALL EXTENSION vsql_auth_test;
+
+CREATE USER persist_user IDENTIFIED WITH vsql_auth_test;
+
+# The plugin column must be the VEF method name, not caching_sha2_password.
+SELECT plugin FROM mysql.user WHERE user = 'persist_user';
+
+DROP USER persist_user;
+UNINSTALL EXTENSION vsql_auth_test;

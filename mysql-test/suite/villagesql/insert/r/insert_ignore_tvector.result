@@ -1,0 +1,13 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+vec TVECTOR(3) NOT NULL
+);
+INSERT IGNORE INTO t VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'vec' cannot be null
+SELECT * FROM t;
+id	vec
+1	[0,0,0]
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_tvector;

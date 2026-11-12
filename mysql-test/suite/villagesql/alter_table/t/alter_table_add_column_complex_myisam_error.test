@@ -1,0 +1,56 @@
+# Test that ALTER TABLE ADD COLUMN with COMPLEX type fails for non-InnoDB engines
+# Custom types are only supported with InnoDB storage engine
+--source include/villagesql/install_complex_extension.inc
+
+# Create a MyISAM table without custom types
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50)
+) ENGINE=MyISAM;
+
+INSERT INTO t1 VALUES (1, 'test1');
+
+# Attempt to add a COMPLEX column to the MyISAM table - should fail
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 ADD COLUMN value COMPLEX;
+
+# Verify the column was not added
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+# Create a MEMORY table without custom types
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50)
+) ENGINE=MEMORY;
+
+INSERT INTO t2 VALUES (1, 'test1');
+
+# Attempt to add a COMPLEX column to the MEMORY table - should fail
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t2 ADD COLUMN value COMPLEX;
+
+# Verify the column was not added
+SHOW CREATE TABLE t2;
+SELECT * FROM t2;
+
+DROP TABLE t2;
+
+# Baseline: ALTER TABLE ADD COLUMN on InnoDB should succeed
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50)
+) ENGINE=InnoDB;
+
+INSERT INTO t3 VALUES (1, 'test1');
+
+ALTER TABLE t3 ADD COLUMN value COMPLEX;
+
+SHOW CREATE TABLE t3;
+SELECT * FROM t3;
+
+DROP TABLE t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

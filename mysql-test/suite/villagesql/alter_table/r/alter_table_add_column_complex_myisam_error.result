@@ -1,0 +1,54 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+name VARCHAR(50)
+) ENGINE=MyISAM;
+INSERT INTO t1 VALUES (1, 'test1');
+ALTER TABLE t1 ADD COLUMN value COMPLEX;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot alter table with MyISAM storage engine.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `name` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	name
+1	test1
+DROP TABLE t1;
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+name VARCHAR(50)
+) ENGINE=MEMORY;
+INSERT INTO t2 VALUES (1, 'test1');
+ALTER TABLE t2 ADD COLUMN value COMPLEX;
+ERROR HY000: Custom types are only supported with InnoDB storage engine. Cannot alter table with MEMORY storage engine.
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `name` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t2;
+id	name
+1	test1
+DROP TABLE t2;
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+name VARCHAR(50)
+) ENGINE=InnoDB;
+INSERT INTO t3 VALUES (1, 'test1');
+ALTER TABLE t3 ADD COLUMN value COMPLEX;
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL,
+  `name` varchar(50) DEFAULT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t3;
+id	name	value
+1	test1	NULL
+DROP TABLE t3;

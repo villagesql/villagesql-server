@@ -1,0 +1,25 @@
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension test_state_writeback using SDK...
+Created test_state_writeback.veb
+INSTALL EXTENSION test_state_writeback;
+CREATE TABLE seq (id INT PRIMARY KEY, s VARCHAR(16));
+INSERT INTO seq VALUES
+(1, 'a'),
+(2, 'bb'),
+(3, 'ccc'),
+(4, 'dd'),
+(5, 'ee'),
+(6, 'ffffffff');
+# First row prev is NULL; later rows reflect prior s.
+# Rows 4-5 reuse the same buffer (shorter than capacity);
+# row 6 reallocs because 'ffffffff' doesn't fit.
+SELECT id, s, test_state_writeback.previous(s) AS prev FROM seq ORDER BY id;
+id	s	prev
+1	a	NULL
+2	bb	a
+3	ccc	bb
+4	dd	ccc
+5	ee	dd
+6	ffffffff	ee
+DROP TABLE seq;
+UNINSTALL EXTENSION test_state_writeback;

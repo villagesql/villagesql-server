@@ -1,0 +1,50 @@
+# Test REPLACE INTO ... SELECT expression with COMPLEX type
+# Grammar: REPLACE [INTO] tbl_name [(col_name [, col_name] ...)] SELECT expr ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_source (
+    id INT PRIMARY KEY,
+    r DOUBLE,
+    i DOUBLE
+);
+
+# Insert 10 rows with various values
+INSERT INTO t_source VALUES
+    (1, 1.0, 2.0),
+    (2, 0.0, 0.0),
+    (3, -3.5, 4.5),
+    (4, -0.0, 0.0),
+    (5, 5.0, -6.0),
+    (6, 0.0, -0.0),
+    (7, -7.5, -8.5),
+    (8, -0.0, -0.0),
+    (9, 9.0, 10.0),
+    (10, 0.0, 0.0);
+
+CREATE TABLE t_target (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+INSERT INTO t_target VALUES (1, '(11.0,12.0)'), (3, '(13.0,14.0)'), (5, '(15.0,16.0)');
+
+SELECT * FROM t_target ORDER BY id;
+
+# String expressions require explicit casting to custom types
+--error ER_VILLAGESQL_GENERIC_ERROR
+REPLACE INTO t_target (id, val)
+SELECT id, CONCAT('(', r, ',', i, ')') FROM t_source;
+
+SELECT * FROM t_target ORDER BY id;
+
+# REPLACE with explicit conversion of string expression
+REPLACE INTO t_target (id, val)
+SELECT id, VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', r, ',', i, ')')) FROM t_source;
+
+SELECT * FROM t_target ORDER BY id;
+
+DROP TABLE t_source;
+DROP TABLE t_target;
+
+--source include/villagesql/uninstall_complex_extension.inc

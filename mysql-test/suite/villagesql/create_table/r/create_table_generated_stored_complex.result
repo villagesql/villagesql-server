@@ -1,0 +1,20 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+complex_input COMPLEX,
+magnitude DOUBLE GENERATED ALWAYS AS (COMPLEX_ABS(complex_input)) STORED
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `complex_input` vsql_complex.COMPLEX DEFAULT NULL,
+  `magnitude` double GENERATED ALWAYS AS (vsql_complex.complex_abs(`complex_input`)) STORED,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (id, complex_input) VALUES (1, '(3.0,4.0)');
+INSERT INTO t1 (id, complex_input) VALUES (2, '(5.0,12.0)');
+SELECT * FROM t1;
+id	complex_input	magnitude
+1	(3,4)	5
+2	(5,12)	13
+DROP TABLE t1;

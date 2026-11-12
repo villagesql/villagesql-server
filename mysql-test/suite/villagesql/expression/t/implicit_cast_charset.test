@@ -1,0 +1,75 @@
+# Does the right value reach the custom type when a string is converted to
+# it implicitly, rather than stored into a column?
+#
+# insert/insert_charset covers the store into a column. A string compared
+# with a custom-typed value, passed as a custom-typed VDF argument, or bound
+# to a prepared-statement parameter in either position, reaches the type's
+# encode by a different route. It should be converted to utf8mb4 the
+# same way.
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, vec TVECTOR(3));
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+INSERT INTO t2 VALUES (1, '[1,2,3]');
+
+--echo #
+--echo # Test 1: a wide-charset literal compared with a custom column
+--echo #
+--echo # Given as bytes, because an introducer on a quoted literal labels the
+--echo # string without encoding it. The bytes are '(1.0,2.0)' in ucs2.
+
+SELECT id FROM t1 WHERE val = _ucs2 0x00280031002E0030002C0032002E00300029;
+SELECT id FROM t1
+WHERE val IN (_ucs2 0x00280033002E0030002C0034002E00300029);
+
+--echo #
+--echo # Test 2: the same literal as a custom-typed VDF argument
+--echo #
+
+SELECT vsql_complex.complex_real(
+  _ucs2 0x00280031002E0030002C0032002E00300029) AS re;
+
+--echo #
+--echo # Test 3: a charset that reassigns characters the grammar uses
+--echo #
+--echo # In swe7, 0x5B is 'A-umlaut' and 0x5D is 'A-ring', so what is written
+--echo # is not a vector. The comparison must refuse it, as the INSERT does,
+--echo # not match the row stored as [1,2,3]. The error renders back into
+--echo # swe7, where those characters are again shown as brackets.
+
+SET NAMES swe7;
+--error ER_WRONG_VALUE
+SELECT id FROM t2 WHERE vec = '[1,2,3]';
+SET NAMES utf8mb4;
+
+--echo #
+--echo # Test 4: a wide-charset prepared-statement parameter
+--echo #
+
+SET @v = _ucs2 0x00280031002E0030002C0032002E00300029;
+
+PREPARE p FROM 'SELECT id FROM t1 WHERE val = ?';
+EXECUTE p USING @v;
+DEALLOCATE PREPARE p;
+
+PREPARE p FROM 'SELECT vsql_complex.complex_real(?) AS re';
+EXECUTE p USING @v;
+DEALLOCATE PREPARE p;
+
+--echo # And one already in utf8mb4
+SET @v = '(3.0,4.0)';
+PREPARE p FROM 'SELECT id FROM t1 WHERE val = ?';
+EXECUTE p USING @v;
+DEALLOCATE PREPARE p;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1, t2;
+
+--source include/villagesql/uninstall_tvector_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc

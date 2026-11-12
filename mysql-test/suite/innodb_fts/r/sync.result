@@ -1,0 +1,190 @@
+# Case 1: Test select and insert(row in both disk and cache)
+CREATE TABLE t1 (
+FTS_DOC_ID BIGINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY,
+title VARCHAR(200),
+FULLTEXT(title)
+) ENGINE = InnoDB;
+INSERT INTO t1(title) VALUES('mysql');
+INSERT INTO t1(title) VALUES('database');
+SET SESSION debug="+d,fts_instrument_sync_debug";
+SET DEBUG_SYNC= 'fts_write_node SIGNAL written WAIT_FOR selected';
+INSERT INTO t1(title) VALUES('mysql database');
+SET DEBUG_SYNC= 'now WAIT_FOR written';
+SET GLOBAL innodb_ft_aux_table="test/t1";
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_CACHE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_TABLE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+database	2	3	2	2	0
+database	2	3	2	3	6
+mysql	1	3	2	1	0
+mysql	1	3	2	3	0
+SET GLOBAL innodb_ft_aux_table=default;
+SELECT * FROM t1 WHERE MATCH(title) AGAINST('mysql database');
+FTS_DOC_ID	title
+3	mysql database
+1	mysql
+2	database
+SET DEBUG_SYNC= 'now SIGNAL selected';
+/* connection con1 */ INSERT INTO t1(title) VALUES('mysql database');
+SET SESSION debug="-d,fts_instrument_sync_debug";
+SET GLOBAL innodb_ft_aux_table="test/t1";
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_CACHE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_TABLE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+database	2	3	2	2	0
+database	2	3	2	3	6
+mysql	1	3	2	1	0
+mysql	1	3	2	3	0
+SET GLOBAL innodb_ft_aux_table=default;
+SELECT * FROM t1 WHERE MATCH(title) AGAINST('mysql database');
+FTS_DOC_ID	title
+3	mysql database
+1	mysql
+2	database
+DROP TABLE t1;
+# Case 2: Test insert and insert(sync)
+CREATE TABLE t1 (
+FTS_DOC_ID BIGINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY,
+title VARCHAR(200),
+FULLTEXT(title)
+) ENGINE = InnoDB;
+INSERT INTO t1(title) VALUES('mysql');
+INSERT INTO t1(title) VALUES('database');
+SET SESSION debug="+d,fts_instrument_sync_debug";
+SET DEBUG_SYNC= 'fts_write_node SIGNAL written WAIT_FOR inserted';
+INSERT INTO t1(title) VALUES('mysql database');
+SET DEBUG_SYNC= 'now WAIT_FOR written';
+INSERT INTO t1(title) VALUES('mysql database');
+SET DEBUG_SYNC= 'now SIGNAL inserted';
+/* connection con1 */ INSERT INTO t1(title) VALUES('mysql database');
+SET SESSION debug="-d,fts_instrument_sync_debug";
+SET GLOBAL innodb_ft_aux_table="test/t1";
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_CACHE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_TABLE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+database	2	3	2	2	0
+database	2	3	2	3	6
+database	4	4	1	4	6
+mysql	1	4	3	1	0
+mysql	1	4	3	3	0
+mysql	1	4	3	4	0
+SET GLOBAL innodb_ft_aux_table=default;
+SELECT * FROM t1 WHERE MATCH(title) AGAINST('mysql database');
+FTS_DOC_ID	title
+3	mysql database
+4	mysql database
+1	mysql
+2	database
+DROP TABLE t1;
+# Case 3: Test insert crash recovery
+CREATE TABLE t1 (
+id    INT,
+title VARCHAR(200),
+FULLTEXT(title)
+) ENGINE = InnoDB;
+INSERT INTO t1(id, title) VALUES(1, 'database');
+SET SESSION debug="+d,fts_instrument_sync_debug,fts_write_node_crash";
+INSERT INTO t1(id, title) VALUES(2, 'mysql');
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+After restart
+SELECT * FROM t1 WHERE MATCH(title) AGAINST ('mysql database');
+id	title
+1	database
+SET SESSION debug="+d,fts_instrument_sync_debug";
+INSERT INTO t1(id, title) VALUES(3, 'mysql');
+SET SESSION debug="-d,fts_instrument_sync_debug";
+SELECT * FROM t1 WHERE MATCH(title) AGAINST ('mysql database');
+id	title
+1	database
+3	mysql
+DROP TABLE t1;
+# Case 4: Test sync commit & rollback in background
+CREATE TABLE t1(
+id INT AUTO_INCREMENT,
+title VARCHAR(100),
+FULLTEXT(title),
+PRIMARY KEY(id)) ENGINE=InnoDB;
+SET SESSION debug="+d,fts_instrument_sync";
+INSERT INTO t1(title) VALUES('mysql');
+SET SESSION debug="-d,fts_instrument_sync";
+# restart
+SET GLOBAL debug="+d,fts_instrument_sync,fts_instrument_sync_interrupted";
+INSERT INTO t1(title) VALUES('database');
+SET GLOBAL debug="-d,fts_instrument_sync,fts_instrument_sync_interrupted";
+SET SESSION debug="+d,fts_instrument_sync_debug";
+INSERT INTO t1(title) VALUES('good');
+SET SESSION debug="-d,fts_instrument_sync_debug";
+SET GLOBAL innodb_ft_aux_table="test/t1";
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_TABLE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+database	4	4	1	4	0
+good	5	5	1	5	0
+mysql	2	2	1	2	0
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_CACHE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+SET GLOBAL innodb_ft_aux_table=default;
+SELECT * FROM t1 WHERE MATCH(title) AGAINST ('mysql database good');
+id	title
+1	mysql
+2	database
+3	good
+DROP TABLE t1;
+#
+# PS-3851: Percona Ver 5.6.39-83.1 Failing assertion: sym_node->table != NULL
+#
+CREATE TABLE `questions_and_answers` (
+`id` int unsigned NOT NULL AUTO_INCREMENT COMMENT 'Unique ID',
+`keywords` text COMMENT 'CSV list of keywords related to this entry',
+PRIMARY KEY (`id`),
+FULLTEXT KEY `keywords` (`keywords`)
+) ENGINE=InnoDB AUTO_INCREMENT=3620 DEFAULT CHARSET=utf8 COMMENT='Main table for Q&A module ';
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1854,'support, services, essay, writing, maths, help, advice, study, advice, advise, careers, employability, graduating, graduate, student_support, academic_support, academic_help');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1855,'accommodation, housing, halls, residence, live, living, bed, beds, acomodation, accomodation, accommidation, acomidation, hall, campus_living, uni_living, uni_halls, university_life, university_accommodation');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1856,'interview, interviews, audition, auditions, portfolio, review, admission, interview_preparation, booking, book, change_interview');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1857,'entry_requirements, application, admission, apply, applying, entry, criteria, requirements, mature, life, experience, A-level, A-levels, A_levels, AS, AS_Level, AS_Levels, BTEC, IB, baccalaureate, Access, diploma, course, UCAS, foundation, foundation_degree, level_2, l2');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1858,'alumni, alumnus, FOCUS, former, old, students, graduates');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1859,'results_day, sending_results, clearing, confirmation, results, can_I_apply_through_clearing, do_you_have_vacancies, do_you_have_spaces, do_you_have_places, confirming_your_place');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1860,'contact, contacts, recruitment, admissions, funding, finance, registry, support, careers, disabilities, accommodation, enrol, enrolment, sport, recreation, team');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1861,'food, eat, drink, eating, café, cafés, snacks');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1862,'faculty, faculties, schools, department, departments, courses, subject, subjects, structure, London, campus, CULC, subject_areas');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1863,'freshers, week, induction, students, starters, freshers_week, what\'s_on_at_freshers');
+INSERT INTO `questions_and_answers` (`id`,`keywords`) VALUES (1864,'loan, loans, financial, support, funding, scholarships, bursaries, bursary, busrarys');
+SET GLOBAL DEBUG='+d,fts_instrument_sync_request';
+ALTER TABLE `questions_and_answers` ALGORITHM=COPY;
+SET GLOBAL DEBUG='-d,fts_instrument_sync_request';
+DROP TABLE `questions_and_answers`;
+#
+# Bug #31310404 I_S_FTS_INDEX_CACHE_FILL_ONE_INDEX() IS NOT PROTECTED BY THE LOCK
+#
+CREATE TABLE t1 (
+FTS_DOC_ID BIGINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY,
+title VARCHAR(200),
+FULLTEXT(title)
+) ENGINE = InnoDB;
+INSERT INTO t1(title) VALUES('mysql');
+INSERT INTO t1(title) VALUES('database');
+SET SESSION debug="+d,fts_instrument_sync_request";
+INSERT INTO t1(title) VALUES('mysql database');
+SET SESSION debug="-d,fts_instrument_sync_request";
+SET GLOBAL innodb_ft_aux_table="test/t1";
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_CACHE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_TABLE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+database	2	3	2	2	0
+database	2	3	2	3	6
+mysql	1	3	2	1	0
+mysql	1	3	2	3	0
+SET GLOBAL innodb_ft_aux_table=default;
+SELECT * FROM t1 WHERE MATCH(title) AGAINST('mysql database');
+FTS_DOC_ID	title
+3	mysql database
+1	mysql
+2	database
+DROP TABLE t1;

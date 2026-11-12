@@ -1,0 +1,76 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE docs (
+k_vc  VARCHAR(75) CHARACTER SET utf8mb4 NOT NULL,
+k_ti  TINYINT                           NOT NULL,
+k_cu  CHAR(8) CHARACTER SET utf8mb4      NOT NULL,
+k_bi  BIGINT                            NOT NULL,
+k_vb  VARBINARY(70)                     NOT NULL,
+k_cl  CHAR(10) CHARACTER SET latin1      NOT NULL,
+k_bin BINARY(16)                        NOT NULL,
+vec   KVECTOR                           NOT NULL,
+tag   VARCHAR(16),
+PRIMARY KEY (k_vc, k_ti, k_cu, k_bi, k_vb, k_cl, k_bin)
+);
+CREATE INDEX idx_vec ON docs (vec)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO docs VALUES
+(REPEAT('e', 75), -128, REPEAT(_utf8mb4 'x', 8), -9223372036854775808,
+0x0000000441424344, 'alpha', 0x00112233445566778899AABBCCDDEEFF,
+'[1,2,3,4]', 'one');
+INSERT INTO docs VALUES
+(REPEAT(_utf8mb4 '€', 25), 127, 'short', 9223372036854775807,
+0x41004200430044, 'beta ', 0x00000000000000000000000000000000,
+'[5,6,7,8]', 'two');
+INSERT INTO docs VALUES
+('', 0, REPEAT(_utf8mb4 'y', 8), 0,
+0x00, 'gamma', 0x0102030405060708090A0B0C0D0E0F10,
+'[9,1,2,3]', 'three');
+INSERT INTO docs VALUES
+(REPEAT(_utf8mb4 '€', 25), 127, 'other', 9223372036854775807,
+0xFF, 'delta', 0x0F0E0D0C0B0A09080706050403020100,
+'[4,3,2,1]', 'four');
+SELECT k_ti, k_bi, k_cl, tag FROM docs FORCE INDEX (PRIMARY)
+ORDER BY tag;
+k_ti	k_bi	k_cl	tag
+127	9223372036854775807	delta	four
+-128	-9223372036854775808	alpha	one
+0	0	gamma	three
+127	9223372036854775807	beta	two
+EXPLAIN FORMAT=tree
+SELECT tag FROM docs
+ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,
+KVECTOR::from_string('[5,6,7,8]'))
+LIMIT 1;
+EXPLAIN
+-> Limit: 1 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_vec  (cost=COST rows=ROWS)
+
+SELECT tag FROM docs
+ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,
+KVECTOR::from_string('[5,6,7,8]'))
+LIMIT 1;
+tag
+two
+SELECT tag FROM docs
+ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,
+KVECTOR::from_string('[1,2,3,4]'))
+LIMIT 1;
+tag
+one
+SELECT tag FROM docs
+ORDER BY vsql_knn_index_test.kvec_l2_distance(vec,
+KVECTOR::from_string('[1,2,3,4]'))
+LIMIT 4;
+tag
+four
+one
+three
+two
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS scan_begins;
+scan_begins
+3
+SELECT vsql_knn_index_test.kvec_scan_fetch_count() AS scan_fetches;
+scan_fetches
+6
+DROP TABLE docs;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,23 @@
+# Test REPLACE INTO ... VALUES with DEFAULT and COMPLEX type
+# Grammar: REPLACE [INTO] tbl_name VALUES (..., DEFAULT, ...)
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX DEFAULT '(0.0,0.0)'
+);
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+
+# Replace using DEFAULT
+REPLACE INTO t1 VALUES (1, DEFAULT);
+
+# Insert new with DEFAULT
+REPLACE INTO t1 VALUES (2, DEFAULT);
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,33 @@
+# Test CREATE TABLE with composite PRIMARY KEY involving COMPLEX columns
+# Tests composite primary key with COMPLEX and other types
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE composite_pk_table (
+    device_id INT,
+    timestamp_val BIGINT,
+    signal_complex COMPLEX,
+    amplitude DOUBLE,
+    complex_id COMPLEX,
+    PRIMARY KEY (device_id, complex_id, timestamp_val)
+);
+
+SHOW COLUMNS FROM composite_pk_table;
+
+INSERT INTO composite_pk_table VALUES (1, 1000, '(37.0,38.0)', 5.2, '(0,1)');
+INSERT INTO composite_pk_table VALUES (1, 1001, '(39.0,40.0)', 6.1, '(1,0)');
+INSERT INTO composite_pk_table VALUES (2, 1000, '(41.0,42.0)', 7.3, '(0,0)');
+
+SELECT * FROM composite_pk_table ORDER BY device_id, signal_complex, timestamp_val;
+
+# Test primary key constraint violation
+--error ER_DUP_ENTRY
+INSERT INTO composite_pk_table VALUES (1, 1000, '(43.0,44.0)', 8.4, '(0,1)');
+
+SELECT * FROM composite_pk_table ORDER BY device_id, signal_complex, timestamp_val;
+
+DROP TABLE composite_pk_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

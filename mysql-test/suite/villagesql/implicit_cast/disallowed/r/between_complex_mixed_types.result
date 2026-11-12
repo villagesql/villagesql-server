@@ -1,0 +1,5 @@
+CREATE TABLE t_complex (id INT, val COMPLEX);
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+SELECT * FROM t_complex WHERE val BETWEEN '(0,0)' AND 'zzz';
+ERROR HY000: Incorrect COMPLEX value: 'zzz'
+DROP TABLE t_complex;

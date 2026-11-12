@@ -1,0 +1,50 @@
+# Test that VEB file caching correctly detects changes based on SHA256 hash
+# This test builds extensions on-the-fly and verifies that when a .veb file
+# content changes (different SHA256), the server detects the change and loads
+# the new version from a different cache directory.
+#
+# Uses dynamically built extensions with TESTTYPE custom type instead of
+# pre-built vsql-complex extensions.
+
+# Use MYSQLTEST_VARDIR for VEB directory
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+# === PHASE 1: Create and install version 1 (short format) ===
+--let $testtype_extension_name = test_type_v1
+--source include/villagesql/testtype_short_precision.inc
+
+INSTALL EXTENSION test_type_v1;
+
+CREATE TABLE test_veb_cache_dynamic (id INT, t TESTTYPE);
+INSERT INTO test_veb_cache_dynamic VALUES (1, '(1.5,2.5)');
+INSERT INTO test_veb_cache_dynamic VALUES (2, '(3.141592653589793,2.718281828459045)');
+
+# Version 1 uses %.6g format (shorter precision)
+SELECT id, t FROM test_veb_cache_dynamic ORDER BY id;
+
+DROP TABLE test_veb_cache_dynamic;
+UNINSTALL EXTENSION test_type_v1;
+
+# === PHASE 2: Create version 2 with FULL format (%.17g) ===
+# Create VEB with same name but different content (different SHA256)
+--let $testtype_extension_name = test_type_v1
+--source include/villagesql/testtype_full_precision.inc
+
+# === PHASE 3: Install version 2 (should detect different SHA256) ===
+INSTALL EXTENSION test_type_v1;
+
+CREATE TABLE test_veb_cache_dynamic (id INT, t TESTTYPE);
+INSERT INTO test_veb_cache_dynamic VALUES (1, '(1.5,2.5)');
+INSERT INTO test_veb_cache_dynamic VALUES (2, '(3.141592653589793,2.718281828459045)');
+
+# Version 2 uses %.17g format (full precision)
+SELECT id, t FROM test_veb_cache_dynamic ORDER BY id;
+
+DROP TABLE test_veb_cache_dynamic;
+UNINSTALL EXTENSION test_type_v1;

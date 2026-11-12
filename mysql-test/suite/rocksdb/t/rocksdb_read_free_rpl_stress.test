@@ -1,0 +1,22 @@
+--source include/not_valgrind.inc
+--source include/have_rocksdb.inc
+--source include/rpl/init_source_replica.inc
+
+--source include/rpl/connection_replica.inc
+--source include/rpl/stop_replica.inc
+set @@global.rocksdb_read_free_rpl = PK_SK;
+--source include/rpl/start_replica.inc
+--source ../include/rocksdb_read_free_rpl_stress.inc
+
+--source include/rpl/connection_replica.inc
+--source include/rpl/stop_replica.inc
+set @@global.rocksdb_read_free_rpl = PK_ONLY;
+--source include/rpl/start_replica.inc
+--source ../include/rocksdb_read_free_rpl_stress.inc
+
+--source include/rpl/connection_replica.inc
+--source include/rpl/stop_replica.inc
+set @@global.rocksdb_read_free_rpl = default;
+--source include/rpl/start_replica.inc
+
+--source include/rpl/deinit.inc

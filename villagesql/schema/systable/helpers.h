@@ -1,0 +1,150 @@
+/* Copyright (c) 2026 VillageSQL Contributors
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ */
+
+#ifndef VILLAGESQL_SCHEMA_SYSTABLE_HELPERS_H_
+#define VILLAGESQL_SCHEMA_SYSTABLE_HELPERS_H_
+
+#include <initializer_list>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "my_inttypes.h"
+
+struct CHARSET_INFO;
+class Field;
+class THD;
+struct TABLE;
+
+namespace villagesql {
+
+// For use with asserts.
+const bool VILLAGESQL_NOT_IMPLEMENTED = false;
+
+// Build a qualified base name string "extension_name.type_name".
+inline std::string make_qualified_base_name(std::string_view extension_name,
+                                            std::string_view type_name) {
+  std::string result;
+  result.reserve(extension_name.size() + 1 + type_name.size());
+  result.append(extension_name);
+  result.push_back('.');
+  result.append(type_name);
+  return result;
+}
+
+// Returns true if name is a qualified custom type name (contains a dot),
+// e.g. "vsql_complex.COMPLEX". The dot is the canonical separator defined
+// by make_qualified_base_name().
+inline bool is_qualified_name(std::string_view name) {
+  return name.find('.') != std::string_view::npos;
+}
+
+struct ParsedQualifiedName {
+  std::string extension_name;  // empty if unqualified
+  std::string bare_name;
+};
+
+// Splits a potentially qualified name into {extension_name, bare_name}.
+// "ext.name" -> {"ext", "name"}
+// "name"     -> {"",    "name"}
+inline ParsedQualifiedName parse_qualified_name(std::string_view name) {
+  auto dot = name.find('.');
+  if (dot == std::string_view::npos) return {"", std::string(name)};
+  return {std::string(name.substr(0, dot)), std::string(name.substr(dot + 1))};
+}
+
+// Looks up the row whose key on index `key_index` matches the key fields the
+// caller has stored in table.record[0]. The index stays open, with the row
+// current, until the lookup goes out of scope, so the caller can then
+// ha_update_row() or ha_delete_row() it.
+class RowLookup {
+ public:
+  RowLookup(TABLE &table, uint key_index)
+      : m_table(table), m_key_index(key_index) {}
+  ~RowLookup();
+
+  RowLookup(const RowLookup &) = delete;
+  RowLookup &operator=(const RowLookup &) = delete;
+
+  // Reads the row into record[0]. Returns the handler error code: 0 if
+  // found, HA_ERR_KEY_NOT_FOUND if there is no such row.
+  int read();
+
+  // As read(), then snapshots the row into record[1] as the old row for
+  // ha_update_row().
+  //
+  // The snapshot has to happen after the read. ha_update_row() takes a diff:
+  // the engine compares record[1] against record[0] and leaves out every field
+  // that compares equal, so a record[1] holding anything but the row just read
+  // drops columns from the update with no error.
+  int read_for_update();
+
+ private:
+  TABLE &m_table;
+  const uint m_key_index;
+  bool m_index_open = false;
+};
+
+// JSON object form of a parameter set, shared by the type_parameters and
+// index_type_parameters columns so escaping is implemented once. Values are
+// always JSON strings; callers render their own types to text first.
+using StringPairs = std::vector<std::pair<std::string, std::string>>;
+
+// Keys are ordered by length then bytes, so the output is deterministic.
+// Returns "{}" on allocation failure.
+std::string json_object_from_pairs(const StringPairs &pairs);
+
+// Returns true if the input is not an object of strings, leaving *out
+// untouched. Empty input or "{}" succeeds with no pairs.
+bool json_object_to_pairs(const std::string &json, StringPairs *out);
+
+// Helper functions for reading a value from a Field.
+void read_string_field(Field *f, std::string &out);
+void read_unsigned_field(Field *f, unsigned int &out);
+void read_bigint_field(Field *f, long long &out);
+void read_tinyint_unsigned_field(Field *f, unsigned char &out);
+
+// Execute a statement; log failures at ERROR_LEVEL. Return true on failure.
+bool execute_statement(THD *thd, const char *query);
+
+// Execute a statement; silently suppress errors whose code appears in
+// ignored_errors (logs at INFORMATION_LEVEL and returns false for those).
+// Any other failure is logged at ERROR_LEVEL and returns true.
+bool execute_statement_ignore_errors(
+    THD *thd, const char *query,
+    std::initializer_list<unsigned int> ignored_errors);
+
+// Helper function to execute a query and check if it returns any rows
+bool query_has_rows(THD *thd, const char *query);
+
+// Helper function to execute a query and extract a single column string value.
+// Returns true on query execution failure and logs an error.
+// Returns false on success; if no row/column is returned, sets value to empty.
+// On success with a row, copies the string value into the provided std::string.
+bool execute_and_extract_single_value(THD *thd, const char *query,
+                                      std::string *value);
+
+// ===== Test utilities =====
+// Direct access to lower_case_table_names for testing
+// This allows unit tests to modify the same variable the normalization
+// functions use
+void test_set_lower_case_table_names(int value);
+int test_get_lower_case_table_names();
+
+}  // namespace villagesql
+
+#endif  // VILLAGESQL_SCHEMA_SYSTABLE_HELPERS_H_

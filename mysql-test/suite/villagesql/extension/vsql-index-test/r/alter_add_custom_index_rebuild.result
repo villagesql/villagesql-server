@@ -1,0 +1,83 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_ext_index_test;
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a  ext_index_wide_blob,
+b  ext_index_wide_blob,
+c  ext_index_wide_blob,
+d  ext_index_wide_blob
+);
+INSERT INTO t1 (id) VALUES (1), (2), (3);
+# --- Add via the default algorithm ---
+ALTER TABLE t1 ADD INDEX idx_a (a ext_index_default) USING EXTENDED(ext_index);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `b` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `c` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `d` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# --- Add via INPLACE, with a custom index already present ---
+ALTER TABLE t1 ADD INDEX idx_b (b ext_index_default) USING EXTENDED(ext_index),
+ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `b` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `c` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `d` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`),
+  KEY `idx_b` (`b` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# --- Add via COPY ---
+ALTER TABLE t1 ADD INDEX idx_c (c ext_index_default) USING EXTENDED(ext_index),
+ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `b` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `c` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `d` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`),
+  KEY `idx_b` (`b` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`),
+  KEY `idx_c` (`c` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# --- Add combined with a table rebuild (FORCE, COPY) ---
+ALTER TABLE t1 ADD INDEX idx_d (d ext_index_default) USING EXTENDED(ext_index),
+FORCE, ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `b` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `c` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  `d` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`),
+  KEY `idx_b` (`b` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`),
+  KEY `idx_c` (`c` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`),
+  KEY `idx_d` (`d` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# All four custom indexes and all rows survived.
+SELECT COUNT(*) AS rows_total FROM t1;
+rows_total
+3
+INSERT INTO t1 (id) VALUES (4);
+SELECT COUNT(*) AS rows_after_insert FROM t1;
+rows_after_insert
+4
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_ext_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -1,0 +1,11 @@
+SET NAMES utf8mb3;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SELECT regexp_like( 'abc\n123\n456\nxyz\n', '(?m)^\\d+\\R\\d+$' );
+regexp_like( 'abc\n123\n456\nxyz\n', '(?m)^\\d+\\R\\d+$' )
+1
+SELECT regexp_like( 'a\nb', '(*CR)a.b' );
+ERROR HY000: Syntax error in regular expression on line 1, character 2.
+SELECT regexp_like( 'a\nb', 'a\\vb' );
+regexp_like( 'a\nb', 'a\\vb' )
+1

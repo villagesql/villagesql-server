@@ -1,0 +1,114 @@
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Test 1: Fresh installation (no villagesql schema exists)
+# This simulates a fresh MySQL installation with VillageSQL added
+# Shut server down
+# Initialize fresh datadir
+# Start server with fresh datadir (should trigger VillageSQL installation)
+# Verify fresh installation results
+SELECT 'Fresh Installation' AS test_case;
+test_case
+Fresh Installation
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT COUNT(*) AS villagesql_schema_exists
+FROM mysql.schemata
+WHERE name = 'villagesql';
+villagesql_schema_exists
+1
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id
+AND name = 'properties';
+properties_table_exists
+1
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	percona-8.4_0.0.8-dev
+# Check that 'created' timestamp is set after fresh installation
+SELECT COUNT(*) AS created_timestamp_exists
+FROM villagesql.properties
+WHERE name = 'created';
+created_timestamp_exists
+1
+# Store the initial created timestamp for later comparison
+# Test 2: Current version
+# A normal restart
+# Add a small delay to ensure timestamp will be different
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Verify no-op upgrade results
+# Verify that 'created' timestamp was not updated during normal restart
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	percona-8.4_0.0.8-dev
+# Test 3: Current version (should be no-op)
+# Force upgrade on already current installation
+# Add a small delay to ensure timestamp will be different
+# Restart with upgrade=FORCE (should be no-op)
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Verify no-op upgrade results
+SELECT 'No-op Upgrade' AS test_case;
+test_case
+No-op Upgrade
+# Verify that 'created' timestamp was not updated during force update no-op
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	percona-8.4_0.0.8-dev
+# Test 4: Simulate a partial install
+# Manually delete the version
+DELETE FROM villagesql.properties WHERE name = 'version';
+SELECT 'Before Simulated Upgrade' AS test_case;
+test_case
+Before Simulated Upgrade
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+# Add a small delay to ensure timestamp will be different
+# Restart with upgrade=FORCE to trigger version upgrade
+SET SESSION debug='+d,skip_dd_table_access_check';
+# Verify version was upgraded
+SELECT 'After Simulated Upgrade' AS test_case;
+test_case
+After Simulated Upgrade
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	percona-8.4_0.0.8-dev
+# Verify that 'created' timestamp was updated after forced reinstall
+# Test 5: Partial installation recovery
+# Drop properties table and verify it gets recreated
+DROP TABLE villagesql.properties;
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT 'After Properties Table Dropped' AS test_case;
+test_case
+After Properties Table Dropped
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id
+AND name = 'properties';
+properties_table_exists
+0
+# Add a small delay to ensure timestamp will be different
+# Restart to trigger partial installation recovery
+# Verify partial installation was recovered
+SELECT 'After Partial Installation Recovery' AS test_case;
+test_case
+After Partial Installation Recovery
+SET SESSION debug='+d,skip_dd_table_access_check';
+SELECT 'After Properties Table Dropped' AS test_case;
+test_case
+After Properties Table Dropped
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id
+AND name = 'properties';
+properties_table_exists
+0
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	percona-8.4_0.0.8-dev
+# Verify that 'created' timestamp was updated after forced reinstall
+# Test 6: Check upgrade log for issues
+# Verify no warnings or errors occurred during upgrades
+# Check upgrade log for warnings
+include/assert_grep.inc [No critical errors during VillageSQL upgrades]
+# Cleanup
+# Shutdown server before cleanup
+# Restart with original datadir

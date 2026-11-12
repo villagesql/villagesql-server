@@ -1,0 +1,7 @@
+CREATE TABLE t_complex_default (id INT, complex_val COMPLEX DEFAULT '(100.0,100.0)');
+ALTER TABLE t_complex_default ADD COLUMN string_col VARCHAR(100) DEFAULT 'default_string';
+INSERT INTO t_complex_default (id) VALUES (1);
+SELECT * FROM t_complex_default;
+id	complex_val	string_col
+1	(100,100)	default_string
+DROP TABLE t_complex_default;

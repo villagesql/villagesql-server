@@ -1,0 +1,16 @@
+# Test explicit CAST to custom
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+
+# For now, this is a parse error, just like many other CASTs
+# (e.g. VARCHAR is unsupported as a cast)
+--error ER_PARSE_ERROR
+SELECT id, CAST(val AS COMPLEX) FROM t_complex WHERE id = 1;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,32 @@
+# Test CREATE TABLE with LIST partitioning and COMPLEX columns
+# Tests LIST partitioning with COMPLEX type columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE list_partitioned_table (
+    id INT,
+    region_code INT,
+    complex_data COMPLEX,
+    notes VARCHAR(100),
+    PRIMARY KEY(id, region_code)
+) PARTITION BY LIST (region_code) (
+    PARTITION p_north VALUES IN (1, 2, 3),
+    PARTITION p_south VALUES IN (4, 5, 6),
+    PARTITION p_east VALUES IN (7, 8, 9),
+    PARTITION p_west VALUES IN (10, 11, 12)
+);
+
+SHOW COLUMNS FROM list_partitioned_table;
+
+INSERT INTO list_partitioned_table VALUES (3, 8, '(67.0,68.0)', 'east region');
+INSERT INTO list_partitioned_table VALUES (1, 1, '(63.0,64.0)', 'north region');
+INSERT INTO list_partitioned_table VALUES (4, 11, '(69.0,70.0)', 'west region');
+INSERT INTO list_partitioned_table VALUES (2, 5, '(65.0,66.0)', 'south region');
+
+SELECT * FROM list_partitioned_table ORDER BY id;
+
+DROP TABLE list_partitioned_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

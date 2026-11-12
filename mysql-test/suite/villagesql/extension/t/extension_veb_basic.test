@@ -1,0 +1,90 @@
+# Test basic VEB file operations: create, install, verify version, check expansion directory
+
+# Use MYSQLTEST_VARDIR for VEB directory (since --veb-dir is not set by default in tests)
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+--source include/villagesql/binlog_check_begin.inc
+
+# Create a test extension with version 1.2.3 in manifest and a lib file
+--let $extension_name = test_veb_ext
+--let $extension_version = 1.2.3
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/simple_vdf.cc
+--source include/villagesql/create_extension_sdk.inc
+
+# Install the extension
+INSTALL EXTENSION test_veb_ext;
+
+# Verify version 1.2.3 was read from manifest (not hardcoded as 0.0.1)
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+# Verify expansion cache directory structure exists:
+#   {datadir}/.veb_expansion_cache/{name}/{sha256}/
+let MYSQLD_DATADIR= `SELECT @@datadir`;
+
+# Check that .veb_expansion_cache directory exists
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache
+
+# Check that extension directory exists
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/test_veb_ext
+
+# Find the SHA256 subdirectory (we don't know the exact hash, but there should be exactly one)
+--perl
+use strict;
+use File::Find;
+
+my $datadir = $ENV{'MYSQLD_DATADIR'};
+my $ext_dir = "$datadir/.veb_expansion_cache/test_veb_ext";
+
+# Find all subdirectories (should be exactly one SHA256 hash)
+opendir(my $dh, $ext_dir) or die "Cannot open $ext_dir: $!";
+my @subdirs = grep { $_ ne '.' && $_ ne '..' && -d "$ext_dir/$_" } readdir($dh);
+closedir($dh);
+
+if (scalar(@subdirs) != 1) {
+    die "Expected exactly 1 SHA256 subdirectory, found: " . scalar(@subdirs);
+}
+
+my $sha256_dir = $subdirs[0];
+
+# Verify SHA256 format (64 hex characters)
+if ($sha256_dir !~ /^[0-9a-f]{64}$/) {
+    die "Expected SHA256 hash (64 hex chars), got: $sha256_dir";
+}
+
+# Verify manifest.json exists in the SHA256 directory
+my $manifest_path = "$ext_dir/$sha256_dir/manifest.json";
+if (! -f $manifest_path) {
+    die "Expected manifest.json at: $manifest_path";
+}
+
+# Verify lib directory exists
+my $lib_dir = "$ext_dir/$sha256_dir/lib";
+if (! -d $lib_dir) {
+    die "Expected lib/ directory at: $lib_dir";
+}
+
+# Verify .so file exists in lib directory
+my $so_file = "$lib_dir/test_veb_ext.so";
+if (! -f $so_file) {
+    die "Expected test_veb_ext.so at: $so_file";
+}
+
+print "Verified expansion cache structure: .veb_expansion_cache/test_veb_ext/<SHA256>/\n";
+print "Manifest exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/manifest.json\n";
+print "Lib directory exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/lib/\n";
+print "Shared library exists at: <DATADIR>/.veb_expansion_cache/test_veb_ext/<SHA256>/lib/test_veb_ext.so\n";
+EOF
+
+# Uninstall the extension (cleanup)
+UNINSTALL EXTENSION test_veb_ext;
+
+# Verify removed from table (should return no rows)
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--source include/villagesql/binlog_check_end.inc

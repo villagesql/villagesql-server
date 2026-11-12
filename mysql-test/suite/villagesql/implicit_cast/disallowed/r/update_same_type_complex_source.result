@@ -1,0 +1,9 @@
+CREATE TABLE t_mixed (id INT, val1 COMPLEX, val2 COMPLEX);
+INSERT INTO t_mixed VALUES
+(1, '(1.0,1.0)', '(2.0,2.0)'),
+(2, '(3.0,3.0)', '(4.0,4.0)');
+UPDATE t_mixed SET val1 = val2 WHERE id = 1;
+SELECT val1, val2 FROM t_mixed WHERE id = 1;
+val1	val2
+(2,2)	(2,2)
+DROP TABLE t_mixed;

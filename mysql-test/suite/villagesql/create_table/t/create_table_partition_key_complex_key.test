@@ -1,0 +1,20 @@
+# Test CREATE TABLE with KEY partitioning using COMPLEX as partition key
+# Tests that COMPLEX custom type gives proper error when used as KEY partition key
+# NOTE: Test needs investigation - may succeed when it should fail, or may give wrong error
+
+--source include/villagesql/not_implemented_complex_type.inc
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT,
+    value COMPLEX
+) PARTITION BY KEY(value) PARTITIONS 3;
+
+SHOW COLUMNS FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

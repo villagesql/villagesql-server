@@ -1,0 +1,41 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+INSERT INTO t1 VALUES
+(1, '(1,2)', 100.50),
+(2, '(3,4)', 200.75),
+(3, '(5,6)', 150.25),
+(4, '(7,8)', 300.00),
+(5, '(1,2)', 175.50);
+CREATE VIEW v_level1 AS
+SELECT id, val, amount FROM t1;
+SELECT * FROM v_level1 ORDER BY id;
+id	val	amount
+1	(1,2)	100.50
+2	(3,4)	200.75
+3	(5,6)	150.25
+4	(7,8)	300.00
+5	(1,2)	175.50
+CREATE VIEW v_level2 AS
+SELECT id, val, amount FROM v_level1 WHERE amount > 150;
+SELECT * FROM v_level2 ORDER BY id;
+id	val	amount
+2	(3,4)	200.75
+3	(5,6)	150.25
+4	(7,8)	300.00
+5	(1,2)	175.50
+CREATE VIEW v_level3 AS
+SELECT id, val FROM v_level2 WHERE id > 2;
+SELECT * FROM v_level3 ORDER BY id;
+id	val
+3	(5,6)
+4	(7,8)
+5	(1,2)
+CREATE VIEW v_level3_complex_filter AS
+SELECT id, val, amount FROM v_level2 WHERE val = '(1,2)';
+SELECT * FROM v_level3_complex_filter ORDER BY id;
+id	val	amount
+5	(1,2)	175.50
+DROP VIEW v_level3_complex_filter;
+DROP VIEW v_level3;
+DROP VIEW v_level2;
+DROP VIEW v_level1;
+DROP TABLE t1;

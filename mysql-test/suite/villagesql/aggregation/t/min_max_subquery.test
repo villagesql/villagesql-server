@@ -1,0 +1,56 @@
+# Test MIN() and MAX() with subqueries
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE complex_test (
+  id INT PRIMARY KEY,
+  value vsql_complex.COMPLEX,
+  category VARCHAR(20)
+);
+
+INSERT INTO complex_test VALUES
+  (1, '(3.0, 4.0)', 'A'),
+  (2, '(1.0, 2.0)', 'A'),
+  (3, '(5.0, 1.0)', 'B'),
+  (4, '(2.0, 3.0)', 'B'),
+  (5, '(4.0, 5.0)', 'A'),
+  (6, '(6.0, 2.0)', 'B');
+
+--echo # Test MIN/MAX in subquery
+SELECT category,
+  (SELECT MAX(value) FROM complex_test t2 WHERE t2.category = t1.category) as max_val,
+  (SELECT MIN(value) FROM complex_test t2 WHERE t2.category = t1.category) as min_val
+FROM complex_test t1
+GROUP BY category
+ORDER BY category;
+
+--echo # Test MIN/MAX in WHERE with correlated subquery
+SELECT id, value, category
+FROM complex_test t1
+WHERE value = (SELECT MAX(value) FROM complex_test t2 WHERE t2.category = t1.category)
+ORDER BY id;
+
+--echo # Test MIN/MAX with IN subquery
+SELECT id, value
+FROM complex_test
+WHERE value IN (
+  SELECT MAX(value) FROM complex_test GROUP BY category
+  UNION
+  SELECT MIN(value) FROM complex_test GROUP BY category
+)
+ORDER BY id;
+
+--echo # Test MIN/MAX with EXISTS
+SELECT t1.id, t1.value
+FROM complex_test t1
+WHERE EXISTS (
+  SELECT 1 FROM complex_test t2
+  WHERE t2.category = t1.category
+  AND t2.value = (SELECT MAX(value) FROM complex_test t3 WHERE t3.category = t1.category)
+  AND t1.id = t2.id
+)
+ORDER BY id;
+
+DROP TABLE complex_test;
+
+--source include/villagesql/uninstall_complex_extension.inc

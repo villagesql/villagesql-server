@@ -1,0 +1,3 @@
+# Query INFORMATION_SCHEMA.EXTENSIONS
+
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS ORDER BY extension_name;

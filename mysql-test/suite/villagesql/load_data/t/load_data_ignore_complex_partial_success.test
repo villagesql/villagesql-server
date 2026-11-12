@@ -1,0 +1,26 @@
+# Test LOAD DATA IGNORE with COMPLEX type
+# Grammar: LOAD DATA ... IGNORE ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(0.0,-0.0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+--write_file $MYSQLTEST_VARDIR/tmp/complex_ignore.dat
+1|(5.0,6.0)
+3|not_complex
+5|(-1,-1)
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+# Row id 1 is a duplicate (skipped). Row id 3 is a bad value (intrinsic default stored). Row id 5 is fine.
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/complex_ignore.dat' IGNORE INTO TABLE t1 FIELDS TERMINATED BY '|'
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex_ignore.dat
+
+--source include/villagesql/uninstall_complex_extension.inc

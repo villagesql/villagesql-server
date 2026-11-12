@@ -1,0 +1,26 @@
+# Test CREATE TEMPORARY TABLE with COMPLEX type
+# Grammar: CREATE TEMPORARY TABLE table_name (column_list)
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TEMPORARY TABLE t1 (
+    id INT PRIMARY KEY,
+    temp_value COMPLEX
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (1, '(2.5,3.0)');
+INSERT INTO t1 VALUES (2, '(0.0,1.0)');
+
+--source include/villagesql/query_custom_columns.inc
+SELECT * FROM t1;
+
+DROP TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,17 @@
+# Test CROSS JOIN with comparison in WHERE
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT, val COMPLEX);
+CREATE TABLE t_string (id INT, val VARCHAR(100));
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+INSERT INTO t_string VALUES (1, 'hello');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t_complex c CROSS JOIN t_string s WHERE c.val < s.val;
+
+DROP TABLE t_complex;
+DROP TABLE t_string;
+
+--source include/villagesql/uninstall_complex_extension.inc

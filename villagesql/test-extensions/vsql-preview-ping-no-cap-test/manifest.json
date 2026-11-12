@@ -1,0 +1,7 @@
+{
+  "name": "vsql_preview_ping_no_cap_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension: uses ping capability without registering it via .with<>",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

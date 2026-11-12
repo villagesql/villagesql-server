@@ -1,0 +1,100 @@
+# Test DELETE operations with prepared statements and COMPLEX custom types
+# Covers: DELETE with parameters, DELETE with WHERE, multi-table operations
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(5.0,6.0)'),
+  (4, '(7.0,8.0)'),
+  (5, '(1.0,2.0)');
+
+--echo #
+--echo # Test 1: DELETE with INT parameter
+--echo #
+
+PREPARE stmt1 FROM 'DELETE FROM t1 WHERE id = ?';
+SET @del_id = 4;
+EXECUTE stmt1 USING @del_id;
+SELECT COUNT(*) FROM t1;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: DELETE with COMPLEX parameter in WHERE
+--echo #
+
+UPDATE t1 SET val = '(20.0,21.0)' WHERE id IN (2, 3);
+
+PREPARE stmt2 FROM 'DELETE FROM t1 WHERE val = ?';
+SET @del_val = '(20.0,21.0)';
+EXECUTE stmt2 USING @del_val;
+SELECT * FROM t1 ORDER BY id;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: DELETE with multiple executions
+--echo #
+
+INSERT INTO t1 VALUES (10, '(40.0,41.0)'), (11, '(42.0,43.0)');
+
+PREPARE stmt3 FROM 'DELETE FROM t1 WHERE id = ?';
+SET @id = 10;
+EXECUTE stmt3 USING @id;
+SET @id = 11;
+EXECUTE stmt3 USING @id;
+SELECT COUNT(*) FROM t1;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: DELETE with complex WHERE condition
+--echo #
+
+INSERT INTO t1 VALUES (20, '(50.0,51.0)'), (21, '(52.0,53.0)'), (22, '(50.0,51.0)');
+
+PREPARE stmt4 FROM 'DELETE FROM t1 WHERE id > ? AND val = ?';
+SET @min_id = 20;
+SET @val = '(50.0,51.0)';
+EXECUTE stmt4 USING @min_id, @val;
+SELECT * FROM t1 WHERE id >= 20 ORDER BY id;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: Multi-table DELETE
+--echo #
+
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (30, '(70.0,71.0)');
+INSERT INTO t2 VALUES (30, '(70.0,71.0)');
+
+PREPARE stmt5 FROM 'DELETE t1 FROM t1 INNER JOIN t2 ON t1.id = t2.id WHERE t1.val = ?';
+SET @val = '(70.0,71.0)';
+EXECUTE stmt5 USING @val;
+SELECT COUNT(*) FROM t1 WHERE id = 30;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Test 6: DELETE with ORDER BY and LIMIT
+--echo #
+
+INSERT INTO t1 VALUES (40, '(80.0,81.0)'), (41, '(80.0,81.0)'), (42, '(80.0,81.0)');
+
+PREPARE stmt6 FROM 'DELETE FROM t1 WHERE id >= ? ORDER BY id LIMIT ?';
+SET @min_id = 40;
+SET @lim = 2;
+EXECUTE stmt6 USING @min_id, @lim;
+SELECT * FROM t1 WHERE id >= 40 ORDER BY id;
+DEALLOCATE PREPARE stmt6;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1, t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

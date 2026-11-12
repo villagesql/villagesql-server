@@ -1,0 +1,29 @@
+# Test INSERT with expression result into COMPLEX field
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+
+# Single row INSERT with CONCAT expression fails
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_complex VALUES (7, CONCAT('(', '1', ',', '2', ')'));
+
+# Multi-row INSERT: valid literals work
+INSERT INTO t_complex VALUES (1, '(1,2)'), (2, '(3,4)');
+SELECT * FROM t_complex ORDER BY id;
+
+# Multi-row INSERT with CONCAT in the middle
+# This should fail on row 3 (the CONCAT), and row 4 should never be inserted
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_complex VALUES
+  (3, '(5,6)'),
+  (4, '(7,8)'),
+  (5, CONCAT('(', '9', ',', '10', ')')),
+  (6, '(11,12)');
+
+# Verify that only rows 1-2 exist (rows 3-6 were not inserted due to row 5 failure)
+SELECT * FROM t_complex ORDER BY id;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

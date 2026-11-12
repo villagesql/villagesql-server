@@ -1,0 +1,43 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(15.0,16.0)'), ('(3.0,4.0)'), ('(-0,0)'), ('(21.0,22.0)');
+INSERT INTO t1 VALUES ('(7.0,8.0)'), ('(0,0)'), ('(11.0,12.0)'), ('(19.0,20.0)');
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(0,-0)'), ('(25.0,26.0)'), ('(5.0,6.0)');
+INSERT INTO t1 VALUES ('(7.0,8.0)'), ('(0,0)'), ('(11.0,12.0)'), ('(19.0,20.0)');
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(0,-0)'), ('(25.0,26.0)'), ('(5.0,6.0)');
+INSERT INTO t1 VALUES ('(33.0,34.0)'), ('(35.0,36.0)');
+HANDLER t1 OPEN;
+HANDLER t1 READ FIRST;
+val
+(15,16)
+HANDLER t1 READ NEXT;
+val
+(3,4)
+HANDLER t1 READ NEXT;
+val
+(0,0)
+HANDLER t1 READ NEXT;
+val
+(21,22)
+HANDLER t1 READ NEXT;
+val
+(7,8)
+HANDLER t1 READ NEXT;
+val
+(0,0)
+HANDLER t1 READ NEXT;
+val
+(11,12)
+HANDLER t1 READ NEXT;
+val
+(19,20)
+HANDLER t1 READ NEXT;
+val
+(1,2)
+HANDLER t1 READ NEXT;
+val
+(0,0)
+HANDLER t1 READ NEXT;
+val
+(25,26)
+HANDLER t1 CLOSE;
+DROP TABLE t1;

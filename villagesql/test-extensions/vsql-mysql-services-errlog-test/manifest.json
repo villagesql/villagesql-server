@@ -1,0 +1,7 @@
+{
+  "name": "vsql_mysql_services_errlog_test",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension writing to the server error log via a consumed MySQL core service",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

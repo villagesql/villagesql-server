@@ -1,0 +1,23 @@
+# Test VIEW with WHERE clause using equality comparison on COMPLEX column
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, name VARCHAR(50));
+
+INSERT INTO t1 VALUES
+  (1, '(1,2)', 'first'),
+  (2, '(3,4)', 'second'),
+  (3, '(1,2)', 'third'),
+  (4, '(5,6)', 'fourth');
+
+# View with WHERE clause comparing COMPLEX column to literal
+CREATE VIEW v_filtered AS
+SELECT id, val, name FROM t1 WHERE val = '(1,2)';
+
+# Should return only rows with matching COMPLEX value
+SELECT * FROM v_filtered ORDER BY id;
+
+DROP VIEW v_filtered;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

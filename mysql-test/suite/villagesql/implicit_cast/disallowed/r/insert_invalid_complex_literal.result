@@ -1,0 +1,4 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+INSERT INTO t_complex VALUES (1, 'invalid_complex_value');
+ERROR HY000: Incorrect COMPLEX value: 'invalid_complex_value' for column 'val' at row 1
+DROP TABLE t_complex;

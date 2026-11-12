@@ -1,0 +1,86 @@
+# Test triggers with NULL values in custom type columns
+# Verify that NULL handling works correctly in trigger context
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val COMPLEX
+);
+
+delimiter //;
+
+# Trigger that captures NULL values
+CREATE TRIGGER tr_before_insert BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+  SET @inserted_val = NEW.val;
+  SET @inserted_is_null = (NEW.val IS NULL);
+END//
+
+CREATE TRIGGER tr_before_update BEFORE UPDATE ON t1
+FOR EACH ROW
+BEGIN
+  SET @old_val = OLD.val;
+  SET @new_val = NEW.val;
+  SET @old_is_null = (OLD.val IS NULL);
+  SET @new_is_null = (NEW.val IS NULL);
+END//
+
+delimiter ;//
+
+# Test 1: Insert NULL value
+INSERT INTO t1 VALUES (1, NULL);
+SELECT @inserted_val, @inserted_is_null;
+
+# Verify NULL stored correctly
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 1;
+
+# Test 2: Insert valid value, then UPDATE to NULL
+INSERT INTO t1 VALUES (2, '(1.0,2.0)');
+SELECT * FROM t1 WHERE id = 2;
+
+UPDATE t1 SET val = NULL WHERE id = 2;
+SELECT @old_val, @old_is_null, @new_val, @new_is_null;
+
+# Verify NULL after update
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 2;
+
+# Test 3: Update NULL to valid value
+UPDATE t1 SET val = '(3.0,4.0)' WHERE id = 1;
+SELECT @old_val, @old_is_null, @new_val, @new_is_null;
+
+# Verify valid value after update
+SELECT * FROM t1 WHERE id = 1;
+
+# Test 4: Trigger that conditionally sets to NULL
+delimiter //;
+
+CREATE TRIGGER tr_set_null BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+  IF NEW.id = 99 THEN
+    SET NEW.val = NULL;
+  END IF;
+END//
+
+delimiter ;//
+
+INSERT INTO t1 VALUES (99, '(5.0,6.0)');
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 99;
+
+# Cleanup
+DROP TRIGGER tr_before_insert;
+DROP TRIGGER tr_before_update;
+DROP TRIGGER tr_set_null;
+DROP TABLE t1;
+
+# Clear user variables
+SET @inserted_val = NULL;
+SET @inserted_is_null = NULL;
+SET @old_val = NULL;
+SET @new_val = NULL;
+SET @old_is_null = NULL;
+SET @new_is_null = NULL;
+
+--source include/villagesql/uninstall_complex_extension.inc

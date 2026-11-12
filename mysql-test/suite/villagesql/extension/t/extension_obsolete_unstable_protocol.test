@@ -1,0 +1,49 @@
+# Test that extensions compiled against an old unstable protocol version are
+# rejected, while extensions using the current unstable version are accepted.
+#
+# Even-numbered protocol versions are unstable. Only the current server
+# protocol version is accepted; older even versions are rejected. Odd versions
+# are stable and always accepted.
+#
+# This test is debug-only: it relies on @vef_debug_protocol_override to
+# simulate the server being at a higher protocol version.
+
+--source include/have_debug.inc
+
+call mtr.add_suppression("extension uses obsolete unstable protocol version");
+
+# Compute protocol versions relative to the current server version so this test
+# doesn't need updating when the protocol version is bumped. The SET statements
+# record the expression rather than a hard-coded number.
+SET @next_unstable = @@GLOBAL.villagesql_vef_server_protocol + 2;
+SET @next_stable = @@GLOBAL.villagesql_vef_server_protocol + 1;
+
+--echo # Simulate server at next unstable protocol; extension uses current (old unstable)
+SET @vef_debug_protocol_override = @next_unstable;
+--replace_regex /obsolete unstable protocol version .+/obsolete unstable protocol version CURRENT_PROTOCOL (current: NEXT_PROTOCOL)/
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_noop_test;
+
+--echo # Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Simulate server at next stable protocol; extension uses current (old unstable)
+SET @vef_debug_protocol_override = @next_stable;
+--replace_regex /obsolete unstable protocol version .+/obsolete unstable protocol version CURRENT_PROTOCOL (current: NEXT_PROTOCOL)/
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_noop_test;
+
+--echo # Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Current server protocol; extension uses current unstable -- should succeed
+SET @vef_debug_protocol_override = NULL;
+INSTALL EXTENSION vsql_noop_test;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+UNINSTALL EXTENSION vsql_noop_test;
+
+--echo # Verify extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;

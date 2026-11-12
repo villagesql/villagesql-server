@@ -1,0 +1,60 @@
+# Test that VEB file SHA256-based caching works across server restarts
+# This test verifies that when a .veb file content changes (different SHA256)
+# and the server is restarted, it detects the change and loads the new version
+# from a different _expanded directory.
+#
+# Uses dynamically built extensions with TESTTYPE custom type.
+
+# Use MYSQLTEST_VARDIR for VEB directory
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+# === PHASE 1: Create and install version 1 (full precision) ===
+--let $testtype_extension_name = test_type_restart
+--source include/villagesql/testtype_full_precision.inc
+
+INSTALL EXTENSION test_type_restart;
+
+CREATE TABLE test_veb_cache_restart_dynamic (id INT, t TESTTYPE);
+INSERT INTO test_veb_cache_restart_dynamic VALUES (1, '(1.5,2.5)');
+INSERT INTO test_veb_cache_restart_dynamic VALUES (2, '(3.141592653589793,2.718281828459045)');
+
+# Version 1 uses %.17g format (full precision)
+SELECT id, t FROM test_veb_cache_restart_dynamic ORDER BY id;
+
+# === PHASE 2: Replace VEB with short precision version and restart ===
+# Create short precision version with same extension name
+# This will overwrite the VEB file (same name/version in manifest, but different SHA256)
+--let $testtype_extension_name = test_type_restart
+--source include/villagesql/testtype_short_precision.inc
+
+# Restart the server
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--source include/restart_mysqld.inc
+
+# === PHASE 3: Verify extension still works after restart ===
+# Extension metadata in database still points to old SHA256
+# So it still loads the original version (full precision)
+SELECT id, t FROM test_veb_cache_restart_dynamic ORDER BY id;
+
+# === PHASE 4: Uninstall and reinstall to pick up new VEB ===
+DROP TABLE test_veb_cache_restart_dynamic;
+UNINSTALL EXTENSION test_type_restart;
+
+# Reinstall - should now detect the new SHA256 and load short precision version
+INSTALL EXTENSION test_type_restart;
+
+CREATE TABLE test_veb_cache_restart_dynamic (id INT, t TESTTYPE);
+INSERT INTO test_veb_cache_restart_dynamic VALUES (1, '(1.5,2.5)');
+INSERT INTO test_veb_cache_restart_dynamic VALUES (2, '(3.141592653589793,2.718281828459045)');
+
+# Now should use %.6g format (shorter precision) from replaced VEB
+SELECT id, t FROM test_veb_cache_restart_dynamic ORDER BY id;
+
+DROP TABLE test_veb_cache_restart_dynamic;
+UNINSTALL EXTENSION test_type_restart;

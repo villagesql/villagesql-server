@@ -1,0 +1,16 @@
+call mtr.add_suppression("Component reported: 'vsql-errlog-marker");
+INSTALL EXTENSION vsql_mysql_services_errlog_test;
+SELECT vsql_mysql_services_errlog_test.log_warning('vsql-errlog-marker-8f3a') AS emit_status;
+emit_status
+0
+SELECT COUNT(*) > 0 AS marker_logged
+FROM performance_schema.error_log
+WHERE DATA LIKE '%vsql-errlog-marker-8f3a%';
+marker_logged
+1
+UNINSTALL EXTENSION vsql_mysql_services_errlog_test;
+INSTALL EXTENSION vsql_mysql_services_errlog_test;
+SELECT vsql_mysql_services_errlog_test.log_warning('vsql-errlog-marker-reinstall') AS emit_status_again;
+emit_status_again
+0
+UNINSTALL EXTENSION vsql_mysql_services_errlog_test;

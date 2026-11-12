@@ -1,0 +1,50 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection server_1]
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+call mtr.add_suppression("Worker .* failed executing transaction .* at source log .* Error 'Expected a type or a custom type instead of \"COMPLEX\"");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped");
+include/rpl/wait_for_applier_error.inc [errno=1064]
+Replication error occurred (expected):
+Last_Error_Message
+Worker 1 failed executing transaction 'ANONYMOUS' at source log master-bin.NNNNNN, end_log_pos POSITION; Error 'Expected a type or a custom type instead of "COMPLEX" near 'vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+)' at line 3' on query. Default database: 'test'. Query: 'CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `val` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+)'
+
+
+
+[connection server_2]
+START REPLICA SQL_THREAD;
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+INSERT INTO t1 VALUES (3, '(5.0,6.0)');
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+DROP TABLE t1;
+include/rpl/sync_to_replica.inc
+[connection server_1]
+[connection server_2]
+include/rpl/deinit.inc

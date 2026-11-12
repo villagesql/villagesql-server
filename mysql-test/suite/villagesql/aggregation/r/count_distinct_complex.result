@@ -1,0 +1,24 @@
+CREATE TABLE complex_test (
+id INT PRIMARY KEY,
+value vsql_complex.COMPLEX,
+category VARCHAR(20)
+);
+INSERT INTO complex_test VALUES
+(1, '(1.0, 2.0)', 'A'),
+(2, '(3.0, 4.0)', 'A'),
+(3, '(1.0, 2.0)', 'A'),
+(4, '(5.0, 1.0)', 'B'),
+(5, '(5.0, 1.0)', 'B');
+# Test COUNT(DISTINCT) on custom type
+SELECT COUNT(DISTINCT value) FROM complex_test;
+COUNT(DISTINCT value)
+3
+# Test COUNT(DISTINCT) with GROUP BY
+SELECT category, COUNT(DISTINCT value) as distinct_count
+FROM complex_test
+GROUP BY category
+ORDER BY category;
+category	distinct_count
+A	2
+B	1
+DROP TABLE complex_test;

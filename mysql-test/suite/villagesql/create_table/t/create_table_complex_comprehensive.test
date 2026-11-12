@@ -1,0 +1,47 @@
+# Test CREATE TABLE with comprehensive COMPLEX type features
+# Tests combination of individually-tested COMPLEX features in one table
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE signal_analysis (
+    measurement_id INT AUTO_INCREMENT PRIMARY KEY,
+    raw_signal COMPLEX NOT NULL,
+    reference_signal COMPLEX DEFAULT '(1.0,0.0)',
+    secondary_signal COMPLEX COMMENT 'Secondary measurement',
+    # Generated columns with COMPLEX functions
+    real_component DOUBLE GENERATED ALWAYS AS (COMPLEX_REAL(raw_signal)) VIRTUAL,
+    magnitude DOUBLE GENERATED ALWAYS AS (COMPLEX_ABS(raw_signal)) STORED,
+    # Functional indexes on computed values
+    INDEX idx_magnitude ((COMPLEX_ABS(raw_signal))),
+    INDEX idx_real_part ((COMPLEX_REAL(raw_signal))),
+    # Constraints on COMPLEX functions
+    CHECK (COMPLEX_ABS(raw_signal) > 0.0),
+    CHECK (COMPLEX_REAL(raw_signal) BETWEEN -1000.0 AND 1000.0)
+) COMMENT='Comprehensive COMPLEX type test table';
+
+SHOW CREATE TABLE signal_analysis;
+
+# Insert test data
+INSERT INTO signal_analysis (raw_signal, secondary_signal)
+    VALUES ('(3.0,4.0)', '(1.0,0.0)');
+
+INSERT INTO signal_analysis (raw_signal, reference_signal, secondary_signal)
+    VALUES ('(5.0,12.0)', '(2.0,0.0)', '(2.0,2.0)');
+
+SELECT * FROM signal_analysis;
+
+# Test constraint violations
+--error ER_CHECK_CONSTRAINT_VIOLATED
+INSERT INTO signal_analysis (raw_signal) VALUES ('(0.0,0.0)');
+
+# Test complex queries with COMPLEX functions
+SELECT measurement_id, raw_signal, magnitude,
+       COMPLEX_REAL(secondary_signal) as secondary_real
+FROM signal_analysis
+WHERE magnitude > 5.0;
+
+DROP TABLE signal_analysis;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

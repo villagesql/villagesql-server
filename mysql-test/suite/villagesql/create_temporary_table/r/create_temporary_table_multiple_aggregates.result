@@ -1,0 +1,37 @@
+CREATE TABLE t1 (id INT, val COMPLEX, amount DECIMAL(10,2));
+INSERT INTO t1 VALUES
+(1, '(2,0)', 100.50),
+(2, '(2,0)', 50.25),
+(3, '(2,0)', 75.00),
+(4, '(10,0)', 200.75),
+(5, '(10,0)', 150.00),
+(6, '(-1,0)', 80.00);
+CREATE TEMPORARY TABLE temp_stats AS
+SELECT
+val,
+COUNT(*) AS cnt,
+SUM(amount) AS total,
+AVG(amount) AS avg_amt,
+MIN(amount) AS min_amt,
+MAX(amount) AS max_amt
+FROM t1
+GROUP BY val;
+SHOW COLUMNS FROM temp_stats;
+Field	Type	Null	Key	Default	Extra
+val	vsql_complex.COMPLEX	YES		NULL	NULL
+cnt	bigint	NO		0	NULL
+total	decimal(32,2)	YES		NULL	NULL
+avg_amt	decimal(14,6)	YES		NULL	NULL
+min_amt	decimal(10,2)	YES		NULL	NULL
+max_amt	decimal(10,2)	YES		NULL	NULL
+SELECT * FROM temp_stats ORDER BY val;
+val	cnt	total	avg_amt	min_amt	max_amt
+(-1,0)	1	80.00	80.000000	80.00	80.00
+(2,0)	3	225.75	75.250000	50.25	100.50
+(10,0)	2	350.75	175.375000	150.00	200.75
+SELECT val, cnt FROM temp_stats WHERE cnt > 1 ORDER BY val;
+val	cnt
+(2,0)	3
+(10,0)	2
+DROP TABLE temp_stats;
+DROP TABLE t1;

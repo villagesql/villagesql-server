@@ -1,0 +1,19 @@
+# Test NTH_VALUE window function with COMPLEX type
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, group_id INT, val COMPLEX);
+INSERT INTO t1 VALUES (3, 2, '(5.0,6.0)'), (1, 1, '(1.0,2.0)'), (2, 1, '(3.0,4.0)');
+
+# 1. NTH_VALUE returning COMPLEX - first value in partition
+SELECT id, NTH_VALUE(val, 1) OVER (PARTITION BY group_id ORDER BY id) FROM t1;
+
+# 2. NTH_VALUE returning COMPLEX - second value overall
+SELECT id, NTH_VALUE(val, 2) OVER (ORDER BY id) FROM t1;
+
+# 3. ORDER BY COMPLEX value
+SELECT id, NTH_VALUE(val, 2) OVER (ORDER BY val) FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

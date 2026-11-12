@@ -1,0 +1,22 @@
+CREATE TABLE t1 (c COMPLEX);
+CREATE VIEW v1 AS SELECT vsql_complex.complex_real(c) FROM t1;
+SHOW CREATE VIEW v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select vsql_complex.complex_real(`t1`.`c`) AS `vsql_complex.complex_real(c)` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+ALTER TABLE t1 DROP COLUMN c, ADD COLUMN c1 INT;
+SHOW CREATE VIEW v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select vsql_complex.complex_real(`t1`.`c`) AS `vsql_complex.complex_real(c)` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+CHECK TABLE v1;
+Table	Op	Msg_type	Msg_text
+test.v1	check	Error	View 'test.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+test.v1	check	error	Corrupt
+DROP TABLE t1;
+SHOW CREATE VIEW v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select vsql_complex.complex_real(`t1`.`c`) AS `vsql_complex.complex_real(c)` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+DROP VIEW v1;

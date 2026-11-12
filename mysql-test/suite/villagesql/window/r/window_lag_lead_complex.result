@@ -1,0 +1,43 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX, alt COMPLEX);
+INSERT INTO t1 VALUES
+(1, 1, '(1,1)', '(0,1)'), (2, 1, '(-2,3)', '(0,2)'), (3, 1, NULL, '(0,3)'),
+(4, 2, '(4,-4)', '(0,4)'), (5, 2, '(5,5)', '(0,5)');
+SELECT id, val,
+LAG(val, 2) OVER (ORDER BY id) AS lag2,
+LEAD(val, 2) OVER (ORDER BY id) AS lead2
+FROM t1 ORDER BY id;
+id	val	lag2	lead2
+1	(1,1)	NULL	NULL
+2	(-2,3)	NULL	(4,-4)
+3	NULL	(1,1)	(5,5)
+4	(4,-4)	(-2,3)	NULL
+5	(5,5)	NULL	NULL
+SELECT id, grp, val,
+LAG(val) OVER (PARTITION BY grp ORDER BY id) AS lag1,
+LEAD(val) OVER (PARTITION BY grp ORDER BY id) AS lead1
+FROM t1 ORDER BY id;
+id	grp	val	lag1	lead1
+1	1	(1,1)	NULL	(-2,3)
+2	1	(-2,3)	(1,1)	NULL
+3	1	NULL	(-2,3)	NULL
+4	2	(4,-4)	NULL	(5,5)
+5	2	(5,5)	(4,-4)	NULL
+SELECT id, val,
+LAG(val, 1, alt) OVER (ORDER BY id) AS lag_d,
+LEAD(val, 1, alt) OVER (ORDER BY id) AS lead_d
+FROM t1 ORDER BY id;
+id	val	lag_d	lead_d
+1	(1,1)	(0,1)	(-2,3)
+2	(-2,3)	(1,1)	NULL
+3	NULL	(-2,3)	(4,-4)
+4	(4,-4)	NULL	(5,5)
+5	(5,5)	(4,-4)	(0,5)
+SELECT id, val, LAG(val) OVER (ORDER BY val) AS lag_v
+FROM t1 ORDER BY id;
+id	val	lag_v
+1	(1,1)	(-2,3)
+2	(-2,3)	NULL
+3	NULL	NULL
+4	(4,-4)	(1,1)
+5	(5,5)	(4,-4)
+DROP TABLE t1;

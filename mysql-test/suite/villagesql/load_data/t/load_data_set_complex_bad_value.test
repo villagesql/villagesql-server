@@ -1,0 +1,27 @@
+# Test LOAD DATA ... SET ... with COMPLEX type
+# Grammar: LOAD DATA ... SET col = expr ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, val COMPLEX);
+
+--write_file $MYSQLTEST_VARDIR/tmp/complex_set.dat
+1	(1.0,2.0)
+2	(0,0)
+3	(3.0,4.0)
+4	(-0,0)
+5	(5.0,6.0)
+6	not_a_complex_value
+7	(-0,-0)
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+# Load into user variable first, then assign to column (simulating transformation)
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/complex_set.dat' INTO TABLE t1 (id, @v) SET val = @v
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex_set.dat
+
+--source include/villagesql/uninstall_complex_extension.inc

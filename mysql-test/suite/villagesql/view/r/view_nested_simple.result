@@ -1,0 +1,14 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+INSERT INTO t1 VALUES
+(1, '(1,2)', 100.50),
+(2, '(3,4)', 200.75),
+(3, '(5,6)', 150.25);
+CREATE VIEW v1 AS
+SELECT id, val, amount FROM t1;
+SELECT * FROM v1 ORDER BY id;
+id	val	amount
+1	(1,2)	100.50
+2	(3,4)	200.75
+3	(5,6)	150.25
+DROP VIEW v1;
+DROP TABLE t1;

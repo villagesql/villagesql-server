@@ -1,0 +1,24 @@
+CREATE TABLE t1 (c1 COMPLEX, c2 COMPLEX, c3 COMPLEX);
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	c1	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	c2	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	c3	vsql_complex	0.0.1	COMPLEX	{}
+ALTER TABLE t1 RENAME TO t2, DROP COLUMN c1, RENAME COLUMN c2 TO c9;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t2	c3	vsql_complex	0.0.1	COMPLEX	{}
+test	t2	c9	vsql_complex	0.0.1	COMPLEX	{}
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `c9` vsql_complex.COMPLEX DEFAULT NULL,
+  `c3` vsql_complex.COMPLEX DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t2 VALUES ('(1.0,2.0)', '(3.0,4.0)');
+SELECT * FROM t2;
+c9	c3
+(1,2)	(3,4)
+DROP TABLE t2;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters

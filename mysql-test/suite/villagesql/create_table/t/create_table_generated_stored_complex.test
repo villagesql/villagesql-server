@@ -1,0 +1,21 @@
+# Test CREATE TABLE with stored generated column using COMPLEX
+# Tests stored generated column with COMPLEX type expressions
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_input COMPLEX,
+    magnitude DOUBLE GENERATED ALWAYS AS (COMPLEX_ABS(complex_input)) STORED
+);
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 (id, complex_input) VALUES (1, '(3.0,4.0)');
+INSERT INTO t1 (id, complex_input) VALUES (2, '(5.0,12.0)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

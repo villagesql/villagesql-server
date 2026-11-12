@@ -1,0 +1,61 @@
+# Test CREATE TABLE with mixed data types including COMPLEX
+# Tests COMPLEX alongside all major MySQL data types
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE mixed_types_table (
+    # Integer types
+    tiny_col TINYINT,
+    small_col SMALLINT,
+    medium_col MEDIUMINT,
+    int_col INT,
+    big_col BIGINT,
+
+    # Decimal types
+    decimal_col DECIMAL(10,2),
+    numeric_col NUMERIC(8,3),
+    float_col FLOAT,
+    double_col DOUBLE,
+
+    # String types
+    char_col CHAR(10),
+    varchar_col VARCHAR(255),
+    text_col TEXT,
+
+    # Date/time types
+    date_col DATE,
+    time_col TIME,
+    datetime_col DATETIME,
+    timestamp_col TIMESTAMP,
+
+    # COMPLEX type
+    complex_col COMPLEX,
+
+    # Binary types
+    binary_col BINARY(16),
+    varbinary_col VARBINARY(64),
+
+    # Other types
+    json_col JSON,
+    enum_col ENUM('A', 'B', 'C')
+);
+
+SHOW COLUMNS FROM mixed_types_table;
+
+INSERT INTO mixed_types_table VALUES (
+    127, 32767, 8388607, 2147483647, 9223372036854775807,
+    123.45, 67.890, 3.14, 2.718,
+    'char', 'varchar string', 'text content',
+    '2023-10-31', '14:30:00', '2023-10-31 14:30:00', NOW(),
+    '(101.0,102.0)',
+    BINARY('binary data'), 'varbinary data',
+    '{"key": "value"}', 'A'
+);
+
+SELECT complex_col FROM mixed_types_table;
+
+DROP TABLE mixed_types_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

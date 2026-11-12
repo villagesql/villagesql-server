@@ -1,0 +1,57 @@
+
+## Running Tests
+
+This package includes the mysql-test framework (`mysql-test/`) for extension authors to write and run tests.
+
+@TEST_NOTE@
+
+### Running Extension Tests
+
+When developing an extension, specify your test suite directory and VEB location:
+
+```bash
+# Run all tests in your extension's test suite
+./villagesql mysql-test --suite=/path/to/your/extension/tests \
+                        --veb-source-dir=/path/to/your/extension/build
+
+# Run with parallel execution
+./villagesql mysql-test --suite=/path/to/your/extension/tests \
+                        --veb-source-dir=/path/to/your/extension/build \
+                        --parallel=auto
+
+ # Run a specific test
+./villagesql mysql-test --suite=/path/to/your/extension/tests/my_test.test \
+                        --veb-source-dir=/path/to/your/extension/build
+                        my_test
+
+# Record test results (for creating .result files)
+./villagesql mysql-test --suite=/path/to/your/extension/tests \
+                        --veb-source-dir=/path/to/your/extension/build \
+                        --record
+```
+
+**Options:**
+- `--suite` - Path to your test suite directory or specific test file
+- `--veb-source-dir` - Path to directory containing your `.veb` files (can be specified multiple times)
+- `--parallel=auto` - Run tests in parallel for faster execution
+- `--record` - Update test result files
+
+### Test Organization
+
+Create your extension tests in:
+- `tests/` - Your test suite
+- `tests/t/` - Test files (.test)
+- `tests/r/` - Expected results (.result)
+
+Example test file structure:
+```
+tests/
+├── t/
+│   ├── basic.test
+│   └── advanced.test
+└── r/
+    ├── basic.result
+    └── advanced.result
+```
+
+See `mysql-test/README` for more information on writing tests.

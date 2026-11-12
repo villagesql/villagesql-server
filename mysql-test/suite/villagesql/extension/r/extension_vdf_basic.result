@@ -1,0 +1,45 @@
+# Test VEF UDF Registration
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension test_vdf_ext using SDK...
+Created test_vdf_ext.veb
+# Install extension with VDFs
+INSTALL EXTENSION test_vdf_ext;
+# Verify VDFs were NOT registered in mysql.func (VEF functions use in-memory registry)
+SELECT name FROM mysql.func WHERE name IN ('simple_int_func', 'simple_string_func', 'simple_test');
+name
+# Call the custom VDFs using qualified name with .
+SELECT test_vdf_ext.simple_int_func() AS result;
+result
+42
+SELECT test_vdf_ext.simple_string_func() AS result;
+result
+Hello from UDF
+SELECT test_vdf_ext.simple_test('hello') AS result;
+result
+5
+# Verify VDF returning STRING has UTF8 charset (not BINARY)
+# This catches a bug where resolve_type() ran before m_vdf was set,
+# causing string-returning VDFs to incorrectly use binary charset.
+SELECT CHARSET(test_vdf_ext.simple_string_func()) AS string_charset;
+string_charset
+utf8mb4
+SELECT COLLATION(test_vdf_ext.simple_string_func()) AS string_collation;
+string_collation
+utf8mb4_bin
+# Try calling non-existent VDF on installed extension (should fail - falls through to stored function lookup)
+SELECT test_vdf_ext.nonexistent_func() AS result;
+ERROR 42000: FUNCTION test_vdf_ext.nonexistent_func does not exist
+# Call VDF without qualified name (should work - unqualified lookup)
+SELECT simple_int_func() AS result;
+result
+42
+# Try to drop custom VDF directly (should fail - not in mysql.func)
+DROP FUNCTION simple_int_func;
+ERROR 42000: FUNCTION test.simple_int_func does not exist
+# Uninstall extension
+UNINSTALL EXTENSION test_vdf_ext;
+# Try to call VDF after extension is uninstalled (should fail - falls through to stored function lookup)
+SELECT test_vdf_ext.simple_int_func() AS result;
+ERROR 42000: FUNCTION test_vdf_ext.simple_int_func does not exist
+include/rpl/deprecated/show_binlog_events.inc

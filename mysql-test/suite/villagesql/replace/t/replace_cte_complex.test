@@ -1,0 +1,50 @@
+# Test REPLACE ... WITH (CTE) ... SELECT with COMPLEX type
+# Grammar: REPLACE ... WITH ... SELECT ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert 5 initial rows
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(3.0,4.0)'),
+    (3, '(5.0,6.0)'),
+    (4, '(7.0,8.0)'),
+    (5, '(9.0,10.0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Replace using CTE with string literals - implicit cast to COMPLEX
+REPLACE INTO t1
+WITH cte AS (
+    SELECT 1 AS id, '(11.0,12.0)' AS val
+    UNION ALL SELECT 2, '(0,0)'
+    UNION ALL SELECT 3, '(-3.5,4.5)'
+    UNION ALL SELECT 4, '(-0,0)'
+    UNION ALL SELECT 5, '(13.0,-14.0)'
+    UNION ALL SELECT 6, '(0,-0)'
+    UNION ALL SELECT 7, '(-7.5,-8.5)'
+    UNION ALL SELECT 8, '(-0,-0)'
+    UNION ALL SELECT 9, '(15.0,16.0)'
+    UNION ALL SELECT 10, '(0,0)'
+)
+SELECT * FROM cte;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Replace using CTE with data from table (this should work since val is already COMPLEX)
+REPLACE INTO t1
+WITH cte AS (
+    SELECT id, val FROM t1 WHERE id <= 3
+)
+SELECT id + 10 AS id, val FROM cte;
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

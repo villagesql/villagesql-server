@@ -1,0 +1,29 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+name VARCHAR(50),
+val COMPLEX
+);
+CREATE TRIGGER tr_before_insert BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+SET @before_val = NEW.val;
+SET @before_id = NEW.id;
+END//
+CREATE TRIGGER tr_after_insert AFTER INSERT ON t1
+FOR EACH ROW
+BEGIN
+SET @after_val = NEW.val;
+END//
+INSERT INTO t1 VALUES (1, 'test', '(1.0,2.0)');
+SELECT @before_val, @before_id, @after_val;
+@before_val	@before_id	@after_val
+(1,2)	1	(1,2)
+SELECT * FROM t1;
+id	name	val
+1	test	(1,2)
+DROP TRIGGER tr_before_insert;
+DROP TRIGGER tr_after_insert;
+DROP TABLE t1;
+SET @before_val = NULL;
+SET @before_id = NULL;
+SET @after_val = NULL;

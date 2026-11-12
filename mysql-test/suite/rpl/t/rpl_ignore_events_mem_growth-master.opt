@@ -1,0 +1,3 @@
+--sync_relay_log_info=1
+--sync_source_info=1
+--performance-schema-instrument='memory%=ON'

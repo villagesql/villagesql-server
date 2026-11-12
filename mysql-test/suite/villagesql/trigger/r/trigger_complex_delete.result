@@ -1,0 +1,33 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+name VARCHAR(50),
+val COMPLEX
+);
+CREATE TRIGGER tr_before_delete BEFORE DELETE ON t1
+FOR EACH ROW
+BEGIN
+SET @deleted_val = OLD.val;
+SET @deleted_id = OLD.id;
+SET @deleted_name = OLD.name;
+END//
+CREATE TRIGGER tr_after_delete AFTER DELETE ON t1
+FOR EACH ROW
+BEGIN
+SET @after_deleted_val = OLD.val;
+END//
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(5.0,6.0)');
+DELETE FROM t1 WHERE id = 2;
+SELECT @deleted_val, @deleted_id, @deleted_name, @after_deleted_val;
+@deleted_val	@deleted_id	@deleted_name	@after_deleted_val
+(5,6)	2	test2	(5,6)
+SELECT * FROM t1;
+id	name	val
+1	test1	(1,2)
+DROP TRIGGER tr_before_delete;
+DROP TRIGGER tr_after_delete;
+DROP TABLE t1;
+SET @deleted_val = NULL;
+SET @deleted_id = NULL;
+SET @deleted_name = NULL;
+SET @after_deleted_val = NULL;

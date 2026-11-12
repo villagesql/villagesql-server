@@ -1,0 +1,40 @@
+# Test MIN() and MAX() with JOIN operations
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE complex_test (
+  id INT PRIMARY KEY,
+  value vsql_complex.COMPLEX,
+  category VARCHAR(20)
+);
+
+INSERT INTO complex_test VALUES
+  (1, '(3.0, 4.0)', 'A'),
+  (2, '(1.0, 2.0)', 'A'),
+  (3, '(5.0, 1.0)', 'B'),
+  (4, '(2.0, 3.0)', 'B'),
+  (5, '(4.0, 5.0)', 'A'),
+  (6, '(6.0, 2.0)', 'B');
+
+--echo # Test MIN/MAX with JOIN
+CREATE TABLE categories (name VARCHAR(20), threshold vsql_complex.COMPLEX);
+INSERT INTO categories VALUES ('A', '(2.0, 0.0)'), ('B', '(3.0, 0.0)');
+
+SELECT c.name, MAX(t.value) as max_val
+FROM complex_test t
+JOIN categories c ON t.category = c.name
+WHERE t.value > c.threshold
+GROUP BY c.name
+ORDER BY c.name;
+
+--echo # Test MIN/MAX with self-join
+SELECT t1.category, MAX(t1.value) as max_val
+FROM complex_test t1
+JOIN complex_test t2 ON t1.category = t2.category AND t1.value >= t2.value
+GROUP BY t1.category
+ORDER BY t1.category;
+
+DROP TABLE categories;
+DROP TABLE complex_test;
+
+--source include/villagesql/uninstall_complex_extension.inc

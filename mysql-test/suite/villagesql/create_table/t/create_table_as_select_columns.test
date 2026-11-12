@@ -1,0 +1,31 @@
+# Test CREATE TABLE AS SELECT with specific COMPLEX columns
+# Grammar: CREATE TABLE table_name AS SELECT specific_columns ...
+
+# Create source table with mixed data types including COMPLEX
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE source_data (
+    id INT PRIMARY KEY,
+    complex_value COMPLEX,
+    real_part DOUBLE,
+    name VARCHAR(50)
+);
+
+INSERT INTO source_data VALUES (1, '(2.0,3.0)', 2.0, 'sample1');
+INSERT INTO source_data VALUES (2, '(4.0,5.0)', 4.0, 'sample2');
+
+# Create table selecting only COMPLEX column and id
+CREATE TABLE t1 AS SELECT id, complex_value FROM source_data;
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (3, '(6.0,7.0)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+DROP TABLE source_data;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

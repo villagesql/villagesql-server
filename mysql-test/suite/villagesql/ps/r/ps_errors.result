@@ -1,0 +1,40 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+#
+# Test 1: Error case - Non-existent prepared statement
+#
+EXECUTE nonexistent_stmt;
+ERROR HY000: Unknown prepared statement handler (nonexistent_stmt) given to EXECUTE
+#
+# Test 2: Error case - Syntax error in PREPARE
+#
+PREPARE bad_stmt FROM 'SELECT * FROM t1 WHERE';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1
+#
+# Test 3: Error case - Invalid COMPLEX value in WHERE clause
+#
+PREPARE stmt3 FROM 'SELECT id FROM t1 WHERE val = ?';
+SET @bad_val = 'invalid_complex';
+EXECUTE stmt3 USING @bad_val;
+ERROR HY000: Incorrect vsql_complex.COMPLEX value: 'invalid_complex' for parameter '?'
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: Error case - Wrong number of parameters
+#
+PREPARE stmt4 FROM 'SELECT * FROM t1 WHERE id = ? AND val = ?';
+SET @only_one = 1;
+EXECUTE stmt4 USING @only_one;
+ERROR HY000: Incorrect arguments to EXECUTE
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: Error case - DEALLOCATE non-existent statement
+#
+DEALLOCATE PREPARE nonexistent_stmt;
+ERROR HY000: Unknown prepared statement handler (nonexistent_stmt) given to DEALLOCATE PREPARE
+#
+# Cleanup
+#
+DROP TABLE t1;

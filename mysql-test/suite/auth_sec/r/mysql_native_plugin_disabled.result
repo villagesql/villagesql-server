@@ -1,0 +1,34 @@
+#
+# WL#15667: Make mysql_native_password server plugin optional
+#
+SELECT PLUGIN_STATUS FROM INFORMATION_SCHEMA.plugins
+WHERE PLUGIN_NAME='mysql_native_password';
+PLUGIN_STATUS
+DISABLED
+CREATE USER wl15667@localhost IDENTIFIED WITH 'mysql_native_password';
+ERROR HY000: Plugin 'mysql_native_password' is not loaded
+CREATE USER wl15667@localhost;
+ALTER USER wl15667@localhost IDENTIFIED WITH 'mysql_native_password' BY 'foo';
+ERROR HY000: Plugin 'mysql_native_password' is not loaded
+DROP USER wl15667@localhost;
+# End of 8.0 tests
+#
+# Bug #36527984: Wrong authentication error message after disabling mysql_native_password
+#
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'foo'@'localhost' (using password: NO)
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'foob'@'localhost' (using password: NO)
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'fooba'@'localhost' (using password: NO)
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'foobar'@'localhost' (using password: NO)
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'foobarb'@'localhost' (using password: NO)
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'foobarba'@'localhost' (using password: NO)
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'foobarbaz'@'localhost' (using password: NO)
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'foobazbar'@'localhost' (using password: NO)
+# End of 8.4 tests

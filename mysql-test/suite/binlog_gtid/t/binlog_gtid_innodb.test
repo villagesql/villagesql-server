@@ -1,0 +1,4 @@
+--source include/have_log_bin.inc
+--source common/binlog/innodb.inc
+
+--echo End of tests

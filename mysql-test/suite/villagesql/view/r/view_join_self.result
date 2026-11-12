@@ -1,0 +1,15 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, label VARCHAR(50));
+INSERT INTO t1 VALUES
+(1, '(1,2)', 'A'),
+(2, '(3,4)', 'B'),
+(3, '(1,2)', 'C'),
+(4, '(5,6)', 'D');
+CREATE VIEW v_self_join AS
+SELECT a.id AS id1, a.label AS label1, b.id AS id2, b.label AS label2, a.val
+FROM t1 a JOIN t1 b ON a.val = b.val
+WHERE a.id < b.id;
+SELECT * FROM v_self_join ORDER BY id1, id2;
+id1	label1	id2	label2	val
+1	A	3	C	(1,2)
+DROP VIEW v_self_join;
+DROP TABLE t1;

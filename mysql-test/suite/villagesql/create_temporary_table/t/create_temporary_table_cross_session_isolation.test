@@ -1,0 +1,41 @@
+# Test that two sessions can hold temporary tables with the same name and
+# column names but different custom types, and each session sees only its
+# own type context.
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+--source include/count_sessions.inc
+
+connect (con1,localhost,root);
+--echo # con1: Create temporary table with COMPLEX type
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(3.0,4.0)');
+
+connect (con2,localhost,root);
+--echo # con2: Create temporary table with same name and column but TVECTOR type
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, val TVECTOR(2));
+INSERT INTO t1 VALUES (1, '[1.0, 2.0]');
+
+--echo # con2: Reads its own TVECTOR values
+SHOW CREATE TABLE t1;
+SELECT id, val FROM t1;
+
+connection con1;
+--echo # con1: Reads its own COMPLEX values
+SHOW CREATE TABLE t1;
+SELECT id, val FROM t1;
+
+--echo # con1: Drop temporary table
+DROP TEMPORARY TABLE t1;
+
+connection con2;
+--echo # con2: Drop temporary table
+DROP TEMPORARY TABLE t1;
+
+disconnect con1;
+disconnect con2;
+connection default;
+--source include/wait_until_count_sessions.inc
+
+--source include/villagesql/uninstall_complex_extension.inc
+--source include/villagesql/uninstall_tvector_extension.inc

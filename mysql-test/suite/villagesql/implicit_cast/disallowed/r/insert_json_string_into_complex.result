@@ -1,0 +1,4 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+INSERT INTO t_complex VALUES (4, '{"x": 1, "y": 2}');
+ERROR HY000: Incorrect COMPLEX value: '{"x": 1, "y": 2}' for column 'val' at row 1
+DROP TABLE t_complex;

@@ -1,0 +1,47 @@
+# Test LOAD DATA INFILE with bad DOUBLE values across all mode combinations.
+# Documents MySQL built-in behavior for reference when comparing with custom types.
+# The result file should be structurally identical to load_data_complex_bad_value_modes.result
+# except for Error/Warning lines which are type-specific.
+
+--write_file $MYSQLTEST_VARDIR/tmp/bad_value.dat
+1	1.5
+2	not_a_double
+3	\N
+4	3.5
+EOF
+
+--write_file $MYSQLTEST_VARDIR/tmp/null_value.dat
+1	1.5
+2	\N
+3	3.5
+EOF
+
+let $bad_value_file = $MYSQLTEST_VARDIR/tmp/bad_value.dat;
+let $null_value_file = $MYSQLTEST_VARDIR/tmp/null_value.dat;
+
+# --- nullable ---
+let $col_def = DOUBLE;
+let $type_default = 0;
+let $bad_value_strict_error = 1265; # WARN_DATA_TRUNCATED
+let $null_notnull_strict_error = 0;
+--source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
+
+# --- NOT NULL ---
+let $col_def = DOUBLE NOT NULL;
+let $type_default = 0;
+let $bad_value_strict_error = 1265; # WARN_DATA_TRUNCATED
+let $null_notnull_strict_error = 1263; # ER_WARN_NULL_TO_NOTNULL
+--source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
+
+# --- with DEFAULT ---
+# Note: MySQL ignores the user-defined DEFAULT for bad values and stores the
+# type's intrinsic default (0) instead. The count for val = 100 will be 0.
+let $col_def = DOUBLE DEFAULT 100;
+let $type_default = 100;
+let $bad_value_strict_error = 1265; # WARN_DATA_TRUNCATED
+let $null_notnull_strict_error = 0;
+--source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
+
+SET sql_mode = DEFAULT;
+--remove_file $MYSQLTEST_VARDIR/tmp/bad_value.dat
+--remove_file $MYSQLTEST_VARDIR/tmp/null_value.dat

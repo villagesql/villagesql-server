@@ -1,0 +1,124 @@
+# Test replication of COMPLEX datatype
+# This test verifies that COMPLEX type data correctly replicates from
+# source to replica for INSERT, UPDATE, DELETE, and ALTER TABLE operations
+# Uses default binlog format (ROW)
+
+--source include/rpl/init_source_replica.inc
+
+# Install COMPLEX extension on both source and replica
+--let $rpl_server_number= 1
+--source include/villagesql/install_complex_extension.inc
+
+--let $rpl_server_number= 2
+--source include/villagesql/install_complex_extension.inc
+
+connection master;
+
+# Create table with COMPLEX type
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Test INSERT replication
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(-5.5,6.7)');
+SELECT * FROM t1 ORDER BY id;
+
+--source include/rpl/sync_to_replica.inc
+
+# Verify on replica
+connection slave;
+SELECT * FROM t1 ORDER BY id;
+
+# Compare tables
+--let $diff_tables = master:t1, slave:t1
+--source include/diff_tables.inc
+
+# Test UPDATE replication
+connection master;
+UPDATE t1 SET val = '(5.0,6.0)' WHERE id = 1;
+UPDATE t1 SET val = '(0.0,0.0)' WHERE id = 3;
+SELECT * FROM t1 ORDER BY id;
+
+--source include/rpl/sync_to_replica.inc
+
+# Verify updates on replica
+connection slave;
+SELECT * FROM t1 ORDER BY id;
+--let $diff_tables = master:t1, slave:t1
+--source include/diff_tables.inc
+
+# Test DELETE replication
+connection master;
+DELETE FROM t1 WHERE id = 2;
+SELECT * FROM t1 ORDER BY id;
+
+--source include/rpl/sync_to_replica.inc
+
+# Verify deletes on replica
+connection slave;
+SELECT * FROM t1 ORDER BY id;
+--let $diff_tables = master:t1, slave:t1
+--source include/diff_tables.inc
+
+# Test NULL values
+connection master;
+INSERT INTO t1 VALUES (4, NULL);
+SELECT * FROM t1 ORDER BY id;
+
+--source include/rpl/sync_to_replica.inc
+
+connection slave;
+SELECT * FROM t1 ORDER BY id;
+--let $diff_tables = master:t1, slave:t1
+--source include/diff_tables.inc
+
+# Test multiple COMPLEX columns and ALTER TABLE
+connection master;
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    c1 COMPLEX,
+    c2 COMPLEX
+);
+
+INSERT INTO t2 VALUES
+    (1, '(1.0,1.0)', '(2.0,2.0)'),
+    (2, '(4.0,5.0)', '(6.0,7.0)');
+SELECT * FROM t2 ORDER BY id;
+
+--source include/rpl/sync_to_replica.inc
+
+connection slave;
+SELECT * FROM t2 ORDER BY id;
+--let $diff_tables = master:t2, slave:t2
+--source include/diff_tables.inc
+
+# Test ALTER TABLE to add COMPLEX column
+connection master;
+ALTER TABLE t2 ADD COLUMN c3 COMPLEX;
+
+# Insert data with the new column
+INSERT INTO t2 VALUES (3, '(8.0,9.0)', '(10.0,11.0)', '(12.0,13.0)');
+SELECT * FROM t2 ORDER BY id;
+
+--source include/rpl/sync_to_replica.inc
+
+# Verify ALTER TABLE replicated correctly
+connection slave;
+SELECT * FROM t2 ORDER BY id;
+--let $diff_tables = master:t2, slave:t2
+--source include/diff_tables.inc
+
+# Cleanup
+connection master;
+DROP TABLE t1, t2;
+--source include/rpl/sync_to_replica.inc
+
+# Uninstall extension from both servers
+--let $rpl_server_number= 1
+--source include/villagesql/uninstall_complex_extension.inc
+
+--let $rpl_server_number= 2
+--source include/villagesql/uninstall_complex_extension.inc
+
+--source include/rpl/deinit.inc

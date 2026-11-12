@@ -1,0 +1,73 @@
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE test_update_basic (
+id INT PRIMARY KEY,
+complex_val COMPLEX NOT NULL DEFAULT '(0,0)'
+);
+INSERT INTO test_update_basic (id, complex_val) VALUES
+(1, '(1,1)'),
+(2, '(2,2)'),
+(3, '(3,3)'),
+(4, '(4,4)'),
+(5, '(5,5)');
+SELECT id, complex_val FROM test_update_basic ORDER BY id;
+id	complex_val
+1	(1,1)
+2	(2,2)
+3	(3,3)
+4	(4,4)
+5	(5,5)
+UPDATE test_update_basic SET complex_val = '(10,10)' WHERE id = 1;
+UPDATE test_update_basic SET complex_val = '(99,99)' WHERE id IN (2,3);
+UPDATE test_update_basic SET complex_val = '(0,0)' WHERE complex_val = '(4,4)';
+SELECT id, complex_val FROM test_update_basic ORDER BY id;
+id	complex_val
+1	(10,10)
+2	(99,99)
+3	(99,99)
+4	(0,0)
+5	(5,5)
+CREATE TABLE test_update_nulls (
+id INT AUTO_INCREMENT PRIMARY KEY,
+nullable_complex COMPLEX DEFAULT NULL,
+not_null_complex COMPLEX NOT NULL DEFAULT '(1,1)'
+);
+INSERT INTO test_update_nulls (nullable_complex, not_null_complex) VALUES
+('(1,1)', '(2,2)'),
+('(3,3)', '(4,4)');
+UPDATE test_update_nulls SET nullable_complex = NULL WHERE id = 1;
+SELECT id, nullable_complex, not_null_complex FROM test_update_nulls ORDER BY id;
+id	nullable_complex	not_null_complex
+1	NULL	(2,2)
+2	(3,3)	(4,4)
+UPDATE test_update_basic SET complex_val = '(88,88)' WHERE id >= 4;
+SELECT id, complex_val FROM test_update_basic ORDER BY id;
+id	complex_val
+1	(10,10)
+2	(99,99)
+3	(99,99)
+4	(88,88)
+5	(88,88)
+CREATE TABLE test_update_replace (
+id INT PRIMARY KEY,
+complex_val COMPLEX NOT NULL DEFAULT '(0,0)'
+);
+INSERT INTO test_update_replace (id, complex_val) VALUES (1, '(1,1)');
+SELECT id, complex_val FROM test_update_replace ORDER BY id;
+id	complex_val
+1	(1,1)
+REPLACE INTO test_update_replace (id, complex_val) VALUES (1, '(100,100)');
+REPLACE INTO test_update_replace (id, complex_val) VALUES (10, '(200,200)');
+SELECT id, complex_val FROM test_update_replace ORDER BY id;
+id	complex_val
+1	(100,100)
+10	(200,200)
+INSERT INTO test_update_replace (id, complex_val) VALUES (1, '(300,300)')
+ON DUPLICATE KEY UPDATE complex_val = '(400,400)';
+INSERT INTO test_update_replace (id, complex_val) VALUES (20, '(500,500)')
+ON DUPLICATE KEY UPDATE complex_val = '(600,600)';
+SELECT id, complex_val FROM test_update_replace WHERE id IN (1, 20) ORDER BY id;
+id	complex_val
+1	(400,400)
+20	(500,500)
+DROP TABLE test_update_basic, test_update_nulls, test_update_replace;
+UNINSTALL EXTENSION vsql_complex;

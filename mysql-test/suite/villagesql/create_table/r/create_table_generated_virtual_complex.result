@@ -1,0 +1,20 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+complex_input COMPLEX,
+real_part DOUBLE GENERATED ALWAYS AS (COMPLEX_REAL(complex_input)) VIRTUAL
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `complex_input` vsql_complex.COMPLEX DEFAULT NULL,
+  `real_part` double GENERATED ALWAYS AS (vsql_complex.complex_real(`complex_input`)) VIRTUAL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (id, complex_input) VALUES (1, '(5.5,7.7)');
+INSERT INTO t1 (id, complex_input) VALUES (2, '(9.9,11.1)');
+SELECT * FROM t1;
+id	complex_input	real_part
+1	(5.5,7.7)	5.5
+2	(9.9,11.1)	9.9
+DROP TABLE t1;

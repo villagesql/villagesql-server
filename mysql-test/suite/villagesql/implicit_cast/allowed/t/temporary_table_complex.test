@@ -1,0 +1,19 @@
+# Test temporary table with COMPLEX
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+
+CREATE TEMPORARY TABLE temp_complex (id INT, val COMPLEX);
+INSERT INTO temp_complex SELECT * FROM t_complex WHERE id = 1;
+SELECT * FROM temp_complex;
+
+# Validate the type is COMPLEX by calling a COMPLEX function
+SELECT id, vsql_complex.complex_conjugate(val) as conjugate FROM temp_complex;
+
+DROP TABLE t_complex;
+DROP TEMPORARY TABLE temp_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

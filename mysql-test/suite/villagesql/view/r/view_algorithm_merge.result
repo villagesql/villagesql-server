@@ -1,0 +1,22 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+INSERT INTO t1 VALUES
+(1, '(2,0)', 100.50),
+(2, '(2,0)', 50.25);
+CREATE ALGORITHM=MERGE VIEW v_merge AS
+SELECT val, SUM(amount) AS total_amount
+FROM t1
+GROUP BY val;
+Warnings:
+Warning	1354	View merge algorithm can't be used here for now (assumed undefined algorithm)
+SHOW CREATE VIEW v_merge;
+View	Create View	character_set_client	collation_connection
+v_merge	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_merge` AS select `t1`.`val` AS `val`,sum(`t1`.`amount`) AS `total_amount` from `t1` group by `t1`.`val`	utf8mb4	utf8mb4_0900_ai_ci
+DESCRIBE v_merge;
+Field	Type	Null	Key	Default	Extra
+val	vsql_complex.COMPLEX	YES		NULL	
+total_amount	decimal(32,2)	YES		NULL	
+SELECT * FROM v_merge;
+val	total_amount
+(2,0)	150.75
+DROP VIEW v_merge;
+DROP TABLE t1;

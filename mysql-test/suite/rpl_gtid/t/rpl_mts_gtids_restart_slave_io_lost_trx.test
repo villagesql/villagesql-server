@@ -1,0 +1,15 @@
+###############################################################################
+#
+# BUG#17326020 ASSERTION ON SLAVE AFTER STOP/START SLAVE USING MTS+GTID
+#              REPLICATION
+#
+###############################################################################
+#
+# This test will verify if the slave SQL thread and the slave IO thread behave
+# correctly when the IO thread is restarted in the middle of a transaction
+# using MTS slave configuration.
+#
+
+--source include/have_replica_parallel_workers.inc
+--let $using_mts= 1
+--source common/rpl/rpl_gtids_restart_receiver_lost_trx.test
