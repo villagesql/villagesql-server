@@ -1,0 +1,84 @@
+#
+# SET in a procedure, called twice
+#
+CREATE PROCEDURE p_set()
+BEGIN
+DECLARE d INT;
+SET d = tvector_dim('[1,2]');
+SELECT d;
+END//
+CALL p_set();
+d
+2
+CALL p_set();
+d
+2
+DROP PROCEDURE p_set;
+#
+# SET in a loop, run twice in one call
+#
+CREATE PROCEDURE p_loop()
+BEGIN
+DECLARE i INT DEFAULT 0;
+DECLARE d INT;
+WHILE i < 2 DO
+SET d = tvector_dim('[1,2,3]');
+SELECT i, d;
+SET i = i + 1;
+END WHILE;
+END//
+CALL p_loop();
+i	d
+0	3
+i	d
+1	3
+DROP PROCEDURE p_loop;
+#
+# IF condition in a procedure, called twice
+#
+CREATE PROCEDURE p_if(n INT)
+BEGIN
+IF tvector_dim('[1,2,3]') = n THEN
+SELECT 'equal' AS r;
+ELSE
+SELECT 'different' AS r;
+END IF;
+END//
+CALL p_if(2);
+r
+different
+CALL p_if(3);
+r
+equal
+DROP PROCEDURE p_if;
+#
+# RETURN in a function, called once per row
+#
+CREATE TABLE ts (id INT PRIMARY KEY);
+INSERT INTO ts VALUES (1), (2), (3);
+CREATE FUNCTION f_dim(n INT) RETURNS INT DETERMINISTIC
+RETURN tvector_dim('[1,2,3,4]') + n;
+SELECT id, f_dim(id) AS d FROM ts ORDER BY id;
+id	d
+1	5
+2	6
+3	7
+DROP FUNCTION f_dim;
+#
+# SET NEW.col in a trigger, fired for each row
+#
+CREATE TABLE tt (id INT PRIMARY KEY, d INT);
+CREATE TRIGGER tt_bi BEFORE INSERT ON tt FOR EACH ROW
+SET NEW.d = tvector_dim('[1,2]') + NEW.id;
+INSERT INTO tt (id) VALUES (1);
+INSERT INTO tt (id) VALUES (2);
+INSERT INTO tt (id) SELECT id + 10 FROM ts;
+SELECT * FROM tt ORDER BY id;
+id	d
+1	3
+2	4
+11	13
+12	14
+13	15
+DROP TABLE tt;
+DROP TABLE ts;

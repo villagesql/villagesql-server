@@ -1,0 +1,379 @@
+# A prepared statement calling a VDF that needs no reprepare is resolved once,
+# at PREPARE, and every EXECUTE reuses that. Each case runs it several times
+# with what could leave it stale: a failed EXECUTE, ? values of other types
+# or bound as binary, a table or view changed under it, DML, a subquery, an
+# EXECUTE from a procedure, and many EXECUTEs in a row.
+#
+# Each case prints how many times the statement was prepared again over its
+# EXECUTEs (Com_stmt_reprepare).
+
+--source include/no_ps_protocol.inc
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE tc (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO tc VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(0.0,5.0)');
+
+CREATE TABLE tv (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO tv VALUES (1, '[1,0,0]'), (2, '[0,2,0]'), (3, '[0,0,3]');
+
+--echo #
+--echo # A failed EXECUTE, then more EXECUTEs
+--echo #
+
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @c = '(7.0,8.0)';
+EXECUTE s USING @c;
+SET @c = 'not a complex';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @c;
+SET @c = '(9.0,1.0)';
+EXECUTE s USING @c;
+SET @c = NULL;
+EXECUTE s USING @c;
+SET @c = '(2.0,3.0)';
+EXECUTE s USING @c;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT id FROM tv ORDER BY tvector_dot_product(vec, ?) DESC LIMIT 2';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+--echo # A value of another dimension fails
+SET @v = '[1,2]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[0,0,5]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A ? next to a VDF, bound with values of other types
+--echo #
+
+PREPARE s FROM 'SELECT id, complex_real(val) * ? AS x FROM tc WHERE id = 2';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @p = 2;
+EXECUTE s USING @p;
+SET @p = 2.5;
+EXECUTE s USING @p;
+SET @p = '3';
+EXECUTE s USING @p;
+SET @p = NULL;
+EXECUTE s USING @p;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # The table recreated between EXECUTEs with another dimension: the
+--echo # statement is prepared again, and the ? takes the new dimension
+--echo #
+
+PREPARE s FROM 'SELECT id, tvector_dot_product(vec, ?) AS d FROM tv ORDER BY id';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+DROP TABLE tv;
+CREATE TABLE tv (id INT PRIMARY KEY, vec TVECTOR(4) NOT NULL);
+INSERT INTO tv VALUES (1, '[1,0,0,0]'), (2, '[0,0,0,4]');
+SET @v = '[1,1,1,1]';
+EXECUTE s USING @v;
+EXECUTE s USING @v;
+SET @v = '[1,1,1]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A column added to the table between EXECUTEs
+--echo #
+
+PREPARE s FROM 'SELECT id, complex_imag(val) AS i FROM tc WHERE id = ?';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @id = 1;
+EXECUTE s USING @id;
+ALTER TABLE tc ADD COLUMN extra INT;
+SET @id = 2;
+EXECUTE s USING @id;
+ALTER TABLE tc DROP COLUMN extra;
+SET @id = 3;
+EXECUTE s USING @id;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A view calling a VDF, replaced between EXECUTEs
+--echo #
+
+CREATE VIEW vw AS SELECT id, complex_real(val) AS r FROM tc;
+PREPARE s FROM 'SELECT id, r FROM vw WHERE id <= ? ORDER BY id';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @id = 2;
+EXECUTE s USING @id;
+EXECUTE s USING @id;
+CREATE OR REPLACE VIEW vw AS SELECT id, complex_imag(val) AS r FROM tc;
+EXECUTE s USING @id;
+SET @id = 3;
+EXECUTE s USING @id;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+DROP VIEW vw;
+
+--echo #
+--echo # A VDF that needs no reprepare next to one that does: prepared again at
+--echo # every EXECUTE, and both give the bound values
+--echo #
+
+PREPARE s FROM 'SELECT complex_real(?) AS r, tvector_dim(?) AS d';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @c = '(1.0,0.0)', @v = '[1,2]';
+EXECUTE s USING @c, @v;
+SET @c = '(2.0,0.0)', @v = '[1,2,3]';
+EXECUTE s USING @c, @v;
+SET @c = '(3.0,0.0)', @v = '[1,2,3,4]';
+EXECUTE s USING @c, @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # from_string of a user variable, of a type whose parameters come from
+--echo # the value: prepared again at every EXECUTE, and takes the new value
+--echo #
+
+PREPARE s FROM 'SELECT tvector_dim(TVECTOR::from_string(@s)) AS d';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @s = '[1,2]';
+EXECUTE s;
+SET @s = '[1,2,3]';
+EXECUTE s;
+SET @s = '[1,2,3,4]';
+EXECUTE s;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+SET @s = NULL;
+
+--echo #
+--echo # INSERT and UPDATE calling a VDF
+--echo #
+
+CREATE TABLE tr (id INT PRIMARY KEY, i DOUBLE);
+PREPARE s FROM 'INSERT INTO tr VALUES (?, complex_imag(?))';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @id = 1, @c = '(0.0,1.5)';
+EXECUTE s USING @id, @c;
+SET @id = 2, @c = '(0.0,2.5)';
+EXECUTE s USING @id, @c;
+SET @id = 3, @c = NULL;
+EXECUTE s USING @id, @c;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+SELECT * FROM tr ORDER BY id;
+DROP TABLE tr;
+
+PREPARE s FROM 'UPDATE tc SET val = complex_conjugate(val) WHERE id = ?';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @id = 1;
+EXECUTE s USING @id;
+EXECUTE s USING @id;
+SET @id = 2;
+EXECUTE s USING @id;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+--echo # id 1 conjugated twice, id 2 once
+SELECT id, val FROM tc ORDER BY id;
+UPDATE tc SET val = complex_conjugate(val) WHERE id = 2;
+
+--echo #
+--echo # A VDF of a ? in a subquery
+--echo #
+
+PREPARE s FROM 'SELECT id FROM tc WHERE complex_abs(val) > (SELECT complex_abs(?)) ORDER BY id';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @c = '(1.0,0.0)';
+EXECUTE s USING @c;
+SET @c = '(4.0,0.0)';
+EXECUTE s USING @c;
+SET @c = '(6.0,0.0)';
+EXECUTE s USING @c;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # EXECUTE from a procedure, of a statement prepared outside it
+--echo #
+
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+delimiter //;
+CREATE PROCEDURE p_exec(c VARCHAR(64))
+BEGIN
+  SET @pc = c;
+  EXECUTE s USING @pc;
+END//
+delimiter ;//
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+CALL p_exec('(4.0,0.0)');
+CALL p_exec('(5.0,0.0)');
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DROP PROCEDURE p_exec;
+DEALLOCATE PREPARE s;
+SET @pc = NULL;
+
+--echo #
+--echo # Many EXECUTEs in a row, each with its own value
+--echo #
+
+PREPARE s FROM 'SELECT complex_real(?) + complex_imag(?) INTO @sum';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @total = 0;
+--let $i = 1
+--disable_query_log
+while ($i <= 200)
+{
+  --eval SET @c = '($i.0,1.0)'
+  EXECUTE s USING @c, @c;
+  SET @total = @total + @sum;
+  --inc $i
+}
+--enable_query_log
+--echo # sum of (i + 1) for i in 1..200 is 20300
+SELECT @total AS total;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A ? as a VDF argument, bound with text and with binary in turn
+--echo #
+
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @c = '(7.0,8.0)';
+EXECUTE s USING @c;
+SET @c = CAST('(9.0,1.0)' AS BINARY);
+EXECUTE s USING @c;
+SET @c = '(2.0,3.0)';
+EXECUTE s USING @c;
+SET @c = X'28362E302C312E3029';
+EXECUTE s USING @c;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+CREATE TABLE tb (id INT PRIMARY KEY, val COMPLEX);
+PREPARE s FROM 'INSERT INTO tb VALUES (?, ?)';
+SET @id = 1, @c = '(1.0,1.0)';
+EXECUTE s USING @id, @c;
+SET @id = 2, @c = CAST('(2.0,2.0)' AS BINARY);
+EXECUTE s USING @id, @c;
+SET @id = 3, @c = '(3.0,3.0)';
+EXECUTE s USING @id, @c;
+DEALLOCATE PREPARE s;
+SELECT id, complex_real(val) AS r, complex_imag(val) AS i FROM tb ORDER BY id;
+DROP TABLE tb;
+
+--echo #
+--echo # A ? as a VDF argument, bound with a number and with a string in turn,
+--echo # next to the same calls with literals
+--echo #
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT complex_real(5) AS r;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT complex_real(2.5) AS r;
+SELECT complex_real('(4.0,1.0)') AS r;
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @c = 5;
+--error ER_UDF_ERROR
+EXECUTE s USING @c;
+SET @c = 2.5;
+--error ER_UDF_ERROR
+EXECUTE s USING @c;
+SET @c = '(4.0,1.0)';
+EXECUTE s USING @c;
+SET @c = 5;
+--error ER_UDF_ERROR
+EXECUTE s USING @c;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # The column's type params cannot be changed in place, even with the
+--echo # table empty, so the statement's ? keeps the column's dimension
+--echo #
+
+CREATE TABLE tm (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO tm VALUES (1, '[1,2,3]');
+PREPARE s FROM 'SELECT id, tvector_dot_product(vec, ?) AS d FROM tm';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+DELETE FROM tm;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE tm MODIFY vec TVECTOR(4) NOT NULL;
+INSERT INTO tm VALUES (1, '[1,2,3]');
+SET @v = '[2,2,2]';
+EXECUTE s USING @v;
+SET @v = '[1,1,1,1]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+SHOW CREATE TABLE tm;
+DROP TABLE tm;
+
+SET @c = NULL, @v = NULL, @p = NULL, @id = NULL, @sum = NULL, @total = NULL;
+DROP TABLE tc;
+DROP TABLE tv;
+--source include/villagesql/uninstall_tvector_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc

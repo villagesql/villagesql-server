@@ -1,0 +1,54 @@
+INSTALL EXTENSION vsql_complex;
+#
+# A prepared statement
+#
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+SET @c = '(1.0,2.0)';
+EXECUTE s USING @c;
+r
+1
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': VDF 'complex_real' is currently in use
+SET @c = '(3.0,4.0)';
+EXECUTE s USING @c;
+r
+3
+DEALLOCATE PREPARE s;
+SET @c = NULL;
+#
+# A stored function, called in this connection
+#
+CREATE FUNCTION f_real(s VARCHAR(64)) RETURNS DOUBLE DETERMINISTIC
+RETURN complex_real(COMPLEX::from_string(s));
+SELECT f_real('(5.0,0.0)') AS r;
+r
+5
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': VDF 'COMPLEX::from_string' is currently in use
+SELECT f_real('(6.0,0.0)') AS r;
+r
+6
+#
+# A trigger, fired in this connection
+#
+CREATE TABLE tt (id INT PRIMARY KEY, s VARCHAR(64), r DOUBLE);
+CREATE TRIGGER tt_bi BEFORE INSERT ON tt FOR EACH ROW
+SET NEW.r = complex_real(COMPLEX::from_string(NEW.s));
+INSERT INTO tt (id, s) VALUES (1, '(7.0,0.0)');
+DROP FUNCTION f_real;
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': VDF 'COMPLEX::from_string' is currently in use
+INSERT INTO tt (id, s) VALUES (2, '(8.0,0.0)');
+SELECT * FROM tt ORDER BY id;
+id	s	r
+1	(7.0,0.0)	7
+2	(8.0,0.0)	8
+DROP TABLE tt;
+#
+# With nothing left holding a VDF, the extension can be uninstalled
+#
+UNINSTALL EXTENSION vsql_complex;
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE EXTENSION_NAME = 'vsql_complex';
+COUNT(*)
+0
