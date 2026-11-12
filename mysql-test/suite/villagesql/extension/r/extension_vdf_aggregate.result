@@ -14,6 +14,11 @@ INSERT INTO t1 VALUES
 (3, 30, 'B'),
 (4, 40, 'B'),
 (5, 50, 'B');
+SELECT CHARSET(agg_vdf_ext.vdf_concat(category)) AS result_charset,
+COLLATION(agg_vdf_ext.vdf_concat(category)) AS result_collation,
+COERCIBILITY(agg_vdf_ext.vdf_concat(category)) AS coercibility FROM t1;
+result_charset	result_collation	coercibility
+utf8mb4	utf8mb4_bin	4
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t1
 GROUP BY category

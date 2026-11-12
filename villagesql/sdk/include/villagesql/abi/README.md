@@ -59,6 +59,45 @@ argument arrives exactly as the caller supplied it, whatever its charset, and a
 BINARY result is labelled `binary`. Use it for data that is not text, such as a
 hash or a serialized structure.
 
+### SQL result collation
+
+Scalar and aggregate VDF STRING results use the fixed `utf8mb4_bin` collation,
+independent of argument and connection collations. This includes functions with
+mixed input collations or no text arguments. The server does not automatically
+convert the returned UTF-8 text back to an input's charset.
+
+When `utf8mb4_bin` is used for comparison, case and accents are significant:
+`'A'` differs from `'a'`, and `'e'` differs from `'é'`. Trailing spaces are ignored
+in equality comparisons (`'a' = 'a '`), grouping, and DISTINCT. This does not
+remove spaces from the returned text. Trailing spaces remain significant in LIKE.
+
+The result has COERCIBLE derivation (4), the same collation precedence as a
+string literal. Normal MySQL collation aggregation still applies: for example,
+a column's collation has stronger precedence. A fixed result collation therefore
+does not force every comparison involving the result to use `utf8mb4_bin`.
+
+Callers can apply COLLATE to the result to select different comparison rules.
+For a STRING-returning VDF named `my_extension.transform`, for example:
+
+```sql
+SELECT my_extension.transform('Hello') COLLATE utf8mb4_0900_ai_ci;
+```
+
+Applying COLLATE to an argument does not select the VDF result's collation.
+
+### Assignment and client conversion
+
+The result's internal charset is separate from its destination. MySQL converts
+text to an existing column's charset on assignment and to `character_set_results`
+when sending it to the client. Setting `character_set_results` to NULL or binary
+disables that client conversion. Extensions must still return UTF-8; they should
+not convert STRING results to the client's charset themselves. Characters that
+the destination charset cannot represent cannot be preserved by conversion.
+
+CREATE TABLE AS SELECT inherits the expression's charset/collation unless
+overridden. Once stored, the value has column collation precedence rather than
+the VDF expression's COERCIBLE precedence.
+
 ## Constant arguments in prerun
 
 From `VEF_PROTOCOL_4`, a prerun sees the value of each constant argument in

@@ -137,6 +137,50 @@ text8_hooked	STRING	["TEXT8"]
 TEXT8::compare	INT	["TEXT8", "TEXT8"]
 TEXT8::from_string	TEXT8	["STRING"]
 TEXT8::to_string	STRING	["TEXT8"]
+SELECT COLLATION(vdf_sb.str_echo('a' COLLATE utf8mb4_0900_ai_ci)) AS result_collation,
+COERCIBILITY(vdf_sb.str_echo('a')) AS coercibility;
+result_collation	coercibility
+utf8mb4_bin	4
+SELECT vdf_sb.str_echo('A') = vdf_sb.str_echo('a') AS case_equal,
+vdf_sb.str_echo('e') = vdf_sb.str_echo('é') AS accent_equal,
+vdf_sb.str_echo('a') = vdf_sb.str_echo('a ') AS space_equal,
+vdf_sb.str_echo('a') LIKE vdf_sb.str_echo('a ') AS space_like,
+HEX(vdf_sb.str_echo('a ')) AS preserved_spaces;
+case_equal	accent_equal	space_equal	space_like	preserved_spaces
+0	0	1	0	6120
+CREATE TABLE result_policy (s VARCHAR(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci);
+INSERT INTO result_policy VALUES ('a'), ('A'), ('a '), ('é'), ('e');
+SELECT s, s = vdf_sb.str_echo('A') AS column_equal,
+s = (vdf_sb.str_echo('A') COLLATE utf8mb4_bin) AS explicit_equal
+FROM result_policy ORDER BY HEX(s);
+s	column_equal	explicit_equal
+A	1	1
+a	1	0
+a 	0	0
+e	0	0
+é	0	0
+SELECT COUNT(DISTINCT vdf_sb.str_echo(s)) AS distinct_values FROM result_policy;
+distinct_values
+4
+SELECT MIN(HEX(s)) AS representative, COUNT(*) AS members
+FROM result_policy GROUP BY vdf_sb.str_echo(s) ORDER BY representative;
+representative	members
+41	1
+61	2
+65	1
+C3A9	1
+CREATE TABLE materialized_policy AS SELECT vdf_sb.str_echo(s) AS s FROM result_policy;
+SELECT DISTINCT CHARSET(s), COLLATION(s), COERCIBILITY(s) FROM materialized_policy;
+CHARSET(s)	COLLATION(s)	COERCIBILITY(s)
+utf8mb4	utf8mb4_bin	2
+SELECT HEX(s) FROM materialized_policy ORDER BY HEX(s);
+HEX(s)
+41
+61
+6120
+65
+C3A9
+DROP TABLE materialized_policy, result_policy;
 #
 # Cleanup
 #
