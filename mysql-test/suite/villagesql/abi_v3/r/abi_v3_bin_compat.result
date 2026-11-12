@@ -143,6 +143,8 @@ FF	42
 DROP TABLE t_bin;
 CREATE TABLE t_blob (id INT PRIMARY KEY, v abi_v3_test.FAULT_BLOB);
 INSERT INTO t_blob VALUES (1, _binary 'OK literal');
+INSERT INTO t_blob VALUES (4, 0x4F4B20686578),
+(5, b'01001111010010110010000001100010');
 CREATE TABLE t_bin (id INT PRIMARY KEY, b VARBINARY(16));
 INSERT INTO t_bin VALUES (2, 'OK column');
 INSERT INTO t_blob SELECT id, b FROM t_bin;
@@ -155,6 +157,8 @@ id	v
 1	OK literal
 2	OK column
 3	OK param
+4	OK hex
+5	OK b
 SET @id = NULL, @v = NULL;
 DROP TABLE t_blob, t_bin;
 UNINSTALL EXTENSION abi_v3_test;
@@ -198,6 +202,10 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
   `v` abi_v3_test.FAULT_BLOB DEFAULT NULL,
   PRIMARY KEY (`id`)
 )
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (test.t_blob)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Xid	#	#	COMMIT /* XID */
 #	#	Query	#	#	BEGIN
 #	#	Table_map	#	#	table_id: # (test.t_blob)
 #	#	Write_rows	#	#	table_id: # flags: STMT_END_F

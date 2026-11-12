@@ -1,0 +1,47 @@
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension custom_text_literal using SDK...
+Created custom_text_literal.veb
+INSTALL EXTENSION custom_text_literal;
+CREATE TABLE t (id INT PRIMARY KEY, v custom_text_literal.TEXT16);
+INSERT INTO t VALUES (1, 'O''Reilly'), (2, 'a\\b'), (3, 'ab');
+SELECT id, v FROM t ORDER BY id;
+id	v
+1	O'Reilly
+2	a\b
+3	ab
+# A string literal with a quote
+CREATE VIEW v1 AS SELECT id FROM t WHERE v = 'O''Reilly';
+SHOW CREATE VIEW v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t`.`id` AS `id` from `t` where (`t`.`v` = 'O\'Reilly')	utf8mb4	utf8mb4_0900_ai_ci
+SELECT * FROM v1;
+id
+1
+# A string literal with a backslash
+CREATE VIEW v2 AS SELECT id FROM t WHERE v = 'a\\b';
+SHOW CREATE VIEW v2;
+View	Create View	character_set_client	collation_connection
+v2	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v2` AS select `t`.`id` AS `id` from `t` where (`t`.`v` = 'a\\b')	utf8mb4	utf8mb4_0900_ai_ci
+SELECT * FROM v2;
+id
+2
+# A hex literal with a quote: 'O''Reilly' is 0x4F275265696C6C79
+CREATE VIEW v3 AS SELECT id FROM t WHERE v = 0x4F275265696C6C79;
+SHOW CREATE VIEW v3;
+View	Create View	character_set_client	collation_connection
+v3	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v3` AS select `t`.`id` AS `id` from `t` where (`t`.`v` = 'O\'Reilly')	utf8mb4	utf8mb4_0900_ai_ci
+SELECT * FROM v3;
+id
+1
+# A hex literal with a backslash: 'a\b' is 0x615C62
+CREATE VIEW v4 AS SELECT id FROM t WHERE v = 0x615C62;
+SHOW CREATE VIEW v4;
+View	Create View	character_set_client	collation_connection
+v4	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v4` AS select `t`.`id` AS `id` from `t` where (`t`.`v` = 'a\\b')	utf8mb4	utf8mb4_0900_ai_ci
+SELECT * FROM v4;
+id
+2
+DROP VIEW IF EXISTS v1, v2, v3, v4;
+DROP TABLE t;
+UNINSTALL EXTENSION custom_text_literal;

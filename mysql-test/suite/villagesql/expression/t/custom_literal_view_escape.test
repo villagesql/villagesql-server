@@ -1,0 +1,51 @@
+# A view stores a custom-type literal in the type's text form. That text must
+# be escaped as a SQL string literal, so the view parses and returns the same
+# rows. Covers a string literal and a hex literal, with a quote and a
+# backslash in the value.
+
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $extension_name = custom_text_literal
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/custom_text_literal.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION custom_text_literal;
+
+CREATE TABLE t (id INT PRIMARY KEY, v custom_text_literal.TEXT16);
+INSERT INTO t VALUES (1, 'O''Reilly'), (2, 'a\\b'), (3, 'ab');
+SELECT id, v FROM t ORDER BY id;
+
+--disable_abort_on_error
+
+--echo # A string literal with a quote
+CREATE VIEW v1 AS SELECT id FROM t WHERE v = 'O''Reilly';
+SHOW CREATE VIEW v1;
+SELECT * FROM v1;
+
+--echo # A string literal with a backslash
+CREATE VIEW v2 AS SELECT id FROM t WHERE v = 'a\\b';
+SHOW CREATE VIEW v2;
+SELECT * FROM v2;
+
+--echo # A hex literal with a quote: 'O''Reilly' is 0x4F275265696C6C79
+CREATE VIEW v3 AS SELECT id FROM t WHERE v = 0x4F275265696C6C79;
+SHOW CREATE VIEW v3;
+SELECT * FROM v3;
+
+--echo # A hex literal with a backslash: 'a\b' is 0x615C62
+CREATE VIEW v4 AS SELECT id FROM t WHERE v = 0x615C62;
+SHOW CREATE VIEW v4;
+SELECT * FROM v4;
+
+--enable_abort_on_error
+
+DROP VIEW IF EXISTS v1, v2, v3, v4;
+DROP TABLE t;
+UNINSTALL EXTENSION custom_text_literal;

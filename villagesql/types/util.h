@@ -26,6 +26,7 @@
 #include "lex_string.h"
 #include "my_inttypes.h"
 #include "sql/dd/string_type.h"
+#include "sql/enum_query_type.h"
 #include "sql/field.h"
 #include "sql/sql_array.h"
 #include "sql_string.h"
@@ -285,9 +286,15 @@ inline std::optional<size_t> TryComputeHash(const T &obj, const uchar *data,
 // Inject custom type context into a string Item and encode it for comparison
 // This is used to "poison" string literals with custom type information when
 // they are compared against custom type columns (e.g., WHERE col = '(1,2)')
-// Only affects STRING_ITEM types without existing type context
+// Only affects STRING_ITEM and HEX_BIN_ITEM types without existing type context
 // Returns false on success, true on error (my_error already called if needed)
 extern bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc);
+
+// Append the literal a custom type value encoded by InjectAndEncodeCustomType
+// prints as: its text form, quoted and escaped, so the printed query parses
+// back to the same value.
+extern void PrintEncodedLiteral(const TypeContext &tc, const String &encoded,
+                                enum_query_type query_type, String *out);
 
 // Template version that works with both Item and Field types
 // Both Item and Field have has_type_context() and get_type_context() methods
@@ -414,6 +421,12 @@ extern FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to);
 // context, and the source produces a string result.
 extern type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
                                                            Field *to_field);
+
+// Encode and store a string value into a custom type field, from its binary
+// form or its text form as EncodeByForm() decides. Returns appropriate
+// type_conversion_status for the result.
+extern type_conversion_status EncodeAndStoreStringToCustomField(
+    const String &value, Field *field);
 
 // Encode and store a string value into a custom type field during EXECUTE,
 // reading the parameter's bytes in the charset they arrived in. Returns

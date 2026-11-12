@@ -51,11 +51,14 @@ SELECT HEX(b), abi_v3_test.test_result_kind(b) AS result FROM t_bin ORDER BY b;
 DROP TABLE t_bin;
 
 # Its custom type keeps receiving a value in the binary charset in its encode
-# from text, as its bytes, as it did when it was built: a _binary string, a
-# VARBINARY column and a binary prepared-statement parameter. FAULT_BLOB
-# accepts a value that starts with 'OK '.
+# from text, as its bytes, as it did when it was built: a _binary string, a hex
+# and a bit literal, a VARBINARY column and a binary prepared-statement
+# parameter. FAULT_BLOB accepts a value that starts with 'OK '.
 CREATE TABLE t_blob (id INT PRIMARY KEY, v abi_v3_test.FAULT_BLOB);
 INSERT INTO t_blob VALUES (1, _binary 'OK literal');
+# 'OK hex', and 'OK b' as 32 bits
+INSERT INTO t_blob VALUES (4, 0x4F4B20686578),
+                          (5, b'01001111010010110010000001100010');
 CREATE TABLE t_bin (id INT PRIMARY KEY, b VARBINARY(16));
 INSERT INTO t_bin VALUES (2, 'OK column');
 INSERT INTO t_blob SELECT id, b FROM t_bin;
