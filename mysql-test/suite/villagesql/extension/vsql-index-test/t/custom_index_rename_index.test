@@ -25,6 +25,12 @@ ALTER TABLE t1 ADD INDEX i_a (b) USING EXTENDED(dummy_index_hnsw);
 --source include/villagesql/query_custom_indexes.inc
 SHOW CREATE TABLE t1;
 
+--echo # A rename that only changes the case keeps the name as typed.
+ALTER TABLE t1 RENAME INDEX i_r TO I_R;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 RENAME INDEX I_R TO i_r;
+
 --echo # Also when the ALTER rebuilds the table.
 ALTER TABLE t1 RENAME INDEX i_r TO i_s, ALGORITHM=COPY;
 --source include/villagesql/query_custom_indexes.inc

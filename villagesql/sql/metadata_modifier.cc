@@ -546,7 +546,11 @@ bool Metadata_modifier::rename_indexes_table(
       if (it != index_renames->end()) new_index_name = it->second;
     }
     IndexKey new_key(new_db, new_table, new_index_name);
-    if (new_key.str() == old_index->key().str()) continue;
+    // A rename that only changes the case of the index name keeps the key, but
+    // the stored name has to follow it to match the data dictionary.
+    if (new_key.str() == old_index->key().str() &&
+        new_index_name == old_index->index_name())
+      continue;
 
     // index_id stays, so the index's custom_index_columns rows still apply.
     IndexEntry new_entry(
