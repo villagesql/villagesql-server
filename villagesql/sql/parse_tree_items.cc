@@ -261,21 +261,21 @@ bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
   return true;
 }
 
-constexpr std::string_view kSeparator = ", ";
-constexpr std::string_view kSuffixPrefix = ", and ";
-constexpr std::string_view kSuffixSuffix = " more methods";
+constexpr std::string_view separator = ", ";
+constexpr std::string_view suffixPrefix = ", and ";
+constexpr std::string_view suffixSuffix = " more methods";
 
 // Length of ", and N more methods", or 0 when nothing is omitted.
 size_t omitted_suffix_len(size_t omitted_count) {
   if (omitted_count == 0) return 0;
-  return kSuffixPrefix.size() + std::to_string(omitted_count).size() +
-         kSuffixSuffix.size();
+  return suffixPrefix.size() + std::to_string(omitted_count).size() +
+         suffixSuffix.size();
 }
 
 // Length of the first `name_count` names joined with the separator.
 size_t joined_len(const std::vector<std::string> &names, size_t name_count) {
   if (name_count == 0) return 0;
-  size_t total_len = kSeparator.size() * (name_count - 1);
+  size_t total_len = separator.size() * (name_count - 1);
   for (size_t index = 0; index < name_count; ++index) {
     total_len += names[index].size();
   }
@@ -287,7 +287,7 @@ std::string join_first(const std::vector<std::string> &names,
   std::string result;
   result.reserve(joined_len(names, name_count));
   for (size_t index = 0; index < name_count; ++index) {
-    if (index > 0) result += kSeparator;
+    if (index > 0) result += separator;
     result += names[index];
   }
   return result;
@@ -304,7 +304,7 @@ size_t max_names_that_fit(const std::vector<std::string> &names,
   for (size_t candidate_count = 1; candidate_count <= total_names;
        ++candidate_count) {
     const size_t newest_name_len = names[candidate_count - 1].size();
-    const size_t separator_len = candidate_count > 1 ? kSeparator.size() : 0;
+    const size_t separator_len = candidate_count > 1 ? separator.size() : 0;
     used_len += separator_len + newest_name_len;
 
     const size_t omitted_count = total_names - candidate_count;
@@ -335,6 +335,6 @@ std::string join_names_bounded(const std::vector<std::string> &names,
   }
 
   const size_t omitted_count = total_names - shown_count;
-  return join_first(names, shown_count) + std::string(kSuffixPrefix) +
-         std::to_string(omitted_count) + std::string(kSuffixSuffix);
+  return join_first(names, shown_count) + std::string(suffixPrefix) +
+         std::to_string(omitted_count) + std::string(suffixSuffix);
 }
