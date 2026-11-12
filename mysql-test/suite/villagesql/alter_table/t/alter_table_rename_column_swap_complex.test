@@ -1,0 +1,38 @@
+# Renames of two custom columns in one ALTER TABLE that swap or chain their
+# names. Each RENAME COLUMN refers to the names before the ALTER. The custom
+# column rows must follow the columns, so each column keeps its type.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, c1 COMPLEX, c2 COMPLEX2);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', '(3.0,4.0)');
+--source include/villagesql/query_custom_columns.inc
+
+--echo # Two custom columns swap names.
+ALTER TABLE t1 RENAME COLUMN c1 TO c2, RENAME COLUMN c2 TO c1;
+--source include/villagesql/query_custom_columns.inc
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+--echo # And back.
+ALTER TABLE t1 RENAME COLUMN c1 TO c2, RENAME COLUMN c2 TO c1;
+--source include/villagesql/query_custom_columns.inc
+SELECT * FROM t1;
+
+--echo # A chain of renames, where the first rename takes the name the second
+--echo # one gives up.
+ALTER TABLE t1 RENAME COLUMN c1 TO c2, RENAME COLUMN c2 TO c3;
+--source include/villagesql/query_custom_columns.inc
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+--echo # A chain back with CHANGE COLUMN.
+ALTER TABLE t1 CHANGE COLUMN c3 c2 COMPLEX2, CHANGE COLUMN c2 c1 COMPLEX;
+--source include/villagesql/query_custom_columns.inc
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/uninstall_complex_extension.inc
