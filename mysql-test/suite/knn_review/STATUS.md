@@ -14,6 +14,8 @@ Review suite for the custom-index work on deb/custom-index/42 (b9315d6).
       python3 mysql-test/suite/knn_review/knn_review_gen.py
 
   Its KNOWN_ISSUES dict decides which tests skip for which issue.
+- Coverage: `COVERAGE.md`, one row per test (what it checks, index, debug,
+  restart, known issue). The generator writes it with the tests.
 - The tests named `hnsw_*` need vsql-vector deb/hnsw_index/33 (ce25b42): build
   it and put `vsql_vector.veb` in the server's veb directory. All the others
   need only the in-tree test extension.
