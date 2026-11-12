@@ -1,0 +1,140 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+value COMPLEX
+);
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+value DOUBLE
+);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t2 VALUES (2, '3.0');
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	value	vsql_complex	0.0.1	COMPLEX	{}
+# Swap t1 and t2 through a temporary name.
+RENAME TABLE t1 TO tmp, t2 TO t1, tmp TO t2;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t2	value	vsql_complex	0.0.1	COMPLEX	{}
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `value` double DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	value
+2	3
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t2;
+id	value
+1	(1,2)
+# Rename t2 twice in one statement.
+RENAME TABLE t2 TO t3, t3 TO t4;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t4	value	vsql_complex	0.0.1	COMPLEX	{}
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `id` int NOT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t4;
+id	value
+1	(1,2)
+# Swap two tables that both have a custom column of the same name.
+CREATE TABLE t5 (
+id INT PRIMARY KEY,
+value COMPLEX
+);
+INSERT INTO t5 VALUES (5, '(5.0,6.0)');
+RENAME TABLE t4 TO tmp, t5 TO t4, tmp TO t5;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t4	value	vsql_complex	0.0.1	COMPLEX	{}
+test	t5	value	vsql_complex	0.0.1	COMPLEX	{}
+SELECT * FROM t4;
+id	value
+5	(5,6)
+SELECT * FROM t5;
+id	value
+1	(1,2)
+DROP TABLE t1, t4, t5;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+# Swap a table with two custom columns and a plain one with a table
+# where c1 is a plain column and only c2 is custom.
+CREATE TABLE t6 (
+id INT PRIMARY KEY,
+c1 COMPLEX,
+c2 COMPLEX,
+name VARCHAR(10)
+);
+CREATE TABLE t7 (
+id INT PRIMARY KEY,
+c1 DOUBLE,
+c2 COMPLEX
+);
+INSERT INTO t6 VALUES (6, '(1.0,1.0)', '(2.0,2.0)', 'six');
+INSERT INTO t7 VALUES (7, 3.5, '(4.0,4.0)');
+RENAME TABLE t6 TO tmp, t7 TO t6, tmp TO t7;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t6	c2	vsql_complex	0.0.1	COMPLEX	{}
+test	t7	c1	vsql_complex	0.0.1	COMPLEX	{}
+test	t7	c2	vsql_complex	0.0.1	COMPLEX	{}
+SHOW CREATE TABLE t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `id` int NOT NULL,
+  `c1` double DEFAULT NULL,
+  `c2` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t6;
+id	c1	c2
+7	3.5	(4,4)
+SHOW CREATE TABLE t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `id` int NOT NULL,
+  `c1` vsql_complex.COMPLEX DEFAULT NULL,
+  `c2` vsql_complex.COMPLEX DEFAULT NULL,
+  `name` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t7;
+id	c1	c2	name
+6	(1,1)	(2,2)	six
+# A chain whose last pair fails renames nothing.
+CREATE TABLE t8 (id INT PRIMARY KEY);
+RENAME TABLE t6 TO tmp, t7 TO t6, tmp TO t8;
+ERROR 42S01: Table 't8' already exists
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t6	c2	vsql_complex	0.0.1	COMPLEX	{}
+test	t7	c1	vsql_complex	0.0.1	COMPLEX	{}
+test	t7	c2	vsql_complex	0.0.1	COMPLEX	{}
+SHOW TABLES;
+Tables_in_test
+t6
+t7
+t8
+SELECT * FROM t6;
+id	c1	c2
+7	3.5	(4,4)
+SELECT * FROM t7;
+id	c1	c2	name
+6	(1,1)	(2,2)	six
+DROP TABLE t6, t7, t8;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
