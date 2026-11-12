@@ -17,6 +17,7 @@
 #ifndef VILLAGESQL_SQL_METADATA_MODIFIER_H_
 #define VILLAGESQL_SQL_METADATA_MODIFIER_H_
 
+#include <map>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -206,12 +207,14 @@ class Metadata_modifier {
       const std::unordered_set<std::string> *skip_columns = nullptr);
 
   // Update the table name associated with custom indexes from old_name to
-  // new_name. Canonical index names in skip_indexes are left alone: the caller
-  // stages their removal under old_name.
+  // new_name, and rename the indexes in index_renames (keyed by canonical old
+  // index name) to the mapped names. Canonical index names in skip_indexes are
+  // left alone: the caller stages their removal under old_name.
   // Returns false on success, true on error.
   bool rename_indexes_table(
       THD *thd, Table_name old_name, Table_name new_name,
-      const std::unordered_set<std::string> *skip_indexes = nullptr);
+      const std::unordered_set<std::string> *skip_indexes = nullptr,
+      const std::map<std::string, std::string> *index_renames = nullptr);
 
   // Modify column entries based on alter_info. table_ref is the table being
   // altered.

@@ -38,6 +38,19 @@ RENAME TABLE r3 TO tmp, t2 TO r3, tmp TO t2;
 SHOW CREATE TABLE r3;
 SHOW CREATE TABLE t2;
 
+--echo # A swap of two tables whose indexes have the same name, followed by a
+--echo # rename of one of the swapped tables in the same statement.
+CREATE TABLE s1 (id INT PRIMARY KEY, v dummy_type_vector,
+  INDEX i (v) USING EXTENDED(dummy_index_hnsw));
+CREATE TABLE s2 (id INT PRIMARY KEY, v dummy_type_vector,
+  INDEX i (v dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw));
+RENAME TABLE s1 TO tmp, s2 TO s1, tmp TO s2, s2 TO s3;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE s1;
+SHOW CREATE TABLE s3;
+DROP TABLE s1, s3;
+--source include/villagesql/query_custom_indexes.inc
+
 --echo # RENAME TABLE to another database.
 CREATE DATABASE db2;
 RENAME TABLE t2 TO db2.t2;
