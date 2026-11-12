@@ -1,0 +1,11 @@
+# A from_binary that returns without setting an outcome gets the SDK's default
+# encode warning, which names the number of bytes it was given rather than
+# quoting them as text. vsql_test_only's PVEC has such a from_binary. On a
+# constant, the server reports the warning while it infers the type's params.
+
+INSTALL EXTENSION vsql_test_only;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_test_only.PVEC::from_binary(0x0102030405) AS v;
+
+UNINSTALL EXTENSION vsql_test_only;

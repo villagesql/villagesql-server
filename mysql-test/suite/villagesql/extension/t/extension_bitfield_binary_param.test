@@ -1,8 +1,7 @@
 # A deterministic VDF returning a parameterized type is pre-executed on a
 # constant argument to infer the return type's parameters, reading the
-# constant as utf8mb4 text. Only a STRING parameter is pre-executed: a
-# constant for a BINARY parameter is not text, and reading it as utf8mb4 would
-# reject bytes such as 0xFF.
+# constant as the VDF reads it: a constant for a BINARY parameter keeps its
+# bytes, even ones such as 0xFF that are not valid utf8mb4.
 
 INSTALL EXTENSION vsql_bitfield_test;
 

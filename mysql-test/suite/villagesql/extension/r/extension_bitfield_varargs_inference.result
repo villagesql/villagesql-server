@@ -1,0 +1,5 @@
+INSTALL EXTENSION vsql_bitfield_test;
+SELECT vsql_bitfield_test.bitfield_from_args('A') IS NOT NULL AS computed;
+computed
+1
+UNINSTALL EXTENSION vsql_bitfield_test;
