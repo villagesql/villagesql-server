@@ -36,6 +36,8 @@ Review suite for the custom-index work on deb/custom-index/42 (b9315d6).
   - KNN-28: rollback at recovery of a prepared transaction (binary log on)
     that changed an HNSW index fails: UPDATE and DELETE assert, a rolled-back
     INSERT stays in KNN results. Deb is checking (startup sequencing).
+  - KNN-29: after a restart, purge leaves the HNSW entries of committed
+    deletes and vector updates; locking reads then return too few rows
 - Known behaviour, tuning planned: KNN-27 (with HNSW, after purge of
   scattered deletes, a KNN query on rows on a line returns wrong rows).
 - Fixed in /42: KNN-25 (crash recovery asserted on a PK mapping B-tree redo
@@ -58,11 +60,12 @@ Purge timing:
 
 Restart and recovery (these need vsql-vector; the test extension keeps its
 entries in memory, so a restart empties its index):
-- Purge after a restart. Commit deletes, restart before purge runs, then purge.
-  The delete-marked entries have to survive the restart and be removed
-  afterwards.
-- An XA transaction prepared before a restart, then XA RECOVER and XA COMMIT or
-  XA ROLLBACK. rollback/xa covers this without a restart.
+- Restart without the extension. Remove vsql_vector.veb, kill with an open
+  transaction that changed an HNSW index, restart. The rollback has to fail
+  cleanly or wait, not assert or skip the undo.
+- Crash during DDL on an HNSW index (CREATE INDEX, DROP INDEX, RENAME TABLE),
+  using the ddl_log_crash_* debug points. Table, index and victionary rows
+  have to agree afterwards.
 
 Locking and isolation:
 - READ UNCOMMITTED. A KNN read sees another session's uncommitted vector update
