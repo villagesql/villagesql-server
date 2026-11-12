@@ -141,50 +141,6 @@ static void emit_type_method_error(std::string_view ext_name,
       MYF(0), type_name.c_str(), method_name.c_str());
 }
 
-std::string join_names_bounded(const std::vector<std::string> &names,
-                               size_t budget) {
-  if (names.empty() || budget == 0) return {};
-
-  const size_t n = names.size();
-
-  auto suffix_len = [](size_t omitted) -> size_t {
-    return omitted == 0 ? 0 : 2 + 4 + std::to_string(omitted).size() + 14;
-  };
-
-  size_t total = 2 * (n - 1);
-  for (const auto &s : names) total += s.size();
-  if (total <= budget) {
-    std::string out;
-    out.reserve(total);
-    for (size_t i = 0; i < n; i++) {
-      if (i) out += ", ";
-      out += names[i];
-    }
-    return out;
-  }
-
-  size_t used = 0;
-  size_t best_k = 0;
-  for (size_t k = 1; k <= n; k++) {
-    used += (k > 1 ? 2 : 0) + names[k - 1].size();
-    if (used + suffix_len(n - k) > budget) break;
-    best_k = k;
-  }
-
-  if (best_k == 0) {
-    std::string fallback = std::to_string(n) + " not listed";
-    return fallback.size() <= budget ? fallback : std::string{};
-  }
-
-  std::string out;
-  for (size_t i = 0; i < best_k; i++) {
-    if (i) out += ", ";
-    out += names[i];
-  }
-  out += ", and " + std::to_string(n - best_k) + " more methods";
-  return out;
-}
-
 // Intrinsic default function should not be callable. For a parameterized
 // types, the parameters are needed to resolve the default value.
 // The type's parameters are unknown during SQL call. Thus, SQL call is
@@ -303,4 +259,82 @@ bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
   }
 
   return true;
+}
+
+constexpr std::string_view kSeparator = ", ";
+constexpr std::string_view kSuffixPrefix = ", and ";
+constexpr std::string_view kSuffixSuffix = " more methods";
+
+// Length of ", and N more methods", or 0 when nothing is omitted.
+size_t omitted_suffix_len(size_t omitted_count) {
+  if (omitted_count == 0) return 0;
+  return kSuffixPrefix.size() + std::to_string(omitted_count).size() +
+         kSuffixSuffix.size();
+}
+
+// Length of the first `name_count` names joined with the separator.
+size_t joined_len(const std::vector<std::string> &names, size_t name_count) {
+  if (name_count == 0) return 0;
+  size_t total_len = kSeparator.size() * (name_count - 1);
+  for (size_t index = 0; index < name_count; ++index) {
+    total_len += names[index].size();
+  }
+  return total_len;
+}
+
+std::string join_first(const std::vector<std::string> &names,
+                       size_t name_count) {
+  std::string result;
+  result.reserve(joined_len(names, name_count));
+  for (size_t index = 0; index < name_count; ++index) {
+    if (index > 0) result += kSeparator;
+    result += names[index];
+  }
+  return result;
+}
+
+// Largest number of leading names that fit in `budget` together with the
+// "and N more methods" suffix.
+size_t max_names_that_fit(const std::vector<std::string> &names,
+                          size_t budget) {
+  const size_t total_names = names.size();
+  size_t used_len = 0;
+  size_t best_count = 0;
+
+  for (size_t candidate_count = 1; candidate_count <= total_names;
+       ++candidate_count) {
+    const size_t newest_name_len = names[candidate_count - 1].size();
+    const size_t separator_len = candidate_count > 1 ? kSeparator.size() : 0;
+    used_len += separator_len + newest_name_len;
+
+    const size_t omitted_count = total_names - candidate_count;
+    if (used_len + omitted_suffix_len(omitted_count) > budget) break;
+
+    best_count = candidate_count;
+  }
+  return best_count;
+}
+
+std::string join_names_bounded(const std::vector<std::string> &names,
+                               size_t budget) {
+  if (names.empty() || budget == 0) return {};
+
+  const size_t total_names = names.size();
+
+  // Everything fits: no truncation needed.
+  if (joined_len(names, total_names) <= budget) {
+    return join_first(names, total_names);
+  }
+
+  const size_t shown_count = max_names_that_fit(names, budget);
+
+  // Not even one name fits alongside the suffix.
+  if (shown_count == 0) {
+    std::string fallback = std::to_string(total_names) + " not listed";
+    return fallback.size() <= budget ? fallback : std::string{};
+  }
+
+  const size_t omitted_count = total_names - shown_count;
+  return join_first(names, shown_count) + std::string(kSuffixPrefix) +
+         std::to_string(omitted_count) + std::string(kSuffixSuffix);
 }
