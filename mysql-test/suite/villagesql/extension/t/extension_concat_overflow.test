@@ -1,4 +1,4 @@
-# Test for memory corruption / exhaustion previously documented #1332
+# Test ba_concat_all results larger than the requested output buffer.
 # Underlying math is that the default output buffer is 1024 bytes.
 # Four hundred COMPLEX objects needs output buffer of 6400 bytes.
 # Goal is to probe various buffer needs below and above 1024.
