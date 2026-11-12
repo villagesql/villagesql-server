@@ -76,6 +76,9 @@ class vdf_handler {
   vef_invalue_t **m_invalues_ptrs{nullptr};
   char *m_result_buffer{nullptr};
   size_t m_result_buffer_size{0};
+  // The result buffer as fix_fields left it, allocated with the statement.
+  char *m_resolved_result_buffer{nullptr};
+  size_t m_resolved_result_buffer_size{0};
   char *m_error_msg{nullptr};
   bool m_active{false};
   // True once fix_fields has run prerun, or the function has none. False only

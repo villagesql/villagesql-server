@@ -450,6 +450,9 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     }
   }
 
+  m_resolved_result_buffer = m_result_buffer;
+  m_resolved_result_buffer_size = m_result_buffer_size;
+
   // cleanup() runs postrun only if prerun had its turn here.
   m_active = !defer_prerun;
   m_prerun_ran = !defer_prerun;
@@ -499,6 +502,10 @@ void vdf_handler::accumulate(bool *null_value) {
 void vdf_handler::cleanup() {
   if (m_active) RunPostrun();
   m_active = false;
+  // A buffer grown at row time is freed with the execution's memory, and a
+  // prepared statement or stored routine runs this handler again.
+  m_result_buffer = m_resolved_result_buffer;
+  m_result_buffer_size = m_resolved_result_buffer_size;
 }
 
 void vdf_handler::RunPostrun() {
