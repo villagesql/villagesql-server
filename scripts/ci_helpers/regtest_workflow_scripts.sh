@@ -43,6 +43,11 @@ check "classify: leading whitespace"      "kind=run,command=testall,"          "
 check "classify: trailing args"           "kind=run,command=testall,"          "$(out '/testall please' MEMBER)"
 check "classify: case-insensitive"        "kind=run,command=testall,"          "$(out '/TestAll' MEMBER)"
 check "classify: empty body"              "kind=ignore,"                       "$(out '' MEMBER)"
+# GitHub submits comment bodies with CRLF line endings. CR is not in the
+# default IFS, so before the IFS fix a lone "/testextensions" was tokenized as
+# "/testextensions\r", matched nothing, and was silently ignored.
+check "classify: CRLF body"               "kind=run,command=testextensions,"   "$(out "$(printf '/testextensions\r\n')" MEMBER)"
+check "classify: CRLF /help"              "kind=help,"                         "$(out "$(printf '/help\r\n')" MEMBER)"
 
 # --- find_running -----------------------------------------------------------
 RUNS='{"workflow_runs":[
