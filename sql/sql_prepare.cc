@@ -2457,8 +2457,8 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
 
   if (orig_param_array != nullptr) {
     copy_parameter_types(orig_param_array);
-    villagesql::vdf::MaybeCopyPsParamStringValues(
-        m_arena.item_list(), m_param_array, orig_param_array, m_param_count);
+    villagesql::vdf::MaybeCopyPsParamValues(m_arena.item_list(), m_param_array,
+                                            orig_param_array, m_param_count);
   }
   /*
    The only case where we should have items in the thd->item_list is

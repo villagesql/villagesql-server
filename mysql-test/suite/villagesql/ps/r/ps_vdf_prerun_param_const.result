@@ -1,0 +1,55 @@
+Creating extension state_and_varargs using SDK...
+Created state_and_varargs.veb
+INSTALL EXTENSION state_and_varargs;
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(?) AS param';
+SET @p = 5;
+EXECUTE s USING @p;
+param
+const INT 5
+SET @p = NULL;
+EXECUTE s USING @p;
+param
+const STRING NULL
+SET @p = 'abc';
+EXECUTE s USING @p;
+param
+const STRING 'abc'
+SET @p = 1.5e0;
+EXECUTE s USING @p;
+param
+const REAL 1.5
+# A DECIMAL's digits are copied to the reprepared ? before prerun
+SET @p = 123.25;
+EXECUTE s USING @p;
+param
+const STRING '123.25'
+SET @p = -7.5;
+EXECUTE s USING @p;
+param
+const STRING '-7.5'
+DEALLOCATE PREPARE s;
+# The same with the ? inside an expression
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(? * 2) AS param';
+SET @p = 1.25;
+EXECUTE s USING @p;
+param
+const STRING '2.500000000000000000000000000000'
+SET @p = 3;
+EXECUTE s USING @p;
+param
+const INT 6
+DEALLOCATE PREPARE s;
+# The same as a NULL literal: int_sum_all accepts INT or a constant NULL
+INSTALL EXTENSION vsql_test_only;
+SELECT vsql_test_only.int_sum_all(1, NULL, 2) AS total;
+total
+3
+PREPARE s FROM 'SELECT vsql_test_only.int_sum_all(1, ?, 2) AS total';
+SET @p = NULL;
+EXECUTE s USING @p;
+total
+3
+DEALLOCATE PREPARE s;
+SET @p = NULL;
+UNINSTALL EXTENSION vsql_test_only;
+UNINSTALL EXTENSION state_and_varargs;

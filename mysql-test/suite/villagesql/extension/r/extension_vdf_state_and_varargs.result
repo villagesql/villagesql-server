@@ -39,8 +39,8 @@ indexed
 1:hello   world123
 2:hello   abcdefgh
 # prerun_const: prerun sees each constant argument's value as the VDF
-# will receive it. A NULL literal is a STRING NULL; a column, a
-# subquery and a ? parameter are not constants. A subquery without
+# will receive it. A NULL literal is a STRING NULL; a column and a
+# subquery are not constants, a ? parameter is. A subquery without
 # tables, such as (SELECT 1), is folded into its value first.
 SELECT state_and_varargs.prerun_const(42) AS int_lit,
 state_and_varargs.prerun_const(1 + 2) AS int_expr,
@@ -65,7 +65,7 @@ PREPARE s_const FROM 'SELECT state_and_varargs.prerun_const(?) AS param';
 SET @n = NULL;
 EXECUTE s_const USING @n;
 param
-not const
+const STRING NULL
 DEALLOCATE PREPARE s_const;
 SELECT state_and_varargs.prerun_const(_binary x'FF') AS bad_utf8
 FROM test_bytearray WHERE id = 0;

@@ -623,8 +623,8 @@ typedef struct {
   // protocol >= VEF_PROTOCOL_4
   // For each argument: its value if it is a constant, NULL otherwise. A
   // constant is an argument the server can evaluate before the first row,
-  // such as a literal or an expression over literals; a prepared-statement
-  // parameter or a subquery never is. Each value is what the VDF will receive
+  // such as a literal, an expression over literals or a prepared-statement
+  // parameter; a subquery never is. Each value is what the VDF will receive
   // for that argument, so a NULL literal is a STRING with is_null set.
   // Array has arg_count elements.
   const vef_invalue_t **const_args;

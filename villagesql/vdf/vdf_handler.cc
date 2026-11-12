@@ -46,7 +46,7 @@ namespace vdf {
 // user variables (e.g. @v after `SET @v = '[...]'`) and prepared-statement
 // parameters holding a string. A parameter has no value at PREPARE, but a
 // statement inferring from one is prepared again at every EXECUTE with the
-// values bound (see MaybeCopyPsParamStringValues). If the parameter is
+// values bound (see MaybeCopyPsParamValues). If the parameter is
 // STRING_VALUE there, we can infer the params from it.
 static bool is_inferrable_string_const(Item *arg) {
   if (!arg->const_for_execution()) return false;
@@ -69,12 +69,18 @@ static vef_type_id StringReadType(vef_protocol_t protocol) {
   return protocol >= VEF_PROTOCOL_4 ? VEF_TYPE_STRING : VEF_TYPE_BINARY;
 }
 
-// Whether prerun sees arg as a constant: one a UDF's init would read as
-// constant (udf_handler::call_init_func()), which leaves out subqueries, and
-// never a prepared-statement parameter, which has no value until EXECUTE.
+// Returns true if prerun gets arg's value as a constant. These are the same
+// arguments a UDF's init reads as constant (udf_handler::call_init_func()),
+// without subqueries. When an argument has a ?, prerun waits for EXECUTE (see
+// defer_prerun in fix_fields). By then the ? has its value, and the value does
+// not change during that execution, so it is treated as a constant too.
 static bool IsPrerunConstArg(Item *arg) {
-  return arg->type() != Item::PARAM_ITEM && arg->const_for_execution() &&
-         !arg->has_subquery();
+  if (arg->type() == Item::PARAM_ITEM) {
+    const auto state = down_cast<Item_param *>(arg)->param_state();
+    return state != Item_param::NO_VALUE &&
+           state != Item_param::LONG_DATA_VALUE;
+  }
+  return arg->const_for_execution() && !arg->has_subquery();
 }
 
 template <typename InvalueType>
@@ -850,8 +856,8 @@ static bool CallsVdf(Item *item_list) {
   return false;
 }
 
-void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
-                                  Item_param *const *from, uint count) {
+void MaybeCopyPsParamValues(Item *item_list, Item_param **to,
+                            Item_param *const *from, uint count) {
   if (!CallsVdf(item_list)) return;
   // TODO(villagesql-general): a value sent with mysql_stmt_send_long_data() is
   // LONG_DATA_VALUE and is not copied, so from_string(?) does not infer its
@@ -859,6 +865,10 @@ void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
   for (uint i = 0; i < count; i++) {
     if (from[i]->param_state() == Item_param::STRING_VALUE)
       to[i]->str_value_ptr.copy(from[i]->str_value_ptr);
+    // MySQL copies a DECIMAL with its digits set to zero, so prerun would
+    // see 0. Copy the real digits.
+    if (from[i]->param_state() == Item_param::DECIMAL_VALUE)
+      to[i]->decimal_value = from[i]->decimal_value;
   }
 }
 

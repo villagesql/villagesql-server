@@ -53,8 +53,8 @@ WHERE t1.id = 1 AND t2.id IN (2, 3)
 ORDER BY t2.id;
 
 --echo # prerun_const: prerun sees each constant argument's value as the VDF
---echo # will receive it. A NULL literal is a STRING NULL; a column, a
---echo # subquery and a ? parameter are not constants. A subquery without
+--echo # will receive it. A NULL literal is a STRING NULL; a column and a
+--echo # subquery are not constants, a ? parameter is. A subquery without
 --echo # tables, such as (SELECT 1), is folded into its value first.
 SELECT state_and_varargs.prerun_const(42) AS int_lit,
        state_and_varargs.prerun_const(1 + 2) AS int_expr,

@@ -63,7 +63,7 @@ hash or a serialized structure.
 
 From `VEF_PROTOCOL_4`, a prerun sees the value of each constant argument in
 `const_args`: an argument the server can evaluate before the first row, such
-as a literal or `CAST(NULL AS SIGNED)`. A prepared-statement parameter or a
+as a literal, `CAST(NULL AS SIGNED)` or a prepared-statement parameter. A
 subquery is never a constant here. Each value is the `vef_invalue_t` the VDF
 will receive for that argument, of any type, and `const_args[i]` is NULL for an
 argument that is not a constant.

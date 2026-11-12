@@ -115,9 +115,10 @@ class vdf_handler {
 // prepared again at every EXECUTE. Preparing again makes new `?` objects, and
 // MySQL gives them the bound values only after the statement is resolved. So
 // for a statement that calls a VDF, copy the string ('...') to the new `?`
-// object before resolving, so that the params can be deduced from it.
-void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
-                                  Item_param *const *from, uint count);
+// object before resolving, so that the params can be deduced from it. A
+// DECIMAL is copied too, so that prerun sees the value.
+void MaybeCopyPsParamValues(Item *item_list, Item_param **to,
+                            Item_param *const *from, uint count);
 
 }  // namespace vdf
 }  // namespace villagesql
