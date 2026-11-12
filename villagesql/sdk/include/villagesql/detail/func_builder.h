@@ -354,6 +354,10 @@ struct TypeOpParamsType<void (*)(CustomArgWith<P>, StringResult)> {
   using type = P;
 };
 template <typename P>
+struct TypeOpParamsType<void (*)(CustomArgWith<P>, BinaryResult)> {
+  using type = P;
+};
+template <typename P>
 struct TypeOpParamsType<int (*)(CustomArgWith<P>, CustomArgWith<P>)> {
   using type = P;
 };
@@ -756,27 +760,30 @@ struct TypeEncodeVdfWrapper {
 };
 
 // Pre-fills result->type / result->error_msg with a default "failed to
-// decode value" ERROR. The decode wrappers call this before
-// invoking the extension's to_string so that an extension that early-returns
+// decode value" ERROR. The decode wrappers call this before invoking the
+// extension's to_string or to_binary so that an extension that early-returns
 // without setting an outcome still surfaces a useful error.
 //
-// TODO(villagesql-beta): tighten the contract so every to_string explicitly
-// sets an outcome (set_length / set / set_null / warning / error) on every
-// path, then drop this synthesis and treat the silent-return case as an SDK
-// bug. Mirrors the same TODO on set_default_encode_failure.
+// TODO(villagesql-beta): tighten the contract so every to_string and to_binary
+// explicitly sets an outcome (set_length / set / set_null / warning / error)
+// on every path, then drop this synthesis and treat the silent-return case as
+// an SDK bug. Mirrors the same TODO on set_default_encode_failure.
 inline void set_default_decode_failure(vef_vdf_result_t *result) {
   result->type = VEF_RESULT_ERROR;
   snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to decode value");
 }
 
-// TypeDecodeVdfWrapper: wraps TypeDecodeFunc into a VDF.
-// VDF signature: (CUSTOM(type)) -> STRING.
+// TypeDecodeVdfWrapper: wraps TypeDecodeFunc or TypeDecodeBinaryFunc into a
+// VDF. VDF signature: (CUSTOM(type)) -> STRING, or (CUSTOM(type)) -> BINARY.
 //
 // Pre-sets the result to VEF_RESULT_ERROR with a default "failed to decode
 // value" message; the extension can override by calling out.set_length /
 // out.set / out.set_null / out.warning / out.error.
 template <auto Func>
 struct TypeDecodeVdfWrapper {
+  using Out =
+      std::tuple_element_t<1, typename FuncParamTypes<decltype(Func)>::type>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t arg = get_invalue(ctx, args, 0);
@@ -785,7 +792,7 @@ struct TypeDecodeVdfWrapper {
       return;
     }
     set_default_decode_failure(result);
-    VDF_EXCEPTIONS_TRY { Func(CustomArg(&arg), StringResult(result)); }
+    VDF_EXCEPTIONS_TRY { Func(CustomArg(&arg), Out(result)); }
     VDF_EXCEPTIONS_CATCH(result);
   }
 };
@@ -917,6 +924,9 @@ struct TypeDecodeWithCacheVdfWrapper {
   using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
   using P = typename ExtractDchParamsType<FirstArgStripped>::type;
+  // StringResult for to_string, BinaryResult for to_binary.
+  using Out =
+      std::tuple_element_t<1, typename FuncParamTypes<decltype(Func)>::type>;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -927,7 +937,7 @@ struct TypeDecodeWithCacheVdfWrapper {
         return;
       }
       set_default_decode_failure(result);
-      Func(CustomArgWith<P>(&arg), StringResult(result));
+      Func(CustomArgWith<P>(&arg), Out(result));
     }
     VDF_EXCEPTIONS_CATCH(result);
   }

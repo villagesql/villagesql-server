@@ -53,7 +53,7 @@ static const vef_func_desc_t *find_vdf_by_name(const vef_registration_t &reg,
 // If the name contains "::", checks:
 //   - prefix (before "::") matches type_name (case-insensitive)
 //   - suffix (after "::") is one of: from_string, from_binary, to_string,
-//     compare, hash
+//     to_binary, compare, hash
 // Returns false on success, true on validation error.
 // Names without "::" are always accepted (backward compatibility).
 static bool validate_type_method_vdf_name(const char *vdf_name,
@@ -91,12 +91,13 @@ static bool validate_type_method_vdf_name(const char *vdf_name,
   }
 
   if (suffix != "from_string" && suffix != "from_binary" &&
-      suffix != "to_string" && suffix != "compare" && suffix != "hash") {
+      suffix != "to_string" && suffix != "to_binary" && suffix != "compare" &&
+      suffix != "hash") {
     LogVSQL(
         ERROR_LEVEL,
         "Type '%s' in extension '%s': %s '%s' uses '::' but suffix "
         "'%.*s' is not a valid type method (must be from_string, from_binary, "
-        "to_string, compare, or hash)",
+        "to_string, to_binary, compare, or hash)",
         type_name, extension_name.c_str(), field_name, vdf_name,
         static_cast<int>(suffix.size()), suffix.data());
     return true;
@@ -381,6 +382,14 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
       td->from_binary_vdf_name, nullptr, "from_binary_func",
       "from_binary_vdf_name", reg, td, type_name, extension_name, 1, binary_id,
       no_custom, VEF_TYPE_CUSTOM, td->name, /*required=*/false, &error);
+  if (error) return std::nullopt;
+
+  // Validate to_binary (optional; VDF only, no function pointer). The server
+  // does not call it itself; it is registered as a callable SQL function.
+  resolve_type_vdf(td->to_binary_vdf_name, nullptr, "to_binary_func",
+                   "to_binary_vdf_name", reg, td, type_name, extension_name, 1,
+                   custom_id, custom_name, VEF_TYPE_BINARY, nullptr,
+                   /*required=*/false, &error);
   if (error) return std::nullopt;
 
   // 3. Resolve int_to_params / resolve_params (VDF only, no function pointer).

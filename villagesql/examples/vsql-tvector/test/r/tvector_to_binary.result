@@ -1,0 +1,41 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[1.5,2.25,3]'), (3, NULL);
+# The binary form, labelled binary
+SELECT id, HEX(TVECTOR::to_binary(v)) AS bin,
+LENGTH(TVECTOR::to_binary(v)) AS len,
+CHARSET(TVECTOR::to_binary(v)) AS cs
+FROM t ORDER BY id;
+id	bin	len	cs
+1	0000803F0000004000004040	12	binary
+2	0000C03F0000104000004040	12	binary
+3	NULL	NULL	binary
+# Back with TVECTOR::from_binary
+SET @b = (SELECT TVECTOR::to_binary(v) FROM t WHERE id = 1);
+SELECT TVECTOR::from_binary(@b) AS v;
+v
+[1,2,3]
+SET @b = (SELECT TVECTOR::to_binary(v) FROM t WHERE id = 2);
+SELECT TVECTOR::from_binary(@b) AS v;
+v
+[1.5,2.25,3]
+# Through a VARBINARY column
+CREATE TABLE b (id INT PRIMARY KEY, raw VARBINARY(64));
+INSERT INTO b SELECT id, TVECTOR::to_binary(v) FROM t;
+SELECT id, HEX(raw) FROM b ORDER BY id;
+id	HEX(raw)
+1	0000803F0000004000004040
+2	0000C03F0000104000004040
+3	NULL
+# The same bytes as the binary form a value was given in
+SELECT HEX(TVECTOR::to_binary(TVECTOR::from_binary(0x0000803F0000004000004040)))
+AS bin;
+bin
+0000803F0000004000004040
+# A constant of the type
+SELECT HEX(TVECTOR::to_binary(TVECTOR::from_string('[4,5,6]'))) AS bin;
+bin
+000080400000A0400000C040
+SET @b = NULL;
+DROP TABLE t, b;
+UNINSTALL EXTENSION vsql_tvector;

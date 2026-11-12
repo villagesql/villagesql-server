@@ -66,6 +66,16 @@ text. It is registered as the SQL function `TYPE::from_binary`. As with the
 encode from text, a parameterized type's parameters are inferred from a
 constant argument.
 
+The inverse is `to_binary_vdf_name` (protocol >= `VEF_PROTOCOL_4`), a decode
+with signature `(CUSTOM(this type)) -> BINARY` that returns a value's binary
+form, next to the required decode to text. It is registered as the SQL
+function `TYPE::to_binary`. The server does not call it itself: a custom type
+value is never converted implicitly to a string or to the binary charset, so
+`TYPE::to_binary` and `TYPE::to_string` are how a value leaves in either form.
+The binary form it returns reaches clients and other servers, so it is the same
+on every platform: the type defines the byte order of its multi-byte numbers
+(TVECTOR uses little-endian floats), whatever the byte order of the host.
+
 ## Constant arguments in prerun
 
 From `VEF_PROTOCOL_4`, a prerun sees the value of each constant argument in

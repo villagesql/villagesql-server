@@ -145,6 +145,14 @@ template <typename P>
 using TypeDecodeWithParamsFunc = void (*)(CustomArgWith<P> in,
                                           StringResult out);
 
+// Decode to the binary form: custom -> raw bytes, the inverse of
+// TypeEncodeBinaryFunc. Reports its outcome the same way as TypeDecodeFunc.
+using TypeDecodeBinaryFunc = void (*)(CustomArg in, BinaryResult out);
+// Parameterized variant: params come from the CustomArgWith<P> input.
+template <typename P>
+using TypeDecodeBinaryWithParamsFunc = void (*)(CustomArgWith<P> in,
+                                                BinaryResult out);
+
 // Compare: returns <0, 0, or >0.
 using TypeCompareFunc = int (*)(CustomArg a, CustomArg b);
 template <typename P>
@@ -886,6 +894,34 @@ constexpr detail::StaticFuncDesc<1> make_type_decode(const char *name,
     meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
   meta.return_type = detail::to_vef_type(STRING);
+  meta.param_types[0] = detail::to_vef_type(type_name);
+  meta.num_params = 1;
+  meta.buffer_size = 0;
+  meta.deterministic = true;
+  return detail::StaticFuncDesc<1>(name, meta);
+}
+
+// make_type_decode_binary<&fn>("name", TYPE) — (CUSTOM(type)) -> BINARY.
+//
+// Accepts two signatures:
+//   TypeDecodeBinaryFunc              (non-parameterized)
+//   TypeDecodeBinaryWithParamsFunc<P> (parameterized)
+template <auto Func>
+constexpr detail::StaticFuncDesc<1> make_type_decode_binary(
+    const char *name, const char *type_name) {
+  using F = decltype(Func);
+  detail::FuncWithMetadata meta{};
+  if constexpr (std::is_same_v<F, TypeDecodeBinaryFunc>) {
+    meta.f = &detail::TypeDecodeVdfWrapper<Func>::invoke;
+  } else {
+    using P = typename detail::TypeDecodeWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeDecodeBinaryWithParamsFunc<P>>,
+                  "make_type_decode_binary: function must match either "
+                  "TypeDecodeBinaryFunc or TypeDecodeBinaryWithParamsFunc<P>.");
+    meta.f = &detail::TypeDecodeWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
+  }
+  meta.return_type = detail::to_vef_type(BINARY);
   meta.param_types[0] = detail::to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;

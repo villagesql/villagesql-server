@@ -988,6 +988,25 @@ void tvector_from_binary(vsql::MaybeParams<TVectorParams> &p,
   out.set_length(from.size());
 }
 
+// The inverse of tvector_from_binary. TVECTOR stores its elements as
+// little-endian floats or doubles on every platform (store_float,
+// store_double), and its binary form is the same bytes, so they are returned
+// unchanged.
+void tvector_to_binary(vsql::CustomArgWith<TVectorParams> in,
+                       vsql::BinaryResult out) {
+  const TVectorParams &p = in.params();
+  auto data = in.value();
+  if (p.dimension == 0) {
+    out.error("TVECTOR has no dimension");
+    return;
+  }
+  if (data.size() != static_cast<size_t>(p.dimension) * p.bytes_per_elem) {
+    out.error("TVECTOR data size does not match its dimension");
+    return;
+  }
+  out.set(data);
+}
+
 static constexpr const char kTVectorTypeName[] = "TVECTOR";
 
 // Upper bound on TVECTOR's persisted byte size: kTVectorMaxDimension
@@ -1009,6 +1028,7 @@ constexpr auto TVECTOR =
         .from_string<&tvector_from_string>()
         .from_binary<&tvector_from_binary>()
         .to_string<&tvector_to_string>()
+        .to_binary<&tvector_to_binary>()
         .compare<&tvector_compare>()
         .intrinsic_default_vdf("tvector_intrinsic_default")
         .build();
