@@ -2589,6 +2589,48 @@ index (vsql-vector): an insert, a delete and a vector update.
              (("crash_commit_before", False), ("crash_after_flush_binlog", True),
               ("crash_commit_after", True)))
 
+
+t = T("rollback", "hnsw_xa_restart", """
+A prepared XA transaction that changed an HNSW index (vsql-vector) survives a
+kill and restart: XA RECOVER lists it, KNN reads see the table without its
+changes, and its rows stay locked. XA ROLLBACK then undoes the changes and
+XA COMMIT makes them visible. The changes are an insert, a delete and a vector
+update.""")
+t.raw(["--disable_query_log",
+       "call mtr.add_suppression(\"Found 1 prepared XA transactions\");",
+       "--enable_query_log", ""])
+hnsw_install(t)
+changed = with_vec(model(r4=None), 1, "[9,9,9,9]") | {9: (1, "i", (1, 0, 0, 0.1))}
+for xid, end, after in (("x1", "ROLLBACK", BASE), ("x2", "COMMIT", changed)):
+    t.echo(f"XA {end} after the restart")
+    t.sql(f"XA START '{xid}'")
+    t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
+    t.sql("DELETE FROM t WHERE id = 4")
+    t.sql("UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
+    t.sql(f"XA END '{xid}'")
+    t.sql(f"XA PREPARE '{xid}'")
+    t.raw(*KILL_RESTART)
+    t.sql("XA RECOVER", header="formatID\tgtrid_length\tbqual_length\tdata",
+          rows=[f"1\t{len(xid)}\t0\t{xid}"])
+    t.sql("SELECT COUNT(*) AS n FROM t", rows=["8"], header="n")
+    hknn(t, 8, rows=ALL8)
+    t.sql("SELECT id FROM t WHERE id = 1 FOR UPDATE NOWAIT", error=LOCK_NOWAIT)
+    t.sql(f"XA {end} '{xid}'")
+    t.sql("SELECT COUNT(*) AS n FROM t", rows=[str(len(after))], header="n")
+    hknn(t, len(after), rows=near(after, len(after)))
+    if end == "ROLLBACK":
+        # After the commit, the entries of the deleted row and the old vector
+        # use up the LIMIT of a locking read until purge (KNN-24), so the
+        # locking reads are checked after the rollback only.
+        t.sql("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        t.sql("START TRANSACTION")
+        hknn(t, extra=" FOR UPDATE", rows=near(after))
+        hknn(t, len(after), extra=" FOR UPDATE", rows=near(after, len(after)))
+        t.sql("COMMIT")
+        t.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+hnsw_uninstall(t)
+tests.append(t)
+
 def prepared_rollback(name, what, stmt):
     t = T("rollback", name, f"""
 A transaction with {what} on a table with an HNSW index (vsql-vector) is
