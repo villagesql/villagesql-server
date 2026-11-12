@@ -60,12 +60,28 @@ Purge timing:
 
 Restart and recovery (these need vsql-vector; the test extension keeps its
 entries in memory, so a restart empties its index):
-- Restart without the extension. Remove vsql_vector.veb, kill with an open
-  transaction that changed an HNSW index, restart. The rollback has to fail
-  cleanly or wait, not assert or skip the undo.
+- Restart without the extension (later). Remove vsql_vector.veb, kill with an
+  open transaction that changed an HNSW index, restart. The rollback has to
+  fail cleanly or wait, not assert or skip the undo.
 - Crash during DDL on an HNSW index (CREATE INDEX, DROP INDEX, RENAME TABLE),
   using the ddl_log_crash_* debug points. Table, index and victionary rows
   have to agree afterwards.
+
+Detecting and dropping a bad index (with vsql-vector, across restarts). There
+is no index check in the extension ABI, and CHECK TABLE reports a healthy KNN
+index corrupt (KNN-10), so the question is whether a bad index can be dropped:
+- Server that cannot start (KNN-28). Kill at crash_after_flush_engine_log,
+  start with --innodb-force-recovery=3 (no rollback), DROP INDEX idx_v (or
+  DROP TABLE), restart normally. The server has to come up with the table at
+  its committed state. Open: whether the recovered transaction's table lock
+  blocks the DROP.
+- Index marked corrupted. CHECK TABLE marks it (KNN-10), then restart: is it
+  still marked, do KNN queries fail (ER 1712) or fall back to a scan, and does
+  DROP INDEX work and remove the victionary rows and the extension's storage.
+  Recreating it needs NYI-4.
+- Index with leaked entries (KNN-29). Leak entries through purge after a
+  restart, then DROP INDEX and DROP TABLE and restart: no orphaned storage, no
+  errors at startup.
 
 Locking and isolation:
 - READ UNCOMMITTED. A KNN read sees another session's uncommitted vector update
