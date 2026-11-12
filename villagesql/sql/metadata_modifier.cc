@@ -506,6 +506,12 @@ bool Metadata_modifier::rename_indexes_table(
 
   auto &vclient = VictionaryClient::instance();
   if (!vclient.is_initialized()) return false;
+  // We must already have locked the table to make sure that the
+  // table indexes are not altered.
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, old_db,
+                                                      old_table, MDL_SHARED));
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, new_db,
+                                                      new_table, MDL_SHARED));
 
   auto guard = vclient.get_read_lock();
 
@@ -520,12 +526,13 @@ bool Metadata_modifier::rename_indexes_table(
   for (const auto &[staged_entry, staged_old_key] : to_rename_indexes_) {
     custom_indexes.erase(staged_old_key.str());
     const std::string staged_key = staged_entry.key().str();
-    if (staged_key.compare(0, old_prefix.size(), old_prefix) == 0)
+    if (staged_key.starts_with(old_prefix))
       custom_indexes[staged_key] = &staged_entry;
   }
 
   // Built apart from to_rename_indexes_, which custom_indexes may point into.
   std::vector<std::pair<IndexEntry, IndexKey>> renames;
+  renames.reserve(custom_indexes.size());
   for (const auto &[_, old_index] : custom_indexes) {
     if (skip_indexes != nullptr &&
         skip_indexes->count(canonical_index_name(old_index->index_name())) > 0)
