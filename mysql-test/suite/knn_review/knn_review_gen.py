@@ -37,6 +37,7 @@ KNOWN_ISSUES = {
     "rollback/hnsw_recovery_prepared_rollback": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
     "rollback/hnsw_recovery_prepared_rollback_insert": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
     "rollback/hnsw_recovery_prepared_rollback_delete": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
+    "delete/hnsw_purge_restart": "KNN-29 After a restart, purge leaves the HNSW entries of committed deletes and vector updates",
     "delete/hnsw_purge_scattered": "KNN-27 With HNSW, after purge of scattered deletes a KNN query on collinear rows returns wrong rows",
 }
 LOCK_NOWAIT = ("ER_LOCK_NOWAIT", "ERROR HY000: Statement aborted because "
@@ -2628,6 +2629,83 @@ for xid, end, after in (("x1", "ROLLBACK", BASE), ("x2", "COMMIT", changed)):
         hknn(t, len(after), extra=" FOR UPDATE", rows=near(after, len(after)))
         t.sql("COMMIT")
         t.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+hnsw_uninstall(t)
+tests.append(t)
+
+
+
+t = T("delete", "hnsw_purge_locking", """
+Deletes and a vector update on a table with an HNSW index (vsql-vector) are
+committed while purge is stopped (debug build); then purge runs. Once purged,
+READ COMMITTED locking KNN reads return full results: the old entries no longer
+use up the LIMIT (see KNN-24). The same as delete/hnsw_purge_restart, without
+the restart.""")
+t.raw(["--source include/have_debug.inc", ""])
+hnsw_install(t)
+t.sql("SET GLOBAL innodb_purge_stop_now = ON")
+t.sql("DELETE FROM t WHERE id IN (4, 8)")
+t.sql("UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
+t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
+m = with_vec(model(r4=None, r8=None), 1, "[9,9,9,9]") | {9: (1, "i", (1, 0, 0, 0.1))}
+t.sql("SET GLOBAL innodb_purge_run_now = ON")
+t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.sql("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+t.sql("START TRANSACTION")
+hknn(t, extra=" FOR UPDATE", rows=near(m))
+hknn(t, len(m), extra=" FOR UPDATE", rows=near(m, len(m)))
+t.sql("COMMIT")
+t.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+hnsw_uninstall(t)
+tests.append(t)
+
+t = T("delete", "hnsw_purge_restart", """
+Deletes and a vector update on a table with an HNSW index (vsql-vector) are
+committed while purge is stopped (debug build), and the server is killed
+before purge runs. After the restart, KNN reads return the committed table
+before and after purge removes the old entries. Once purged, locking reads
+return full results too (the old entries no longer use up the LIMIT, see
+KNN-24), and the purged state survives another restart.""")
+t.raw(["--source include/have_debug.inc", ""])
+hnsw_install(t)
+t.sql("SET GLOBAL innodb_purge_stop_now = ON")
+t.sql("DELETE FROM t WHERE id IN (4, 8)")
+t.sql("UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
+t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
+m = with_vec(model(r4=None, r8=None), 1, "[9,9,9,9]") | {9: (1, "i", (1, 0, 0, 0.1))}
+n = len(m)
+
+
+def purge_restart_reads(t, locking):
+    t.sql("SELECT COUNT(*) AS n FROM t", rows=[str(n)], header="n")
+    hknn(t, n, rows=near(m, n))
+    hknn(t, rows=near(m))
+    if locking:
+        t.sql("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        t.sql("START TRANSACTION")
+        hknn(t, extra=" FOR UPDATE", rows=near(m))
+        hknn(t, n, extra=" FOR UPDATE", rows=near(m, n))
+        t.sql("COMMIT")
+        t.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+
+
+t.echo("Committed, not purged")
+purge_restart_reads(t, False)
+t.raw(*KILL_RESTART)
+t.echo("After the restart")
+purge_restart_reads(t, False)
+t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.echo("Purged")
+purge_restart_reads(t, True)
+t.raw(*KILL_RESTART)
+t.echo("After another restart")
+purge_restart_reads(t, True)
+t.echo("The index takes new changes")
+t.sql("INSERT INTO t VALUES (10, 1, 'j', '[1,0,0,0.05]')")
+t.sql("DELETE FROM t WHERE id = 9")
+m2 = dict(m)
+m2.pop(9)
+m2[10] = (1, "j", (1, 0, 0, 0.05))
+hknn(t, len(m2), rows=near(m2, len(m2)))
 hnsw_uninstall(t)
 tests.append(t)
 
