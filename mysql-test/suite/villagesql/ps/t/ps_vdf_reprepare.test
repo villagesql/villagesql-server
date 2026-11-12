@@ -1,0 +1,166 @@
+# When an EXECUTE of a prepared statement calling a VDF prepares the statement
+# again.
+#
+# A statement is prepared again at EXECUTE only when its first PREPARE left
+# something for the EXECUTE to finish, or a VDF in it keeps per-execution
+# state:
+#   - prerun and postrun run once per EXECUTE, so a VDF with them, or an
+#     aggregate VDF, prepares again every time;
+#   - a bind_and_check_types hook that gets a ? with no value at PREPARE is
+#     postponed to EXECUTE;
+#   - from_string(?) takes its type parameters from the value bound at
+#     EXECUTE.
+# A VDF with none of these is resolved once, at PREPARE, and every EXECUTE
+# reuses that. That is safe because the extension cannot be uninstalled while
+# a prepared statement holds one of its VDFs.
+#
+# Each case prints how many times the statement was prepared again over its
+# EXECUTEs (Com_stmt_reprepare).
+
+--source include/no_ps_protocol.inc
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE tc (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO tc VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(0.0,5.0)');
+
+CREATE TABLE tv (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO tv VALUES (1, '[1,0,0]'), (2, '[0,2,0]'), (3, '[0,0,3]');
+
+--echo #
+--echo # A VDF on a column, with a ? elsewhere: prepared once
+--echo #
+
+PREPARE s FROM 'SELECT id, complex_real(val) AS r FROM tc WHERE id = ?';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @id = 1;
+EXECUTE s USING @id;
+SET @id = 2;
+EXECUTE s USING @id;
+SET @id = 3;
+EXECUTE s USING @id;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A ? as a VDF argument, of a type with no parameters: prepared once
+--echo #
+
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @c = '(7.0,8.0)';
+EXECUTE s USING @c;
+SET @c = '(9.0,1.0)';
+EXECUTE s USING @c;
+SET @c = '(2.0,3.0)';
+EXECUTE s USING @c;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A ? as a VDF argument, its dimension taken from a column, in ORDER BY
+--echo # with LIMIT (the shape of a nearest-neighbour query): prepared once
+--echo #
+
+PREPARE s FROM 'SELECT id FROM tv ORDER BY tvector_dot_product(vec, ?) DESC LIMIT 2';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+SET @v = '[3,0,0]';
+EXECUTE s USING @v;
+SET @v = '[0,0,5]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+SET @v = NULL;
+
+--echo #
+--echo # An aggregate VDF: prepared again at every EXECUTE
+--echo #
+
+PREPARE s FROM 'SELECT complex_sum(val) AS s FROM tc WHERE id <= ?';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @id = 1;
+EXECUTE s USING @id;
+SET @id = 2;
+EXECUTE s USING @id;
+SET @id = 3;
+EXECUTE s USING @id;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A bind_and_check_types hook given a ?: prepared again at every EXECUTE
+--echo #
+
+PREPARE s FROM 'SELECT tvector_dim(?) AS d';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # from_string(?) of a parameterized type: prepared again at every EXECUTE
+--echo #
+
+PREPARE s FROM 'SELECT tvector_dim(TVECTOR::from_string(?)) AS d';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+SET @v = NULL;
+
+DROP TABLE tc;
+DROP TABLE tv;
+--source include/villagesql/uninstall_tvector_extension.inc
+
+--echo #
+--echo # The extension cannot be uninstalled while a prepared statement holds
+--echo # one of its VDFs, so a statement prepared once never calls a function
+--echo # whose code is gone. After DEALLOCATE it can.
+--echo #
+
+PREPARE s FROM 'SELECT complex_real(COMPLEX::from_string(''(5.0,6.0)'')) AS r';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+EXECUTE s;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+EXECUTE s;
+EXECUTE s;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+SET @id = NULL;
+SET @c = NULL;
+--source include/villagesql/uninstall_complex_extension.inc

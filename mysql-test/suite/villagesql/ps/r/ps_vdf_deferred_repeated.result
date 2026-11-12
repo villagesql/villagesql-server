@@ -1,0 +1,293 @@
+Creating extension vdf_postrun_leak using SDK...
+Created vdf_postrun_leak.veb
+INSTALL EXTENSION vsql_tvector;
+INSTALL EXTENSION vdf_postrun_leak;
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[4,5,6]');
+#
+# A comparison with from_string(?): good, bad, good, no match
+#
+PREPARE s FROM 'SELECT id FROM t WHERE v = TVECTOR::from_string(?)';
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+id
+1
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR(2) in =
+SET @v = '[4,5,6]';
+EXECUTE s USING @v;
+id
+2
+SET @v = '[9,9,9]';
+EXECUTE s USING @v;
+id
+reprepares
+4
+DEALLOCATE PREPARE s;
+#
+# UNION ALL with a column: good, bad, good
+#
+PREPARE s FROM 'SELECT TVECTOR::to_string(u) AS u FROM
+                  (SELECT v AS u FROM t WHERE id = 1
+                   UNION ALL SELECT TVECTOR::from_string(?)) d';
+SET @v = '[7,8,9]';
+EXECUTE s USING @v;
+u
+[1,2,3]
+[7,8,9]
+SET @v = '[7,8]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot use UNION with different custom types 'vsql_tvector.TVECTOR(3)' and 'vsql_tvector.TVECTOR(2)'
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+u
+[1,2,3]
+[1,1,1]
+reprepares
+3
+DEALLOCATE PREPARE s;
+#
+# A derived table: each EXECUTE takes its own dimension
+#
+PREPARE s FROM 'SELECT TVECTOR::to_string(d.x) AS d
+                FROM (SELECT TVECTOR::from_string(?) AS x) d';
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+d
+[1,2,3,4]
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+d
+[1,2]
+SET @v = '[1,2,3,4,5,6]';
+EXECUTE s USING @v;
+d
+[1,2,3,4,5,6]
+reprepares
+3
+DEALLOCATE PREPARE s;
+#
+# CASE with a column and from_string(?): good, bad, good
+#
+PREPARE s FROM 'SELECT id, TVECTOR::to_string(CASE WHEN id = 1 THEN v
+                                ELSE TVECTOR::from_string(?) END) AS c
+                FROM t ORDER BY id';
+SET @v = '[0,0,0]';
+EXECUTE s USING @v;
+id	c
+1	[1,2,3]
+2	[0,0,0]
+SET @v = '[0,0]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot compare values of incompatible types 'vsql_tvector.TVECTOR(3)' and 'vsql_tvector.TVECTOR(2)'
+SET @v = '[9,9,9]';
+EXECUTE s USING @v;
+id	c
+1	[1,2,3]
+2	[9,9,9]
+reprepares
+3
+DEALLOCATE PREPARE s;
+#
+# A hook's result compared with a column: good, bad, good
+#
+PREPARE s FROM 'SELECT id FROM t WHERE v = tvector_concat(
+                  TVECTOR::from_string(''[1]''), TVECTOR::from_string(?))';
+SET @v = '[2,3]';
+EXECUTE s USING @v;
+id
+1
+SET @v = '[2,3,4]';
+EXECUTE s USING @v;
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR(4) in =
+SET @v = '[5,6]';
+EXECUTE s USING @v;
+id
+reprepares
+3
+DEALLOCATE PREPARE s;
+#
+# A hook given a bare ?: good, bad, good
+#
+PREPARE s FROM 'SELECT tvector_dim(?) AS d';
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+d
+2
+SET @v = 'not a vector';
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 is not a vector literal
+SET @v = '[1,2,3,4,5]';
+EXECUTE s USING @v;
+d
+5
+reprepares
+3
+DEALLOCATE PREPARE s;
+#
+# NULL bound to a ? whose value gives the params, next to the same
+# call with a NULL literal, then a value again
+#
+SELECT tvector_dim(NULL) AS d;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+PREPARE s FROM 'SELECT tvector_dim(?) AS d';
+SET @v = NULL;
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+d
+3
+DEALLOCATE PREPARE s;
+SELECT id FROM t WHERE v = TVECTOR::from_string(NULL);
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR in =
+PREPARE s FROM 'SELECT id FROM t WHERE v = TVECTOR::from_string(?)';
+SET @v = NULL;
+EXECUTE s USING @v;
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR in =
+SET @v = '[4,5,6]';
+EXECUTE s USING @v;
+id
+2
+DEALLOCATE PREPARE s;
+SELECT TVECTOR::to_string(d.x) AS d FROM (SELECT TVECTOR::from_string(NULL) AS x) d;
+ERROR HY000: Cannot initialize function 'TVECTOR::to_string': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+PREPARE s FROM 'SELECT TVECTOR::to_string(d.x) AS d
+                FROM (SELECT TVECTOR::from_string(?) AS x) d';
+SET @v = NULL;
+EXECUTE s USING @v;
+ERROR HY000: Cannot initialize function 'TVECTOR::to_string': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+d
+[1,2]
+DEALLOCATE PREPARE s;
+SELECT TVECTOR::to_string(tvector_concat(TVECTOR::from_string('[1,2]'),
+TVECTOR::from_string(NULL))) AS c;
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 2 must be a TVECTOR or a constant vector literal
+PREPARE s FROM 'SELECT TVECTOR::to_string(tvector_concat(
+                  TVECTOR::from_string(?), TVECTOR::from_string(?))) AS c';
+SET @v = '[1,2]', @w = NULL;
+EXECUTE s USING @v, @w;
+ERROR HY000: Cannot initialize function 'tvector_concat': argument 2 must be a TVECTOR or a constant vector literal
+SET @w = '[3]';
+EXECUTE s USING @v, @w;
+c
+[1,2,3]
+DEALLOCATE PREPARE s;
+#
+# A result of a custom type whose params change between EXECUTEs: the
+# column metadata follows the values
+#
+PREPARE s FROM 'SELECT tvector_concat(TVECTOR::from_string(?),
+                                      TVECTOR::from_string(?)) AS c';
+SET @v = '[1]', @w = '[2]';
+EXECUTE s USING @v, @w;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					c	253	8	5	Y	128	31	255
+c
+[1,2]
+SET @v = '[1,2,3]', @w = '[4,5]';
+EXECUTE s USING @v, @w;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					c	253	20	11	Y	128	31	255
+c
+[1,2,3,4,5]
+DEALLOCATE PREPARE s;
+PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS v';
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					v	253	8	5	Y	128	31	255
+v
+[1,2]
+SET @v = '[1,2,3,4,5]';
+EXECUTE s USING @v;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					v	253	20	11	Y	128	31	255
+v
+[1,2,3,4,5]
+DEALLOCATE PREPARE s;
+#
+# A generated column and a CHECK constraint calling VDFs, fixed when the
+# table is first opened, by a PREPARE
+#
+CREATE TABLE tg (id INT PRIMARY KEY, v TVECTOR(3),
+d INT AS (tvector_dim(v)),
+m DOUBLE AS (tvector_max_element(v)) STORED,
+CHECK (tvector_max_element(v) < 10));
+FLUSH TABLES;
+PREPARE s FROM 'INSERT INTO tg (id, v) VALUES (?, ?)';
+SET @id = 1, @v = '[1,2,3]';
+EXECUTE s USING @id, @v;
+SET @id = 2, @v = '[4,5,6]';
+EXECUTE s USING @id, @v;
+SET @id = 3, @v = '[1,2,30]';
+EXECUTE s USING @id, @v;
+ERROR HY000: Check constraint 'tg_chk_1' is violated.
+SET @id = 4, @v = '[1,2]';
+EXECUTE s USING @id, @v;
+ERROR HY000: Incorrect TVECTOR value: '[1,2]' for column 'v' at row 1
+SET @id = 5, @v = '[7,8,9]';
+EXECUTE s USING @id, @v;
+reprepares
+0
+DEALLOCATE PREPARE s;
+SELECT id, TVECTOR::to_string(v) AS v, d, m FROM tg ORDER BY id;
+id	v	d	m
+1	[1,2,3]	3	3
+2	[4,5,6]	3	6
+5	[7,8,9]	3	9
+FLUSH TABLES;
+PREPARE s FROM 'UPDATE tg SET v = ? WHERE id = ?';
+SET @v = '[0,0,1]', @id = 1;
+EXECUTE s USING @v, @id;
+SET @v = '[0,0,99]', @id = 2;
+EXECUTE s USING @v, @id;
+ERROR HY000: Check constraint 'tg_chk_1' is violated.
+SET @v = '[0,2,0]', @id = 2;
+EXECUTE s USING @v, @id;
+DEALLOCATE PREPARE s;
+SELECT id, TVECTOR::to_string(v) AS v, d, m FROM tg ORDER BY id;
+id	v	d	m
+1	[0,0,1]	3	1
+2	[0,2,0]	3	2
+5	[7,8,9]	3	9
+DROP TABLE tg;
+#
+# prerun and postrun stay balanced when a reprepare fails after a VDF's
+# prerun ran: hooked_probe(?) is resolved before the WHERE that fails
+#
+# Baseline
+SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live;
+unbalanced	live
+0	0
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.hooked_probe(?) AS r FROM t
+                WHERE v = TVECTOR::from_string(?) ORDER BY id';
+SET @a = 'a', @v = '[1,2,3]';
+EXECUTE s USING @a, @v;
+id	r
+1	1:a
+SET @a = 'b', @v = '[1,2]';
+EXECUTE s USING @a, @v;
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(3) and vsql_tvector.TVECTOR(2) in =
+# After the failed EXECUTE
+SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live;
+unbalanced	live
+0	0
+SET @a = 'c', @v = '[4,5,6]';
+EXECUTE s USING @a, @v;
+id	r
+2	1:c
+reprepares
+3
+DEALLOCATE PREPARE s;
+# After DEALLOCATE: every prerun has had its postrun
+SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live;
+unbalanced	live
+0	0
+SET @v = NULL, @w = NULL, @a = NULL, @id = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vdf_postrun_leak;
+UNINSTALL EXTENSION vsql_tvector;

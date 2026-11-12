@@ -516,7 +516,7 @@ extern bool HasPSParamWithoutValue(Item *item);
 // When a bind_and_check_types hook is provided, that hook replaces the
 // otherwise automatically applied type disambiguation rules. Sets
 // *out_bind_hook_postponed when the bind hook could not be run yet (see
-// IsFirstPrepareBeforeReprepare); the call is then left unchecked and the
+// DeferUntilReprepare); the call is then left unchecked and the
 // return params unknown. Returns false on success, true on error.
 extern bool ValidateAndConvertVDFArguments(
     THD *thd, const char *func_name, std::string_view extension_name,
@@ -525,14 +525,19 @@ extern bool ValidateAndConvertVDFArguments(
     const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
     bool *out_bind_hook_postponed);
 
-// Returns true at the first PREPARE of a statement that is prepared again at
-// every EXECUTE, which is any statement calling a UDF or VDF. Such a PREPARE
-// has no values for its `?` markers, so custom type params that depend on one,
-// e.g. those of TVECTOR::from_string(?), are unknown. Each EXECUTE resolves the
-// statement again with the values bound. So while this returns true, unknown
-// params are accepted, and the checks that need them run when the statement is
-// prepared again.
-extern bool IsFirstPrepareBeforeReprepare(const THD *thd);
+// For a check that cannot be made yet. Returns true at the first PREPARE of a
+// statement: it has no values for its `?` markers, so custom type params that
+// depend on one, e.g. those of TVECTOR::from_string(?), are unknown. It then
+// marks the statement to be prepared again at every EXECUTE, with the values
+// bound, so the check runs then; the caller accepts the unknown params and
+// leaves the check. Returns false otherwise, and the check must be made now.
+//
+// A statement calling a VDF is prepared once and reused by every EXECUTE
+// unless something marks it with MarkVdfStatementForReprepare.
+extern bool DeferUntilReprepare(THD *thd);
+
+// Marks the statement being prepared to be prepared again at every EXECUTE.
+extern void MarkVdfStatementForReprepare(THD *thd);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
 // If return_params is non-null, uses those params instead of empty ones.

@@ -1,0 +1,71 @@
+Creating extension rlen_ext using SDK...
+Created rlen_ext.veb
+INSTALL EXTENSION rlen_ext;
+#
+# A prepared statement, a large result, then smaller ones
+#
+PREPARE s FROM 'SELECT LENGTH(rlen_ext.unbounded_str(?)) AS len, rlen_ext.unbounded_str(?) = REPEAT(''y'', ?) AS intact';
+SET @n = 5000;
+EXECUTE s USING @n, @n, @n;
+len	intact
+5000	1
+SET @n = 3000;
+EXECUTE s USING @n, @n, @n;
+len	intact
+3000	1
+SET @n = 10;
+EXECUTE s USING @n, @n, @n;
+len	intact
+10	1
+SET @n = 4000;
+EXECUTE s USING @n, @n, @n;
+len	intact
+4000	1
+reprepares
+1
+DEALLOCATE PREPARE s;
+#
+# A stored function, called once per row
+#
+CREATE TABLE n (id INT PRIMARY KEY, n INT);
+INSERT INTO n VALUES (1, 10), (2, 5000), (3, 3000), (4, 20), (5, 4000), (6, 1);
+CREATE FUNCTION f(k INT) RETURNS LONGTEXT RETURN rlen_ext.unbounded_str(k);
+SELECT id, LENGTH(f(n)) AS len, f(n) = REPEAT('y', n) AS intact FROM n ORDER BY id;
+id	len	intact
+1	10	1
+2	5000	1
+3	3000	1
+4	20	1
+5	4000	1
+6	1	1
+SELECT id, LENGTH(f(n)) AS len, f(n) = REPEAT('y', n) AS intact FROM n ORDER BY id;
+id	len	intact
+1	10	1
+2	5000	1
+3	3000	1
+4	20	1
+5	4000	1
+6	1	1
+#
+# A stored procedure, called several times
+#
+CREATE PROCEDURE p(k INT)
+SELECT LENGTH(rlen_ext.unbounded_str(k)) AS len,
+rlen_ext.unbounded_str(k) = REPEAT('y', k) AS intact;
+CALL p(5000);
+len	intact
+5000	1
+CALL p(3000);
+len	intact
+3000	1
+CALL p(10);
+len	intact
+10	1
+CALL p(4000);
+len	intact
+4000	1
+DROP PROCEDURE p;
+DROP FUNCTION f;
+DROP TABLE n;
+SET @n = NULL;
+UNINSTALL EXTENSION rlen_ext;
