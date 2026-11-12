@@ -781,6 +781,7 @@ inline void set_default_decode_failure(vef_vdf_result_t *result) {
 // out.set / out.set_null / out.warning / out.error.
 template <auto Func>
 struct TypeDecodeVdfWrapper {
+  // StringResult for to_string, BinaryResult for to_binary.
   using Out =
       std::tuple_element_t<1, typename FuncParamTypes<decltype(Func)>::type>;
 

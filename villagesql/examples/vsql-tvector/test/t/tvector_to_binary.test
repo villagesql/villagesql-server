@@ -31,6 +31,18 @@ SELECT HEX(TVECTOR::to_binary(TVECTOR::from_binary(0x0000803F0000004000004040)))
 --echo # A constant of the type
 SELECT HEX(TVECTOR::to_binary(TVECTOR::from_string('[4,5,6]'))) AS bin;
 
+--echo # Double elements: 8 bytes each
+CREATE TABLE d (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
+INSERT INTO d VALUES (1, '[1,2,3]');
+SELECT HEX(TVECTOR::to_binary(v)) AS bin, LENGTH(TVECTOR::to_binary(v)) AS len
+FROM d;
+--echo # The binary form does not carry the element width. On a constant,
+--echo # from_binary reads floats, so these 24 bytes are six floats, and their
+--echo # bytes come back unchanged.
+SET @b = (SELECT TVECTOR::to_binary(v) FROM d WHERE id = 1);
+SELECT TVECTOR::from_binary(@b) AS v;
+SELECT HEX(TVECTOR::to_binary(TVECTOR::from_binary(@b))) AS bin;
+
 SET @b = NULL;
-DROP TABLE t, b;
+DROP TABLE t, b, d;
 UNINSTALL EXTENSION vsql_tvector;
