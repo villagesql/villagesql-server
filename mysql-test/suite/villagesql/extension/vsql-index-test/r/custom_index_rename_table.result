@@ -78,6 +78,46 @@ t2	CREATE TABLE `t2` (
   PRIMARY KEY (`id`),
   KEY `i_a` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# A swap of two tables whose indexes have the same name, followed by a
+# rename of one of the swapped tables in the same statement.
+CREATE TABLE s1 (id INT PRIMARY KEY, v dummy_type_vector,
+INDEX i (v) USING EXTENDED(dummy_index_hnsw));
+CREATE TABLE s2 (id INT PRIMARY KEY, v dummy_type_vector,
+INDEX i (v dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw));
+RENAME TABLE s1 TO tmp, s2 TO s1, tmp TO s2, s2 TO s3;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	r3	i_b	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	s1	i	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	s3	i	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t2	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+r3	i_b	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+s1	i	0	v	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+s3	i	0	v	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t2	i_a	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `id` int NOT NULL,
+  `v` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i` (`v` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE s3;
+Table	Create Table
+s3	CREATE TABLE `s3` (
+  `id` int NOT NULL,
+  `v` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i` (`v` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE s1, s3;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	r3	i_b	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t2	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+r3	i_b	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+t2	i_a	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
 # RENAME TABLE to another database.
 CREATE DATABASE db2;
 RENAME TABLE t2 TO db2.t2;
