@@ -4222,6 +4222,9 @@ struct LEX : public Query_tables_list {
  private:
   /// True if statement references UDF functions
   bool m_has_udf{false};
+  // VillageSQL: True if the statement calls a VDF. Unlike m_has_udf, this
+  // does not make every EXECUTE prepare the statement again.
+  bool m_has_vdf{false};
   bool ignore;
 
  public:
@@ -4229,6 +4232,7 @@ struct LEX : public Query_tables_list {
   void set_ignore(bool ignore_param) { ignore = ignore_param; }
   void set_has_udf() { m_has_udf = true; }
   bool has_udf() const { return m_has_udf; }
+  void set_has_vdf() { m_has_vdf = true; }
   st_parsing_options parsing_options;
   Alter_info *alter_info;
   /* Prepared statements SQL syntax:*/
@@ -4348,7 +4352,9 @@ struct LEX : public Query_tables_list {
   /// Check if the current statement uses meta-data (uses a table or a stored
   /// routine).
   bool is_metadata_used() const {
-    return query_tables != nullptr || has_udf() ||
+    // VillageSQL: a VDF counts, so that a stored routine keeps the text of an
+    // expression calling one, to parse it again when the VDF asks for that.
+    return query_tables != nullptr || has_udf() || m_has_vdf ||
            (sroutines != nullptr && !sroutines->empty());
   }
 

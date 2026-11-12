@@ -44,10 +44,10 @@ namespace vdf {
 // safely pre-execute at fix_fields time: a constant-for-execution Item whose
 // val_str() has no side effects. Today this covers string literals, read-only
 // user variables (e.g. @v after `SET @v = '[...]'`) and prepared-statement
-// parameters holding a string. A parameter has no value at PREPARE, but every
-// EXECUTE of a statement calling a VDF prepares it again with the values bound
-// (see MaybeCopyPsParamStringValues). If the parameter is STRING_VALUE there,
-// we can infer the params from it.
+// parameters holding a string. A parameter has no value at PREPARE, but a
+// statement inferring from one is prepared again at every EXECUTE with the
+// values bound (see MaybeCopyPsParamStringValues). If the parameter is
+// STRING_VALUE there, we can infer the params from it.
 static bool is_inferrable_string_const(Item *arg) {
   if (!arg->const_for_execution()) return false;
   if (arg->type() == Item::STRING_ITEM) return true;
@@ -202,6 +202,20 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
           ? m_udf->vdf_func_desc->bind_and_check_types
           : nullptr;
   villagesql::TypeParameters return_params;
+
+  // In a prepared statement, a call is resolved here once, at PREPARE, and
+  // every EXECUTE reuses it, unless the statement is marked to be prepared
+  // again at each EXECUTE. Prerun and postrun keep per-execution state, so they
+  // need that, and so does a bind_and_check_types hook, which may read a
+  // constant argument's value (a ? or a user variable) that the next EXECUTE
+  // changes. A check deferred to EXECUTE marks it too (DeferUntilReprepare).
+  // The extension cannot be uninstalled while a prepared statement holds one
+  // of its VDFs, so a call resolved once stays valid.
+  if (m_udf->vdf_func_desc->prerun || m_udf->vdf_func_desc->postrun ||
+      bind_and_check != nullptr) {
+    villagesql::MarkVdfStatementForReprepare(thd);
+  }
+
   // A postponed call waits for the statement to be prepared again with its
   // parameter values: inference and prerun are skipped too, and the return
   // type is set below with its params unknown.
@@ -243,6 +257,11 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
         snap.is_parameterized && snap.max_persisted_length > 0) {
+      // The params come from the argument's value. Only a literal keeps that
+      // value from one EXECUTE to the next.
+      if (arguments[0]->type() != Item::STRING_ITEM) {
+        villagesql::MarkVdfStatementForReprepare(thd);
+      }
       // The parameter is STRING, so the constant is read as the VDF will read
       // it at row time.
       String tmp;
@@ -290,12 +309,16 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   // bound to it. udf_handler::fix_fields defers a UDF's init at PREPARE when
   // any argument is not constant, e.g. a column. We defer only for an argument
   // with a ?, because a column's type is known at PREPARE and prerun can check
-  // it there. A call whose bind hook is postponed defers prerun too.
+  // it there. A call whose bind hook is postponed defers prerun too. A VDF
+  // without prerun has nothing to defer, so a ? alone does not make its
+  // statement prepare again at EXECUTE.
   const bool defer_prerun =
-      postponed || (villagesql::IsFirstPrepareBeforeReprepare(thd) &&
-                    std::any_of(m_args, m_args + arg_count, [](Item *arg) {
-                      return villagesql::HasPSParamWithoutValue(arg);
-                    }));
+      postponed ||
+      (m_udf->vdf_func_desc->prerun != nullptr &&
+       std::any_of(
+           m_args, m_args + arg_count,
+           [](Item *arg) { return villagesql::HasPSParamWithoutValue(arg); }) &&
+       villagesql::DeferUntilReprepare(thd));
   if (m_udf->vdf_func_desc->prerun && !defer_prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;
@@ -387,6 +410,17 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
                                         signature, func, &return_params);
     m_return_type_context = func->get_type_context();
 
+    // A result whose params are still unknown at the first PREPARE may take
+    // them from the value of a ? at EXECUTE, e.g. from_string(?), so the
+    // statement must be prepared again with the value bound.
+    if (m_return_type_context != nullptr &&
+        m_return_type_context->is_unknown() &&
+        std::any_of(m_args, m_args + arg_count, [](Item *arg) {
+          return villagesql::HasPSParamWithoutValue(arg);
+        })) {
+      villagesql::DeferUntilReprepare(thd);
+    }
+
     // CUSTOM-returning VDFs (e.g. the type's from_string / encode VDF) emit
     // output that fits the resolved return type's field. For a
     // fixed-length or parameter-resolved type that is persisted_length, unknown
@@ -415,6 +449,9 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
       }
     }
   }
+
+  m_resolved_result_buffer = m_result_buffer;
+  m_resolved_result_buffer_size = m_result_buffer_size;
 
   // cleanup() runs postrun only if prerun had its turn here.
   m_active = !defer_prerun;
@@ -465,6 +502,10 @@ void vdf_handler::accumulate(bool *null_value) {
 void vdf_handler::cleanup() {
   if (m_active) RunPostrun();
   m_active = false;
+  // A buffer grown at row time is freed with the execution's memory, and a
+  // prepared statement or stored routine runs this handler again.
+  m_result_buffer = m_resolved_result_buffer;
+  m_result_buffer_size = m_resolved_result_buffer_size;
 }
 
 void vdf_handler::RunPostrun() {
@@ -587,9 +628,9 @@ static bool marshal_args_typed(const vef_signature_t *sig,
 }
 
 bool vdf_handler::marshal_args() {
-  // Prerun must have run. fix_fields defers it only at a first PREPARE.
-  // For statements that call VDFs, every EXECUTE prepares the statement again
-  // with a new handler whose prerun runs.
+  // Prerun must have run. fix_fields defers it only at a first PREPARE, which
+  // marks the statement to be prepared again at every EXECUTE, with a new
+  // handler whose prerun runs.
   if (should_assert_if_false(m_prerun_ran)) {
     villagesql_error("internal: function '%s' called before its prerun", MYF(0),
                      m_udf->name.str);

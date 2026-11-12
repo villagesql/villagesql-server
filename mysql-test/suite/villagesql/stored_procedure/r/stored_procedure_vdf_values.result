@@ -1,0 +1,116 @@
+CREATE TABLE tc (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO tc VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(0.0,5.0)');
+#
+# SET from a parameter, called three times
+#
+CREATE PROCEDURE p_set(c COMPLEX)
+BEGIN
+DECLARE r DOUBLE;
+SET r = complex_real(c);
+SELECT r;
+END//
+CALL p_set('(1.0,0.0)');
+r
+1
+CALL p_set('(2.0,0.0)');
+r
+2
+CALL p_set('(3.0,0.0)');
+r
+3
+DROP PROCEDURE p_set;
+#
+# RETURN of from_string of a parameter, called once per row
+#
+CREATE TABLE ts (id INT PRIMARY KEY, s VARCHAR(64));
+INSERT INTO ts VALUES (1, '(3.0,4.0)'), (2, '(6.0,8.0)'), (3, NULL);
+CREATE FUNCTION f_abs(s VARCHAR(64)) RETURNS DOUBLE DETERMINISTIC
+RETURN complex_abs(COMPLEX::from_string(s));
+SELECT id, f_abs(s) AS a FROM ts ORDER BY id;
+id	a
+1	5
+2	10
+3	NULL
+SELECT id, f_abs(s) AS a FROM ts ORDER BY id DESC;
+id	a
+3	NULL
+2	10
+1	5
+DROP FUNCTION f_abs;
+#
+# A cursor over a VDF, opened in each call
+#
+CREATE PROCEDURE p_cur(n INT)
+BEGIN
+DECLARE done INT DEFAULT 0;
+DECLARE r DOUBLE;
+DECLARE total DOUBLE DEFAULT 0;
+DECLARE cur CURSOR FOR SELECT complex_real(val) FROM tc WHERE id <= n;
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+OPEN cur;
+read_loop: LOOP
+FETCH cur INTO r;
+IF done THEN
+LEAVE read_loop;
+END IF;
+SET total = total + r;
+END LOOP;
+CLOSE cur;
+SELECT n, total;
+END//
+CALL p_cur(1);
+n	total
+1	1
+CALL p_cur(2);
+n	total
+2	4
+CALL p_cur(3);
+n	total
+3	4
+DROP PROCEDURE p_cur;
+#
+# SET NEW.col in a trigger, fired for each row
+#
+CREATE TABLE tt (id INT PRIMARY KEY, s VARCHAR(64), r DOUBLE);
+CREATE TRIGGER tt_bi BEFORE INSERT ON tt FOR EACH ROW
+SET NEW.r = complex_real(COMPLEX::from_string(NEW.s));
+INSERT INTO tt (id, s) VALUES (1, '(1.5,0.0)');
+INSERT INTO tt (id, s) VALUES (2, '(2.5,0.0)');
+INSERT INTO tt (id, s) SELECT id + 10, s FROM ts;
+SELECT * FROM tt ORDER BY id;
+id	s	r
+1	(1.5,0.0)	1.5
+2	(2.5,0.0)	2.5
+11	(3.0,4.0)	3
+12	(6.0,8.0)	6
+13	NULL	NULL
+DROP TABLE tt;
+#
+# from_string of a type whose parameters come from the value: the
+# expression is parsed again at each run, and takes the new value
+#
+CREATE FUNCTION f_dim(s VARCHAR(64)) RETURNS INT DETERMINISTIC
+RETURN tvector_dim(TVECTOR::from_string(s));
+# A routine parameter is not a constant, so its dimension is unknown
+SELECT f_dim('[1,2]') AS d;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+DROP FUNCTION f_dim;
+# A user variable is read as a constant when the expression is parsed
+CREATE FUNCTION f_dim_var() RETURNS INT NOT DETERMINISTIC
+RETURN tvector_dim(TVECTOR::from_string(@s));
+SET @s = '[1,2]';
+SELECT f_dim_var() AS d;
+d
+2
+SET @s = '[1,2,3]';
+SELECT f_dim_var() AS d;
+d
+3
+SET @s = '[1,2,3,4]';
+SELECT f_dim_var() AS d;
+d
+4
+DROP FUNCTION f_dim_var;
+SET @s = NULL;
+DROP TABLE ts;
+DROP TABLE tc;

@@ -76,6 +76,9 @@ class vdf_handler {
   vef_invalue_t **m_invalues_ptrs{nullptr};
   char *m_result_buffer{nullptr};
   size_t m_result_buffer_size{0};
+  // The result buffer as fix_fields left it, allocated with the statement.
+  char *m_resolved_result_buffer{nullptr};
+  size_t m_resolved_result_buffer_size{0};
   char *m_error_msg{nullptr};
   bool m_active{false};
   // True once fix_fields has run prerun, or the function has none. False only
@@ -107,13 +110,12 @@ class vdf_handler {
   void RunPostrun();
 };
 
-// Every EXECUTE of a prepared statement that calls a VDF prepares the
-// statement again (the same happens for classic UDFs). A VDF can deduce a
-// custom type's params from a string value, e.g. TVECTOR::from_string(?)
-// with '...' bound to the `?`. Preparing again makes new `?` objects, and
-// MySQL gives it the bound values only after the statement is resolved.
-// So for a statement that calls a VDF, copy the string ('...') to the new
-// `?` object before resolving, so that the params can be deduced from it.
+// A VDF can deduce a custom type's params from a string value, e.g.
+// TVECTOR::from_string(?) with '...' bound to the `?`. Such a statement is
+// prepared again at every EXECUTE. Preparing again makes new `?` objects, and
+// MySQL gives them the bound values only after the statement is resolved. So
+// for a statement that calls a VDF, copy the string ('...') to the new `?`
+// object before resolving, so that the params can be deduced from it.
 void MaybeCopyPsParamStringValues(Item *item_list, Item_param **to,
                                   Item_param *const *from, uint count);
 

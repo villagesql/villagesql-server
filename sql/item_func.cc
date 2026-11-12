@@ -5152,7 +5152,12 @@ bool udf_handler::get_and_convert_string(uint index) {
 bool Item_udf_func::do_itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::do_itemize(pc, res)) return true;
-  pc->thd->lex->set_has_udf();
+  // VillageSQL: a VDF marks the statement for a reprepare at each EXECUTE
+  // only when it needs one (see MarkVdfStatementForReprepare).
+  if (is_vdf())
+    pc->thd->lex->set_has_vdf();
+  else
+    pc->thd->lex->set_has_udf();
   pc->thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_UDF);
   pc->thd->lex->safe_to_cache_query = false;
   return false;

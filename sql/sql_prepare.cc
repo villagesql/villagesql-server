@@ -3148,6 +3148,11 @@ bool Prepared_statement::reprepare(THD *thd) {
 
   if (prepare_error) return true;
 
+  // VillageSQL: a VDF check deferred at the first PREPARE runs here with the
+  // values bound, so this prepare does not mark the statement again. It still
+  // depends on the values, so keep it prepared again at each EXECUTE.
+  if (copy.m_lex->has_udf()) m_lex->set_has_udf();
+
   if (validate_metadata(thd, &copy)) return true;
 
   /* Update reprepare count for this prepared statement in P_S table. */
