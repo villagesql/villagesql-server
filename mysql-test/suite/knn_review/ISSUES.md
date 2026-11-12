@@ -40,6 +40,7 @@ mark the issue fixed here.
 | KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | open | delete/hnsw_many_deleted |
 | KNN-27 | With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows | known purge behaviour, tuning planned | delete/hnsw_purge_scattered |
 | KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | open, Deb checking (startup sequencing) | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
+| KNN-29 | After a restart, purge leaves the HNSW entries of committed deletes and vector updates | open | delete/hnsw_purge_restart |
 
 ## Not implemented yet
 
@@ -681,3 +682,24 @@ still not implemented on /40.
   rollback/hnsw_recovery_commit_crash).
 - Expected: the server recovers and rolls the transaction back.
 - UPDATE and DELETE: the server cannot start. INSERT: wrong results.
+
+## KNN-29: After a restart, purge leaves the HNSW entries of committed deletes and vector updates
+
+- Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
+  vsql-vector deb/hnsw_index/33 (ce25b42), debug build.
+- Repro: HNSW index on the standard 8 rows. `SET GLOBAL
+  innodb_purge_stop_now = ON`, then `DELETE FROM t WHERE id IN (4, 8)`,
+  `UPDATE t SET v = '[9,9,9,9]' WHERE id = 1` and an insert of row 9. Kill and
+  restart (kill_and_restart_mysqld.inc), then wait for purge
+  (wait_innodb_all_purged.inc). At READ COMMITTED,
+  `SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE`
+  returns `9`; expected `9 2 5`. With LIMIT 7 it returns `9 2 5 3`; expected
+  `9 2 5 3 6 7 1`. The same after another restart. Plain (non-locking) reads
+  return the right rows. Nothing about purge in the server log.
+- The same steps without the restart (delete/hnsw_purge_locking) return the
+  full results.
+- Three rows are missing, one for each old entry (rows 4 and 8, the old
+  vector of row 1), as in KNN-24.
+- Expected: purge after the restart removes the old entries, as it does
+  without the restart.
+- Wrong results (too few rows) for locking reads, silently and permanently.

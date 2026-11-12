@@ -1,0 +1,57 @@
+# Deletes and a vector update on a table with an HNSW index (vsql-vector) are
+# committed while purge is stopped (debug build), and the server is killed
+# before purge runs. After the restart, KNN reads return the committed table
+# before and after purge removes the old entries. Once purged, locking reads
+# return full results too (the old entries no longer use up the LIMIT, see
+# KNN-24), and the purged state survives another restart.
+
+--let $knn_issue = KNN-29 After a restart, purge leaves the HNSW entries of committed deletes and vector updates
+--source suite/knn_review/include/known_issue.inc
+
+--source include/have_debug.inc
+
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+SET GLOBAL innodb_purge_stop_now = ON;
+DELETE FROM t WHERE id IN (4, 8);
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]');
+--echo # Committed, not purged
+SELECT COUNT(*) AS n FROM t;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--source include/kill_and_restart_mysqld.inc
+--echo # After the restart
+SELECT COUNT(*) AS n FROM t;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--source include/wait_innodb_all_purged.inc
+--echo # Purged
+SELECT COUNT(*) AS n FROM t;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7 FOR UPDATE;
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+--source include/kill_and_restart_mysqld.inc
+--echo # After another restart
+SELECT COUNT(*) AS n FROM t;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7 FOR UPDATE;
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+--echo # The index takes new changes
+INSERT INTO t VALUES (10, 1, 'j', '[1,0,0,0.05]');
+DELETE FROM t WHERE id = 9;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;

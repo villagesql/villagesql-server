@@ -1,0 +1,132 @@
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+SET GLOBAL innodb_purge_stop_now = ON;
+DELETE FROM t WHERE id IN (4, 8);
+UPDATE t SET v = '[9,9,9,9]' WHERE id = 1;
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]');
+# Committed, not purged
+SELECT COUNT(*) AS n FROM t;
+n
+7
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+id
+9
+2
+5
+3
+6
+7
+1
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+9
+2
+5
+# Kill and restart
+# After the restart
+SELECT COUNT(*) AS n FROM t;
+n
+7
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+id
+9
+2
+5
+3
+6
+7
+1
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+9
+2
+5
+# Purged
+SELECT COUNT(*) AS n FROM t;
+n
+7
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+id
+9
+2
+5
+3
+6
+7
+1
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+9
+2
+5
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+9
+2
+5
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7 FOR UPDATE;
+id
+9
+2
+5
+3
+6
+7
+1
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+# Kill and restart
+# After another restart
+SELECT COUNT(*) AS n FROM t;
+n
+7
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+id
+9
+2
+5
+3
+6
+7
+1
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+9
+2
+5
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE;
+id
+9
+2
+5
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7 FOR UPDATE;
+id
+9
+2
+5
+3
+6
+7
+1
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+# The index takes new changes
+INSERT INTO t VALUES (10, 1, 'j', '[1,0,0,0.05]');
+DELETE FROM t WHERE id = 9;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
+id
+10
+2
+5
+3
+6
+7
+1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;
