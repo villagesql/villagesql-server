@@ -33,11 +33,11 @@ Review suite for the custom-index work on deb/custom-index/42 (b9315d6).
   - KNN-4, 5, 7, 8, 10, 20, 22
   - KNN-26: with HNSW and most rows deleted (entries not purged yet), a plain
     KNN query returns too few rows, mostly 1
-  - KNN-27: with HNSW, after purge of scattered deletes, a KNN query on rows
-    on a line returns wrong rows
   - KNN-28: rollback at recovery of a prepared transaction (binary log on)
     that changed an HNSW index fails: UPDATE and DELETE assert, a rolled-back
-    INSERT stays in KNN results
+    INSERT stays in KNN results. Deb is checking (startup sequencing).
+- Known behaviour, tuning planned: KNN-27 (with HNSW, after purge of
+  scattered deletes, a KNN query on rows on a line returns wrong rows).
 - Fixed in /42: KNN-25 (crash recovery asserted on a PK mapping B-tree redo
   record). rollback/hnsw_crash_recovery passes.
 - KNN-12 also happens on main: #1541. Fixed by #1544, which is stacked on

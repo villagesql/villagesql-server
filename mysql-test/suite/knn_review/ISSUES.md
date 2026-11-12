@@ -38,8 +38,8 @@ mark the issue fixed here.
 | KNN-24 | With an HNSW index, entries a READ COMMITTED locking KNN read rejects use up the LIMIT (too few rows) | open, #1398 | locking/hnsw_current_entry_after_change, locking/hnsw_lock_wait_then_delete, locking/hnsw_lock_wait_then_vector_update |
 | KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | fixed in /42 | rollback/hnsw_crash_recovery |
 | KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | open | delete/hnsw_many_deleted |
-| KNN-27 | With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows | open | delete/hnsw_purge_scattered |
-| KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | open | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
+| KNN-27 | With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows | known purge behaviour, tuning planned | delete/hnsw_purge_scattered |
+| KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | open, Deb checking (startup sequencing) | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
 
 ## Not implemented yet
 
@@ -632,6 +632,8 @@ still not implemented on /40.
 
 ## KNN-27: With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows
 
+- Status: known purge behaviour in vsql-vector; Deb plans to tune it. The
+  test stays as a regression check and skips until then.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
   vsql-vector deb/hnsw_index/33 (ce25b42).
 - Repro: HNSW index on 100 rows, row i at `[i,0,0,0]`. Purge stopped
@@ -650,6 +652,7 @@ still not implemented on /40.
 
 ## KNN-28: Rollback at recovery of a prepared transaction that changed an HNSW index fails
 
+- Status: open; Deb is checking it as a server startup sequencing issue.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
   vsql-vector deb/hnsw_index/33 (ce25b42), debug build, binary log on.
 - Repro: table `t (id INT PRIMARY KEY, v SVECTOR(4))` with an HNSW index and
