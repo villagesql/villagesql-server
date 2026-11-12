@@ -1,0 +1,26 @@
+# DDL on a custom type column, run as a prepared statement.
+
+--source include/no_ps_protocol.inc
+--source include/villagesql/install_complex_extension.inc
+
+PREPARE s FROM 'CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX)';
+EXECUTE s;
+DROP TABLE t1;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SHOW CREATE TABLE t1;
+
+CREATE TABLE t2 (id INT PRIMARY KEY);
+PREPARE s FROM 'ALTER TABLE t2 ADD COLUMN val COMPLEX';
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SHOW CREATE TABLE t2;
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t2 VALUES (1, '(3.0,4.0)');
+SELECT id, complex_real(val) AS r FROM t1;
+SELECT id, complex_real(val) AS r FROM t2;
+
+DROP TABLE t1, t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

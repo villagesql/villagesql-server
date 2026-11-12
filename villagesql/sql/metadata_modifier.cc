@@ -1236,7 +1236,14 @@ static bool open_staged_system_tables(THD *thd, Table_ref *first, uint flags,
                                       uint *opened) {
   DML_prelocking_strategy strategy;
   uint counter = 0;
-  if (open_tables(thd, &first, &counter, flags, &strategy)) {
+  // A prepared statement records the versions of the tables it names, and a
+  // statement such as CREATE TABLE asks to be prepared again when a table it
+  // opens has none recorded. The system tables are not the statement's own,
+  // and each prepare would stage them anew, so they must not ask.
+  thd->push_reprepare_observer(nullptr);
+  const bool open_failed = open_tables(thd, &first, &counter, flags, &strategy);
+  thd->pop_reprepare_observer();
+  if (open_failed) {
     villagesql_error("Cannot open VillageSQL system tables", MYF(0));
     return true;
   }
