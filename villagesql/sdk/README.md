@@ -125,13 +125,16 @@ diff as the reference for the full set of edit sites.
    Then retarget every remaining use of `VEF_PROTOCOL_M` outside `stable_sdk/`
    and the enum to `VEF_PROTOCOL_{M+1}`. These name the version a feature was
    added in, not the current version, so they do not use `VEF_PROTOCOL_CURRENT`:
-   - Feature gates (`protocol >= VEF_PROTOCOL_M`) in the server and the builder
+   - Feature checks (`protocol >= VEF_PROTOCOL_M`) in the server and the builder
      headers.
    - Versions the SDK or server writes into a descriptor (e.g. the minimum
      protocol `detail/func_builder.h` reports for a function, and the
      `veb_register_type_v{M}.cc` registration, renamed to match).
-   An `M` gate still works after the roll, because the server rejects `M`, but
-   leave none behind: `grep VEF_PROTOCOL_M` should match only the enum.
+   An `M` check still works after the roll, because the server rejects `M`, but
+   leave none behind. `scripts/check_retired_protocols.sh` lists any that remain
+   outside the enum and `stable_sdk/`. CI runs it on the lines each PR adds and
+   on the whole tree after each push to main, so it also catches references
+   from a branch opened before the roll.
 
 **4. Update the build** — `villagesql/CMakeLists.txt` (`STABLE_SDK_DIR`) and
    `villagesql/cmake/VsqlExtension.cmake` to point the stable include path at
