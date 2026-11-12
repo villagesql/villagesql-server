@@ -31,6 +31,21 @@ ALTER TABLE t1 RENAME INDEX i_r TO I_R;
 SHOW CREATE TABLE t1;
 ALTER TABLE t1 RENAME INDEX I_R TO i_r;
 
+--echo # Two custom indexes swap names in one ALTER.
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_a TO i_r;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_a TO i_r;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # A chain of renames in one ALTER, where the first rename takes the
+--echo # name the second one gives up.
+ALTER TABLE t1 RENAME INDEX i_a TO i_r, RENAME INDEX i_r TO i_z;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_z TO i_r;
+--source include/villagesql/query_custom_indexes.inc
+
 --echo # Also when the ALTER rebuilds the table.
 ALTER TABLE t1 RENAME INDEX i_r TO i_s, ALGORITHM=COPY;
 --source include/villagesql/query_custom_indexes.inc

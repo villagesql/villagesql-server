@@ -16,6 +16,7 @@
 
 #include "villagesql/sql/metadata_modifier.h"
 
+#include <limits>
 #include <map>
 #include <unordered_set>
 #include <utility>
@@ -517,24 +518,30 @@ bool Metadata_modifier::rename_indexes_table(
   auto guard = vclient.get_read_lock();
 
   // The table's indexes as the renames already staged here leave them, as in
-  // rename_columns_table().
+  // rename_columns_table(). An index an earlier rename produced also records
+  // the position of that rename in to_rename_indexes_.
+  constexpr size_t not_staged = std::numeric_limits<size_t>::max();
   const std::string old_prefix = IndexKeyPrefix(old_db, old_table).str();
-  std::map<std::string, const IndexEntry *> custom_indexes;
+  std::map<std::string, std::pair<const IndexEntry *, size_t>> custom_indexes;
   for (const IndexEntry *entry :
        vclient.GetCustomIndexesForTable(old_db, old_table)) {
-    if (entry) custom_indexes[entry->key().str()] = entry;
+    if (entry) custom_indexes[entry->key().str()] = {entry, not_staged};
   }
-  for (const auto &[staged_entry, staged_old_key] : to_rename_indexes_) {
+  for (size_t i = 0; i < to_rename_indexes_.size(); ++i) {
+    const auto &[staged_entry, staged_old_key] = to_rename_indexes_[i];
     custom_indexes.erase(staged_old_key.str());
     const std::string staged_key = staged_entry.key().str();
     if (staged_key.starts_with(old_prefix))
-      custom_indexes[staged_key] = &staged_entry;
+      custom_indexes[staged_key] = {&staged_entry, i};
   }
 
   // Built apart from to_rename_indexes_, which custom_indexes may point into.
+  // Each rename comes with the position of the staged rename it continues.
+  std::vector<std::pair<IndexEntry, size_t>> continued;
   std::vector<std::pair<IndexEntry, IndexKey>> renames;
   renames.reserve(custom_indexes.size());
-  for (const auto &[_, old_index] : custom_indexes) {
+  for (const auto &[_, staged] : custom_indexes) {
+    const auto [old_index, staged_pos] = staged;
     const std::string old_index_name =
         canonical_index_name(old_index->index_name());
     if (skip_indexes != nullptr && skip_indexes->count(old_index_name) > 0)
@@ -557,8 +564,15 @@ bool Metadata_modifier::rename_indexes_table(
         std::move(new_key), old_index->index_id, old_index->extension_name,
         old_index->extension_version, old_index->index_type_name,
         old_index->index_type_parameters);
-    renames.emplace_back(std::move(new_entry), old_index->key());
+    if (staged_pos == not_staged)
+      renames.emplace_back(std::move(new_entry), old_index->key());
+    else
+      continued.emplace_back(std::move(new_entry), staged_pos);
   }
+  // A rename of an index an earlier rename produced replaces that rename's
+  // target, so the row is deleted under the name it has in the table.
+  for (auto &[entry, pos] : continued)
+    to_rename_indexes_[pos].first = std::move(entry);
   for (auto &rename : renames) to_rename_indexes_.push_back(std::move(rename));
 
   return false;
@@ -1138,10 +1152,17 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   }
   to_remove_indexes_.clear();
 
-  // 5b. Process custom index renames (updates with old key).
+  // 5b. Process custom index renames. Each deletes the row under the old name
+  // and inserts it under the new one with the same index_id. All deletes come
+  // first, so renames that swap or chain names in one statement never insert
+  // a name another row still holds.
+  for (const auto &[new_entry, old_key] : to_rename_indexes_) {
+    if (vclient.custom_indexes().MarkForDeletion(*thd, old_key)) {
+      return true;
+    }
+  }
   for (auto &[new_entry, old_key] : to_rename_indexes_) {
-    if (vclient.custom_indexes().MarkForUpdate(*thd, std::move(new_entry),
-                                               std::move(old_key))) {
+    if (vclient.custom_indexes().MarkForInsertion(*thd, std::move(new_entry))) {
       return true;
     }
     marked_index = true;

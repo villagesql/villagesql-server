@@ -62,6 +62,65 @@ t1	CREATE TABLE `t1` (
   KEY `i_a` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 RENAME INDEX I_R TO i_r;
+# Two custom indexes swap names in one ALTER.
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_a TO i_r;
+Warnings:
+Warning	1025	Error renaming an index of table 't1' from 'i_r' to 'i_a' in InnoDB persistent statistics storage: Duplicate key
+Warning	1025	Error renaming an index of table 't1' from 'i_a' to 'i_r' in InnoDB persistent statistics storage: Duplicate key
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+t1	i_r	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_a` (`a` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_r` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_a TO i_r;
+Warnings:
+Warning	1025	Error renaming an index of table 't1' from 'i_r' to 'i_a' in InnoDB persistent statistics storage: Duplicate key
+Warning	1025	Error renaming an index of table 't1' from 'i_a' to 'i_r' in InnoDB persistent statistics storage: Duplicate key
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t1	i_r	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+# A chain of renames in one ALTER, where the first rename takes the
+# name the second one gives up.
+ALTER TABLE t1 RENAME INDEX i_a TO i_r, RENAME INDEX i_r TO i_z;
+Warnings:
+Warning	1025	Error renaming an index of table 't1' from 'i_a' to 'i_r' in InnoDB persistent statistics storage: Duplicate key
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_z	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_r	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t1	i_z	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_z` (`a` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_r` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_z TO i_r;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t1	i_r	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
 # Also when the ALTER rebuilds the table.
 ALTER TABLE t1 RENAME INDEX i_r TO i_s, ALGORITHM=COPY;
 db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
