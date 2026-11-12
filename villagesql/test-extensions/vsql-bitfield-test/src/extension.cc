@@ -296,8 +296,8 @@ void bitfield_from_bytes(vsql::BinaryArg in, vsql::CustomResult out) {
 //
 // A varargs signature carries no parameter list, and with neither a prerun nor
 // a bind_and_check_types hook, a call on one string constant reaches the
-// server's constant inference path. Inference then has no parameter to read the
-// constant's type from.
+// server's constant inference path. With no parameter type to go by, inference
+// passes the constant as STRING, as a varargs call marshals it at row time.
 void bitfield_from_args(vsql::VarArgs args, vsql::CustomResult out) {
   std::string bytes;
   for (size_t i = 0; i < args.size(); i++) {

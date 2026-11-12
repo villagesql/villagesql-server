@@ -50,10 +50,9 @@ bool LookupTypeForInference(std::string_view extension_name,
 // since a varargs VDF has no parameter list to read it from.
 //
 // The VDF is called with its type params unknown; an encode VDF gets
-// MaybeParams<P> in the unknown
-// state. The SDK wrapper writes the inferred canonical "k=v,k=v" params
-// string back through the vef_inferred_type_params_t channel on
-// vef_vdf_result_t.
+// MaybeParams<P> in the unknown state. The SDK wrapper writes the inferred
+// canonical "k=v,k=v" params string back through the
+// vef_inferred_type_params_t channel on vef_vdf_result_t.
 //
 // Returns false on success; out_inferred holds the inferred TypeParameters
 // and out_encoded_bytes holds the encoded binary value (length-trimmed).
@@ -63,9 +62,11 @@ bool LookupTypeForInference(std::string_view extension_name,
 // the input was NULL). Caller should fall through to its existing ambiguity
 // error path.
 //
-// Returns true and calls my_error() if the VDF signaled
-// a warning or error (malformed literal, etc.) — that's a fix_fields-time
-// failure for the constant-string inference case.
+// Returns true and calls my_error() if the VDF signaled a warning or error
+// (malformed literal, etc.), which is a fix_fields-time failure for the
+// constant inference case.
+// TODO(villagesql-general): rename this file to something like
+// constant_inference.h.
 bool InferFromConstant(THD *thd, int64_t max_persisted_length,
                        const vef_func_desc_t *encode_vdf, vef_type_id arg_type,
                        std::string_view constant, TypeParameters *out_inferred,

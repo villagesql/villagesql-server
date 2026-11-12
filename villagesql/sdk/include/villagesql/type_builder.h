@@ -156,6 +156,9 @@ class TypeBuilder {
 
   constexpr TypeDescriptor build() const {
     TypeDescriptor desc{};
+    // TODO(villagesql-general): vef_type_desc_t is initialized by position, so
+    // every field added to it needs an entry at the end here. Initialize it by
+    // field name, or drop this builder along with the pre-vsql API.
     const bool use_raw_ptrs = encode_func_ != nullptr ||
                               decode_func_ != nullptr ||
                               compare_func_ != nullptr;

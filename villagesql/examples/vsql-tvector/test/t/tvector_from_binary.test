@@ -28,6 +28,15 @@ SELECT vsql_tvector.tvector_dim(TVECTOR::from_binary(0x0000803F)) AS n;
 --error ER_VILLAGESQL_GENERIC_ERROR
 SELECT TVECTOR::from_binary(0x0000803F00) AS v;
 
+# A bit literal is binary too: these 32 bits are the bytes 00 00 80 3F, 1.0.
+SELECT TVECTOR::from_binary(b'00000000000000001000000000111111') AS v;
+
+# More elements than a TVECTOR may have.
+SET @v = REPEAT(0x0000803F, 4097);
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::from_binary(@v) AS v;
+SET @v = NULL;
+
 ########################################################################
 #
 # 3. A prepared-statement parameter.

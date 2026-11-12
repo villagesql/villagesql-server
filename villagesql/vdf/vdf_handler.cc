@@ -230,12 +230,14 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     return true;
   }
 
-  // Constant-string from_string inference.
+  // Constant inference.
   //
   // If the return type's params are still unknown after type disambiguation
-  // rules and the call matches `<TYPE>::from_string(<string-const>)` with a
-  // deterministic VDF, we pre-execute the encode VDF here to learn the params
-  // from the input string. The SDK wrapper writes the inferred canonical
+  // rules and the call is a deterministic one-argument VDF returning a
+  // parameterized type on a constant, such as
+  // `<TYPE>::from_string(<string-const>)` or
+  // `<TYPE>::from_binary(<binary-const>)`, we pre-execute the VDF here to learn
+  // the params from the constant. The SDK wrapper writes the inferred canonical
   // params back through vef_inferred_type_params_t; we bind them to
   // return_params so SetVDFReturnTypeContext below populates the outer call's
   // return TypeContext. The VDF re-runs at row time on the original argument,
@@ -249,8 +251,8 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   // bit literal.
   // The deterministic flag only exists as of VEF_PROTOCOL_3; older descriptors
   // leave that byte uninitialized, so guard the read on the protocol version.
-  // A VDF with a prerun is not pre-executed: the call would come before prerun,
-  // with none of the state prerun sets up.
+  // A VDF with a prerun is not pre-executed here: this call would run before
+  // its prerun has set up the state the VDF reads (user_data).
   const vef_type_id param_id =
       signature != nullptr && signature->param_count == 1
           ? signature->params[0].id

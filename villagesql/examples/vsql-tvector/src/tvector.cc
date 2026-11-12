@@ -963,6 +963,12 @@ void tvector_from_binary(vsql::MaybeParams<TVectorParams> &p,
     return;
   }
   const size_t count = from.size() / bpe;
+  if (count > static_cast<size_t>(kTVectorMaxDimension)) {
+    out.warning("tvector_from_binary: " + std::to_string(count) +
+                " elements; the maximum is " +
+                std::to_string(kTVectorMaxDimension));
+    return;
+  }
   if (p.is_known()) {
     if (count != static_cast<size_t>(p.value().dimension)) {
       out.warning("tvector_from_binary: dimension mismatch");

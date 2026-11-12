@@ -59,8 +59,8 @@ bool InferFromConstant(THD * /*thd*/, int64_t max_persisted_length,
                        std::string_view constant, TypeParameters *out_inferred,
                        std::string *out_encoded_bytes) {
   // Pre-conditions: the caller should have already verified that the type is
-  // parameterized and that the VDF is the type's encode VDF. We still guard
-  // defensively so a bad call doesn't crash.
+  // parameterized and that the VDF returns it. We still guard defensively so a
+  // bad call doesn't crash.
   if (encode_vdf == nullptr || encode_vdf->vdf == nullptr) {
     return true;
   }

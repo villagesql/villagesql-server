@@ -807,6 +807,11 @@ void real_avg_result(const RealAvgState &state, vsql::RealResult out) {
   out.set(state.sum / static_cast<double>(state.count));
 }
 
+// PVEC has no binary form. Its from_binary returns without setting an
+// outcome, so that a call shows the SDK's default encode warning.
+void pvec_from_binary(vsql::MaybeParams<PVecParams> &,
+                      vsql::Span<const unsigned char>, vsql::CustomResult) {}
+
 static constexpr const char kPVecTypeName[] = "PVEC";
 
 constexpr auto PVEC =
@@ -818,6 +823,7 @@ constexpr auto PVEC =
         .int_to_params<&pvec_int_to_params>()
         .resolve_params<&pvec_resolve_params>()
         .from_string<&pvec_from_string>()
+        .from_binary<&pvec_from_binary>()
         .to_string<&pvec_to_string>()
         .compare<&pvec_compare>()
         .build();
