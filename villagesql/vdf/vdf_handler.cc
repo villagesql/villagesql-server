@@ -44,10 +44,10 @@ namespace vdf {
 // safely pre-execute at fix_fields time: a constant-for-execution Item whose
 // val_str() has no side effects. Today this covers string literals, read-only
 // user variables (e.g. @v after `SET @v = '[...]'`) and prepared-statement
-// parameters holding a string. A parameter has no value at PREPARE, but every
-// EXECUTE of a statement calling a VDF prepares it again with the values bound
-// (see MaybeCopyPsParamStringValues). If the parameter is STRING_VALUE there,
-// we can infer the params from it.
+// parameters holding a string. A parameter has no value at PREPARE, but a
+// statement inferring from one is prepared again at every EXECUTE with the
+// values bound (see MaybeCopyPsParamStringValues). If the parameter is
+// STRING_VALUE there, we can infer the params from it.
 static bool is_inferrable_string_const(Item *arg) {
   if (!arg->const_for_execution()) return false;
   if (arg->type() == Item::STRING_ITEM) return true;

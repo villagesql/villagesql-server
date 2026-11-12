@@ -278,6 +278,105 @@ total
 reprepares
 0
 DEALLOCATE PREPARE s;
+#
+# A ? as a VDF argument, bound with text and with binary in turn
+#
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+SET @c = '(7.0,8.0)';
+EXECUTE s USING @c;
+r
+7
+SET @c = CAST('(9.0,1.0)' AS BINARY);
+EXECUTE s USING @c;
+r
+9
+SET @c = '(2.0,3.0)';
+EXECUTE s USING @c;
+r
+2
+SET @c = X'28362E302C312E3029';
+EXECUTE s USING @c;
+r
+6
+reprepares
+0
+DEALLOCATE PREPARE s;
+CREATE TABLE tb (id INT PRIMARY KEY, val COMPLEX);
+PREPARE s FROM 'INSERT INTO tb VALUES (?, ?)';
+SET @id = 1, @c = '(1.0,1.0)';
+EXECUTE s USING @id, @c;
+SET @id = 2, @c = CAST('(2.0,2.0)' AS BINARY);
+EXECUTE s USING @id, @c;
+SET @id = 3, @c = '(3.0,3.0)';
+EXECUTE s USING @id, @c;
+DEALLOCATE PREPARE s;
+SELECT id, complex_real(val) AS r, complex_imag(val) AS i FROM tb ORDER BY id;
+id	r	i
+1	1	1
+2	2	2
+3	3	3
+DROP TABLE tb;
+#
+# A ? as a VDF argument, bound with a number and with a string in turn,
+# next to the same calls with literals
+#
+SELECT complex_real(5) AS r;
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 must be a custom type or string constant
+SELECT complex_real(2.5) AS r;
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 must be a custom type or string constant
+SELECT complex_real('(4.0,1.0)') AS r;
+r
+4
+PREPARE s FROM 'SELECT complex_real(?) AS r';
+SET @c = 5;
+EXECUTE s USING @c;
+ERROR HY000: VDF error in function 'complex_real': argument malformed
+SET @c = 2.5;
+EXECUTE s USING @c;
+ERROR HY000: VDF error in function 'complex_real': argument malformed
+SET @c = '(4.0,1.0)';
+EXECUTE s USING @c;
+r
+4
+SET @c = 5;
+EXECUTE s USING @c;
+ERROR HY000: VDF error in function 'complex_real': argument malformed
+reprepares
+2
+DEALLOCATE PREPARE s;
+#
+# The column's type params cannot be changed in place, even with the
+# table empty, so the statement's ? keeps the column's dimension
+#
+CREATE TABLE tm (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO tm VALUES (1, '[1,2,3]');
+PREPARE s FROM 'SELECT id, tvector_dot_product(vec, ?) AS d FROM tm';
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+id	d
+1	6
+DELETE FROM tm;
+ALTER TABLE tm MODIFY vec TVECTOR(4) NOT NULL;
+ERROR HY000: Cannot convert between incompatible custom types 'vsql_tvector.TVECTOR(3)' and 'vsql_tvector.TVECTOR(4)'
+INSERT INTO tm VALUES (1, '[1,2,3]');
+SET @v = '[2,2,2]';
+EXECUTE s USING @v;
+id	d
+1	12
+SET @v = '[1,1,1,1]';
+EXECUTE s USING @v;
+ERROR HY000: Incorrect vsql_tvector.TVECTOR(3) value: '[1,1,1,1]' for parameter '?'
+reprepares
+0
+DEALLOCATE PREPARE s;
+SHOW CREATE TABLE tm;
+Table	Create Table
+tm	CREATE TABLE `tm` (
+  `id` int NOT NULL,
+  `vec` vsql_tvector.TVECTOR(3) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE tm;
 SET @c = NULL, @v = NULL, @p = NULL, @id = NULL, @sum = NULL, @total = NULL;
 DROP TABLE tc;
 DROP TABLE tv;
