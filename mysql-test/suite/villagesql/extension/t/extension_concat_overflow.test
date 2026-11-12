@@ -110,7 +110,7 @@ SELECT LENGTH(@var);
 SELECT @var = REPEAT(UNHEX('00000000000014400000000000001840'), 400);
 
 --echo # Drop table with complex
-DROP table t;
+DROP TABLE t;
 
 --echo # Uninstall the extensions
 UNINSTALL EXTENSION vsql_simple;
