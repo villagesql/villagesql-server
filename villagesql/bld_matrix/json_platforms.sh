@@ -21,8 +21,8 @@
 set -euo pipefail
 
 jq -sc . <<'PLATFORMS'
-{"platform":"linux-x86_64","runner":["self-hosted","vsql_build_worker","Linux","x86_64"],"os":"linux"}
+{"platform":"linux-x86_64","runner":["self-hosted","server_build_worker","ubuntu_24","linux-server","x86_64"],"os":"linux"}
 {"platform":"linux-aarch64","runner":"ubuntu-24.04-arm","os":"linux"}
-{"platform":"linux-s390x","runner":["self-hosted","vsql_build_worker","Linux","S390X"],"os":"linux"}
+{"platform":"linux-s390x","runner":["self-hosted","server_build_worker","Linux","S390X"],"os":"linux"}
 {"platform":"macos-arm64","runner":["self-hosted","macOS","ARM64"],"os":"macos"}
 PLATFORMS

@@ -30,6 +30,6 @@
 set -euo pipefail
 
 jq -sc . <<'IMAGES'
-{"docker_platform":"linux/amd64","runner":["self-hosted", "vsql_build_worker", "Linux", "x86_64"]}
+{"docker_platform":"linux/amd64","runner":["self-hosted", "server_build_worker", "ubuntu_24", "linux-server", "x86_64"]}
 {"docker_platform":"linux/arm64","runner":"ubuntu-24.04-arm"}
 IMAGES
