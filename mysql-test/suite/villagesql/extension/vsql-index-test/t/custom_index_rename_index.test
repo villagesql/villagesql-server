@@ -1,0 +1,64 @@
+# Renaming a custom (USING EXTENDED) index keeps it a custom index. Its row in
+# villagesql.custom_indexes follows the index to its new name, with its type and
+# profile, also when the ALTER rebuilds or renames the table. No row is left under the old name, so the old name can be reused and
+# the extension can be uninstalled once the table is dropped.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector, b dummy_type_vector,
+  INDEX i_a (a dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw));
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # RENAME INDEX moves the index metadata to the new index name.
+ALTER TABLE t1 RENAME INDEX i_a TO i_r;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+
+--echo # The renamed index is still a custom index: a later in-place ALTER,
+--echo # which writes every index's storage reference back, succeeds.
+ALTER TABLE t1 ADD INDEX i_id (id), ALGORITHM=INPLACE;
+ALTER TABLE t1 DROP INDEX i_id, ALGORITHM=INPLACE;
+
+--echo # The old index name can be reused.
+ALTER TABLE t1 ADD INDEX i_a (b) USING EXTENDED(dummy_index_hnsw);
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+
+--echo # A rename that only changes the case keeps the name as typed.
+ALTER TABLE t1 RENAME INDEX i_r TO I_R;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 RENAME INDEX I_R TO i_r;
+
+--echo # Two custom indexes swap names in one ALTER.
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_a TO i_r;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_a TO i_r;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # A chain of renames in one ALTER, where the first rename takes the
+--echo # name the second one gives up.
+ALTER TABLE t1 RENAME INDEX i_a TO i_r, RENAME INDEX i_r TO i_z;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_z TO i_r;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # Also when the ALTER rebuilds the table.
+ALTER TABLE t1 RENAME INDEX i_r TO i_s, ALGORITHM=COPY;
+--source include/villagesql/query_custom_indexes.inc
+
+--echo # And together with a table rename.
+ALTER TABLE t1 RENAME TO t2, RENAME INDEX i_s TO i_t;
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t2;
+ALTER TABLE t2 ADD INDEX i_id (id), ALGORITHM=INPLACE;
+ALTER TABLE t2 DROP INDEX i_id, ALGORITHM=INPLACE;
+
+--echo # With the table dropped, the extension can be uninstalled.
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

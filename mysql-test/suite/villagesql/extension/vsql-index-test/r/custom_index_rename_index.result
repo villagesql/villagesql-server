@@ -1,0 +1,156 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector, b dummy_type_vector,
+INDEX i_a (a dummy_profile_hnsw_desc DESC) USING EXTENDED(dummy_index_hnsw));
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+# RENAME INDEX moves the index metadata to the new index name.
+ALTER TABLE t1 RENAME INDEX i_a TO i_r;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_r	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_r` (`a` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# The renamed index is still a custom index: a later in-place ALTER,
+# which writes every index's storage reference back, succeeds.
+ALTER TABLE t1 ADD INDEX i_id (id), ALGORITHM=INPLACE;
+ALTER TABLE t1 DROP INDEX i_id, ALGORITHM=INPLACE;
+# The old index name can be reused.
+ALTER TABLE t1 ADD INDEX i_a (b) USING EXTENDED(dummy_index_hnsw);
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t1	i_r	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_r` (`a` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_a` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# A rename that only changes the case keeps the name as typed.
+ALTER TABLE t1 RENAME INDEX i_r TO I_R;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	I_R	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	I_R	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+t1	i_a	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `I_R` (`a` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_a` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 RENAME INDEX I_R TO i_r;
+# Two custom indexes swap names in one ALTER.
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_a TO i_r;
+Warnings:
+Warning	1025	Error renaming an index of table 't1' from 'i_r' to 'i_a' in InnoDB persistent statistics storage: Duplicate key
+Warning	1025	Error renaming an index of table 't1' from 'i_a' to 'i_r' in InnoDB persistent statistics storage: Duplicate key
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+t1	i_r	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_a` (`a` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_r` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_a TO i_r;
+Warnings:
+Warning	1025	Error renaming an index of table 't1' from 'i_r' to 'i_a' in InnoDB persistent statistics storage: Duplicate key
+Warning	1025	Error renaming an index of table 't1' from 'i_a' to 'i_r' in InnoDB persistent statistics storage: Duplicate key
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t1	i_r	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+# A chain of renames in one ALTER, where the first rename takes the
+# name the second one gives up.
+ALTER TABLE t1 RENAME INDEX i_a TO i_r, RENAME INDEX i_r TO i_z;
+Warnings:
+Warning	1025	Error renaming an index of table 't1' from 'i_a' to 'i_r' in InnoDB persistent statistics storage: Duplicate key
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_z	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_r	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t1	i_z	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_z` (`a` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_r` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 RENAME INDEX i_r TO i_a, RENAME INDEX i_z TO i_r;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t1	i_r	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+# Also when the ALTER rebuilds the table.
+ALTER TABLE t1 RENAME INDEX i_r TO i_s, ALGORITHM=COPY;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t1	i_s	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t1	i_s	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+# And together with a table rename.
+ALTER TABLE t1 RENAME TO t2, RENAME INDEX i_s TO i_t;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t2	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+test	t2	i_t	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t2	i_a	0	b	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+t2	i_t	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_desc
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  `b` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_t` (`a` `vsql_index_test`.`dummy_profile_hnsw_desc` DESC) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`),
+  KEY `i_a` (`b` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t2 ADD INDEX i_id (id), ALGORITHM=INPLACE;
+ALTER TABLE t2 DROP INDEX i_id, ALGORITHM=INPLACE;
+# With the table dropped, the extension can be uninstalled.
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

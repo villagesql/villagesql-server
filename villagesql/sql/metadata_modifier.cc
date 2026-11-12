@@ -16,6 +16,7 @@
 
 #include "villagesql/sql/metadata_modifier.h"
 
+#include <limits>
 #include <map>
 #include <unordered_set>
 #include <utility>
@@ -488,7 +489,8 @@ bool Metadata_modifier::rename_columns_table(
 
 bool Metadata_modifier::rename_indexes_table(
     THD *thd [[maybe_unused]], Table_name old_name, Table_name new_name,
-    const std::unordered_set<std::string> *skip_indexes) {
+    const std::unordered_set<std::string> *skip_indexes,
+    const std::map<std::string, std::string> *index_renames) {
   if (should_assert_if_null(old_name.first) ||
       should_assert_if_null(old_name.second) ||
       should_assert_if_null(new_name.first) ||
@@ -516,36 +518,65 @@ bool Metadata_modifier::rename_indexes_table(
   auto guard = vclient.get_read_lock();
 
   // The table's indexes as the renames already staged here leave them, as in
-  // rename_columns_table().
+  // rename_columns_table(). An index an earlier rename produced also records
+  // the position of that rename in to_rename_indexes_.
+  constexpr size_t not_staged = std::numeric_limits<size_t>::max();
   const std::string old_prefix = IndexKeyPrefix(old_db, old_table).str();
-  std::map<std::string, const IndexEntry *> custom_indexes;
+  std::map<std::string, std::pair<const IndexEntry *, size_t>> custom_indexes;
   for (const IndexEntry *entry :
        vclient.GetCustomIndexesForTable(old_db, old_table)) {
-    if (entry) custom_indexes[entry->key().str()] = entry;
+    if (entry) custom_indexes[entry->key().str()] = {entry, not_staged};
   }
-  for (const auto &[staged_entry, staged_old_key] : to_rename_indexes_) {
+  // Each staged rename runs from a committed key to the index's current key,
+  // and they all apply at once. So drop every old key before adding any
+  // current one, since one rename's current key may be another's old key.
+  for (const auto &[_, staged_old_key] : to_rename_indexes_)
     custom_indexes.erase(staged_old_key.str());
+  for (size_t i = 0; i < to_rename_indexes_.size(); ++i) {
+    const IndexEntry &staged_entry = to_rename_indexes_[i].first;
     const std::string staged_key = staged_entry.key().str();
     if (staged_key.starts_with(old_prefix))
-      custom_indexes[staged_key] = &staged_entry;
+      custom_indexes[staged_key] = {&staged_entry, i};
   }
 
   // Built apart from to_rename_indexes_, which custom_indexes may point into.
+  // Each rename comes with the position of the staged rename it continues.
+  std::vector<std::pair<IndexEntry, size_t>> continued;
   std::vector<std::pair<IndexEntry, IndexKey>> renames;
   renames.reserve(custom_indexes.size());
-  for (const auto &[_, old_index] : custom_indexes) {
-    if (skip_indexes != nullptr &&
-        skip_indexes->count(canonical_index_name(old_index->index_name())) > 0)
+  for (const auto &[_, staged] : custom_indexes) {
+    const auto [old_index, staged_pos] = staged;
+    const std::string old_index_name =
+        canonical_index_name(old_index->index_name());
+    if (skip_indexes != nullptr && skip_indexes->count(old_index_name) > 0)
+      continue;
+
+    std::string new_index_name = old_index->index_name();
+    if (index_renames != nullptr) {
+      auto it = index_renames->find(old_index_name);
+      if (it != index_renames->end()) new_index_name = it->second;
+    }
+    IndexKey new_key(new_db, new_table, new_index_name);
+    // A rename that only changes the case of the index name keeps the key, but
+    // the stored name has to follow it to match the data dictionary.
+    if (new_key.str() == old_index->key().str() &&
+        new_index_name == old_index->index_name())
       continue;
 
     // index_id stays, so the index's custom_index_columns rows still apply.
-    IndexEntry new_entry(IndexKey(new_db, new_table, old_index->index_name()),
-                         old_index->index_id, old_index->extension_name,
-                         old_index->extension_version,
-                         old_index->index_type_name,
-                         old_index->index_type_parameters);
-    renames.emplace_back(std::move(new_entry), old_index->key());
+    IndexEntry new_entry(
+        std::move(new_key), old_index->index_id, old_index->extension_name,
+        old_index->extension_version, old_index->index_type_name,
+        old_index->index_type_parameters);
+    if (staged_pos == not_staged)
+      renames.emplace_back(std::move(new_entry), old_index->key());
+    else
+      continued.emplace_back(std::move(new_entry), staged_pos);
   }
+  // A rename of an index an earlier rename produced replaces that rename's
+  // target, so the row is deleted under the name it has in the table.
+  for (auto &[entry, pos] : continued)
+    to_rename_indexes_[pos].first = std::move(entry);
   for (auto &rename : renames) to_rename_indexes_.push_back(std::move(rename));
 
   return false;
@@ -1125,10 +1156,17 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   }
   to_remove_indexes_.clear();
 
-  // 5b. Process custom index renames (updates with old key).
+  // 5b. Process custom index renames. Each deletes the row under the old name
+  // and inserts it under the new one with the same index_id. All deletes come
+  // first, so renames that swap or chain names in one statement never insert
+  // a name another row still holds.
+  for (const auto &[new_entry, old_key] : to_rename_indexes_) {
+    if (vclient.custom_indexes().MarkForDeletion(*thd, old_key)) {
+      return true;
+    }
+  }
   for (auto &[new_entry, old_key] : to_rename_indexes_) {
-    if (vclient.custom_indexes().MarkForUpdate(*thd, std::move(new_entry),
-                                               std::move(old_key))) {
+    if (vclient.custom_indexes().MarkForInsertion(*thd, std::move(new_entry))) {
       return true;
     }
     marked_index = true;
@@ -1344,13 +1382,18 @@ bool Metadata_modifier::process_alter(THD *thd,
     return true;
   }
 
-  if (renaming_table) {
+  std::map<std::string, std::string> index_renames;
+  for (const Alter_rename_key *rename_key : alter_info->alter_rename_key_list)
+    index_renames[canonical_index_name(rename_key->old_name)] =
+        rename_key->new_name;
+
+  if (renaming_table || !index_renames.empty()) {
     std::unordered_set<std::string> dropped_indexes;
     for (const IndexEntry &entry : custom_modifier.to_remove_indexes_)
       dropped_indexes.insert(canonical_index_name(entry.index_name()));
-    if (custom_modifier.rename_indexes_table(thd, {db, table_name},
-                                             {new_db, new_table_name},
-                                             &dropped_indexes)) {
+    if (custom_modifier.rename_indexes_table(
+            thd, {db, table_name}, {new_db, new_table_name}, &dropped_indexes,
+            &index_renames)) {
       return true;
     }
   }
