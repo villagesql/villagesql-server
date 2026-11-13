@@ -110,15 +110,29 @@ class vdf_handler {
   void RunPostrun();
 };
 
-// A VDF can deduce a custom type's params from a string value, e.g.
-// TVECTOR::from_string(?) with '...' bound to the `?`. Such a statement is
-// prepared again at every EXECUTE. Preparing again makes new `?` objects, and
-// MySQL gives them the bound values only after the statement is resolved. So
-// for a statement that calls a VDF, copy the string ('...') to the new `?`
-// object before resolving, so that the params can be deduced from it. A
-// DECIMAL is copied too, so that prerun sees the value.
-void MaybeCopyPsParamValues(Item *item_list, Item_param **to,
-                            Item_param *const *from, uint count);
+// A statement that calls a VDF can be prepared again at EXECUTE. Preparing
+// again makes new `?` objects, and MySQL moves the bound values into them
+// (swap_parameter_array) only after the statement is resolved. But resolving
+// already needs them: a VDF deduces a custom type's params from a string, e.g.
+// TVECTOR::from_string(?), and prerun gets each `?`'s value as a constant.
+// So for a statement that calls a VDF, this lends the values to the new `?`
+// objects while it lives, and gives them back when destroyed, before MySQL
+// moves them. Lending swaps buffers, so nothing is copied, and the code that
+// runs meanwhile only reads the values. Does nothing when `from` is nullptr,
+// i.e. at a first PREPARE.
+class PsParamValueLoan {
+ public:
+  PsParamValueLoan(Item *item_list, Item_param **to, Item_param **from,
+                   uint count);
+  ~PsParamValueLoan();
+  PsParamValueLoan(const PsParamValueLoan &) = delete;
+  PsParamValueLoan &operator=(const PsParamValueLoan &) = delete;
+
+ private:
+  Item_param **m_to{nullptr};
+  Item_param **m_from{nullptr};
+  uint m_count{0};
+};
 
 }  // namespace vdf
 }  // namespace villagesql

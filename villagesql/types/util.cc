@@ -2301,7 +2301,7 @@ static bool CallBindTypesHook(
     // Provide constant string values where available, in the charset of the
     // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
     // unconverted for any other. A bare ? is read only when it holds a string
-    // (see MaybeCopyPsParamValues). A ? with no value, possibly nested,
+    // (see PsParamValueLoan). A ? with no value, possibly nested,
     // is not expected here: ValidateAndConvertVDFArguments postpones the hook.
     const bool bare_param_without_string =
         args[i]->type() == Item::PARAM_ITEM &&

@@ -39,6 +39,29 @@ EXECUTE s USING @p;
 param
 const INT 6
 DEALLOCATE PREPARE s;
+# A string inside a numeric expression
+SET @p = '5';
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(? * 1.0) AS param';
+EXECUTE s USING @p;
+param
+const STRING '5.000000000000000000000000000000'
+DEALLOCATE PREPARE s;
+# A NULL inside an expression: the expression sees the NULL
+SET @p = NULL;
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(? + 0) AS param';
+EXECUTE s USING @p;
+param
+const INT NULL
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(COALESCE(?, 9)) AS param';
+EXECUTE s USING @p;
+param
+const INT 9
+PREPARE s FROM
+'SELECT state_and_varargs.prerun_const(IFNULL(? * 1.0, -1)) AS param';
+EXECUTE s USING @p;
+param
+const STRING '-1.000000000000000000000000000000'
+DEALLOCATE PREPARE s;
 # The same as a NULL literal: int_sum_all accepts INT or a constant NULL
 INSTALL EXTENSION vsql_test_only;
 SELECT vsql_test_only.int_sum_all(1, NULL, 2) AS total;
