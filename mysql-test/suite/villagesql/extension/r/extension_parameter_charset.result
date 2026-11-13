@@ -36,21 +36,34 @@ FROM villagesql.custom_columns
 WHERE db_name = DATABASE() AND table_name = 't_latin';
 type_parameters	same_parameters
 {"label": "café", "length": "3"}	1
-# Emoji is stored, but SHOW CREATE replaces it with '?'
 CREATE TABLE t_unicode (v LENIENT_PARAM_TYPE('length=3,label=É😀'));
+# restart
+SET NAMES utf8mb4;
+SET SESSION debug='+d,skip_dd_table_access_check';
 SELECT type_parameters FROM villagesql.custom_columns
 WHERE db_name = DATABASE() AND table_name = 't_unicode';
 type_parameters
 {"label": "é😀", "length": "3"}
-FLUSH TABLES;
 SELECT COUNT(*) FROM t_unicode;
 COUNT(*)
 0
+SET @original_parameters = (SELECT type_parameters FROM villagesql.custom_columns
+WHERE db_name = DATABASE() AND table_name = 't_unicode');
 SHOW CREATE TABLE t_unicode;
 Table	Create Table
 t_unicode	CREATE TABLE `t_unicode` (
-  `v` vsql_test_only.LENIENT_PARAM_TYPE('label=é?,length=3') DEFAULT NULL
+  `v` vsql_test_only.LENIENT_PARAM_TYPE('label=é😀,length=3') DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_unicode;
+CREATE TABLE `t_unicode` (
+  `v` vsql_test_only.LENIENT_PARAM_TYPE('label=é😀,length=3') DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+SELECT type_parameters,
+type_parameters = CAST(@original_parameters AS JSON) AS same_parameters
+FROM villagesql.custom_columns
+WHERE db_name = DATABASE() AND table_name = 't_unicode';
+type_parameters	same_parameters
+{"label": "é😀", "length": "3"}	1
 CREATE TABLE t_duplicate (v LENIENT_PARAM_TYPE('length=3,resume=a,résumé=b'));
 ERROR 42000: Type 'vsql_test_only.LENIENT_PARAM_TYPE': duplicate parameter 'résumé' near 'LENIENT_PARAM_TYPE('length=3,resume=a,résumé=b'))' at line 1
 CREATE TABLE t_nul (v LENIENT_PARAM_TYPE('length=3,label=x\0y'));
