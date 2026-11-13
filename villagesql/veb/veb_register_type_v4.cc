@@ -72,7 +72,7 @@ static bool validate_type_method_vdf_name(const char *vdf_name,
   if (prefix.empty() || !type_names_equal(std::string(prefix), type_name)) {
     LogVSQL(ERROR_LEVEL,
             "Type '%s' in extension '%s': %s '%s' uses '::' but prefix '%.*s' "
-            "does not match type name (case-insensitive)",
+            "does not match type name",
             type_name, extension_name.c_str(), field_name, vdf_name,
             static_cast<int>(prefix.size()), prefix.data());
     return true;
