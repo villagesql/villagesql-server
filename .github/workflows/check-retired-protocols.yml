@@ -15,6 +15,7 @@ on:
     paths:
     - scripts/check_retired_protocols.sh
     - scripts/regtest_check_retired_protocols.sh
+    - .github/workflows/check-retired-protocols.yml
 
 permissions:
   contents: read
