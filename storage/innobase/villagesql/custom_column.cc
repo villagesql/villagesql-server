@@ -18,8 +18,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <optional>
 #include <unordered_set>
+#include <vector>
 
+#include "scope_guard.h"
+#include "sql/auto_thd.h"
 #include "sql/create_field.h"
 #include "sql/current_thd.h"
 #include "sql/dd/cache/dictionary_client.h"
@@ -27,6 +31,7 @@
 #include "sql/dd/types/table.h"
 #include "sql/field.h"
 #include "sql/handler.h"
+#include "sql/mdl.h"
 #include "sql/table.h"
 #include "storage/innobase/include/btr0pcur.h"
 #include "storage/innobase/include/dict0dd.h"
@@ -236,6 +241,18 @@ void Custom_column::load_all(dict_table_t *table) {
     }
   }
 
+  // The DD client requires a shared MDL lock on the table. It is not held
+  // during XA recovery. If the caller already holds one, MDL hands out a cloned
+  // explicit ticket, so releasing ours leaves the caller's lock intact.
+  MDL_ticket *mdl_ticket = nullptr;
+  if (dd_mdl_acquire(thd, &mdl_ticket, schema.c_str(), tablename.c_str())) {
+    log_warning("failed to acquire MDL lock");
+    ut_ad(false);
+    return;
+  }
+  const auto mdl_guard = create_scope_guard(
+      [thd, &mdl_ticket]() { dd_mdl_release(thd, &mdl_ticket); });
+
   // Acquire the DD table object.
   const dd::Table *dd_table;
   if (dc->acquire(schema, tablename, &dd_table) || dd_table == nullptr) {
@@ -271,8 +288,11 @@ void Custom_column::load_all(dict_table_t *table) {
     dict_col_t *col = &table->cols[col_index];
     const dd::Column *dd_col = dd_find_column(dd_table, field->field_name);
 
-    // Load custom column information if this field has a custom type.
-    Custom_column::load(table, col, field, dd_col);
+    // Load custom column information if this field has a custom type. Skip
+    // columns already loaded so that load_all() can be called repeatedly.
+    if (col->custom_column == nullptr) {
+      Custom_column::load(table, col, field, dd_col);
+    }
     ++col_index;
   }
 
@@ -280,6 +300,34 @@ void Custom_column::load_all(dict_table_t *table) {
 
   // Clean up the TABLE_SHARE and TABLE.
   release_uncached_table(&ts, &td);
+}
+
+void Custom_column::load_resurrected() {
+  std::vector<dict_table_t *> tables;
+  dict_sys_mutex_enter();
+  for (auto table : dict_sys->table_LRU.removable()) {
+    if (DICT_TF2_FLAG_IS_SET(table, DICT_TF2_RESURRECT_PREPARED) &&
+        !table->is_corrupted() && !dict_table_is_sdi(table->id)) {
+      table->acquire_with_lock();
+      tables.push_back(table);
+    }
+  }
+  dict_sys_mutex_exit();
+
+  if (tables.empty()) {
+    return;
+  }
+
+  // No THD exists when called from XA recovery during server startup.
+  std::optional<Auto_THD> auto_thd;
+  if (current_thd == nullptr) {
+    auto_thd.emplace();
+  }
+
+  for (auto *table : tables) {
+    load_all(table);
+    table->release();
+  }
 }
 
 bool purge_error_log_allowed(uint64_t &suppressed) {
