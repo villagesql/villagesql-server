@@ -2455,11 +2455,12 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
   // A subsystem, such as the Audit plugin, may have set error unnoticed:
   error |= thd->is_error();
 
-  if (orig_param_array != nullptr) {
-    copy_parameter_types(orig_param_array);
-    villagesql::vdf::MaybeCopyPsParamStringValues(
-        m_arena.item_list(), m_param_array, orig_param_array, m_param_count);
-  }
+  if (orig_param_array != nullptr) copy_parameter_types(orig_param_array);
+  // VillageSQL: for a statement that calls a VDF, lend the bound values to the
+  // new parameters until prepare() returns; reprepare() then moves them with
+  // swap_parameter_array().
+  const villagesql::vdf::PsParamValueLoan ps_param_value_loan(
+      m_arena.item_list(), m_param_array, orig_param_array, m_param_count);
   /*
    The only case where we should have items in the thd->item_list is
    after stmt->set_params_from_vars(), which may in some cases create

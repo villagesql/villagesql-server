@@ -1,0 +1,66 @@
+# A prepared-statement parameter is a constant for a VDF's prerun at EXECUTE:
+# prerun sees the value bound for that execution, as it does for a literal.
+# prerun_const(x) shows what prerun saw for x.
+
+--source include/no_ps_protocol.inc
+
+--let $extension_name = state_and_varargs
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/state_and_varargs_vdf.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION state_and_varargs;
+
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(?) AS param';
+SET @p = 5;
+EXECUTE s USING @p;
+SET @p = NULL;
+EXECUTE s USING @p;
+SET @p = 'abc';
+EXECUTE s USING @p;
+SET @p = 1.5e0;
+EXECUTE s USING @p;
+--echo # A DECIMAL's digits are lent to the reprepared ? before prerun.
+--echo # VDFs have no DECIMAL type, so prerun sees it as a STRING.
+SET @p = 123.25;
+EXECUTE s USING @p;
+SET @p = -7.5;
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+
+--echo # The same with the ? inside an expression
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(? * 2) AS param';
+SET @p = 1.25;
+EXECUTE s USING @p;
+SET @p = 3;
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+
+--echo # A string inside a numeric expression
+SET @p = '5';
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(? * 1.0) AS param';
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+
+--echo # A NULL inside an expression: the expression sees the NULL
+SET @p = NULL;
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(? + 0) AS param';
+EXECUTE s USING @p;
+PREPARE s FROM 'SELECT state_and_varargs.prerun_const(COALESCE(?, 9)) AS param';
+EXECUTE s USING @p;
+PREPARE s FROM
+  'SELECT state_and_varargs.prerun_const(IFNULL(? * 1.0, -1)) AS param';
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+
+--echo # The same as a NULL literal: int_sum_all accepts INT or a constant NULL
+INSTALL EXTENSION vsql_test_only;
+SELECT vsql_test_only.int_sum_all(1, NULL, 2) AS total;
+PREPARE s FROM 'SELECT vsql_test_only.int_sum_all(1, ?, 2) AS total';
+SET @p = NULL;
+EXECUTE s USING @p;
+DEALLOCATE PREPARE s;
+
+SET @p = NULL;
+UNINSTALL EXTENSION vsql_test_only;
+UNINSTALL EXTENSION state_and_varargs;
