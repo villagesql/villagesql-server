@@ -57,6 +57,7 @@
 #include <utility>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/detail/state_alloc.h>
 #include <villagesql/vsql/var_args.h>
 
 namespace vsql {
@@ -124,10 +125,28 @@ class PrerunResult {
  public:
   explicit PrerunResult(vef_prerun_result_t *r) : r_(r) {}
 
+  // Allocate a T for this statement and stash it. Pair with a postrun calling
+  // PostrunArgs::destroy_emplaced_state<T>().
+  //
+  // Prefer this to `set_user_data(new T{})` for any state the VDF *writes* per
+  // row. This overload places the T on cache lines of its own; a plain `new` of
+  // a small state puts several concurrent statements' states in one line, and a
+  // per-row write then bounces that line between cores.
+  // See villagesql/vsql/cache_line.h.
+  template <typename T, typename... Args>
+  T *emplace_state(Args &&...args) {
+    T *p = detail::alloc_state<T>(std::forward<Args>(args)...);
+    r_->user_data = p;
+    return p;
+  }
+
   // Stash a pointer the extension owns. The VDF and postrun read it back
   // via PostrunArgs::user_data() or PostrunArgs::state<T>(). The SDK does
   // not free anything stashed here; pair this with a postrun that calls
   // PostrunArgs::delete_state<T>() (or free()) on the same pointer.
+  //
+  // For user supplied memory. If what you want is `new T{}`, use
+  // emplace_state<T>() instead.
   void set_user_data(void *p) { r_->user_data = p; }
 
   // Request that the per-row result buffer be at least n bytes. The server
@@ -169,6 +188,14 @@ class PostrunArgs {
   template <typename T>
   void delete_state() const {
     delete state<T>();
+  }
+
+  // Destroy and free a T allocated by PrerunResult::emplace_state<T>(). Not
+  // interchangeable with delete_state<T>(): emplace_state uses an over-aligned
+  // operator new, and freeing it with plain delete is undefined.
+  template <typename T>
+  void destroy_emplaced_state() const {
+    detail::free_state<T>(a_->user_data);
   }
 
  private:
