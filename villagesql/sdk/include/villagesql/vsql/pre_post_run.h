@@ -97,8 +97,8 @@ class PrerunArgs {
   }
 
   // Whether argument i is a constant: one the server can evaluate before the
-  // first row, such as a literal or CAST(NULL AS SIGNED). A prepared-statement
-  // parameter or a subquery never is.
+  // first row, such as a literal, CAST(NULL AS SIGNED) or a prepared-statement
+  // parameter. A subquery never is.
   bool is_const(size_t i) const {
     return protocol_ >= VEF_PROTOCOL_4 && a_->const_args != nullptr &&
            a_->const_args[i] != nullptr;

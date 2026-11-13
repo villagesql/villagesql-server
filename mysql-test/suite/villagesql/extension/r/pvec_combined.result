@@ -49,7 +49,8 @@ total
 8
 SET @p = NULL;
 EXECUTE s_param USING @p;
-ERROR HY000: Can't initialize function 'int_sum_all'; int_sum_all: argument 1 must be either INT or NULL
+total
+3
 SET @p = 'five';
 EXECUTE s_param USING @p;
 ERROR HY000: Can't initialize function 'int_sum_all'; int_sum_all: argument 1 must be either INT or NULL
