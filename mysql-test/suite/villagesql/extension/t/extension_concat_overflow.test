@@ -28,7 +28,7 @@ c, c, c, c, c, c, c, c, c, c,
 c, c, c) FROM t INTO @var;
 
 SELECT LENGTH(@var);
-SELECT HEX(@var);
+SELECT @var = REPEAT(UNHEX('00000000000014400000000000001840'), 63);
 
 --echo # 64 COMPLEX, equal to 1024 buffer size
 SELECT ba_concat_all(
