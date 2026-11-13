@@ -147,7 +147,8 @@ class TypeDescriptor {
   // Storage is wired in separately via set_storage_intf() after all types
   // and column storage descriptors are loaded.
   TypeDescriptor(
-      TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
+      TypeDescriptorKey key, vef_protocol_t protocol,
+      vef_protocol_t extension_protocol, unsigned char impl_type,
       int64_t persisted_len, int64_t max_unpersisted_len,
       int64_t max_persisted_len, LengthKind length_kind, EncodeFunction encode,
       DecodeFunction decode, CompareFunction compare,
@@ -184,6 +185,11 @@ class TypeDescriptor {
 
   // Protocol version this type was registered with.
   vef_protocol_t protocol() const { return protocol_; }
+
+  // Protocol the type's extension negotiated: the protocol of the SDK it was
+  // built with, capped at the server's. protocol() is lower when the type
+  // uses no feature of a later protocol.
+  vef_protocol_t extension_protocol() const { return extension_protocol_; }
 
   // Type implementation details
   unsigned char implementation_type() const { return implementation_type_; }
@@ -288,6 +294,7 @@ class TypeDescriptor {
   TypeDescriptorKey key_;
 
   vef_protocol_t protocol_{VEF_PROTOCOL_1};
+  vef_protocol_t extension_protocol_{VEF_PROTOCOL_1};
 
   // Type implementation details
   unsigned char implementation_type_{0};

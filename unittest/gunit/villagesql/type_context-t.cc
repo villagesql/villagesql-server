@@ -839,8 +839,9 @@ class TypeContextTest : public ::testing::Test {
 TEST_F(TypeContextTest, FixedLengthTypeUsesDescriptorValues) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("COMPLEX", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_1, 1, 16, 256, /*max_persisted_length=*/0,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_1, /*extension_protocol=*/VEF_PROTOCOL_1, 1, 16, 256,
+      /*max_persisted_length=*/0, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
   villagesql::TypeContextKey key("COMPLEX", "test_ext", "1.0.0");
@@ -856,8 +857,9 @@ TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, -1, 256, /*max_persisted_length=*/128,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1, -1, 256,
+      /*max_persisted_length=*/128, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       villagesql::ResolveParamsFunction(&rp_ok_fd));
@@ -878,8 +880,9 @@ TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, -1, 256, /*max_persisted_length=*/128,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1, -1, 256,
+      /*max_persisted_length=*/128, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       villagesql::ResolveParamsFunction(&rp_fail_fd));
@@ -902,8 +905,9 @@ TEST_F(TypeContextTest, EmptyParamsSkipsResolveCallback) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, -1, 256, /*max_persisted_length=*/128,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1, -1, 256,
+      /*max_persisted_length=*/128, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       villagesql::ResolveParamsFunction(&rp_fail_fd2));
@@ -919,8 +923,9 @@ TEST_F(TypeContextTest, EmptyParamsSkipsResolveCallback) {
 TEST_F(TypeContextTest, SameKeysAreCompatible) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("COMPLEX", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_1, 1, 16, 256, /*max_persisted_length=*/0,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_1, /*extension_protocol=*/VEF_PROTOCOL_1, 1, 16, 256,
+      /*max_persisted_length=*/0, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
   villagesql::TypeContextKey key("COMPLEX", "test_ext", "1.0.0");
@@ -935,14 +940,16 @@ TEST_F(TypeContextTest, SameKeysAreCompatible) {
 TEST_F(TypeContextTest, DifferentTypeNamesAreNotCompatible) {
   villagesql::TypeDescriptor desc_a(
       villagesql::TypeDescriptorKey("COMPLEX", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_1, 1, 16, 256, /*max_persisted_length=*/0,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_1, /*extension_protocol=*/VEF_PROTOCOL_1, 1, 16, 256,
+      /*max_persisted_length=*/0, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
   villagesql::TypeDescriptor desc_b(
       villagesql::TypeDescriptorKey("OTHER", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_1, 1, 16, 256, /*max_persisted_length=*/0,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_1, /*extension_protocol=*/VEF_PROTOCOL_1, 1, 16, 256,
+      /*max_persisted_length=*/0, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare));
   villagesql::TypeContext a = make_context(
@@ -961,8 +968,9 @@ TEST_F(TypeContextTest, DifferentParametersAreNotCompatible) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, -1, 256, /*max_persisted_length=*/128,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1, -1, 256,
+      /*max_persisted_length=*/128, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       villagesql::ResolveParamsFunction(&rp_ok_fd));
@@ -986,8 +994,9 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithKnown) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, -1, 256, /*max_persisted_length=*/128,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1, -1, 256,
+      /*max_persisted_length=*/128, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       villagesql::ResolveParamsFunction(&rp_ok_fd));
@@ -1011,8 +1020,9 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithUnknown) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, -1, 256, /*max_persisted_length=*/128,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1, -1, 256,
+      /*max_persisted_length=*/128, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
       villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
       villagesql::ResolveParamsFunction(&rp_ok_fd));
@@ -1036,7 +1046,8 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithUnknown) {
 TEST_F(TypeContextTest, VariableLengthTypeEncodesIntrinsicDefault) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("BITFIELD", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_4, 1, /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
+      VEF_PROTOCOL_4, /*extension_protocol=*/VEF_PROTOCOL_4, 1,
+      /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
       villagesql::EncodeFunction(two_byte_encode),
       villagesql::DecodeFunction(dummy_decode),
@@ -1068,7 +1079,8 @@ TEST_F(TypeContextTest, VariableLengthTypeEncodesIntrinsicDefault) {
 TEST_F(TypeContextTest, VariableLengthEmptyEncodeIsFatal) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("EMPTYVAR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_4, 1, /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
+      VEF_PROTOCOL_4, /*extension_protocol=*/VEF_PROTOCOL_4, 1,
+      /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
       villagesql::EncodeFunction(empty_encode),
       villagesql::DecodeFunction(dummy_decode),
@@ -1086,7 +1098,8 @@ TEST_F(TypeContextTest, VariableLengthEmptyEncodeIsFatal) {
 TEST_F(TypeContextTest, FixedLengthTypeEncodesIntrinsicDefault) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("PAIR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, /*persisted_len=*/2, /*max_unpersisted_len=*/256,
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1,
+      /*persisted_len=*/2, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/0, villagesql::LengthKind::Fixed,
       villagesql::EncodeFunction(two_byte_encode),
       villagesql::DecodeFunction(dummy_decode),
@@ -1109,7 +1122,8 @@ TEST_F(TypeContextTest, UnknownParameterizedTypeSkipsIntrinsicDefault) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VARVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_4, 1, /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
+      VEF_PROTOCOL_4, /*extension_protocol=*/VEF_PROTOCOL_4, 1,
+      /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
       villagesql::EncodeFunction(two_byte_encode),
       villagesql::DecodeFunction(dummy_decode),
@@ -1136,7 +1150,8 @@ static villagesql::TypeDescriptor make_fixed_desc(
     std::optional<villagesql::HashFunction> hash = std::nullopt) {
   return villagesql::TypeDescriptor(
       villagesql::TypeDescriptorKey(type_name, "test_ext", "1.0.0"), protocol,
-      /*impl_type=*/1, persisted_len, /*max_unpersisted_len=*/256,
+      /*extension_protocol=*/protocol, /*impl_type=*/1, persisted_len,
+      /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/0, villagesql::LengthKind::Fixed,
       villagesql::EncodeFunction(encode),
       villagesql::DecodeFunction(dummy_decode),
@@ -1159,7 +1174,8 @@ static villagesql::TypeDescriptor make_parameterized_desc(
         std::nullopt) {
   return villagesql::TypeDescriptor(
       villagesql::TypeDescriptorKey(type_name, "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, /*impl_type=*/1, /*persisted_len=*/-1,
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, /*impl_type=*/1,
+      /*persisted_len=*/-1,
       /*max_unpersisted_len=*/256, /*max_persisted_len=*/128,
       villagesql::LengthKind::Fixed, villagesql::EncodeFunction(dummy_encode),
       villagesql::DecodeFunction(dummy_decode),
@@ -1172,7 +1188,8 @@ static villagesql::TypeDescriptor make_variable_desc(
     std::optional<villagesql::ResolveParamsFunction> resolve = std::nullopt) {
   return villagesql::TypeDescriptor(
       villagesql::TypeDescriptorKey(type_name, "test_ext", "1.0.0"),
-      VEF_PROTOCOL_4, /*impl_type=*/1, /*persisted_len=*/-1,
+      VEF_PROTOCOL_4, /*extension_protocol=*/VEF_PROTOCOL_4, /*impl_type=*/1,
+      /*persisted_len=*/-1,
       /*max_unpersisted_len=*/256, max_persisted_len,
       villagesql::LengthKind::Variable, villagesql::EncodeFunction(encode),
       villagesql::DecodeFunction(dummy_decode),
@@ -1628,7 +1645,8 @@ TEST_F(TypeContextTest, VdfEncodeSuppliesIntrinsicDefault) {
   static auto enc_fd = make_encode_fd("enc_two", &two_byte_encode_vdf);
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("PAIR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, /*persisted_len=*/2, /*max_unpersisted_len=*/256,
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1,
+      /*persisted_len=*/2, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/0, villagesql::LengthKind::Fixed,
       villagesql::EncodeFunction(&enc_fd),
       villagesql::DecodeFunction(dummy_decode),
@@ -1651,7 +1669,8 @@ TEST_F(TypeContextTest, VdfEncodeFailureIsFatal) {
   static auto enc_fd = make_encode_fd("enc_fail", &encode_fail_vdf);
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("PAIR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_3, 1, /*persisted_len=*/2, /*max_unpersisted_len=*/256,
+      VEF_PROTOCOL_3, /*extension_protocol=*/VEF_PROTOCOL_3, 1,
+      /*persisted_len=*/2, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/0, villagesql::LengthKind::Fixed,
       villagesql::EncodeFunction(&enc_fd),
       villagesql::DecodeFunction(dummy_decode),

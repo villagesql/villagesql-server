@@ -3428,6 +3428,15 @@ bool Item_func_between::resolve_type(THD *thd) {
 
   if (Item_func_opt_neg::resolve_type(thd)) return true;
 
+  // VillageSQL: Cast eligible bounds to the value's custom type before
+  // collation aggregation, which could otherwise relabel a string literal as
+  // binary, and a custom type reads a binary value as its binary form.
+  // Item_func_between::fix_fields keeps its own cast as a backstop.
+  if (const villagesql::TypeContext *custom_tc = args[0]->get_type_context()) {
+    if (villagesql::TryImplicitCastToCustom(args[1], *custom_tc)) return true;
+    if (villagesql::TryImplicitCastToCustom(args[2], *custom_tc)) return true;
+  }
+
   cmp_type = agg_cmp_type(args, 3);
 
   if (cmp_type == STRING_RESULT &&

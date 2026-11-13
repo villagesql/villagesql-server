@@ -53,8 +53,11 @@ SET @id = 4, @v = 'not a complex';
 EXECUTE s USING @id, @v;
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 4;
 
-# D: INSERT IGNORE, prepared statement, binary parameter.
+# D: INSERT IGNORE, prepared statement, binary parameter. COMPLEX has no
+# binary form, so the bytes are an error rather than being read as text, and
+# IGNORE does not downgrade it.
 SET @id = 5, @v = X'00000000000008400000000000001040';
+--error ER_VILLAGESQL_GENERIC_ERROR
 EXECUTE s USING @id, @v;
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 5;
 DEALLOCATE PREPARE s;

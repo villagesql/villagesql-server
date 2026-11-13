@@ -11447,6 +11447,16 @@ bool Item_aggregate_type::unify_types(const char *op_string, Item **items,
     if (villagesql::MaybeValidateUnionTypeCompatibility(this, items[idx]))
       return true;
   }
+  // VillageSQL: cast a string literal branch to the result's custom type
+  // before type aggregation, which could otherwise relabel it as binary, and a
+  // custom type reads a binary value as its binary form.
+  if (const villagesql::TypeContext *custom_tc = get_type_context()) {
+    for (size_t idx = 0; idx < count; ++idx) {
+      if (items[idx]->type() == Item::STRING_ITEM &&
+          villagesql::TryImplicitCastToCustom(items[idx], *custom_tc))
+        return true;
+    }
+  }
 
   if (aggregate_type(op_string, items, count)) return true;
   /*

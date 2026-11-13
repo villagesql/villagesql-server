@@ -1047,7 +1047,11 @@ typedef struct {
   // OPTIONAL: Name of a VDF (from this extension's funcs[]) that encodes the
   // type from its binary form rather than its text form. The named VDF must
   // have signature (BINARY) -> CUSTOM(this type) and is also registered as a
-  // callable SQL function. NULL means the type has no binary form.
+  // callable SQL function. The server encodes a value in the binary charset
+  // with it rather than with the encode from text. NULL means the type has no
+  // binary form, and a value in the binary charset is an error. A type of an
+  // extension built against a protocol before VEF_PROTOCOL_4 gives such a
+  // value to its encode from text, as its bytes.
   //
   // Read only when protocol >= VEF_PROTOCOL_4.
   const char *from_binary_vdf_name;
