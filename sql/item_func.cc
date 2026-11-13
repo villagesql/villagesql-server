@@ -7276,7 +7276,7 @@ Item_func_get_system_var::Item_func_get_system_var(
   assert(scope != OPT_DEFAULT);
 }
 
-bool Item_func_get_system_var::resolve_type(THD *) {
+bool Item_func_get_system_var::resolve_type(THD *thd) {
   set_nullable(true);
 
   switch (var_tracker.cached_show_type()) {
@@ -7297,6 +7297,12 @@ bool Item_func_get_system_var::resolve_type(THD *) {
     case SHOW_CHAR_PTR:
     case SHOW_LEX_STRING:
       collation.set(system_charset_info, DERIVATION_SYSCONST);
+      if (var_tracker.access_system_variable(
+              thd, [this](const System_variable_tracker &, sys_var *var) {
+                if (var->value_charset() != nullptr)
+                  collation.set(var->value_charset(), DERIVATION_SYSCONST);
+              }))
+        return true;
       set_data_type_string(65535U / collation.collation->mbmaxlen);
       break;
     case SHOW_BOOL:

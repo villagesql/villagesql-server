@@ -269,8 +269,10 @@ int item_value_type(st_mysql_value *value) {
 
 const char *item_val_str(st_mysql_value *value, char *buffer, int *length) {
   String str(buffer, *length, system_charset_info), *res;
-  if (!(res = ((st_item_value_holder *)value)->item->val_str(&str)))
-    return nullptr;
+  auto *holder = static_cast<st_item_value_holder *>(value);
+  res = holder->string_value_ready ? holder->string_value
+                                   : holder->item->val_str(&str);
+  if (res == nullptr) return nullptr;
   *length = static_cast<int>(res->length());
   if (res->c_ptr_quick() == buffer) return buffer;
 
@@ -372,6 +374,31 @@ bool sys_var_pluginvar::do_check(THD *thd, set_var *var) {
   value.val_real = item_val_real;
   value.is_unsigned = item_is_unsigned;
   value.item = var->value;
+
+  String source_buffer, converted;
+  if (m_value_charset != nullptr &&
+      (plugin_var->flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) {
+    // Convert before check/update callbacks and keep the Item unchanged for
+    // subsequent executions of a prepared SET statement.
+    String *source = var->value->val_str(&source_buffer);
+    if (thd->is_error()) return true;
+    value.string_value_ready = true;
+    if (source != nullptr) {
+      const CHARSET_INFO *from_cs = source->charset() == &my_charset_bin
+                                        ? m_value_charset
+                                        : source->charset();
+      if (!source->is_valid_string(from_cs)) return true;
+      uint errors = 0;
+      if (converted.copy(source->ptr(), source->length(), from_cs,
+                         m_value_charset, &errors))
+        return true;
+      if (errors != 0 ||
+          (converted.length() != 0 &&
+           memchr(converted.ptr(), 0, converted.length()) != nullptr))
+        return true;
+      value.string_value = &converted;
+    }
+  }
 
   return plugin_var->check(thd, plugin_var, &var->save_result, &value);
 }

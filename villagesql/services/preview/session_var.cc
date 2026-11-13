@@ -29,6 +29,7 @@
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_system_variable.h"
 #include "sql/current_thd.h"
+#include "sql/server_component/component_sys_var_service_imp.h"
 #include "sql/set_var.h"
 #include "sql/sql_class.h"
 #include "sql/sql_plugin_var.h"
@@ -316,9 +317,11 @@ bool on_populate_session_var(const PopulateContext &ctx,
         break;
     }
 
-    if (reg_svc->register_variable(extension_name.c_str(), v->name, flags,
-                                   v->comment ? v->comment : "", nullptr,
-                                   nullptr, check_arg, nullptr)) {
+    if (mysql_component_sys_variable_imp::register_variable_with_charset(
+            extension_name.c_str(), v->name, flags,
+            v->comment ? v->comment : "", nullptr, nullptr, check_arg, nullptr,
+            v->type == VEF_SESSION_VAR_STR ? &my_charset_utf8mb4_bin
+                                           : nullptr)) {
       LogVSQL(ERROR_LEVEL,
               "Failed to register session variable '%s' for extension '%s'",
               v->name, extension_name.c_str());

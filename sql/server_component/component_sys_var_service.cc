@@ -124,6 +124,16 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
                     const char *comment, mysql_sys_var_check_func check_func,
                     mysql_sys_var_update_func update_func, void *check_arg,
                     void *variable_value)) {
+  return register_variable_with_charset(component_name, var_name, flags,
+                                        comment, check_func, update_func,
+                                        check_arg, variable_value, nullptr);
+}
+
+bool mysql_component_sys_variable_imp::register_variable_with_charset(
+    const char *component_name, const char *var_name, int flags,
+    const char *comment, mysql_sys_var_check_func check_func,
+    mysql_sys_var_update_func update_func, void *check_arg,
+    void *variable_value, const CHARSET_INFO *value_charset) {
   try {
     struct sys_var_chain chain = {nullptr, nullptr};
     sys_var *sysvar [[maybe_unused]];
@@ -563,6 +573,19 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
       }
     }
 
+    // Defaults and command-line values bypass SQL assignment checks.
+    if (value_charset != nullptr &&
+        (flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) {
+      const char *initial = *reinterpret_cast<const char *const *>(opts->value);
+      if (initial != nullptr && !String(initial, strlen(initial), value_charset)
+                                     .is_valid_string(value_charset)) {
+        LogErr(ERROR_LEVEL,
+               ER_SYS_VAR_COMPONENT_FAILED_TO_PARSE_VARIABLE_OPTIONS, var_name);
+        if (opts) my_cleanup_options(opts);
+        goto end;
+      }
+    }
+
     if ((flags & PLUGIN_VAR_NOSYSVAR) == 0) {
       com_sys_var_name_copy =
           my_strdup(key_memory_comp_sys_var, com_sys_var_name, MYF(0));
@@ -570,8 +593,8 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
         LogErr(ERROR_LEVEL, ER_SYS_VAR_COMPONENT_OOM, var_name);
         goto end;
       }
-      sysvar = reinterpret_cast<sys_var *>(
-          new sys_var_pluginvar(&chain, com_sys_var_name_copy, opt));
+      sysvar = reinterpret_cast<sys_var *>(new sys_var_pluginvar(
+          &chain, com_sys_var_name_copy, opt, value_charset));
 
       if (sysvar == nullptr) {
         LogErr(ERROR_LEVEL, ER_SYS_VAR_COMPONENT_OOM, var_name);
