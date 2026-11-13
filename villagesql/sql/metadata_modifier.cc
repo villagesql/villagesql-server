@@ -1220,14 +1220,38 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
 // Append a villagesql system table to thd->lex->query_tables and return the
 // new Table_ref. The table is only staged here: Metadata_modifier::store()
 // finds it again by walking query_tables, and locks every staged table in the
-// single lock_tables() call a statement is allowed.
+// single lock_tables() call a statement is allowed. UnlinkStagedSystemTables()
+// removes it again at the end of the statement.
 static Table_ref *stage_system_table(THD *thd, const char *table_name) {
   Table_ref *tref =
       new (thd->mem_root) Table_ref(SchemaManager::VILLAGESQL_SCHEMA_NAME,
                                     table_name, TL_WRITE, MDL_SHARED_WRITE);
   if (!tref) return nullptr;  // MEM_ROOT already set ER_OUT_OF_RESOURCES
-  thd->lex->add_to_query_tables(tref);
+  LEX *lex = thd->lex;
+  lex->add_to_query_tables(tref);
+  if (lex->villagesql_staged_tables == nullptr) {
+    lex->villagesql_staged_tables = tref;
+  }
   return tref;
+}
+
+void UnlinkStagedSystemTables(LEX *lex) {
+  Table_ref *first = lex->villagesql_staged_tables;
+  if (first == nullptr) return;
+  // prev_global, not the list's end at staging time: a statement can link a
+  // table in front of the staged ones, as CREATE TABLE ... SELECT does with
+  // the table it creates.
+  Table_ref **link = first->prev_global;
+#ifndef NDEBUG
+  // Nothing may be linked after the staged tables, such as prelocked tables.
+  for (Table_ref *tl = first; tl != nullptr; tl = tl->next_global) {
+    assert(is_villagesql_schema(tl->db));
+    assert(lex->query_tables_own_last != &tl->next_global);
+  }
+#endif
+  *link = nullptr;
+  lex->query_tables_last = link;
+  lex->villagesql_staged_tables = nullptr;
 }
 
 // Open the chain of staged system tables starting at `first` without locking
@@ -1236,7 +1260,14 @@ static bool open_staged_system_tables(THD *thd, Table_ref *first, uint flags,
                                       uint *opened) {
   DML_prelocking_strategy strategy;
   uint counter = 0;
-  if (open_tables(thd, &first, &counter, flags, &strategy)) {
+  // A prepared statement records the versions of the tables it names, and a
+  // statement such as CREATE TABLE asks to be prepared again when a table it
+  // opens has none recorded. The system tables are not the statement's own,
+  // and each execution stages them anew, so they must not ask.
+  thd->push_reprepare_observer(nullptr);
+  const bool open_failed = open_tables(thd, &first, &counter, flags, &strategy);
+  thd->pop_reprepare_observer();
+  if (open_failed) {
     villagesql_error("Cannot open VillageSQL system tables", MYF(0));
     return true;
   }
