@@ -1,0 +1,5 @@
+INSTALL EXTENSION vsql_test_only;
+SELECT vsql_test_only.PVEC::to_binary(vsql_test_only.PVEC::from_string('[1,2]'))
+AS v;
+ERROR HY000: VDF error in function 'PVEC::to_binary': failed to decode value
+UNINSTALL EXTENSION vsql_test_only;

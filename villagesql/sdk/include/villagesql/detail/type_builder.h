@@ -50,6 +50,7 @@ enum class TypeOp {
   kIntToParams = 4,
   kResolveParams = 5,
   kEncodeBinary = 6,
+  kDecodeBinary = 7,
 };
 
 // TypeOpVdfName: constexpr-initialized string "TypeName::suffix" for a given
@@ -80,6 +81,8 @@ struct TypeOpVdfName {
         return "resolve_params";
       case TypeOp::kEncodeBinary:
         return "from_binary";
+      case TypeOp::kDecodeBinary:
+        return "to_binary";
     }
   }
   static constexpr std::string_view kTypeName = std::string_view{TypeName};

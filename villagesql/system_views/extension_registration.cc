@@ -141,6 +141,10 @@ static std::string registration_to_json(const vef_registration_t *r) {
         w.Key("from_binary_vdf");
         w.String(t->from_binary_vdf_name);
       }
+      if (t->to_binary_vdf_name) {
+        w.Key("to_binary_vdf");
+        w.String(t->to_binary_vdf_name);
+      }
     }
     if (t->protocol >= VEF_PROTOCOL_3) {
       if (t->encode_vdf_name) {
