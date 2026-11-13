@@ -39,6 +39,30 @@
 --let $v1_error_treated_as_warning = 1
 --source abi_v1_test_logic.inc
 
+# A protocol 1 extension built against the stable SDK: its custom type keeps
+# receiving a value in the binary charset in its encode, as its bytes, as it
+# did when it was built. Covers a _binary string, a VARBINARY column, a binary
+# prepared-statement parameter and a VDF argument of the type, including bytes
+# that are not valid utf8mb4. BYTEARRAY stores up to 8 bytes, space padded.
+INSTALL EXTENSION abi_v1_test;
+SELECT NEGOTIATED_PROTOCOL FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION
+WHERE EXTENSION_NAME = 'abi_v1_test';
+CREATE TABLE t (id INT PRIMARY KEY, data abi_v1_test.BYTEARRAY);
+INSERT INTO t VALUES (1, _binary 'literal'), (2, _binary 0xFF41);
+CREATE TABLE t_bin (id INT PRIMARY KEY, b VARBINARY(8));
+INSERT INTO t_bin VALUES (3, 'column'), (4, 0xC3A9);
+INSERT INTO t SELECT id, b FROM t_bin;
+PREPARE s FROM 'INSERT INTO t VALUES (?, ?)';
+SET @id = 5, @v = _binary 'param';
+EXECUTE s USING @id, @v;
+DEALLOCATE PREPARE s;
+SELECT id, HEX(abi_v1_test.to_string(data)) AS data FROM t ORDER BY id;
+SELECT HEX(abi_v1_test.to_string(abi_v1_test.mask(_binary 'argument', 0)))
+  AS masked;
+SET @id = NULL, @v = NULL;
+DROP TABLE t, t_bin;
+UNINSTALL EXTENSION abi_v1_test;
+
 --echo # Cleanup
 --exec rm -rf $test_dir
 --exec rm -f $veb_dir/abi_v1_test.veb
