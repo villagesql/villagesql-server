@@ -23,6 +23,7 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 - **VDF cleanup** — `postrun` runs when setup fails after `prerun`, so state that `prerun` allocated is released. (`c4a0a6689ce`, #979)
 - **Intrinsic default VDFs** — A type's intrinsic default VDF can no longer be called from SQL. (`83654c5c3f9`, #1304)
 - **Ambiguous custom type names** — The error for a custom type name that more than one extension provides lists those extensions and says to use the qualified name `extension.type`. (`583f619a818`, #1293)
+- **Type-method names** — Method prefixes follow the same identifier rules as type names, so a type named `CAFÉ` accepts `café::from_string`. This also applies to protocol 3 extensions. (#1529)
 - **Extension install and update** — A `.veb` expansion is staged and renamed into place, so a crash during install does not leave an unusable `.so`. A truncated `.veb` is rejected. (`64b3a3c8853`, #1250; `62375da16ff`, #1308)
 - **Extension upgrade** — A failed extension update at restart rolls back only that extension, and the upgrade checks length changes for variable-length types. (`9c4b731c250`, #1343; `42871275adc`, #1256)
 - **Extension exceptions (protocol 4)** — A VDF that throws an exception returns an error to the statement. An extension built with this SDK also returns an error when its custom type's `from_string` function throws. (`28d9f609278`, #1231; `b01b6b72ee8`, #1355)
