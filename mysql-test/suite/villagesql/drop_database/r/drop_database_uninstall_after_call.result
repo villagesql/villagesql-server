@@ -1,0 +1,34 @@
+#
+# DROP PROCEDURE
+#
+CREATE DATABASE d1;
+CREATE PROCEDURE d1.p(IN c COMPLEX) SELECT complex_real(c) AS r;
+CALL d1.p('(1.0,2.0)');
+r
+1
+DROP PROCEDURE d1.p;
+DROP DATABASE d1;
+#
+# DROP DATABASE
+#
+CREATE DATABASE d1;
+CREATE PROCEDURE d1.p(IN c COMPLEX) SELECT complex_real(c) AS r;
+CALL d1.p('(1.0,2.0)');
+r
+1
+DROP DATABASE d1;
+SELECT COUNT(*) AS routines FROM information_schema.routines
+WHERE routine_schema = 'd1';
+routines
+0
+#
+# DROP DATABASE in another session than the one that called the routine
+#
+CREATE DATABASE d1;
+CREATE PROCEDURE d1.p(IN c COMPLEX) SELECT complex_real(c) AS r;
+CALL d1.p('(1.0,2.0)');
+r
+1
+DROP DATABASE d1;
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': VDF 'complex_real' is currently in use

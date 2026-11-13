@@ -1,0 +1,57 @@
+# UNINSTALL EXTENSION after a routine that calls one of the extension's VDFs,
+# and that a session has called, is dropped: by DROP PROCEDURE, by DROP
+# DATABASE, and from another session.
+
+--source include/count_sessions.inc
+
+--echo #
+--echo # DROP PROCEDURE
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE d1;
+CREATE PROCEDURE d1.p(IN c COMPLEX) SELECT complex_real(c) AS r;
+CALL d1.p('(1.0,2.0)');
+DROP PROCEDURE d1.p;
+DROP DATABASE d1;
+
+--source include/villagesql/uninstall_complex_extension.inc
+
+--echo #
+--echo # DROP DATABASE
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE d1;
+CREATE PROCEDURE d1.p(IN c COMPLEX) SELECT complex_real(c) AS r;
+CALL d1.p('(1.0,2.0)');
+DROP DATABASE d1;
+SELECT COUNT(*) AS routines FROM information_schema.routines
+  WHERE routine_schema = 'd1';
+
+--source include/villagesql/uninstall_complex_extension.inc
+
+--echo #
+--echo # DROP DATABASE in another session than the one that called the routine
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE d1;
+CREATE PROCEDURE d1.p(IN c COMPLEX) SELECT complex_real(c) AS r;
+connect (con1, localhost, root,,);
+CALL d1.p('(1.0,2.0)');
+connection default;
+DROP DATABASE d1;
+
+# TODO(villagesql-beta): con1 keeps its cached copy of the dropped routine,
+# and with it the VDF, until it disconnects.
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+disconnect con1;
+--source include/wait_until_count_sessions.inc
+
+--source include/villagesql/uninstall_complex_extension.inc
