@@ -187,6 +187,7 @@
 #include "thr_lock.h"
 #include "villagesql/include/error.h"
 #include "villagesql/services/preview/statement_event.h"
+#include "villagesql/sql/metadata_modifier.h"
 #include "violite.h"
 
 #ifdef WITH_LOCK_ORDER
@@ -4997,6 +4998,9 @@ finish:
   /* Free tables */
   THD_STAGE_INFO(thd, stage_closing_tables);
   close_thread_tables(thd);
+  // VillageSQL: the system tables this statement staged live in its memory,
+  // which a prepared statement or stored routine does not keep.
+  villagesql::UnlinkStagedSystemTables(lex);
 
   // Rollback any item transformations made during optimization and execution
   thd->rollback_item_tree_changes();
