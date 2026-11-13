@@ -53,7 +53,7 @@ c, c, c, c, c, c, c, c, c, c,
 c, c, c, c, c) FROM t INTO @var;
 
 SELECT LENGTH(@var);
-SELECT HEX(@var);
+SELECT @var = REPEAT(UNHEX('00000000000014400000000000001840'), 65);
 
 --echo # 400 COMPLEX arguments (original bug size)
 SELECT ba_concat_all(
