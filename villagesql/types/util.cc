@@ -700,11 +700,11 @@ static bool IsBinaryForm(const String &from) {
 }
 
 // Whether tc's type reads a value's binary form apart from its text form. A
-// type from an extension built before VEF_PROTOCOL_4 cannot declare an encode
+// type from an extension built before VEF_PROTOCOL_5 cannot declare an encode
 // from its binary form, so such a value still goes to its encode from text, as
 // its bytes, as it did before.
 static bool ReadsBinaryForm(const TypeContext &tc) {
-  return tc.descriptor()->extension_protocol() >= VEF_PROTOCOL_4;
+  return tc.descriptor()->extension_protocol() >= VEF_PROTOCOL_5;
 }
 
 // Raise the error for a value's binary form given to a type that has no encode

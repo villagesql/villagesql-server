@@ -63,10 +63,10 @@ static bool is_inferrable_string_const(Item *arg) {
 }
 
 // The type an argument for a parameter of type `id` is read as. A STRING
-// argument is utf8mb4 from VEF_PROTOCOL_4; an extension negotiated at an older
+// argument is utf8mb4 from VEF_PROTOCOL_5. An extension negotiated at an older
 // protocol was built before that, and gets the value's bytes as they are.
 static vef_type_id ArgReadType(vef_type_id id, vef_protocol_t protocol) {
-  if (id == VEF_TYPE_STRING && protocol < VEF_PROTOCOL_4)
+  if (id == VEF_TYPE_STRING && protocol < VEF_PROTOCOL_5)
     return VEF_TYPE_BINARY;
   return id;
 }
@@ -204,7 +204,7 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   // params and returned params instead.
   const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
   const vef_bind_types_func_t bind_and_check =
-      m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_4
+      m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_5
           ? m_udf->vdf_func_desc->bind_and_check_types
           : nullptr;
   villagesql::TypeParameters return_params;
@@ -361,11 +361,11 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     }
     prerun_args.arg_types = arg_types;
 
-    // From VEF_PROTOCOL_4, prerun sees each constant argument's value,
+    // From VEF_PROTOCOL_5, prerun sees each constant argument's value,
     // marshalled as the VDF will receive it. As a UDF's init does, this
     // evaluates the constant once more than the rows do.
     std::vector<String> const_buffers;
-    if (m_udf->vdf_protocol >= VEF_PROTOCOL_4 && signature != nullptr &&
+    if (m_udf->vdf_protocol >= VEF_PROTOCOL_5 && signature != nullptr &&
         arg_count > 0) {
       auto *is_const =
           pointer_cast<bool *>((*THR_MALLOC)->Alloc(sizeof(bool) * arg_count));
@@ -571,7 +571,7 @@ static bool marshal_args_typed(const vef_signature_t *sig,
         break;
       }
       case VEF_TYPE_STRING: {
-        // From VEF_PROTOCOL_4 a STRING argument is utf8mb4 text: converted
+        // From VEF_PROTOCOL_5 a STRING argument is utf8mb4 text: converted
         // from any other charset, and a binary one must already be valid
         // utf8mb4.
         String *arg_str = villagesql::ReadVdfValue(
@@ -589,7 +589,7 @@ static bool marshal_args_typed(const vef_signature_t *sig,
         break;
       }
       case VEF_TYPE_BINARY: {
-        // BINARY needs VEF_PROTOCOL_4, so it never uses the v1 layout, which
+        // BINARY needs VEF_PROTOCOL_5, so it never uses the v1 layout, which
         // has no field for it.
         if constexpr (!std::is_same_v<InvalueType, vef_invalue_v1_t>) {
           // A BINARY argument is the bytes as they are, never converted.

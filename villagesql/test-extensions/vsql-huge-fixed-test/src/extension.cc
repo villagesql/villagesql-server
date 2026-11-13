@@ -20,7 +20,7 @@
 // This is a whole extension for one type because registration stops at the
 // first invalid type. Pairing it with the variable-length case in one VEB would
 // leave that case unvalidated -- hence the sibling vsql-huge-var-test, which
-// covers max_persisted_length through the v4 builder while this one covers
+// covers max_persisted_length through the v5 builder while this one covers
 // persisted_length through v3.
 //
 // The type is never usable, so its operations only need to compile and be

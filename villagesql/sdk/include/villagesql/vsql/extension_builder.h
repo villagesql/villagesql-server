@@ -131,7 +131,7 @@ struct ExtensionBuilder {
   constexpr auto on_init() const {
     return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple, Fn,
                             DeinitFn>{funcs_, types_, required_capabilities_,
-                                      require_atleast_min(VEF_PROTOCOL_4)};
+                                      require_atleast_min(VEF_PROTOCOL_5)};
   }
 
   // Registers a function to run at extension unload (server shutdown or
@@ -145,7 +145,7 @@ struct ExtensionBuilder {
   constexpr auto on_deinit() const {
     return ExtensionBuilder<FuncTuple, TypeTuple, RequiredCapabilityTuple,
                             InitFn, Fn>{funcs_, types_, required_capabilities_,
-                                        require_atleast_min(VEF_PROTOCOL_4)};
+                                        require_atleast_min(VEF_PROTOCOL_5)};
   }
 
   // For testing only — forces the extension to require protocol p regardless

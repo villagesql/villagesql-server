@@ -27,7 +27,7 @@ INSTALL EXTENSION min_protocol_test;
 --echo # Verify extension was NOT installed
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
---echo # Install with default protocol (protocol 4, meets the requirement)
+--echo # Install with default protocol (the server's current protocol, meets the requirement)
 SET @vef_debug_protocol_override = NULL;
 INSTALL EXTENSION min_protocol_test;
 

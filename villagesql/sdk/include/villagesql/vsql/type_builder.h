@@ -152,14 +152,14 @@ class TypeBuilder {
   // (like a typed array) instead of being a single fixed
   // footprint.
   // Variable-length types must declare max_persisted_length() as the upper
-  // bound on the backing field. variable-length is a VEF_PROTOCOL_4 feature, so
-  // this raises the type's required protocol to VEF_PROTOCOL_4 (the server only
+  // bound on the backing field. variable-length is a VEF_PROTOCOL_5 feature, so
+  // this raises the type's required protocol to VEF_PROTOCOL_5 (the server only
   // reads the variable_length flag at protocol >= 4). require_atleast_min()
   // keeps the bump monotonic, so later v3-level setters cannot lower it back.
   constexpr auto variable_length_type() const {
     detail::TypeBuilderState s = state_;
     s.desc.vef_desc.variable_length = true;
-    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_4);
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_5);
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        /*HasVariableLength=*/true, HasPersistedLength,
@@ -350,7 +350,7 @@ class TypeBuilder {
         vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.from_binary_vdf_name = vdf_name;
-    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_4);
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_5);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
@@ -405,7 +405,7 @@ class TypeBuilder {
         vdf_name, state_.desc.vef_desc.name);
     TypeBuilderState s = state_;
     s.desc.vef_desc.to_binary_vdf_name = vdf_name;
-    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_4);
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_5);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,

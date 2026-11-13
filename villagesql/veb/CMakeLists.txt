@@ -22,7 +22,7 @@ SET(VILLAGESQL_VEB_SOURCES
   veb_file.cc
   veb_register_type_v1.cc
   veb_register_type_v3.cc
-  veb_register_type_v4.cc
+  veb_register_type_v5.cc
 )
 
 # Object library for compilation into sql_main (avoids circular dependencies)

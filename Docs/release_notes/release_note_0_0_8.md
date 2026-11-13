@@ -10,9 +10,9 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 
 ### Extension Framework
 
-- **`BINARY` VDF arguments and results (protocol 4)** — A VDF can take and return raw bytes, and a protocol 4 extension receives every `STRING` argument as `utf8mb4`. (`00a43f63a04`, #1411)
-- **Constant argument values in `prerun` (protocol 4)** — A `prerun` sees the value of each constant argument through `const_args`, so it can accept a `NULL` literal without accepting every `STRING`. (`d17f5613a93`, #1503)
-- **Binary form of a custom type (protocol 4)** — A custom type can declare `from_binary` and `to_binary`, available in SQL as `TYPE::from_binary` and `TYPE::to_binary`, to build a value from bytes and to return a value as bytes. (`99e0c558df2`, #1493; `16cd1f86440`, #1554)
+- **`BINARY` VDF arguments and results (protocol 5)** — A VDF can take and return raw bytes, and a protocol 5 extension receives every `STRING` argument as `utf8mb4`. (`00a43f63a04`, #1411)
+- **Constant argument values in `prerun` (protocol 5)** — A `prerun` sees the value of each constant argument through `const_args`, so it can accept a `NULL` literal without accepting every `STRING`. (`d17f5613a93`, #1503)
+- **Binary form of a custom type (protocol 5)** — A custom type can declare `from_binary` and `to_binary`, available in SQL as `TYPE::from_binary` and `TYPE::to_binary`, to build a value from bytes and to return a value as bytes. (`99e0c558df2`, #1493; `16cd1f86440`, #1554)
 - **Variadic VDFs can declare `bind_and_check_types`** — A variadic function can name the type of each bare literal among its arguments. (`9c26e4500ad`, #1287)
 - **Custom type arguments in prepared statements** — A VDF with a custom type argument works in a prepared statement, and a prepared statement accepts only `NULL` or string values for a custom type parameter. (`ea3757cba9f`, #1296; `8502bfbace1`, #1314; `821bfbf7ccf`, #1421)
 - **Custom type parameters from a `?`** — In a prepared statement, the string value bound to a `?` sets a custom type's parameters, as in `TVECTOR::from_string(?)` or `tvector_dim(?)` from the `vsql_tvector` example extension. Checks that need those parameters run at `EXECUTE`. (`5a111f69686`, #1489; `5442a85e37b`, #1490; `e355f12dea5`, #1491)
@@ -26,7 +26,7 @@ The Cargo release artifacts are available at https://crates.io/crates/villagesql
 - **Type-method names** — Method prefixes follow the same identifier rules as type names, so a type named `CAFÉ` accepts `café::from_string`. This also applies to protocol 3 extensions. (#1529)
 - **Extension install and update** — A `.veb` expansion is staged and renamed into place, so a crash during install does not leave an unusable `.so`. A truncated `.veb` is rejected. (`64b3a3c8853`, #1250; `62375da16ff`, #1308)
 - **Extension upgrade** — A failed extension update at restart rolls back only that extension, and the upgrade checks length changes for variable-length types. (`9c4b731c250`, #1343; `42871275adc`, #1256)
-- **Extension exceptions (protocol 4)** — A VDF that throws an exception returns an error to the statement. An extension built with this SDK also returns an error when its custom type's `from_string` function throws. (`28d9f609278`, #1231; `b01b6b72ee8`, #1355)
+- **Extension exceptions (protocol 5)** — A VDF that throws an exception returns an error to the statement. An extension built with this SDK also returns an error when its custom type's `from_string` function throws. (`28d9f609278`, #1231; `b01b6b72ee8`, #1355)
 - **Global status variable `Villagesql_veb_cache_repaired`** — Counts the times the server rebuilt a `.veb` expansion whose cached `.so` was missing or empty. (`967bde76c2a`, #1361)
 - **System variable fixes (preview)** — String and integer variables are handled separately, which fixes null-termination bugs in string values. (`e6435ab0a88`, #1334)
 - **Grants from an external authentication method are not binlogged (preview)** — They do not replicate. (`029df5265d5`, #1335)

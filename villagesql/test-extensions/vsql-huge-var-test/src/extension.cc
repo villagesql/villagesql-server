@@ -20,8 +20,8 @@
 // Separate from the fixed-length case in vsql-huge-fixed-test because
 // registration stops at the first invalid type: sharing one VEB would leave
 // whichever type came second unvalidated. .variable_length_type() also raises
-// this type to VEF_PROTOCOL_4, so it reaches the cap check through
-// build_type_descriptor_v4 rather than the v3 builder its sibling uses.
+// this type to VEF_PROTOCOL_5, so it reaches the cap check through
+// build_type_descriptor_v5 rather than the v3 builder its sibling uses.
 //
 // The type is never usable, so its operations only need to compile and be
 // registrable; nothing ever invokes them.

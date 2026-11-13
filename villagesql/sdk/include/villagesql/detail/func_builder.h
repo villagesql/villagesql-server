@@ -1291,10 +1291,10 @@ struct StaticFuncDesc {
   }
   // Varargs reads args->values (protocol-3 pointer-array layout) without a
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
-  // bind_and_check_types and VEF_TYPE_BINARY exist from VEF_PROTOCOL_4.
+  // bind_and_check_types and VEF_TYPE_BINARY exist from VEF_PROTOCOL_5.
   constexpr vef_protocol_t required_protocol() const {
     if (max_result_length_ > 0 || bind_ != nullptr || uses_binary()) {
-      return VEF_PROTOCOL_4;
+      return VEF_PROTOCOL_5;
     }
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
   }

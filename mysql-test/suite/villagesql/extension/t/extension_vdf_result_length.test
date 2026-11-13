@@ -77,7 +77,7 @@ SHOW CREATE TABLE cap_t;
 DROP TABLE cap_t;
 
 # Varargs + max_result_length: using .varargs() and .max_result_length(200)
-# together requires VEF_PROTOCOL_4 (max_result_length takes priority in
+# together requires VEF_PROTOCOL_5 (max_result_length takes priority in
 # required_protocol()). The result column is varchar(200) from the declared
 # length, not an argument-derived width.
 CREATE TABLE va AS SELECT rlen_ext.varargs_str_join('abc','def') AS s;

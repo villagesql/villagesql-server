@@ -21,7 +21,7 @@
 // width. bounded_concat is an aggregate with .max_result_length(5000). huge_str
 // declares a length above MAX_BLOB_WIDTH to exercise the server-side cap.
 // varargs_str_join uses both .varargs() and .max_result_length(200) together,
-// verifying that required_protocol() returns VEF_PROTOCOL_4 for the combined
+// verifying that required_protocol() returns VEF_PROTOCOL_5 for the combined
 // case.
 
 #include <villagesql/vsql.h>

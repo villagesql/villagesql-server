@@ -5,7 +5,7 @@
 # The fixture vsql_bad_var_no_resolve_test is built against the frozen stable
 # v3 SDK (the "v3" ABI selector in test-extensions/CMakeLists.txt), so the type
 # registers at VEF_PROTOCOL_3 and is dispatched to the v3 builder. The current
-# dev SDK raises variable-length types to VEF_PROTOCOL_4, so it can no longer
+# dev SDK raises variable-length types to VEF_PROTOCOL_5, so it can no longer
 # produce a type that reaches this v3 rejection -- this fixture stands in for a
 # real v3-compiled extension.
 
