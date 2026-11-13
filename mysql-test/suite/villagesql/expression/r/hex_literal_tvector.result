@@ -1,0 +1,83 @@
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[4,5,6]');
+#
+# Test 1: comparisons
+#
+SELECT id FROM t WHERE v = 0x0000803F0000004000004040;
+id
+1
+SELECT id FROM t WHERE v = X'000080400000A0400000C040';
+id
+2
+SELECT id FROM t WHERE v <> 0x0000803F0000004000004040;
+id
+2
+SELECT id FROM t WHERE v = _binary 0x0000803F0000004000004040;
+id
+1
+SELECT id FROM t
+WHERE v IN (0x0000803F0000004000004040, 0x000080400000A0400000C040)
+ORDER BY id;
+id
+1
+2
+SELECT id,
+CASE v WHEN 0x0000803F0000004000004040 THEN 'one-two-three'
+              ELSE 'other' END AS c
+FROM t ORDER BY id;
+id	c
+1	one-two-three
+2	other
+#
+# Test 2: a custom-typed VDF argument
+#
+SELECT id, vsql_tvector.tvector_dot_product(v, 0x0000803F0000004000004040) AS d
+FROM t ORDER BY id;
+id	d
+1	14
+2	32
+#
+# Test 3: a prepared statement, executed twice, and again after a
+# change to the table prepares it again
+#
+PREPARE s FROM 'SELECT id FROM t WHERE v = 0x000080400000A0400000C040';
+EXECUTE s;
+id
+2
+EXECUTE s;
+id
+2
+ALTER TABLE t ADD COLUMN c INT;
+EXECUTE s;
+id
+2
+ALTER TABLE t DROP COLUMN c;
+EXECUTE s;
+id
+2
+DEALLOCATE PREPARE s;
+#
+# Test 4: a view prints the literal as its text form
+#
+CREATE VIEW vw AS SELECT id FROM t WHERE v = 0x0000803F0000004000004040;
+SHOW CREATE VIEW vw;
+View	Create View	character_set_client	collation_connection
+vw	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vw` AS select `t`.`id` AS `id` from `t` where (`t`.`v` = '[1,2,3]')	utf8mb4	utf8mb4_0900_ai_ci
+SELECT id FROM vw;
+id
+1
+DROP VIEW vw;
+#
+# Test 5: bytes that are not a TVECTOR(3)
+#
+SELECT id FROM t WHERE v = 0x0000803F00000040;
+ERROR HY000: Incorrect TVECTOR value: '0x0000803F00000040'
+DROP TABLE t;
+#
+# Test 6: a type without from_binary rejects a hex literal
+#
+CREATE TABLE tc (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO tc VALUES (1, '(3,4)');
+SELECT id FROM tc WHERE c = X'00000000000008400000000000001040';
+ERROR HY000: Type 'vsql_complex.COMPLEX' has no binary form; pass the value as a character string
+DROP TABLE tc;
