@@ -34,6 +34,7 @@ class Create_field;
 class Croutine_hash_entry;
 struct HA_CREATE_INFO;
 struct handlerton;
+struct LEX;
 struct TABLE;
 class Table_ref;
 class THD;
@@ -309,6 +310,12 @@ extern bool DeleteCustomSpParams(THD *thd, const sp_name *name);
 // DROP DATABASE removes its routines without the per-routine DROP path.
 // Returns false on success, true on error.
 extern bool DeleteCustomSpParamsForDatabase(THD *thd, const char *db_name);
+
+// Remove the system tables the statement staged from lex->query_tables. They
+// are allocated in the statement's execution memory, so this must run at the
+// end of every statement, before a prepared statement or stored routine that
+// keeps the LEX can run again or be freed.
+void UnlinkStagedSystemTables(LEX *lex);
 
 }  // namespace villagesql
 

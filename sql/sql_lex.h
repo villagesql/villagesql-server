@@ -2636,6 +2636,9 @@ class Query_tables_list {
     0 - indicates that this query does not need prelocking.
   */
   Table_ref **query_tables_own_last;
+  // VillageSQL: the first of the VillageSQL system tables staged by the
+  // running statement, or nullptr if it staged none.
+  Table_ref *villagesql_staged_tables;
   /*
     Set of stored routines called by statement.
     (Note that we use lazy-initialization for this hash).
