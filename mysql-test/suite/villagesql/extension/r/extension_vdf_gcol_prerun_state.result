@@ -1,0 +1,61 @@
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension test_gcol_state using SDK...
+Created test_gcol_state.veb
+INSTALL EXTENSION test_gcol_state;
+# Outside a table, every statement gets its own prerun
+SELECT test_gcol_state.state_probe(7) AS v;
+v
+7
+SELECT test_gcol_state.state_probe(8) AS v;
+v
+8
+# STORED generated column, one INSERT per statement
+CREATE TABLE ts (id INT PRIMARY KEY, a INT,
+g INT AS (test_gcol_state.state_probe(a)) STORED);
+INSERT INTO ts (id, a) VALUES (1, 10);
+INSERT INTO ts (id, a) VALUES (2, 20);
+INSERT INTO ts (id, a) VALUES (3, 30);
+UPDATE ts SET a = 40 WHERE id = 3;
+SELECT id, a, g FROM ts ORDER BY id;
+id	a	g
+1	10	10
+2	20	20
+3	40	40
+# VIRTUAL generated column, read by several statements
+CREATE TABLE tv (id INT PRIMARY KEY, a INT,
+g INT AS (test_gcol_state.state_probe(a)) VIRTUAL);
+INSERT INTO tv (id, a) VALUES (1, 10), (2, 20);
+SELECT id, a, g FROM tv ORDER BY id;
+id	a	g
+1	10	10
+2	20	20
+SELECT id, a, g FROM tv ORDER BY id;
+id	a	g
+1	10	10
+2	20	20
+# CHECK constraint, one INSERT per statement
+CREATE TABLE tc (id INT PRIMARY KEY, a INT,
+CHECK (test_gcol_state.state_probe(a) >= 0));
+INSERT INTO tc VALUES (1, 10);
+INSERT INTO tc VALUES (2, 20);
+INSERT INTO tc VALUES (3, 30);
+SELECT id, a FROM tc ORDER BY id;
+id	a
+1	10
+2	20
+3	30
+# A statement in a stored procedure is also reused by every CALL
+CREATE PROCEDURE p() SELECT test_gcol_state.state_probe(5) AS v;
+CALL p();
+v
+5
+CALL p();
+v
+5
+DROP PROCEDURE p;
+SELECT test_gcol_state.prerun_count() AS prerun,
+test_gcol_state.postrun_count() AS postrun;
+prerun	postrun
+17	14
+DROP TABLE ts, tv, tc;
+UNINSTALL EXTENSION test_gcol_state;

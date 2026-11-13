@@ -16,7 +16,9 @@
 #include "villagesql/vdf/vdf_handler.h"
 
 #include <algorithm>
+#include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "lex_string.h"
@@ -332,86 +334,10 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
            m_args, m_args + arg_count,
            [](Item *arg) { return villagesql::HasPSParamWithoutValue(arg); }) &&
        villagesql::DeferUntilReprepare(thd));
-  if (m_udf->vdf_func_desc->prerun && !defer_prerun) {
-    vef_prerun_args_t prerun_args{};
-    prerun_args.arg_count = arg_count;
-    prerun_args.deprecated_const_values = nullptr;
-    prerun_args.deprecated_const_lengths = nullptr;
-
-    // Populate arg_types from Item types
-    vef_type_t *arg_types = nullptr;
-    if (arg_count > 0) {
-      arg_types = pointer_cast<vef_type_t *>(
-          (*THR_MALLOC)->Alloc(sizeof(vef_type_t) * arg_count));
-      if (!arg_types) return true;
-      for (uint i = 0; i < arg_count; i++) {
-        auto *tc = m_args[i]->get_type_context();
-        if (tc != nullptr) {
-          arg_types[i].id = VEF_TYPE_CUSTOM;
-          arg_types[i].custom_type = tc->type_name().c_str();
-        } else {
-          arg_types[i].id = villagesql::InferArgTypeId(m_args[i]);
-          arg_types[i].custom_type = nullptr;
-        }
-      }
-    }
-    prerun_args.arg_types = arg_types;
-
-    // From VEF_PROTOCOL_4, prerun sees each constant argument's value,
-    // marshalled as the VDF will receive it. As a UDF's init does, this
-    // evaluates the constant once more than the rows do.
-    std::vector<String> const_buffers;
-    if (m_udf->vdf_protocol >= VEF_PROTOCOL_4 && signature != nullptr &&
-        arg_count > 0) {
-      auto *is_const =
-          pointer_cast<bool *>((*THR_MALLOC)->Alloc(sizeof(bool) * arg_count));
-      auto *const_invalues = pointer_cast<vef_invalue_t *>(
-          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t) * arg_count));
-      auto *const_args = pointer_cast<const vef_invalue_t **>(
-          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t *) * arg_count));
-      if (!is_const || !const_invalues || !const_args) return true;
-      for (uint i = 0; i < arg_count; i++) {
-        is_const[i] = IsPrerunConstArg(m_args[i]);
-      }
-      const_buffers.resize(arg_count);
-      if (marshal_args_typed(signature, m_udf->vdf_protocol, arg_count, m_args,
-                             const_buffers.data(), const_invalues, is_const) ||
-          thd->is_error()) {
-        return true;
-      }
-      for (uint i = 0; i < arg_count; i++) {
-        const_args[i] = is_const[i] ? &const_invalues[i] : nullptr;
-      }
-      prerun_args.const_args = const_args;
-    }
-
-    char error_msg[VEF_MAX_ERROR_LEN] = {0};
-    vef_prerun_result_t prerun_result{};
-    prerun_result.type = VEF_RESULT_VALUE;
-    prerun_result.error_msg = error_msg;
-    prerun_result.result_buffer_size = 0;
-    prerun_result.user_data = nullptr;
-
-    m_udf->vdf_func_desc->prerun(&m_context, &prerun_args, &prerun_result);
-
-    if (prerun_result.type == VEF_RESULT_WARNING ||
-        prerun_result.type == VEF_RESULT_ERROR) {
-      my_error(ER_CANT_INITIALIZE_UDF, MYF(0), m_udf->name.str,
-               error_msg[0] ? error_msg : "prerun failed");
-      return true;
-    }
-
-    // Store user_data for subsequent calls
-    m_vdf_args.user_data = prerun_result.user_data;
-    prerun_completed = true;
-
-    // Handle buffer size request. The vdf_fail_after_prerun debug point forces
-    // a failure here so tests can check that postrun still runs.
-    DBUG_EXECUTE_IF("vdf_fail_after_prerun", {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    });
-    if (MaybeResizeBuffer(prerun_result.result_buffer_size)) return true;
+  if (!defer_prerun && m_udf->vdf_func_desc->prerun != nullptr) {
+    bool failed = false;
+    std::tie(failed, prerun_completed) = RunPrerun(thd);
+    if (failed) return true;
   }
 
   // Set return type_context if this VDF returns a custom type. Pass the
@@ -473,9 +399,116 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   return false;
 }
 
+std::pair<bool, bool> vdf_handler::RunPrerun(THD *thd) {
+  assert(m_udf->vdf_func_desc->prerun != nullptr);
+  bool needs_postrun = false;
+  // Every error returns this: failed, and whether needs postrun.
+  const auto fail = [&] { return std::make_pair(true, needs_postrun); };
+  const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
+  const uint arg_count = m_arg_count;
+
+  vef_prerun_args_t prerun_args{};
+  prerun_args.arg_count = arg_count;
+  prerun_args.deprecated_const_values = nullptr;
+  prerun_args.deprecated_const_lengths = nullptr;
+
+  // Populate arg_types from Item types
+  vef_type_t *arg_types = nullptr;
+  if (arg_count > 0) {
+    arg_types = pointer_cast<vef_type_t *>(
+        (*THR_MALLOC)->Alloc(sizeof(vef_type_t) * arg_count));
+    if (!arg_types) return fail();
+    for (uint i = 0; i < arg_count; i++) {
+      auto *tc = m_args[i]->get_type_context();
+      if (tc != nullptr) {
+        arg_types[i].id = VEF_TYPE_CUSTOM;
+        arg_types[i].custom_type = tc->type_name().c_str();
+      } else {
+        arg_types[i].id = villagesql::InferArgTypeId(m_args[i]);
+        arg_types[i].custom_type = nullptr;
+      }
+    }
+  }
+  prerun_args.arg_types = arg_types;
+
+  // From VEF_PROTOCOL_4, prerun sees each constant argument's value,
+  // marshalled as the VDF will receive it. As a UDF's init does, this
+  // evaluates the constant once more than the rows do.
+  std::vector<String> const_buffers;
+  if (m_udf->vdf_protocol >= VEF_PROTOCOL_4 && signature != nullptr &&
+      arg_count > 0) {
+    auto *is_const =
+        pointer_cast<bool *>((*THR_MALLOC)->Alloc(sizeof(bool) * arg_count));
+    auto *const_invalues = pointer_cast<vef_invalue_t *>(
+        (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t) * arg_count));
+    auto *const_args = pointer_cast<const vef_invalue_t **>(
+        (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t *) * arg_count));
+    if (!is_const || !const_invalues || !const_args) return fail();
+    for (uint i = 0; i < arg_count; i++) {
+      is_const[i] = IsPrerunConstArg(m_args[i]);
+    }
+    const_buffers.resize(arg_count);
+    if (marshal_args_typed(signature, m_udf->vdf_protocol, arg_count, m_args,
+                           const_buffers.data(), const_invalues, is_const) ||
+        thd->is_error()) {
+      return fail();
+    }
+    for (uint i = 0; i < arg_count; i++) {
+      const_args[i] = is_const[i] ? &const_invalues[i] : nullptr;
+    }
+    prerun_args.const_args = const_args;
+  }
+
+  char error_msg[VEF_MAX_ERROR_LEN] = {0};
+  vef_prerun_result_t prerun_result{};
+  prerun_result.type = VEF_RESULT_VALUE;
+  prerun_result.error_msg = error_msg;
+  prerun_result.result_buffer_size = 0;
+  prerun_result.user_data = nullptr;
+
+  m_udf->vdf_func_desc->prerun(&m_context, &prerun_args, &prerun_result);
+
+  if (prerun_result.type == VEF_RESULT_WARNING ||
+      prerun_result.type == VEF_RESULT_ERROR) {
+    my_error(ER_CANT_INITIALIZE_UDF, MYF(0), m_udf->name.str,
+             error_msg[0] ? error_msg : "prerun failed");
+    return fail();
+  }
+
+  // Store user_data for subsequent calls
+  m_vdf_args.user_data = prerun_result.user_data;
+  needs_postrun = true;
+
+  // Handle buffer size request. The vdf_fail_after_prerun debug point forces
+  // a failure here so tests can check that postrun still runs.
+  DBUG_EXECUTE_IF("vdf_fail_after_prerun", {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    return fail();
+  });
+  return {MaybeResizeBuffer(prerun_result.result_buffer_size), needs_postrun};
+}
+
+bool vdf_handler::MaybeRerunPrerun() {
+  if (m_active) return false;
+  THD *thd = current_thd;
+  if (thd->is_error()) return true;
+  if (m_udf->vdf_func_desc->prerun == nullptr) {
+    m_active = true;
+    return false;
+  }
+  bool failed = false;
+  bool needs_postrun = false;
+  std::tie(failed, needs_postrun) = RunPrerun(thd);
+  // cleanup() runs postrun for this statement, also when a step after prerun
+  // failed, but not when prerun itself failed.
+  m_active = needs_postrun;
+  return failed;
+}
+
 void vdf_handler::clear() {
   // See marshal_args().
   if (should_assert_if_false(m_prerun_ran)) return;
+  if (MaybeRerunPrerun()) return;
   m_udf->vdf_func_desc->clear(&m_context, &m_vdf_args);
 }
 
@@ -649,6 +682,7 @@ bool vdf_handler::marshal_args() {
                      m_udf->name.str);
     return true;
   }
+  if (MaybeRerunPrerun()) return true;
   const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
   if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
     return marshal_args_typed(sig, m_udf->vdf_protocol, m_vdf_args.value_count,
