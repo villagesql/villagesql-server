@@ -89,7 +89,7 @@ override_dh_auto_build:
 	CMAKE_EXTRA_FLAGS="$(FETCHCONTENT_FLAGS)" \
 	server/villagesql/bld_tools/build_bundled_extensions.sh \
 		$(CURDIR)/exts \
-		"$$(echo $(CURDIR)/obj/villagesql-extension-sdk-*)" \
+		"$$(echo $(CURDIR)/obj/villagesql-extension-sdk-*/)" \
 		$(CURDIR)/obj/bundled_vebs
 
 override_dh_installsystemd:
