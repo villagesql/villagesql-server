@@ -72,7 +72,7 @@ concurrency:
 jobs:
   tsan-test:
     name: Build and Run TSan Tests
-    runs-on: [self-hosted, linux, x86_64]
+    runs-on: [self-hosted, linux-server, x86_64, server_build_worker, ubuntu_24]
     timeout-minutes: 600
     permissions:
       contents: read

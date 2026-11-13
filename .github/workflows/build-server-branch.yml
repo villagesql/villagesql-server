@@ -37,7 +37,7 @@ on:
         required: true
         type: string
       runner:
-        description: 'JSON-encoded runs-on value (array or quoted string), e.g. ["self-hosted","linux","x86_64"] or "macos-latest".'
+        description: 'JSON-encoded runs-on value (array or quoted string), e.g. ["self-hosted","linux-server","x86_64","server_build_worker","ubuntu_24"] or "macos-latest".'
         required: true
         type: string
       bundled_extensions:
@@ -89,10 +89,10 @@ on:
           - macos
         default: linux
       runner:
-        description: 'JSON-encoded runs-on value, e.g. ["self-hosted","linux","x86_64"] or "macos-latest".'
+        description: 'JSON-encoded runs-on value, e.g. ["self-hosted","linux-server","x86_64","server_build_worker","ubuntu_24"] or "macos-latest".'
         required: true
         type: string
-        default: '["self-hosted","linux","x86_64"]'
+        default: '["self-hosted","linux-server","x86_64","server_build_worker","ubuntu_24"]'
       bundled_extensions:
         description: 'Build (and test) the bundled extensions.'
         required: false
