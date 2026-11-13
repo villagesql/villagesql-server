@@ -712,7 +712,7 @@ static bool ReadsBinaryForm(const TypeContext &tc) {
 // binary form never changes what existing input means.
 static void ReportNoBinaryForm(const TypeContext &tc) {
   villagesql_error(
-      "Type '%s' cannot read a binary value; give a text value a character set",
+      "Type '%s' has no binary form; pass the value as a character string",
       MYF(0), tc.qualified_name().c_str());
 }
 

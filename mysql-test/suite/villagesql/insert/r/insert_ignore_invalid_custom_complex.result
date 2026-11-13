@@ -36,7 +36,7 @@ id	c	is_null
 4	(0,0)	0
 SET @id = 5, @v = X'00000000000008400000000000001040';
 EXECUTE s USING @id, @v;
-ERROR HY000: Type 'vsql_complex.COMPLEX' cannot read a binary value; give a text value a character set
+ERROR HY000: Type 'vsql_complex.COMPLEX' has no binary form; pass the value as a character string
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 5;
 id	c	is_null
 DEALLOCATE PREPARE s;

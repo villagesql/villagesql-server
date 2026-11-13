@@ -233,7 +233,7 @@ static const vef_func_desc_t *resolve_type_vdf(
 std::optional<TypeDescriptor> build_type_descriptor_v3(
     const vef_type_desc_t *td, const vef_registration_t &reg,
     const std::string &type_name, const std::string &extension_name,
-    const std::string &extension_version) {
+    const std::string &extension_version, vef_protocol_t extension_protocol) {
   bool error = false;
 
   // persisted_length must be either -1 (variable-length, parameterized) or a
@@ -429,11 +429,11 @@ std::optional<TypeDescriptor> build_type_descriptor_v3(
   // 5. Build TypeDescriptor.
   TypeDescriptor descriptor(
       TypeDescriptorKey(type_name, extension_name, extension_version),
-      VEF_PROTOCOL_3, MYSQL_TYPE_VARCHAR, td->persisted_length,
-      td->max_decode_buffer_length, td->max_persisted_length, LengthKind::Fixed,
-      std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
-      std::move(hash_fn), std::move(int_to_params_fn),
-      std::move(resolve_params_fn));
+      VEF_PROTOCOL_3, extension_protocol, MYSQL_TYPE_VARCHAR,
+      td->persisted_length, td->max_decode_buffer_length,
+      td->max_persisted_length, LengthKind::Fixed, std::move(encode_fn),
+      std::move(decode_fn), std::move(compare_fn), std::move(hash_fn),
+      std::move(int_to_params_fn), std::move(resolve_params_fn));
 
   // 7. Set intrinsic default (VDF or string literal, mutually exclusive).
   if (intrinsic_default_vdf != nullptr) {

@@ -239,7 +239,7 @@ static const vef_func_desc_t *resolve_type_vdf(
 std::optional<TypeDescriptor> build_type_descriptor_v4(
     const vef_type_desc_t *td, const vef_registration_t &reg,
     const std::string &type_name, const std::string &extension_name,
-    const std::string &extension_version) {
+    const std::string &extension_version, vef_protocol_t extension_protocol) {
   bool error = false;
 
   // A type is variable-length when it sets the variable_length flag (via the
@@ -482,8 +482,9 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
   // 5. Build TypeDescriptor.
   TypeDescriptor descriptor(
       TypeDescriptorKey(type_name, extension_name, extension_version),
-      VEF_PROTOCOL_4, MYSQL_TYPE_VARCHAR, td->persisted_length,
-      td->max_decode_buffer_length, td->max_persisted_length,
+      VEF_PROTOCOL_4, extension_protocol, MYSQL_TYPE_VARCHAR,
+      td->persisted_length, td->max_decode_buffer_length,
+      td->max_persisted_length,
       is_variable ? LengthKind::Variable : LengthKind::Fixed,
       std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
       std::move(hash_fn), std::move(int_to_params_fn),

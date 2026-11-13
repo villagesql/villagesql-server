@@ -289,14 +289,14 @@ r
 7
 SET @c = CAST('(9.0,1.0)' AS BINARY);
 EXECUTE s USING @c;
-ERROR HY000: Type 'vsql_complex.COMPLEX' cannot read a binary value; give a text value a character set
+ERROR HY000: Type 'vsql_complex.COMPLEX' has no binary form; pass the value as a character string
 SET @c = '(2.0,3.0)';
 EXECUTE s USING @c;
 r
 2
 SET @c = X'28362E302C312E3029';
 EXECUTE s USING @c;
-ERROR HY000: Type 'vsql_complex.COMPLEX' cannot read a binary value; give a text value a character set
+ERROR HY000: Type 'vsql_complex.COMPLEX' has no binary form; pass the value as a character string
 reprepares
 0
 DEALLOCATE PREPARE s;
@@ -306,7 +306,7 @@ SET @id = 1, @c = '(1.0,1.0)';
 EXECUTE s USING @id, @c;
 SET @id = 2, @c = CAST('(2.0,2.0)' AS BINARY);
 EXECUTE s USING @id, @c;
-ERROR HY000: Type 'vsql_complex.COMPLEX' cannot read a binary value; give a text value a character set
+ERROR HY000: Type 'vsql_complex.COMPLEX' has no binary form; pass the value as a character string
 SET @id = 3, @c = '(3.0,3.0)';
 EXECUTE s USING @id, @c;
 DEALLOCATE PREPARE s;
