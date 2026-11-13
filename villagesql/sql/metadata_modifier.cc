@@ -447,19 +447,25 @@ bool Metadata_modifier::rename_columns_table(
 
   // The table's columns as the renames already staged here leave them, so
   // that a RENAME TABLE pair can rename a table an earlier pair of the same
-  // statement produced. Staged renames apply in order, so each new rename
-  // starts from the key the previous one gave the column.
+  // statement produced. A column an earlier rename produced also records the
+  // position of that rename in to_rename_.
+  constexpr size_t not_staged = std::numeric_limits<size_t>::max();
   const std::string old_prefix = ColumnKeyPrefix(old_db, old_table).str();
-  std::map<std::string, const ColumnEntry *> custom_columns;
+  std::map<std::string, std::pair<const ColumnEntry *, size_t>> custom_columns;
   for (const ColumnEntry *col :
        vclient.GetCustomColumnsForTable(old_db, old_table)) {
-    if (col) custom_columns[col->key().str()] = col;
+    if (col) custom_columns[col->key().str()] = {col, not_staged};
   }
-  for (const auto &[staged_entry, staged_old_key] : to_rename_) {
+  // Each staged rename runs from a committed key to the column's current key,
+  // and they all apply at once. So drop every old key before adding any
+  // current one, since one rename's current key may be another's old key.
+  for (const auto &[_, staged_old_key] : to_rename_)
     custom_columns.erase(staged_old_key.str());
+  for (size_t i = 0; i < to_rename_.size(); ++i) {
+    const ColumnEntry &staged_entry = to_rename_[i].first;
     const std::string staged_key = staged_entry.key().str();
     if (staged_key.starts_with(old_prefix))
-      custom_columns[staged_key] = &staged_entry;
+      custom_columns[staged_key] = {&staged_entry, i};
   }
 
   if (custom_columns.empty()) {
@@ -467,9 +473,12 @@ bool Metadata_modifier::rename_columns_table(
   }
 
   // Built apart from to_rename_, which custom_columns may point into.
+  // Each rename comes with the position of the staged rename it continues.
+  std::vector<std::pair<ColumnEntry, size_t>> continued;
   std::vector<std::pair<ColumnEntry, ColumnKey>> renames;
   renames.reserve(custom_columns.size());
-  for (const auto &[_, old_col] : custom_columns) {
+  for (const auto &[_, staged] : custom_columns) {
+    const auto [old_col, staged_pos] = staged;
     // The caller stages its own operation for these, keyed by new_name
     // already. Renaming them here too would race that operation for the row.
     if (skip_columns != nullptr &&
@@ -480,8 +489,14 @@ bool Metadata_modifier::rename_columns_table(
                           old_col->extension_name, old_col->extension_version,
                           old_col->type_name, old_col->type_parameters);
 
-    renames.emplace_back(new_entry, old_col->key());
+    if (staged_pos == not_staged)
+      renames.emplace_back(std::move(new_entry), old_col->key());
+    else
+      continued.emplace_back(std::move(new_entry), staged_pos);
   }
+  // A rename of a column an earlier rename produced replaces that rename's
+  // target, so the row is deleted under the name it has in the table.
+  for (auto &[entry, pos] : continued) to_rename_[pos].first = std::move(entry);
   for (auto &rename : renames) to_rename_.push_back(std::move(rename));
 
   return false;
@@ -1119,11 +1134,17 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   }
   to_remove_.clear();
 
-  // 2. Process renames (updates with old key).
+  // 2. Process renames. Each deletes the row under the old name and inserts it
+  // under the new one. All deletes come first, so renames that swap or chain
+  // names in one statement never insert a name another row still holds.
+  for (const auto &[new_entry, old_key] : to_rename_) {
+    if (vclient.columns().MarkForDeletion(*thd, old_key)) {
+      return true;
+    }
+  }
   for (auto &[new_entry, old_key] : to_rename_) {
-    if (vclient.columns().MarkForUpdate(*thd, std::move(new_entry),
-                                        std::move(old_key))) {
-      return true;  // Error marking for update
+    if (vclient.columns().MarkForInsertion(*thd, std::move(new_entry))) {
+      return true;
     }
     marked_column = true;
   }

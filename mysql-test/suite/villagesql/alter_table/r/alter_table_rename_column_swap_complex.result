@@ -1,0 +1,132 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, c1 COMPLEX, c2 COMPLEX2);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', '(3.0,4.0)');
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	c1	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	c2	vsql_complex	0.0.1	COMPLEX2	{}
+# Two custom columns swap names.
+ALTER TABLE t1 RENAME COLUMN c1 TO c2, RENAME COLUMN c2 TO c1;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	c1	vsql_complex	0.0.1	COMPLEX2	{}
+test	t1	c2	vsql_complex	0.0.1	COMPLEX	{}
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `c2` vsql_complex.COMPLEX DEFAULT NULL,
+  `c1` vsql_complex.COMPLEX2 DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	c2	c1
+1	(1,2)	(3,4)
+# And back.
+ALTER TABLE t1 RENAME COLUMN c1 TO c2, RENAME COLUMN c2 TO c1;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	c1	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	c2	vsql_complex	0.0.1	COMPLEX2	{}
+SELECT * FROM t1;
+id	c1	c2
+1	(1,2)	(3,4)
+# A chain of renames, where the first rename takes the name the second
+# one gives up.
+ALTER TABLE t1 RENAME COLUMN c1 TO c2, RENAME COLUMN c2 TO c3;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	c2	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	c3	vsql_complex	0.0.1	COMPLEX2	{}
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `c2` vsql_complex.COMPLEX DEFAULT NULL,
+  `c3` vsql_complex.COMPLEX2 DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	c2	c3
+1	(1,2)	(3,4)
+# A chain back with CHANGE COLUMN.
+ALTER TABLE t1 CHANGE COLUMN c3 c2 COMPLEX2, CHANGE COLUMN c2 c1 COMPLEX;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	c1	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	c2	vsql_complex	0.0.1	COMPLEX2	{}
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `c1` vsql_complex.COMPLEX DEFAULT NULL,
+  `c2` vsql_complex.COMPLEX2 DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	c1	c2
+1	(1,2)	(3,4)
+# A rename that only changes the case keeps the name as typed.
+ALTER TABLE t1 RENAME COLUMN c1 TO C1;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	C1	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	c2	vsql_complex	0.0.1	COMPLEX2	{}
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `C1` vsql_complex.COMPLEX DEFAULT NULL,
+  `c2` vsql_complex.COMPLEX2 DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 RENAME COLUMN C1 TO c1;
+# Renames that fail leave the custom columns as they were.
+ALTER TABLE t1 RENAME COLUMN c1 TO c2;
+ERROR 42S21: Duplicate column name 'c2'
+ALTER TABLE t1 RENAME COLUMN c1 TO c2, RENAME COLUMN c2 TO c3, ADD COLUMN c3 INT;
+ERROR 42S21: Duplicate column name 'c3'
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	c1	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	c2	vsql_complex	0.0.1	COMPLEX2	{}
+SELECT * FROM t1;
+id	c1	c2
+1	(1,2)	(3,4)
+DROP TABLE t1;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+# A RENAME TABLE that swaps two tables whose custom columns have the same
+# name, then renames one of the swapped tables in the same statement.
+CREATE TABLE s1 (id INT PRIMARY KEY, c COMPLEX);
+CREATE TABLE s2 (id INT PRIMARY KEY, c COMPLEX2);
+# When a later pair fails, the statement changes nothing.
+CREATE TABLE s4 (id INT PRIMARY KEY);
+RENAME TABLE s1 TO tmp, s2 TO s1, tmp TO s2, s2 TO s4;
+ERROR 42S01: Table 's4' already exists
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	s1	c	vsql_complex	0.0.1	COMPLEX	{}
+test	s2	c	vsql_complex	0.0.1	COMPLEX2	{}
+DROP TABLE s4;
+RENAME TABLE s1 TO tmp, s2 TO s1, tmp TO s2, s2 TO s3;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	s1	c	vsql_complex	0.0.1	COMPLEX2	{}
+test	s3	c	vsql_complex	0.0.1	COMPLEX	{}
+SHOW CREATE TABLE s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `id` int NOT NULL,
+  `c` vsql_complex.COMPLEX2 DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE s3;
+Table	Create Table
+s3	CREATE TABLE `s3` (
+  `id` int NOT NULL,
+  `c` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE s1, s3;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
