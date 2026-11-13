@@ -5,10 +5,6 @@
 # A bad value that does not abort the statement now stores the type's
 # intrinsic default on every path, whatever the column's nullability. The
 # cases are labelled as in the issue.
-#
-# Case B is a separate defect kept here because it shares the shape: a binary
-# literal under IGNORE raises a hard error instead of a warning, and the
-# message shows '' rather than the offending value.
 
 --source include/villagesql/install_complex_extension.inc
 
@@ -40,9 +36,8 @@ DROP TABLE t_nn;
 INSERT IGNORE INTO t VALUES (2, 'not a complex');
 SELECT id, c, c IS NULL AS is_null FROM t WHERE id = 2;
 
-# B: INSERT IGNORE, invalid binary literal. IGNORE does not downgrade this to
-# a warning the way it does for A, and the message shows '' rather than the
-# offending value.
+# B: INSERT IGNORE, hex literal. COMPLEX has no binary form, so the bytes are
+# an error rather than being read as text, and IGNORE does not downgrade it.
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSERT IGNORE INTO t VALUES (3, X'00000000000008400000000000001040');
 

@@ -65,14 +65,15 @@ that builds a value from its binary form, next to the required encode from
 text. It is registered as the SQL function `TYPE::from_binary`. As with the
 encode from text, a parameterized type's parameters are inferred from a
 constant argument. The server uses it for any value in the binary charset that
-becomes a value of the type: a `_binary` string, a parameter bound as a BLOB,
-or a `VARBINARY` column. A value in any other charset is text, converted to
-utf8mb4 for the encode from text. For a type without `from_binary`, a value in
-the binary charset is an error rather than being read as text, so adding
-`from_binary` later never changes what existing input means. This applies to
-the types of an extension built against protocol >= 4. A type of an extension
-built against an earlier protocol, which cannot declare `from_binary`, keeps
-receiving a value in the binary charset in its encode from text, as its bytes.
+becomes a value of the type: a hex or bit literal, a `_binary` string, a
+parameter bound as a BLOB, or a `VARBINARY` column. A value in any other
+charset is text, converted to utf8mb4 for the encode from text. For a type
+without `from_binary`, a value in the binary charset is an error rather than
+being read as text, so adding `from_binary` later never changes what existing
+input means. This applies to the types of an extension built against protocol
+>= 4. A type of an extension built against an earlier protocol, which cannot
+declare `from_binary`, keeps receiving a value in the binary charset in its
+encode from text, as its bytes.
 
 The inverse is `to_binary_vdf_name` (protocol >= `VEF_PROTOCOL_4`), a decode
 with signature `(CUSTOM(this type)) -> BINARY` that returns a value's binary

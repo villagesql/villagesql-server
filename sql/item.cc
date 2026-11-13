@@ -3876,16 +3876,8 @@ void Item_string::print(const THD *, String *str,
 
   // Custom types: decode binary representation to string format.
   if (has_type_context()) {
-    str->append('\'');
-    String decoded;
-    if (!villagesql::DecodeStringUncached(*get_type_context(), str_value,
-                                          &decoded)) {
-      str->append(decoded);
-    } else {
-      //  TODO(villagesql-general): Make this error observable.
-      str->append("<error decoding value>");
-    }
-    str->append('\'');
+    villagesql::PrintEncodedLiteral(*get_type_context(), str_value, query_type,
+                                    str);
     return;
   }
 
@@ -7883,6 +7875,11 @@ my_decimal *Item_hex_string::val_decimal(my_decimal *decimal_value) {
 type_conversion_status Item_hex_string::save_in_field_inner(Field *field,
                                                             bool) {
   field->set_notnull();
+  // VillageSQL: a hex or bit literal is a binary string, encoded for the
+  // custom type as any binary value is, unless it is already encoded.
+  if (field->has_type_context() && !has_type_context()) {
+    return villagesql::EncodeAndStoreStringToCustomField(str_value, field);
+  }
   if (field->result_type() == STRING_RESULT)
     return field->store(str_value.ptr(), str_value.length(),
                         collation.collation);
@@ -7915,6 +7912,12 @@ void Item_hex_string::print(const THD *, String *str,
                             enum_query_type query_type) const {
   if (query_type & QT_NORMALIZED_FORMAT) {
     str->append("?");
+    return;
+  }
+  // VillageSQL: an encoded custom type value prints as its text form.
+  if (has_type_context()) {
+    villagesql::PrintEncodedLiteral(*get_type_context(), str_value, query_type,
+                                    str);
     return;
   }
   const uchar *ptr = pointer_cast<const uchar *>(str_value.ptr());
