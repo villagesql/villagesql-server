@@ -3,13 +3,8 @@
 # Four hundred COMPLEX objects needs output buffer of 6400 bytes.
 # Goal is to probe various buffer needs below and above 1024.
 
---echo # Install vsql_simple extension
 INSTALL EXTENSION vsql_simple;
-
---echo # Install vsql_complex extension
 INSTALL EXTENSION vsql_complex;
-
---echo # Verify extensions installed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 --echo # create table with complex column
