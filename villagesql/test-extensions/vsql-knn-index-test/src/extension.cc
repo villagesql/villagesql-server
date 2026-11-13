@@ -65,6 +65,7 @@
 #include <mutex>
 #include <new>
 #include <shared_mutex>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -358,6 +359,32 @@ static void kvector_to_string(vsql::CustomArg in, vsql::StringResult out) {
   }
   pos += snprintf(text + pos, sizeof(text) - pos, "]");
   out.set(std::string_view(text, static_cast<size_t>(pos)));
+}
+
+// Binary form: the kVecDim little-endian float32 elements, without the
+// Column::Ref placeholder that only the stored field carries. from_binary
+// writes a zero placeholder, as kvector_from_string does.
+static void kvector_from_binary(vsql::Span<const unsigned char> from,
+                                vsql::CustomResult out) {
+  if (from.size() != kVecBytes) {
+    out.error("kvector: binary form must be " + std::to_string(kVecBytes) +
+              " bytes");
+    return;
+  }
+  vsql::Span<unsigned char> buf = out.buffer();
+  if (buf.size() < kFieldSize) {
+    out.error("kvector: decode buffer too small");
+    return;
+  }
+  memset(buf.data(), 0, kRefSize);
+  memcpy(buf.data() + kRefSize, from.data(), kVecBytes);
+  out.set_length(kFieldSize);
+}
+
+static void kvector_to_binary(vsql::CustomArg in, vsql::BinaryResult out) {
+  auto data = in.value();
+  if (data.size() < kFieldSize) return;
+  out.set({data.data() + kRefSize, kVecBytes});
 }
 
 static int kvector_compare(vsql::CustomArg a, vsql::CustomArg b) {
@@ -670,7 +697,9 @@ constexpr auto KVECTOR = vsql::make_type<kKVectorType>()
                              .persisted_length(kFieldSize)
                              .max_decode_buffer_length(DECODE_BUFFER_SIZE<256>)
                              .from_string<&kvector_from_string>()
+                             .from_binary<&kvector_from_binary>()
                              .to_string<&kvector_to_string>()
+                             .to_binary<&kvector_to_binary>()
                              .compare<&kvector_compare>()
                              .intrinsic_default_str("[0,0,0,0]")
                              .build();

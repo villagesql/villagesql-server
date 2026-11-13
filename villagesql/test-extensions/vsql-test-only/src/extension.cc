@@ -812,6 +812,9 @@ void real_avg_result(const RealAvgState &state, vsql::RealResult out) {
 void pvec_from_binary(vsql::MaybeParams<PVecParams> &,
                       vsql::Span<const unsigned char>, vsql::CustomResult) {}
 
+// Likewise its to_binary, for the SDK's default decode error.
+void pvec_to_binary(vsql::CustomArgWith<PVecParams>, vsql::BinaryResult) {}
+
 static constexpr const char kPVecTypeName[] = "PVEC";
 
 constexpr auto PVEC =
@@ -825,6 +828,7 @@ constexpr auto PVEC =
         .from_string<&pvec_from_string>()
         .from_binary<&pvec_from_binary>()
         .to_string<&pvec_to_string>()
+        .to_binary<&pvec_to_binary>()
         .compare<&pvec_compare>()
         .build();
 

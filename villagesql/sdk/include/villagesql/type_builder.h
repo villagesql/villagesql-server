@@ -182,6 +182,7 @@ class TypeBuilder {
         0,        // max_persisted_length: only set via the v2+ API
         false,    // variable_length: only set via vsql's variable_length_type()
         nullptr,  // from_binary_vdf_name: only set via vsql's from_binary()
+        nullptr,  // to_binary_vdf_name: only set via vsql's to_binary()
     };
     return desc;
   }

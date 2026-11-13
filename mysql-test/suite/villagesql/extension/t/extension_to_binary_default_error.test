@@ -1,0 +1,10 @@
+# A to_binary that returns without setting an outcome gets the SDK's default
+# decode error. vsql_test_only's PVEC has such a to_binary.
+
+INSTALL EXTENSION vsql_test_only;
+
+--error ER_UDF_ERROR
+SELECT vsql_test_only.PVEC::to_binary(vsql_test_only.PVEC::from_string('[1,2]'))
+  AS v;
+
+UNINSTALL EXTENSION vsql_test_only;

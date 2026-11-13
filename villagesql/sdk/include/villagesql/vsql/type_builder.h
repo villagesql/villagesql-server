@@ -58,6 +58,7 @@
 //   .from_string<&fn>()      ->  VDF name "MYTYPE::from_string"  (SQL-callable)
 //   .from_binary<&fn>()      ->  VDF name "MYTYPE::from_binary"  (SQL-callable)
 //   .to_string<&fn>()        ->  VDF name "MYTYPE::to_string"    (SQL-callable)
+//   .to_binary<&fn>()        ->  VDF name "MYTYPE::to_binary"    (SQL-callable)
 //   .compare<&fn>()          ->  VDF name "MYTYPE::compare"      (SQL-callable)
 //   .hash<&fn>()             ->  VDF name "MYTYPE::hash"         (SQL-callable)
 //   .int_to_params<&fn>()    ->  VDF name "MYTYPE::int_to_params"
@@ -97,9 +98,10 @@ namespace vsql {
 // =============================================================================
 //
 // EmbeddedFuncsTuple holds SQL-callable VDFs (from_string/from_binary/
-// to_string/compare/hash/int_to_params/resolve_params) that are automatically
-// registered alongside the type when passed to ExtensionBuilder::type(). These
-// are produced by the template methods on TypeBuilder.
+// to_string/to_binary/compare/hash/int_to_params/resolve_params) that are
+// automatically registered alongside the type when passed to
+// ExtensionBuilder::type(). These are produced by the template methods on
+// TypeBuilder.
 
 template <typename EmbeddedFuncsTuple = std::tuple<>>
 struct TypeObject {
@@ -376,6 +378,36 @@ class TypeBuilder {
     require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_3);
     auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
     return TypeBuilder<HasFromString, true, HasCompare, ParamsType,
+                       HasIntToParams, HasResolveParams, HasMaxPersistedLength,
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
+                       decltype(new_embedded), Name>{s, new_embedded};
+  }
+
+  // to_binary: optional decode to the type's binary form, the inverse of
+  // from_binary. Its function writes the bytes to a BinaryResult where
+  // to_string writes text to a StringResult, and otherwise has the same
+  // contract.
+  template <auto Func>
+  constexpr auto to_binary() const {
+    using namespace detail;
+    using OpP =
+        typename func_builder::detail::TypeOpParamsType<decltype(Func)>::type;
+    static_assert(
+        std::is_same_v<OpP, ParamsType>,
+        "vsql::TypeBuilder::to_binary(): function params type is inconsistent "
+        "with the declared params type — if the type uses .params<P>(), "
+        "to_binary must use TypeDecodeBinaryWithParamsFunc<P>; otherwise use "
+        "TypeDecodeBinaryFunc");
+    constexpr const char *vdf_name =
+        kTypeOpVdfName<Name, TypeOp::kDecodeBinary>.buf;
+    auto inner = func_builder::make_type_decode_binary<Func>(
+        vdf_name, state_.desc.vef_desc.name);
+    TypeBuilderState s = state_;
+    s.desc.vef_desc.to_binary_vdf_name = vdf_name;
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_4);
+    auto new_embedded = std::tuple_cat(embedded_funcs_, std::make_tuple(inner));
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
                        HasIntToParams, HasResolveParams, HasMaxPersistedLength,
                        HasVariableLength, HasPersistedLength,
                        HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf,
