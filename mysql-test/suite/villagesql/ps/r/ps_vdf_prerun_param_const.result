@@ -18,7 +18,8 @@ SET @p = 1.5e0;
 EXECUTE s USING @p;
 param
 const REAL 1.5
-# A DECIMAL's digits are copied to the reprepared ? before prerun
+# A DECIMAL's digits are lent to the reprepared ? before prerun.
+# VDFs have no DECIMAL type, so prerun sees it as a STRING.
 SET @p = 123.25;
 EXECUTE s USING @p;
 param

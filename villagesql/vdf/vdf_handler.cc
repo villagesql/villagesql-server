@@ -860,9 +860,9 @@ PsParamValueLoan::PsParamValueLoan(Item *item_list, Item_param **to,
   m_to = to;
   m_from = from;
   m_count = count;
-  // TODO(villagesql-general): a value sent with mysql_stmt_send_long_data() is
-  // LONG_DATA_VALUE and is lent like any other. Check with a binary-protocol
-  // client test.
+  // TODO(villagesql-general): add a binary-protocol client test for a value
+  // sent with mysql_stmt_send_long_data() (LONG_DATA_VALUE), which is lent
+  // like any other.
   for (uint i = 0; i < m_count; i++) {
     m_to[i]->set_param_type_and_swap_value(m_from[i]);
     m_to[i]->sync_clones();
