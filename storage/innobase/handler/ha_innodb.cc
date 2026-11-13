@@ -4023,7 +4023,6 @@ static void innobase_dict_cache_reset(const char *schema_name,
 /** Invalidate user table dict cache after Replication Plugin recovers. Table
 definition could be different with XA commit/rollback of DDL operations */
 static void innobase_dict_cache_reset_tables_and_tablespaces() {
-  std::vector<dict_table_t *> resurrected_tables;
   dict_sys_mutex_enter();
 
   /* There should be no DDL/DML activity at this stage, so access
@@ -4040,15 +4039,8 @@ static void innobase_dict_cache_reset_tables_and_tablespaces() {
     DD "system table" */
     if (villagesql::is_mysql_schema(db_str.c_str()) || table->is_dd_table ||
         table->is_corrupted() ||
-        villagesql::is_villagesql_schema(db_str.c_str())) {
-      continue;
-    }
-
-    if (DICT_TF2_FLAG_IS_SET(table, DICT_TF2_RESURRECT_PREPARED)) {
-      if (!dict_table_is_sdi(table->id)) {
-        table->acquire_with_lock();
-        resurrected_tables.push_back(table);
-      }
+        villagesql::is_villagesql_schema(db_str.c_str()) ||
+        DICT_TF2_FLAG_IS_SET(table, DICT_TF2_RESURRECT_PREPARED)) {
       continue;
     }
 
@@ -4060,13 +4052,8 @@ static void innobase_dict_cache_reset_tables_and_tablespaces() {
   }
   dict_sys_mutex_exit();
 
-  // VillageSQL: Tables resurrected in dict cache during recovery lack
-  // custom column metadata because the extension system is not initialized
-  // at that time. Load all custom column metadata here.
-  for (auto *table : resurrected_tables) {
-    villagesql::innodb::Custom_column::load_all(table);
-    table->release();
-  }
+  // VillageSQL: Load custom metadata, if not already loaded.
+  villagesql::innodb::Custom_column::load_resurrected();
 }
 
 /** Perform high-level recovery in InnoDB as part of initializing the
@@ -20515,6 +20502,9 @@ static int innobase_xa_recover(
   if (len == 0 || txn_list == nullptr) {
     return (0);
   }
+
+  // VillageSQL: Load custom metadata before prepared trx rollback.
+  villagesql::innodb::Custom_column::load_resurrected();
 
   return (trx_recover_for_mysql(txn_list, len, mem_root));
 }
