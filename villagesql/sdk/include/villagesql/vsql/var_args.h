@@ -29,7 +29,9 @@
 //     for (auto a : args) {
 //       if (a.is_null()) { out.set_null(); return; }
 //       auto bytes = a.as_custom();
-//       memcpy(dst.data() + off, bytes.data(), bytes.size());
+//       if (off + bytes.size() <= dst.size()) {
+//         memcpy(dst.data() + off, bytes.data(), bytes.size());
+//       }
 //       off += bytes.size();
 //     }
 //     out.set_length(off);
