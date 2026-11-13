@@ -159,6 +159,9 @@ id	v
 3	OK param
 4	OK hex
 5	OK b
+SELECT id FROM t_blob WHERE v = 0x4F4B20686578;
+id
+4
 SET @id = NULL, @v = NULL;
 DROP TABLE t_blob, t_bin;
 UNINSTALL EXTENSION abi_v3_test;

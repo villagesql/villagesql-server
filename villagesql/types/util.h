@@ -290,9 +290,8 @@ inline std::optional<size_t> TryComputeHash(const T &obj, const uchar *data,
 // Returns false on success, true on error (my_error already called if needed)
 extern bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc);
 
-// Append the literal a custom type value encoded by InjectAndEncodeCustomType
-// prints as: its text form, quoted and escaped, so the printed query parses
-// back to the same value.
+// Append the text form of a value encoded by InjectAndEncodeCustomType, quoted
+// and escaped so the printed query parses back to the same value.
 extern void PrintEncodedLiteral(const TypeContext &tc, const String &encoded,
                                 enum_query_type query_type, String *out);
 

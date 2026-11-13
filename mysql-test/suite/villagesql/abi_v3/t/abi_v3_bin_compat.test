@@ -52,8 +52,9 @@ DROP TABLE t_bin;
 
 # Its custom type keeps receiving a value in the binary charset in its encode
 # from text, as its bytes, as it did when it was built: a _binary string, a hex
-# and a bit literal, a VARBINARY column and a binary prepared-statement
-# parameter. FAULT_BLOB accepts a value that starts with 'OK '.
+# and a bit literal, a VARBINARY column, a binary prepared-statement parameter
+# and a hex literal compared with a column. FAULT_BLOB accepts a value that
+# starts with 'OK '.
 CREATE TABLE t_blob (id INT PRIMARY KEY, v abi_v3_test.FAULT_BLOB);
 INSERT INTO t_blob VALUES (1, _binary 'OK literal');
 # 'OK hex', and 'OK b' as 32 bits
@@ -67,6 +68,7 @@ SET @id = 3, @v = _binary 'OK param';
 EXECUTE s USING @id, @v;
 DEALLOCATE PREPARE s;
 SELECT id, abi_v3_test.FAULT_BLOB::to_string(v) AS v FROM t_blob ORDER BY id;
+SELECT id FROM t_blob WHERE v = 0x4F4B20686578;
 SET @id = NULL, @v = NULL;
 DROP TABLE t_blob, t_bin;
 UNINSTALL EXTENSION abi_v3_test;

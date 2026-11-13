@@ -73,3 +73,11 @@ DROP VIEW vw;
 SELECT id FROM t WHERE v = 0x0000803F00000040;
 ERROR HY000: Incorrect TVECTOR value: '0x0000803F00000040'
 DROP TABLE t;
+#
+# Test 6: a type without from_binary rejects a hex literal
+#
+CREATE TABLE tc (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO tc VALUES (1, '(3,4)');
+SELECT id FROM tc WHERE c = X'00000000000008400000000000001040';
+ERROR HY000: Type 'vsql_complex.COMPLEX' has no binary form; pass the value as a character string
+DROP TABLE tc;

@@ -67,4 +67,16 @@ SELECT id FROM t WHERE v = 0x0000803F00000040;
 
 DROP TABLE t;
 
+--echo #
+--echo # Test 6: a type without from_binary rejects a hex literal
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+CREATE TABLE tc (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO tc VALUES (1, '(3,4)');
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id FROM tc WHERE c = X'00000000000008400000000000001040';
+DROP TABLE tc;
+--source include/villagesql/uninstall_complex_extension.inc
+
 --source include/villagesql/uninstall_tvector_extension.inc

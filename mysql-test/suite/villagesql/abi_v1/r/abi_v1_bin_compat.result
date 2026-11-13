@@ -97,6 +97,9 @@ id	data
 5	706172616D202020
 6	6865782020202020
 7	6220202020202020
+SELECT id FROM t WHERE data = 0x686578;
+id
+6
 SELECT HEX(abi_v1_test.to_string(abi_v1_test.mask(_binary 'argument', 0)))
 AS masked;
 masked

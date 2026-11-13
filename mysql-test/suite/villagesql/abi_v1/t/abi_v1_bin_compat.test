@@ -42,9 +42,9 @@
 # A protocol 1 extension built against the stable SDK: its custom type keeps
 # receiving a value in the binary charset in its encode, as its bytes, as it
 # did when it was built. Covers a _binary string, a hex and a bit literal, a
-# VARBINARY column, a binary prepared-statement parameter and a VDF argument of
-# the type, including bytes that are not valid utf8mb4. BYTEARRAY stores up to
-# 8 bytes, space padded.
+# VARBINARY column, a binary prepared-statement parameter, a hex literal
+# compared with a column and a VDF argument of the type, including bytes that
+# are not valid utf8mb4. BYTEARRAY stores up to 8 bytes, space padded.
 INSTALL EXTENSION abi_v1_test;
 SELECT NEGOTIATED_PROTOCOL FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION
 WHERE EXTENSION_NAME = 'abi_v1_test';
@@ -59,6 +59,7 @@ SET @id = 5, @v = _binary 'param';
 EXECUTE s USING @id, @v;
 DEALLOCATE PREPARE s;
 SELECT id, HEX(abi_v1_test.to_string(data)) AS data FROM t ORDER BY id;
+SELECT id FROM t WHERE data = 0x686578;
 SELECT HEX(abi_v1_test.to_string(abi_v1_test.mask(_binary 'argument', 0)))
   AS masked;
 SET @id = NULL, @v = NULL;
