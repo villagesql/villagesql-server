@@ -75,6 +75,10 @@ override_dh_auto_configure:
 # mysql-test-run.pl against the installed packages.
 override_dh_auto_test:
 
+# dwz gives up on mysqld ("Too many DIEs") and then fails the build on Debian 12
+# arm64, so the debug info is left uncompressed.
+override_dh_dwz:
+
 # Each directory in repos/ is a FetchContent dependency of an extension, fetched
 # while staging. Point FetchContent at those copies and forbid downloads, so an
 # extension that adds a new one fails here instead of reaching the network.
