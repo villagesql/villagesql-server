@@ -518,6 +518,7 @@ constexpr auto CAFE = [] {
   type.descriptor.vef_desc.encode_vdf_name = "café::from_string";
   type.descriptor.vef_desc.decode_vdf_name = "café::to_string";
   type.descriptor.vef_desc.compare_vdf_name = "café::compare";
+  // embedded_funcs follows builder order: from_string, to_string, compare.
   std::get<0>(type.embedded_funcs).name_ = "café::from_string";
   std::get<1>(type.embedded_funcs).name_ = "café::to_string";
   std::get<2>(type.embedded_funcs).name_ = "café::compare";
