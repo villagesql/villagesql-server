@@ -163,7 +163,8 @@ void ba_concat_all_prerun(vsql::PrerunArgs args, vsql::PrerunResult out) {
     out.error("ba_concat_all requires at least one argument");
     return;
   }
-  // TODO(villagesql-production): vef_type_t needs size info to properly size custom
+  // TODO(villagesql-production): size the buffer from each argument's actual
+  // custom type size; vef_type_t does not carry it yet.
   for (size_t i = 0; i < args.size(); i++) {
     auto t = args.type_at(i);
     if (!t.is_custom() && !t.is_str()) {
