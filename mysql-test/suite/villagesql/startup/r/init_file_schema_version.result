@@ -1,0 +1,30 @@
+#
+# Test: villagesql_schema_version accessibility during --initialize
+# Verify that @@GLOBAL.villagesql_schema_version can be queried from init-file
+#
+# Shut server down
+# Run --initialize-insecure with init-file that queries villagesql_schema_version
+# Start server with initialized datadir
+# Check the value that was captured during --initialize
+SELECT captured_version AS version_during_initialize FROM test.init_version_check;
+version_during_initialize
+mysql-9.7_0.0.8
+#
+# Test: villagesql_schema_version accessibility with --init-file (without --initialize)
+# Verify that @@GLOBAL.villagesql_schema_version can be queried from init-file during normal startup
+#
+# Restart server with init-file (without --initialize)
+# Check the value that was captured during normal startup with --init-file
+SELECT captured_version AS version_during_startup FROM test.startup_version_check;
+version_during_startup
+mysql-9.7_0.0.8
+#
+# Cleanup
+#
+# Shut server down
+# Clean up all test files
+# Restart normal server
+# Test completed successfully
+SELECT 'All Tests Passed' AS final_result;
+final_result
+All Tests Passed

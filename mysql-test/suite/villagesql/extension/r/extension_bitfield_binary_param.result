@@ -1,0 +1,12 @@
+INSTALL EXTENSION vsql_bitfield_test;
+# The VDF runs on a constant that is not valid utf8mb4.
+SELECT vsql_bitfield_test.bitfield_from_bytes(_binary x'FF') IS NOT NULL AS computed;
+computed
+1
+# Nothing infers the result's parameters, so it cannot be stored in a
+# column of the type.
+CREATE TABLE bits (id INT PRIMARY KEY, b vsql_bitfield_test.BITFIELD);
+INSERT INTO bits VALUES (1, vsql_bitfield_test.bitfield_from_bytes(_binary x'FF'));
+ERROR HY000: Cannot implicitly cast from vsql_bitfield_test.BITFIELD to vsql_bitfield_test.BITFIELD('max_number_of_bits=4096') for column 'b' at row 1
+DROP TABLE bits;
+UNINSTALL EXTENSION vsql_bitfield_test;

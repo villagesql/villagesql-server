@@ -1,0 +1,36 @@
+# Test nested VIEW with GROUP BY on COMPLEX, but no ORDER BY on COMPLEX column
+# This isolates whether the issue is GROUP BY or ORDER BY after GROUP BY
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+
+INSERT INTO t1 VALUES
+  (1, '(2,0)', 100.50),
+  (2, '(2,0)', 50.25),
+  (3, '(10,0)', 200.75);
+
+# Create base view
+CREATE VIEW v_base AS
+SELECT id, val, amount FROM t1;
+
+# Create aggregated view from base view
+CREATE VIEW v_aggregated AS
+SELECT val, SUM(amount) AS total_amount
+FROM v_base
+GROUP BY val;
+
+# Test 1: Just SELECT, no ORDER BY
+SELECT * FROM v_aggregated;
+
+# Test 2: ORDER BY non-COMPLEX column
+SELECT * FROM v_aggregated ORDER BY total_amount;
+
+# Test 3: ORDER BY COMPLEX column - this is where it fails
+SELECT * FROM v_aggregated ORDER BY val;
+
+DROP VIEW v_aggregated;
+DROP VIEW v_base;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

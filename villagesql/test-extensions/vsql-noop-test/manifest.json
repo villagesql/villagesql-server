@@ -1,0 +1,7 @@
+{
+  "name": "vsql_noop_test",
+  "version": "0.0.1",
+  "description": "Minimal VEF extension for testing install/uninstall lifecycle.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

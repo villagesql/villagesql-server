@@ -1,0 +1,23 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_slow_query_log;
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+SET GLOBAL vsql_slow_query_log.log_file = 'MYSQLTEST_VARDIR/tmp/vsql_slow_redaction.log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+# A distinctive cleartext secret that must never appear in the log.
+CREATE USER 'vsql_redact_user'@'localhost' IDENTIFIED BY 'sup3rs3cr3t_create';
+ALTER USER 'vsql_redact_user'@'localhost' IDENTIFIED BY 'sup3rs3cr3t_alter';
+SET PASSWORD FOR 'vsql_redact_user'@'localhost' = 'sup3rs3cr3t_setpw';
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+# No cleartext secret leaked to the sink (0 = none, as required).
+0
+0
+0
+# The statements were still logged (obfuscated) -- the sink saw the
+# rewritten form, so the statement is observable without the secret.
+1
+1
+1
+DROP USER 'vsql_redact_user'@'localhost';
+UNINSTALL EXTENSION vsql_slow_query_log;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

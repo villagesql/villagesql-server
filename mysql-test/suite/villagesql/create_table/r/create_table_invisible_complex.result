@@ -1,0 +1,121 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX INVISIBLE,
+name VARCHAR(50)
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `val` vsql_complex.COMPLEX DEFAULT NULL /*!80023 INVISIBLE */,
+  `name` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (id, val, name) VALUES (1, '(1.0,2.0)', 'test1');
+INSERT INTO t1 (id, val, name) VALUES (2, '(3.0,4.0)', 'test2');
+SELECT * FROM t1 ORDER BY id;
+id	name
+1	test1
+2	test2
+SELECT id, val, name FROM t1 ORDER BY id;
+id	val	name
+1	(1,2)	test1
+2	(3,4)	test2
+UPDATE t1 SET val = '(5.0,6.0)' WHERE id = 1;
+SELECT id, val, name FROM t1 WHERE id = 1;
+id	val	name
+1	(5,6)	test1
+DELETE FROM t1 WHERE val = '(3.0,4.0)';
+SELECT id, val, name FROM t1 ORDER BY id;
+id	val	name
+1	(5,6)	test1
+DROP TABLE t1;
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+visible_val COMPLEX,
+invisible_val COMPLEX INVISIBLE,
+description VARCHAR(100)
+);
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `visible_val` vsql_complex.COMPLEX DEFAULT NULL,
+  `invisible_val` vsql_complex.COMPLEX DEFAULT NULL /*!80023 INVISIBLE */,
+  `description` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t2 (id, visible_val, invisible_val, description)
+VALUES (1, '(1.0,1.0)', '(2.0,2.0)', 'mixed visibility');
+SELECT * FROM t2;
+id	visible_val	description
+1	(1,1)	mixed visibility
+SELECT id, visible_val, invisible_val, description FROM t2;
+id	visible_val	invisible_val	description
+1	(1,1)	(2,2)	mixed visibility
+DROP TABLE t2;
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+val COMPLEX INVISIBLE,
+INDEX idx_val (val)
+);
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL,
+  `val` vsql_complex.COMPLEX DEFAULT NULL /*!80023 INVISIBLE */,
+  PRIMARY KEY (`id`),
+  KEY `idx_val` (`val`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t3 (id, val) VALUES (1, '(1.0,2.0)');
+INSERT INTO t3 (id, val) VALUES (2, '(3.0,4.0)');
+INSERT INTO t3 (id, val) VALUES (3, '(1.0,2.0)');
+SELECT id, val FROM t3 WHERE val = '(1.0,2.0)' ORDER BY id;
+id	val
+1	(1,2)
+3	(1,2)
+EXPLAIN SELECT id, val FROM t3 WHERE val = '(1.0,2.0)';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t3	NULL	ref	idx_val	idx_val	19	const	2	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t3`.`id` AS `id`,`test`.`t3`.`val` AS `val` from `test`.`t3` where (`test`.`t3`.`val` = '(1,2)')
+DROP TABLE t3;
+CREATE TABLE t4 (
+id INT PRIMARY KEY,
+unique_val COMPLEX INVISIBLE UNIQUE,
+name VARCHAR(50)
+);
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `id` int NOT NULL,
+  `unique_val` vsql_complex.COMPLEX DEFAULT NULL /*!80023 INVISIBLE */,
+  `name` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_val` (`unique_val`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t4 (id, unique_val, name) VALUES (1, '(1.0,1.0)', 'first');
+INSERT INTO t4 (id, unique_val, name) VALUES (2, '(2.0,2.0)', 'second');
+INSERT INTO t4 (id, unique_val, name) VALUES (3, '(1.0,1.0)', 'duplicate');
+ERROR 23000: Duplicate entry '(1,1)' for key 't4.unique_val'
+SELECT * FROM t4 ORDER BY id;
+id	name
+1	first
+2	second
+SELECT id, unique_val, name FROM t4 ORDER BY id;
+id	unique_val	name
+1	(1,1)	first
+2	(2,2)	second
+DROP TABLE t4;
+CREATE TABLE t5 (
+id INT PRIMARY KEY,
+nullable_val COMPLEX INVISIBLE,
+name VARCHAR(50)
+);
+INSERT INTO t5 (id, nullable_val, name) VALUES (1, '(1.0,2.0)', 'with value');
+INSERT INTO t5 (id, nullable_val, name) VALUES (2, NULL, 'with null');
+SELECT id, nullable_val, name FROM t5 ORDER BY id;
+id	nullable_val	name
+1	(1,2)	with value
+2	NULL	with null
+DROP TABLE t5;

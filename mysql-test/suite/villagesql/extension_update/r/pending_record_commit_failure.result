@@ -1,0 +1,18 @@
+INSTALL EXTENSION update_test VERSION '1.0.0';
+# Force the transaction commit inside ALTER EXTENSION to fail
+SET SESSION DEBUG="+d,pre_commit_error";
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+ERROR HY000: Unknown error
+SET SESSION DEBUG="-d,pre_commit_error";
+# The failed statement rolled back: no pending update is recorded
+SELECT extension_name, extension_version, pending_version
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION
+update_test	1.0.0	NULL
+# Recording the pending update must now succeed
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SELECT extension_name, extension_version, pending_version
+FROM INFORMATION_SCHEMA.EXTENSIONS WHERE extension_name = 'update_test';
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION
+update_test	1.0.0	2.0.0
+UNINSTALL EXTENSION update_test;

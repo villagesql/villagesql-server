@@ -1,0 +1,22 @@
+# Detect lower_case_table_names setting
+# Extract vanilla MySQL 8.4.6 datadir
+# Restart with vanilla MySQL datadir and --skip-grant-tables
+# restart:--datadir=MYSQL_TMP_DIR/villagesql_skip_grant_test --skip-grant-tables --mysqlx=OFF --log-error=MYSQL_TMP_DIR/upgrade_skip_grant.log --log-error-verbosity=3
+# Verify VillageSQL schema was installed
+SET SESSION debug='+d,skip_dd_table_access_check';
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+SELECT COUNT(*) AS villagesql_schema_exists FROM mysql.schemata WHERE name = 'villagesql';
+villagesql_schema_exists
+1
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id
+AND name = 'properties';
+properties_table_exists
+1
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+name	value
+version	mysql-9.7_0.0.8-dev
+# Shutdown and cleanup
+# Restart with original datadir
+# Test passed - VillageSQL installed correctly with --skip-grant-tables!

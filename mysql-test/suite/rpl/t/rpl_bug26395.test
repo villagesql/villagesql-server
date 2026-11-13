@@ -1,0 +1,117 @@
+# ==== Purpose ====
+#
+# Tests that an autocommitted XA transaction where the master crashes
+# just before writing the XID log event is executed correctly.  The
+# master rolls back, so the slave should not execute statement.
+#
+# This test was previously part of rpl_ndb_transaction.test
+#
+#
+# ==== Method ====
+#
+# We want master to be alive so that it can replicate the statement to
+# the slave. So in the test case, we must not crash the
+# master. Instead, we fake the crash by just not writing the XID event
+# to the binlog. This is done by the @@debug='d,do_not_write_xid'
+# flag. This, in turn, requires us to do 'source
+# include/have_debug.inc'
+#
+# So, unlike if the master had crashed, the master *will* execute the
+# statement. But the slave should not execute it. Hence, after the
+# test is executed, the expected result on master is a table with one
+# row, and on slave a table with no rows.
+#
+# To simulate the slave correctly, we wait until everything up to but
+# not including the XID is replicated. This has to be done with
+# include/rpl/sync_to_replica_received.inc, not sync_slave_with_master,
+# since the latter waits until the slave *SQL* thread has caught up
+# with the master's position, which it will never do.
+#
+#
+# ==== Related bugs ====
+#
+# BUG#26395: if crash during autocommit update to transactional table on master, slave fails
+
+--source include/not_group_replication_plugin.inc
+
+# have_debug is needed since we use the @@debug variable on master
+--source include/have_debug.inc
+
+# enough to cover row based replication
+--source include/have_binlog_format_row.inc
+
+--source include/rpl/init_source_replica.inc
+
+--echo ==== Initialize ====
+
+--echo [on master]
+--connection master
+
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+
+CREATE TABLE tinnodb (a INT) ENGINE = INNODB;
+SHOW CREATE TABLE tinnodb;
+
+# do_not_write_xid stops the master from writing an XID event.
+set @old_debug= @@debug;
+set @@debug= '+d,do_not_write_xid';
+
+
+--echo ==== Test ====
+
+# Save the position up to which the slave SQL thread should execute.
+save_master_pos;
+
+# Execute query and check that the row made it to the table.
+INSERT INTO tinnodb VALUES (1);
+SELECT * FROM tinnodb ORDER BY a;
+
+# Sync slave's IO thread.
+--echo [on slave]
+# After the implementation of the transaction boundary parser,
+# this sync cannot use GTIDs or else sync will timeout because only
+# GTIDs of fully replicated transactions are in the
+# Retrieved_Gtid_Set of the slave and, as the last event of the
+# transaction never arrives, syncing with GTIDs won't work.
+--let ignore_gtids_on_sync= 1
+source include/rpl/sync_to_replica_received.inc;
+
+# Sync slave's SQL thread.
+sync_with_master 0;
+
+--echo ==== Verify results on slave ====
+
+# the applier will stop workers and fails with this error, since
+# they are in the middle of a transaction
+--let $slave_sql_errno=1756
+source include/rpl/stop_replica.inc;
+
+--let $status_items=Replica_IO_State,Last_SQL_Error,Last_IO_Error
+--source include/rpl/deprecated/show_replica_status.inc
+
+--let $assert_text= Assert that the slave table has no rows
+--let $assert_cond= `SELECT COUNT(*) = 0 FROM tinnodb`
+--source include/assert.inc
+
+--echo ==== Clean up ====
+
+# Easiest to clean up master and slave separately, without
+# replication, since master and slave are out of sync.
+
+--echo [on master]
+connection master;
+DROP TABLE tinnodb;
+set @@debug= @old_debug;
+
+RESET BINARY LOGS AND GTIDS;
+
+--echo [on slave]
+connection slave;
+DROP TABLE tinnodb;
+
+RESET REPLICA;
+RESET BINARY LOGS AND GTIDS;
+
+--source include/rpl/start_replica.inc
+
+--source include/rpl/deinit.inc

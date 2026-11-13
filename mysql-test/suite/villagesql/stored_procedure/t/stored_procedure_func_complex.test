@@ -1,0 +1,17 @@
+# Test Stored Function returning COMPLEX type
+# Grammar: CREATE FUNCTION ... RETURNS COMPLEX ...
+
+--source include/villagesql/install_complex_extension.inc
+
+delimiter //;
+CREATE FUNCTION f1() RETURNS COMPLEX DETERMINISTIC
+BEGIN
+  RETURN '(5.0,5.0)';
+END//
+delimiter ;//
+
+SELECT f1();
+
+DROP FUNCTION f1;
+
+--source include/villagesql/uninstall_complex_extension.inc

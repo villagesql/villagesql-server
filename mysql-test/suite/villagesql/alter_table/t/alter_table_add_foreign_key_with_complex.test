@@ -1,0 +1,42 @@
+# Test ALTER TABLE ADD FOREIGN KEY alongside COMPLEX columns
+# Grammar: ALTER TABLE table_name ADD FOREIGN KEY (col) REFERENCES table(col)
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE ref_table (
+    id INT PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+INSERT INTO ref_table VALUES (1, 'ref1'), (2, 'ref2');
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    ref_id INT,
+    value COMPLEX
+);
+
+INSERT INTO t1 VALUES (1, 1, '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 2, '(3.5,-1.2)');
+
+SHOW CREATE TABLE t1;
+
+# Add foreign key constraint
+ALTER TABLE t1 ADD CONSTRAINT fk_ref FOREIGN KEY (ref_id) REFERENCES ref_table(id);
+
+SHOW CREATE TABLE t1;
+
+# Test foreign key constraint - should succeed
+INSERT INTO t1 VALUES (3, 1, '(2.0,3.0)');
+
+# Test foreign key constraint - should fail
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO t1 VALUES (4, 99, '(4.0,5.0)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1, ref_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

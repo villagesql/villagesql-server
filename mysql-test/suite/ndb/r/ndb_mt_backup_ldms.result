@@ -1,0 +1,317 @@
+"Create tables for backup"
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+
+"Starting backup as nowait"
+Starting backup
+Backup started
+"Update tables during backup"
+
+"Wait for backup to complete"
+Waiting for backup to complete
+Backup completed
+"Drop tables after backup completes"
+Restore metadata using backup-part 1
+Restore data by restoring all backup parts serially
+Restore data of PART-12-OF-12 on node 6
+Restore data of PART-11-OF-12 on node 6
+Restore data of PART-10-OF-12 on node 6
+Restore data of PART-9-OF-12 on node 6
+Restore data of PART-8-OF-12 on node 6
+Restore data of PART-7-OF-12 on node 6
+Restore data of PART-6-OF-12 on node 6
+Restore data of PART-5-OF-12 on node 6
+Restore data of PART-4-OF-12 on node 6
+Restore data of PART-3-OF-12 on node 6
+Restore data of PART-2-OF-12 on node 6
+Restore data of PART-1-OF-12 on node 6
+Restore data of PART-10-OF-10 on node 5
+Restore data of PART-9-OF-10 on node 5
+Restore data of PART-8-OF-10 on node 5
+Restore data of PART-7-OF-10 on node 5
+Restore data of PART-6-OF-10 on node 5
+Restore data of PART-5-OF-10 on node 5
+Restore data of PART-4-OF-10 on node 5
+Restore data of PART-3-OF-10 on node 5
+Restore data of PART-2-OF-10 on node 5
+Restore data of PART-1-OF-10 on node 5
+Restore data of PART-8-OF-8 on node 4
+Restore data of PART-7-OF-8 on node 4
+Restore data of PART-6-OF-8 on node 4
+Restore data of PART-5-OF-8 on node 4
+Restore data of PART-4-OF-8 on node 4
+Restore data of PART-3-OF-8 on node 4
+Restore data of PART-2-OF-8 on node 4
+Restore data of PART-1-OF-8 on node 4
+Restore data of PART-6-OF-6 on node 3
+Restore data of PART-5-OF-6 on node 3
+Restore data of PART-4-OF-6 on node 3
+Restore data of PART-3-OF-6 on node 3
+Restore data of PART-2-OF-6 on node 3
+Restore data of PART-1-OF-6 on node 3
+Restore data of PART-4-OF-4 on node 2
+Restore data of PART-3-OF-4 on node 2
+Restore data of PART-2-OF-4 on node 2
+Restore data of PART-1-OF-4 on node 2
+Restore data of PART-2-OF-2 on node 1
+Restore data of PART-1-OF-2 on node 1
+"Print restored rows"
+use test;
+select * from t0 order by id;
+id	val
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10	12345
+select * from t1 order by val;
+val
+NULL
+2
+3
+4
+5
+6
+7
+8
+9
+11
+select * from t2 order by id;
+id
+1
+3
+4
+5
+6
+7
+8
+9
+10
+22
+select * from t3 order by id;
+id	val
+1	9
+2	8
+3	33
+4	6
+5	5
+6	4
+7	3
+8	2
+9	1
+10	NULL
+select * from t4 order by id;
+id	val
+1	11001
+2	11001
+3	11001
+4	44
+5	11001
+6	11001
+7	11001
+8	11001
+9	11001
+10	11001
+select id, sha2(val,256) from t5 order by id;
+id	sha2(val,256)
+1	abb90b4d25b258060292570ec7c1635bf95d07f0b6b138b0ddc704695006163c
+2	6d05e456729080292a5505e20e5130eff8cd27caf6a35ed1878811cb8b01098e
+3	f0ce1afd75783af7c1ff3c9a2f54aed5dd9d7bdbf5a13d0e6e10f122940e7a41
+4	96e4ceb1924fbec57757dc291473a1fc61f0961b9526ab1edd8830a7887a450b
+5	2daf9b7cdf5a970ca347bf20c242ea63f2cc0940c690ba278c4bacf21f7dd04e
+6	866436be5d6b399f95d41e02d07051cd1bcdf09abcb36b7f02aa635a78827248
+7	40fdff3fe2b4cbce765fc986d6fbdd4e2a8f01eeb53f6df17c1f4fe5ced32466
+8	f8fec98b18eb9e02b20b0daad372e3bc314b6a58154de9f6ee70db03d736a39d
+9	098b7d223697dd8598fa1750a39f01adf36c006788a09eb6fddfa9491d20b481
+10	NULL
+select * from t6 order by id;
+id	val
+1	1
+2	2
+3	3
+4	4
+5	5
+6	66
+7	7
+8	8
+9	9
+10	NULL
+select * from t7 order by id;
+id	val1	val2
+1	9	9
+2	8	8
+3	7	7
+4	6	6
+5	5	5
+6	4	4
+7	77	3
+8	2	2
+9	1	1
+10	10	NULL
+select id, sha2(val,256) from t8 order by id;
+id	sha2(val,256)
+1	380b4863f69ebaacc794bfa1742a8a6ddc575e8cf0ded4341ab9da158881ea2d
+2	7d465ba69bcd711a850a8af37e79f328c512980e9845b7ffa30dc3a84dfd6ae8
+3	de577cc8152fad5ddc31d41026a136384d24a6e0c44f2033dc30819652b94a73
+4	0226d7097f3413312690e76e1fe1b9e0aaac1dd7010b656827ad27f01fee66db
+5	9427b82dcd09ce70f9de9c9677c460f18a86aec076fbdc79d8e9709f58127d22
+6	495bd978198b68c4b68900f20bf8662f505fb07c7bdc4da8fc1094cc8f021305
+7	2a0d7fdf6971639c7cc76c4a7f912ec66570c17be9319fa9caeb24ddb4fde1ad
+8	8b940be7fb78aaa6b6567dd7a3987996947460df1c668e698eb92ca77e425349
+9	3d92c406402d2116abbe86acf229d773f369f834949549e2bdfebd19ff1ad96f
+10	NULL
+select * from t9 order by auto;
+auto	string	vstring	tiny	short	medium	long_int	longlong	real_float	real_double	real_decimal	utiny	ushort	umedium	ulong	ulonglong	bits	options	flags	date_field	year_field	time_field	date_time
+1	bbbb	bbbb	-22	-22	-22	-22	-22	22.2	22.2200	22.2200	22	00022	22	22	22		two	two	1922-02-22	1922	22:22:22	1922-02-22 22:22:22
+2	8888	8888	-8	-8	-8	-8	-8	8.8	8.8000	8.8000	8	00008	8	8	8		one	one	1988-08-08	1988	08:08:08	1988-08-08 08:08:08
+3	7777	7777	-7	-7	-7	-7	-7	7.7	7.7000	7.7000	7	00007	7	7	7		one	one	1977-07-07	1977	07:07:07	1977-07-07 07:07:07
+4	6666	6666	-6	-6	-6	-6	-6	6.6	6.6000	6.6000	6	00006	6	6	6		one	one	1966-06-06	1966	06:06:06	1966-06-06 06:06:06
+5	5555	5555	-5	-5	-5	-5	-5	5.5	5.5000	5.5000	5	00005	5	5	5		one	one	1955-05-05	1955	05:05:05	1955-05-05 05:05:05
+6	4444	4444	-4	-4	-4	-4	-4	4.4	4.4000	4.4000	4	00004	4	4	4		one	one	1944-04-04	1944	04:04:04	1944-04-04 04:04:04
+7	3333	3333	-3	-3	-3	-3	-3	3.3	3.3000	3.3000	3	00003	3	3	3		one	one	1933-03-03	1933	03:03:03	1933-03-03 03:03:03
+8	2222	2222	-2	-2	-2	-2	-2	2.2	2.2000	2.2000	2	00002	2	2	2		one	one	1922-02-02	1922	02:02:02	1922-02-02 02:02:02
+9	1111	1111	-1	-1	-1	-1	-1	1.1	1.1000	1.1000	1	00001	1	1	1		one	one	1911-01-01	1911	01:01:01	1911-01-01 01:01:01
+10	NULL	NULL	10	10	10	10	10	10.1	NULL	NULL	10	00010	10	10	10	NULL	two	two	NULL	NULL	NULL	NULL
+Drop all tables
+Restore metadata using mt-restore
+Restore data using mt-restore of all backup parts
+"Print restored rows"
+use test;
+select * from t0 order by id;
+id	val
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10	12345
+select * from t1 order by val;
+val
+NULL
+2
+3
+4
+5
+6
+7
+8
+9
+11
+select * from t2 order by id;
+id
+1
+3
+4
+5
+6
+7
+8
+9
+10
+22
+select * from t3 order by id;
+id	val
+1	9
+2	8
+3	33
+4	6
+5	5
+6	4
+7	3
+8	2
+9	1
+10	NULL
+select * from t4 order by id;
+id	val
+1	11001
+2	11001
+3	11001
+4	44
+5	11001
+6	11001
+7	11001
+8	11001
+9	11001
+10	11001
+select id, sha2(val,256) from t5 order by id;
+id	sha2(val,256)
+1	abb90b4d25b258060292570ec7c1635bf95d07f0b6b138b0ddc704695006163c
+2	6d05e456729080292a5505e20e5130eff8cd27caf6a35ed1878811cb8b01098e
+3	f0ce1afd75783af7c1ff3c9a2f54aed5dd9d7bdbf5a13d0e6e10f122940e7a41
+4	96e4ceb1924fbec57757dc291473a1fc61f0961b9526ab1edd8830a7887a450b
+5	2daf9b7cdf5a970ca347bf20c242ea63f2cc0940c690ba278c4bacf21f7dd04e
+6	866436be5d6b399f95d41e02d07051cd1bcdf09abcb36b7f02aa635a78827248
+7	40fdff3fe2b4cbce765fc986d6fbdd4e2a8f01eeb53f6df17c1f4fe5ced32466
+8	f8fec98b18eb9e02b20b0daad372e3bc314b6a58154de9f6ee70db03d736a39d
+9	098b7d223697dd8598fa1750a39f01adf36c006788a09eb6fddfa9491d20b481
+10	NULL
+select * from t6 order by id;
+id	val
+1	1
+2	2
+3	3
+4	4
+5	5
+6	66
+7	7
+8	8
+9	9
+10	NULL
+select * from t7 order by id;
+id	val1	val2
+1	9	9
+2	8	8
+3	7	7
+4	6	6
+5	5	5
+6	4	4
+7	77	3
+8	2	2
+9	1	1
+10	10	NULL
+select id, sha2(val,256) from t8 order by id;
+id	sha2(val,256)
+1	380b4863f69ebaacc794bfa1742a8a6ddc575e8cf0ded4341ab9da158881ea2d
+2	7d465ba69bcd711a850a8af37e79f328c512980e9845b7ffa30dc3a84dfd6ae8
+3	de577cc8152fad5ddc31d41026a136384d24a6e0c44f2033dc30819652b94a73
+4	0226d7097f3413312690e76e1fe1b9e0aaac1dd7010b656827ad27f01fee66db
+5	9427b82dcd09ce70f9de9c9677c460f18a86aec076fbdc79d8e9709f58127d22
+6	495bd978198b68c4b68900f20bf8662f505fb07c7bdc4da8fc1094cc8f021305
+7	2a0d7fdf6971639c7cc76c4a7f912ec66570c17be9319fa9caeb24ddb4fde1ad
+8	8b940be7fb78aaa6b6567dd7a3987996947460df1c668e698eb92ca77e425349
+9	3d92c406402d2116abbe86acf229d773f369f834949549e2bdfebd19ff1ad96f
+10	NULL
+select * from t9 order by auto;
+auto	string	vstring	tiny	short	medium	long_int	longlong	real_float	real_double	real_decimal	utiny	ushort	umedium	ulong	ulonglong	bits	options	flags	date_field	year_field	time_field	date_time
+1	bbbb	bbbb	-22	-22	-22	-22	-22	22.2	22.2200	22.2200	22	00022	22	22	22		two	two	1922-02-22	1922	22:22:22	1922-02-22 22:22:22
+2	8888	8888	-8	-8	-8	-8	-8	8.8	8.8000	8.8000	8	00008	8	8	8		one	one	1988-08-08	1988	08:08:08	1988-08-08 08:08:08
+3	7777	7777	-7	-7	-7	-7	-7	7.7	7.7000	7.7000	7	00007	7	7	7		one	one	1977-07-07	1977	07:07:07	1977-07-07 07:07:07
+4	6666	6666	-6	-6	-6	-6	-6	6.6	6.6000	6.6000	6	00006	6	6	6		one	one	1966-06-06	1966	06:06:06	1966-06-06 06:06:06
+5	5555	5555	-5	-5	-5	-5	-5	5.5	5.5000	5.5000	5	00005	5	5	5		one	one	1955-05-05	1955	05:05:05	1955-05-05 05:05:05
+6	4444	4444	-4	-4	-4	-4	-4	4.4	4.4000	4.4000	4	00004	4	4	4		one	one	1944-04-04	1944	04:04:04	1944-04-04 04:04:04
+7	3333	3333	-3	-3	-3	-3	-3	3.3	3.3000	3.3000	3	00003	3	3	3		one	one	1933-03-03	1933	03:03:03	1933-03-03 03:03:03
+8	2222	2222	-2	-2	-2	-2	-2	2.2	2.2000	2.2000	2	00002	2	2	2		one	one	1922-02-02	1922	02:02:02	1922-02-02 02:02:02
+9	1111	1111	-1	-1	-1	-1	-1	1.1	1.1000	1.1000	1	00001	1	1	1		one	one	1911-01-01	1911	01:01:01	1911-01-01 01:01:01
+10	NULL	NULL	10	10	10	10	10	10.1	NULL	NULL	10	00010	10	10	10	NULL	two	two	NULL	NULL	NULL	NULL

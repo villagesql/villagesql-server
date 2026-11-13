@@ -1,0 +1,35 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0, 2.0)'), (2, '(3.0, 4.0)'), (3, NULL);
+# Verify column type and values before dump
+SELECT COLUMN_NAME, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY ORDINAL_POSITION;
+COLUMN_NAME	COLUMN_TYPE
+id	int
+val	vsql_complex.COMPLEX
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	NULL
+# Dump the table
+# Rename original and restore from dump
+ALTER TABLE t1 RENAME TO t1_orig;
+# Verify column type is preserved after restore
+SELECT COLUMN_NAME, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY ORDINAL_POSITION;
+COLUMN_NAME	COLUMN_TYPE
+id	int
+val	vsql_complex.COMPLEX
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	NULL
+# Verify values are identical
+include/diff_tables.inc [test.t1, test.t1_orig]
+# Cleanup
+DROP TABLE t1, t1_orig;

@@ -1,0 +1,39 @@
+include/group_replication.inc [rpl_server_count=3]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+include/start_group_replication.inc
+CREATE TABLE test.t1 (i INT PRIMARY KEY);
+INSERT INTO test.t1 VALUES(1);
+include/rpl/sync.inc
+[connection server3]
+SET SESSION sql_log_bin= 0;
+include/rpl/gtid_utils.inc
+SET SESSION sql_log_bin= 1;
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=SOURCE_PORT, SOURCE_USER='root', SOURCE_AUTO_POSITION=1;
+include/rpl/start_replica.inc
+[connection server2]
+include/stop_group_replication.inc
+include/start_group_replication.inc
+INSERT INTO test.t1 VALUES(2);
+include/rpl/sync.inc
+[connection server1]
+include/rpl/sync_to_replica.inc
+# On the slave (server3), test that the data is properly replicated
+# after the start replica is complete.
+include/diff_tables.inc [server1:test.t1, server3:test.t1]
+include/rpl/assert_binlog_events.inc [# !Gtid_transaction # !Gtid_transaction # !Gtid_transaction]
+[connection server1]
+DROP TABLE test.t1;
+include/rpl/sync_to_replica.inc
+include/rpl/stop_replica.inc
+CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION=0;
+SET SESSION sql_log_bin= 0;
+include/rpl/gtid_utils_end.inc
+SET SESSION sql_log_bin= 1;
+include/rpl/reset_replica.inc
+include/group_replication_end.inc

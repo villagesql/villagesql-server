@@ -1,0 +1,46 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(3.0,4.0)'), ('(0,0)');
+CREATE TABLE t2 (val COMPLEX);
+INSERT INTO t2 VALUES ('(1.0,2.0)'), ('(5.0,6.0)'), ('(7.0,8.0)'), ('(0,-0)');
+CREATE TABLE t3 (val COMPLEX);
+INSERT INTO t3 VALUES ('(3.0,4.0)'), ('(9.0,10.0)'), ('(-0,0)');
+SELECT val FROM t1 UNION ALL SELECT val FROM t2 UNION ALL SELECT val FROM t3;
+val
+(1,2)
+(3,4)
+(0,0)
+(1,2)
+(5,6)
+(7,8)
+(0,0)
+(3,4)
+(9,10)
+(0,0)
+SELECT val FROM t1 UNION SELECT val FROM t2 UNION SELECT val FROM t3 ORDER BY val;
+val
+(0,0)
+(1,2)
+(3,4)
+(5,6)
+(7,8)
+(9,10)
+SELECT val FROM t1 UNION SELECT val FROM t2 ORDER BY val DESC LIMIT 3;
+val
+(7,8)
+(5,6)
+(3,4)
+SELECT val FROM t1 UNION SELECT NULL;
+val
+(1,2)
+(3,4)
+(0,0)
+NULL
+(SELECT val FROM t1 ORDER BY val DESC LIMIT 1)
+UNION
+(SELECT val FROM t2 ORDER BY val ASC LIMIT 1);
+val
+(3,4)
+(0,0)
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;

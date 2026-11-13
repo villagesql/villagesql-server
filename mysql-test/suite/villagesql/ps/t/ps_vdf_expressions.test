@@ -1,0 +1,70 @@
+# Test VDFs in expressions with prepared statements
+# Covers: VDF in WHERE, ORDER BY, CASE, nested VDFs
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(0.0,5.0)'),
+  (4, '(6.0,0.0)');
+
+--echo #
+--echo # Test 1: VDF in WHERE clause
+--echo #
+
+PREPARE stmt1 FROM 'SELECT id FROM t1 WHERE vsql_complex.complex_real(val) = ?';
+SET @real_val = 3.0;
+EXECUTE stmt1 USING @real_val;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: VDF in WHERE clause with COMPLEX result comparison
+--echo #
+
+PREPARE stmt2 FROM 'SELECT id FROM t1 WHERE vsql_complex.complex_conjugate(val) = ?';
+SET @conj = '(1.0,-2.0)';
+EXECUTE stmt2 USING @conj;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: Nested VDF calls
+--echo #
+
+PREPARE stmt3 FROM 'SELECT id, vsql_complex.complex_real(vsql_complex.complex_conjugate(val)) FROM t1 WHERE id = ?';
+SET @id = 2;
+EXECUTE stmt3 USING @id;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: VDF in ORDER BY clause
+--echo #
+
+PREPARE stmt4 FROM 'SELECT id, val, vsql_complex.complex_real(val) AS real_part FROM t1 WHERE id > ? ORDER BY vsql_complex.complex_real(val)';
+SET @min_id = 0;
+EXECUTE stmt4 USING @min_id;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: VDF in CASE expression
+--echo #
+
+PREPARE stmt5 FROM 'SELECT id, CASE WHEN vsql_complex.complex_real(val) > ? THEN \'positive\' ELSE \'non-positive\' END AS sign FROM t1 WHERE id IN (?, ?)';
+SET @threshold = 2.0;
+SET @id1 = 1;
+SET @id2 = 3;
+EXECUTE stmt5 USING @threshold, @id1, @id2;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

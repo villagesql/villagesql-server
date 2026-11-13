@@ -1,0 +1,59 @@
+INSTALL EXTENSION vsql_test_only;
+# Scalar VDF over an INT argument: the fraction survives
+SELECT vsql_test_only.real_sqrt(2) AS v;
+v
+1.4142135623730951
+SELECT vsql_test_only.real_sqrt(2) > 1.4 AS gt;
+gt
+1
+SELECT vsql_test_only.real_sqrt(2) * 1000 AS scaled;
+scaled
+1414.213562373095
+# Scalar VDF with no arguments at all
+SELECT vsql_test_only.real_half_pi() AS v;
+v
+1.5707963267948966
+# The declared result type is DOUBLE, not DOUBLE(22,0)
+CREATE TABLE t1 AS SELECT vsql_test_only.real_sqrt(2) AS a,
+vsql_test_only.real_half_pi() AS b;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` double DEFAULT NULL,
+  `b` double DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+a	b
+1.4142135623730951	1.5707963267948966
+DROP TABLE t1;
+# A REAL argument
+SELECT vsql_test_only.real_sqrt(CAST(2 AS DOUBLE)) AS v;
+v
+1.4142135623730951
+# NULL in, NULL out
+SELECT vsql_test_only.real_sqrt(NULL) AS v;
+v
+NULL
+# Aggregate VDF over an INT column keeps its fraction too
+CREATE TABLE t2 (g INT, n INT);
+INSERT INTO t2 VALUES (1,1),(1,2),(2,10),(2,11),(2,12);
+SELECT vsql_test_only.real_avg(n) AS v FROM t2;
+v
+7.2
+SELECT g, vsql_test_only.real_avg(n) AS v FROM t2 GROUP BY g ORDER BY g;
+g	v
+1	1.5
+2	11
+# The aggregate's declared result type is DOUBLE as well
+CREATE TABLE t3 AS SELECT vsql_test_only.real_avg(n) AS a FROM t2;
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` double DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t3;
+a
+7.2
+DROP TABLE t3;
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_test_only;

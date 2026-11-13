@@ -1,0 +1,5 @@
+CREATE TABLE t_mixed (id INT, complex_val COMPLEX, complex2_val COMPLEX2, int_val INT);
+INSERT INTO t_mixed VALUES (1, '(1.0,1.0)', '(2.0,2.0)', 100);
+UPDATE t_mixed SET complex2_val = complex_val WHERE id = 1;
+ERROR HY000: Cannot implicitly cast from vsql_complex.COMPLEX to vsql_complex.COMPLEX2 for column 'complex2_val' at row 1
+DROP TABLE t_mixed;

@@ -1,0 +1,15 @@
+# Test INSERT ON DUPLICATE KEY UPDATE with same type
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES (1, '(11.0,12.0)');
+
+INSERT INTO t_complex VALUES (1, '(13.0,14.0)')
+ON DUPLICATE KEY UPDATE val = VALUES(val);
+SELECT val FROM t_complex WHERE id = 1;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

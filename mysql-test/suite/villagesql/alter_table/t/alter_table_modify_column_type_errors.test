@@ -1,0 +1,64 @@
+# Test ALTER TABLE MODIFY COLUMN type conversion errors for custom types
+# - INT column -> custom type should fail (prepare time)
+# - VARCHAR column -> custom type should fail (prepare time)
+# - custom type column -> non-string type (DOUBLE) should fail (prepare time)
+# - custom type column -> incompatible custom type should fail (prepare time)
+
+--source include/villagesql/install_complex_extension.inc
+
+# Test: converting INT column to custom type should fail
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    value INT
+);
+
+INSERT INTO t1 VALUES (1, 42);
+INSERT INTO t1 VALUES (2, 100);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 MODIFY COLUMN value COMPLEX;
+
+DROP TABLE t1;
+
+# Test: converting VARCHAR column to custom type should fail
+CREATE TABLE t_varchar (
+    id INT PRIMARY KEY,
+    value VARCHAR(50)
+);
+
+INSERT INTO t_varchar VALUES (1, '(1.0,2.0)');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t_varchar MODIFY COLUMN value COMPLEX;
+
+DROP TABLE t_varchar;
+
+# Test: converting custom type column to DOUBLE should fail
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+);
+
+INSERT INTO t2 VALUES (1, '(1.0,2.0)');
+INSERT INTO t2 VALUES (2, '(3.5,-1.2)');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t2 MODIFY COLUMN value DOUBLE;
+
+DROP TABLE t2;
+
+# Test: converting COMPLEX column to incompatible custom type COMPLEX2 should fail
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+);
+
+INSERT INTO t3 VALUES (1, '(1.0,2.0)');
+INSERT INTO t3 VALUES (2, '(3.5,-1.2)');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t3 MODIFY COLUMN value COMPLEX2;
+
+DROP TABLE t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

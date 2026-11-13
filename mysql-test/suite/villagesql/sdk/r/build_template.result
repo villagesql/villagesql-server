@@ -1,0 +1,41 @@
+# SDK Build Template Test
+Found SDK tarball
+# Setup test directory
+# Extract SDK tarball
+# Build the template extension
+# Running cmake...
+# Running make...
+# Verify VEB was created
+# Copy VEB to server's VEB directory
+# Install the extension
+INSTALL EXTENSION my_extension;
+# Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'my_extension';
+EXTENSION_NAME	EXTENSION_VERSION
+my_extension	0.0.1
+# Test the my_add function (prefixed with extension name)
+SELECT my_extension.my_add(2, 3);
+my_extension.my_add(2, 3)
+5
+SELECT my_extension.my_add(10, 20);
+my_extension.my_add(10, 20)
+30
+SELECT my_extension.my_add(-5, 5);
+my_extension.my_add(-5, 5)
+0
+# Test NULL handling
+SELECT my_extension.my_add(NULL, 5);
+my_extension.my_add(NULL, 5)
+NULL
+SELECT my_extension.my_add(5, NULL);
+my_extension.my_add(5, NULL)
+NULL
+# Uninstall the extension
+UNINSTALL EXTENSION my_extension;
+# Verify extension was removed
+SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'my_extension';
+EXTENSION_NAME
+# Cleanup
+include/rpl/deprecated/show_binlog_events.inc

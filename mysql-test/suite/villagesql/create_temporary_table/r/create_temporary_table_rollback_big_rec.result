@@ -1,0 +1,52 @@
+use test;
+CREATE TEMPORARY TABLE t1 (
+i INT,
+b MEDIUMBLOB,
+c COMPLEX,
+PRIMARY KEY pk(i),
+INDEX sk(b(100))
+) ENGINE=InnoDB;
+CREATE PROCEDURE populate_t1()
+begin
+declare i int default 1;
+while (i <= 100) do
+insert into t1 values (i, repeat(i,1000), '(1,1)');
+set i = i + 1;
+end while;
+end|
+CREATE PROCEDURE populate_t1_small()
+begin
+declare i int default 1;
+while (i <= 8) do
+insert into t1 values (i, repeat(i,1000), '(1,1)');
+set i = i + 1;
+end while;
+end|
+begin;
+call populate_t1();
+select count(*) from t1;
+count(*)
+100
+delete from t1 where i < 10;
+select count(*) from t1;
+count(*)
+91
+commit;
+set global innodb_purge_stop_now=ON;
+set global innodb_purge_run_now=ON;
+delete from t1 where i < 20;
+select count(*) from t1;
+count(*)
+81
+begin;
+call populate_t1_small();
+select count(*) from t1;
+count(*)
+89
+rollback;
+select count(*) from t1;
+count(*)
+81
+DROP TABLE t1;
+DROP PROCEDURE populate_t1;
+DROP PROCEDURE populate_t1_small;

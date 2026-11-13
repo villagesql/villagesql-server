@@ -1,0 +1,24 @@
+# Test CREATE TABLE with KEY partitioning and COMPLEX columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE key_partitioned_table (
+    id INT PRIMARY KEY,
+    complex_measurement COMPLEX,
+    data_type VARCHAR(50)
+) PARTITION BY KEY(id) PARTITIONS 3;
+
+SHOW COLUMNS FROM key_partitioned_table;
+
+INSERT INTO key_partitioned_table VALUES (1, '(71.0,72.0)', 'sensor_a');
+INSERT INTO key_partitioned_table VALUES (2, '(73.0,74.0)', 'sensor_b');
+INSERT INTO key_partitioned_table VALUES (3, '(75.0,76.0)', 'sensor_c');
+INSERT INTO key_partitioned_table VALUES (4, '(77.0,78.0)', 'sensor_d');
+
+SELECT * FROM key_partitioned_table ORDER BY id;
+
+DROP TABLE key_partitioned_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

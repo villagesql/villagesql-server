@@ -1,0 +1,28 @@
+# Test that a failed ALTER TABLE adding a custom type column does not leave a
+# stale victionary entry. If it does, a subsequent ALTER adding a non-custom
+# column with the same name causes a field_length mismatch assertion on table
+# open.
+#
+# Derived from RQG crash (vil_dbg_crash1.sql):
+#   ALTER TABLE t13 ADD COLUMN rqg_c4 COMPLEX, MODIFY COLUMN rqg_c4 INT ...
+#   (fails: unknown column rqg_c4 in MODIFY)
+#   ALTER TABLE t13 ADD COLUMN rqg_c4 INT ...
+#   (table open asserts field_length=4 != persisted_length=16)
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, val INT);
+INSERT INTO t VALUES (1, 10);
+
+# This fails because MODIFY references a column being added in the same statement.
+--error ER_BAD_FIELD_ERROR
+ALTER TABLE t ADD COLUMN z COMPLEX, MODIFY COLUMN z INT NOT NULL;
+
+# Now add z as a non-custom type. Should not crash with field_length mismatch.
+ALTER TABLE t ADD COLUMN z INT;
+
+SELECT * FROM t ORDER BY id;
+
+DROP TABLE t;
+
+--source include/villagesql/uninstall_complex_extension.inc

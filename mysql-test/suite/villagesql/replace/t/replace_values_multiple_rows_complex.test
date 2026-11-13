@@ -1,0 +1,45 @@
+# Test REPLACE INTO ... VALUES with multiple rows and COMPLEX type
+# Grammar: REPLACE [INTO] tbl_name VALUES (value_list), (value_list), ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert 10 rows with zero variants
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(0,0)'),
+    (3, '(-3.5,4.5)'),
+    (4, '(-0,0)'),
+    (5, '(5.0,-6.0)'),
+    (6, '(0,-0)'),
+    (7, '(-7.5,-8.5)'),
+    (8, '(-0,-0)'),
+    (9, '(9.0,10.0)'),
+    (10, '(0,0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Replace multiple existing rows at once
+REPLACE INTO t1 VALUES
+    (1, '(100.0,100.0)'),
+    (2, '(200.0,200.0)'),
+    (3, '(300.0,300.0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Replace mix of existing and new rows
+REPLACE INTO t1 VALUES
+    (5, '(500.0,500.0)'),
+    (11, '(1100.0,1100.0)'),
+    (7, '(700.0,700.0)'),
+    (12, '(1200.0,1200.0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

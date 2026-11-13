@@ -1,0 +1,67 @@
+# Test unqualified VDF calls (without extension name prefix)
+# Verifies that VDFs can be called without qualification when unambiguous
+
+--echo # Test Unqualified VDF Calls
+
+# Setup VEB directory for testing
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+--source include/villagesql/binlog_check_begin.inc
+
+# Create first test extension with VDFs
+--let $extension_name = test_vdf_ext
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/simple_vdf.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Install first extension
+INSTALL EXTENSION test_vdf_ext;
+
+--echo # Test 1: Basic unqualified call works when single extension provides function
+SELECT simple_int_func() AS result;
+SELECT simple_string_func() AS result;
+SELECT simple_test('hello') AS result;
+
+--echo # Test 2: Qualified call still works
+SELECT test_vdf_ext.simple_int_func() AS result;
+
+# Create second extension with overlapping function name
+--let $extension_name = test_vdf_alt
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/simple_vdf_alt.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Install second extension (has same simple_int_func name)
+INSTALL EXTENSION test_vdf_alt;
+
+--echo # Test 3: Unqualified call for unique function in second extension works
+SELECT alt_string_func() AS result;
+
+--echo # Test 4: Ambiguity error when two extensions provide same function name
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT simple_int_func() AS result;
+
+--echo # Test 5: Qualified calls still work when unqualified is ambiguous
+SELECT test_vdf_ext.simple_int_func() AS result;
+SELECT test_vdf_alt.simple_int_func() AS result;
+
+--echo # Test 6: Uninstall second extension only
+UNINSTALL EXTENSION test_vdf_alt;
+
+--echo # Test 7: Now unqualified call should work again (only one extension provides it)
+SELECT simple_int_func() AS result;
+
+--echo # Test 8: Uninstall remaining extension
+UNINSTALL EXTENSION test_vdf_ext;
+
+--echo # Test 9: After uninstall, unqualified call fails
+--error ER_SP_DOES_NOT_EXIST
+SELECT simple_int_func() AS result;
+
+--source include/villagesql/binlog_check_end.inc

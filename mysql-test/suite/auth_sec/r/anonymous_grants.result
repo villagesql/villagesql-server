@@ -1,0 +1,11 @@
+#
+# bug#27375069 CRASHES ON SHOW GRANTS FOR ANONYMOUS USER
+#
+create user ''@'localhost';
+grant all privileges on *.* to ''@'localhost';
+SHOW GRANTS FOR ''@'localhost';
+Grants for @localhost
+GRANT <ALL_STATIC_PRIVILEGES> ON *.* TO ``@`localhost`
+GRANT <ALL_DYNAMIC_PRIVILEGES> ON *.* TO ``@`localhost`
+# cleanup
+drop user ''@'localhost';

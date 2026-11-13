@@ -1,0 +1,87 @@
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE test_udf_arithmetic (
+id INT AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(50),
+val1 COMPLEX,
+val2 COMPLEX
+);
+INSERT INTO test_udf_arithmetic (name, val1, val2) VALUES
+('basic', '(1,2)', '(3,4)'),
+('with_negatives', '(-1,-2)', '(3,4)'),
+('pure_real', '(5,0)', '(3,0)'),
+('pure_imag', '(0,2)', '(0,3)'),
+('mixed', '(1.5,2.5)', '(-0.5,1.5)'),
+('divide_by_zero', '(1,2)', '(0,0)'),
+('divide_by_null', '(1,2)', NULL);
+SELECT id, name, val1, val2,
+vsql_complex.complex_add(val1, val2) as sum,
+vsql_complex.complex_subtract(val1, val2) as difference,
+vsql_complex.complex_multiply(val1, val2) as product,
+vsql_complex.complex_divide(val1, val2) as quotient
+FROM test_udf_arithmetic
+ORDER BY id;
+id	name	val1	val2	sum	difference	product	quotient
+1	basic	(1,2)	(3,4)	(4,6)	(-2,-2)	(-5,10)	(0.44,0.08)
+2	with_negatives	(-1,-2)	(3,4)	(2,2)	(-4,-6)	(5,-10)	(-0.44,-0.08)
+3	pure_real	(5,0)	(3,0)	(8,0)	(2,0)	(15,0)	(1.6666666666666667,0)
+4	pure_imag	(0,2)	(0,3)	(0,5)	(0,-1)	(-6,0)	(0.6666666666666666,0)
+5	mixed	(1.5,2.5)	(-0.5,1.5)	(1,4)	(2,1)	(-4.5,1)	(1.2,-1.4)
+6	divide_by_zero	(1,2)	(0,0)	(1,2)	(1,2)	(0,0)	NULL
+7	divide_by_null	(1,2)	NULL	NULL	NULL	NULL	NULL
+Warnings:
+Warning	3200	VDF error in function 'complex_divide': division by 0
+SELECT name, val1, val2,
+vsql_complex.complex_add(val1, val2) as result
+FROM test_udf_arithmetic
+ORDER BY id;
+name	val1	val2	result
+basic	(1,2)	(3,4)	(4,6)
+with_negatives	(-1,-2)	(3,4)	(2,2)
+pure_real	(5,0)	(3,0)	(8,0)
+pure_imag	(0,2)	(0,3)	(0,5)
+mixed	(1.5,2.5)	(-0.5,1.5)	(1,4)
+divide_by_zero	(1,2)	(0,0)	(1,2)
+divide_by_null	(1,2)	NULL	NULL
+SELECT name, val1, val2,
+vsql_complex.complex_subtract(val1, val2) as result
+FROM test_udf_arithmetic
+ORDER BY id;
+name	val1	val2	result
+basic	(1,2)	(3,4)	(-2,-2)
+with_negatives	(-1,-2)	(3,4)	(-4,-6)
+pure_real	(5,0)	(3,0)	(2,0)
+pure_imag	(0,2)	(0,3)	(0,-1)
+mixed	(1.5,2.5)	(-0.5,1.5)	(2,1)
+divide_by_zero	(1,2)	(0,0)	(1,2)
+divide_by_null	(1,2)	NULL	NULL
+SELECT name, val1, val2,
+vsql_complex.complex_multiply(val1, val2) as result
+FROM test_udf_arithmetic
+ORDER BY id;
+name	val1	val2	result
+basic	(1,2)	(3,4)	(-5,10)
+with_negatives	(-1,-2)	(3,4)	(5,-10)
+pure_real	(5,0)	(3,0)	(15,0)
+pure_imag	(0,2)	(0,3)	(-6,0)
+mixed	(1.5,2.5)	(-0.5,1.5)	(-4.5,1)
+divide_by_zero	(1,2)	(0,0)	(0,0)
+divide_by_null	(1,2)	NULL	NULL
+SELECT name, val1, val2,
+vsql_complex.complex_divide(val1, val2) as result
+FROM test_udf_arithmetic
+ORDER BY id;
+name	val1	val2	result
+basic	(1,2)	(3,4)	(0.44,0.08)
+with_negatives	(-1,-2)	(3,4)	(-0.44,-0.08)
+pure_real	(5,0)	(3,0)	(1.6666666666666667,0)
+pure_imag	(0,2)	(0,3)	(0.6666666666666666,0)
+mixed	(1.5,2.5)	(-0.5,1.5)	(1.2,-1.4)
+divide_by_zero	(1,2)	(0,0)	NULL
+divide_by_null	(1,2)	NULL	NULL
+Warnings:
+Warning	3200	VDF error in function 'complex_divide': division by 0
+SELECT vsql_complex.complex_divide('(1,0)', '(0,1)') as one_divided_by_i;
+one_divided_by_i
+(0,-1)
+DROP TABLE test_udf_arithmetic;
+UNINSTALL EXTENSION vsql_complex;

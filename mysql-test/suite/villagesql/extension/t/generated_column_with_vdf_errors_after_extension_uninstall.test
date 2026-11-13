@@ -1,0 +1,31 @@
+# A generated column whose expression calls a VDF over only built-in inputs
+# carries no custom_columns row, so nothing persistent pins the extension at
+# uninstall time. While the table is open, the in-memory use_count check
+# blocks UNINSTALL; once the table cache is flushed, UNINSTALL succeeds.
+# Subsequent reads/writes on the table then error with the same code MySQL
+# returns for any missing function: ER_SP_DOES_NOT_EXIST (1305). This pins
+# that runtime behavior so future changes don't silently downgrade the error.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, v INT,
+                gen DOUBLE AS (v + vsql_complex.complex_real('(1,2)')) STORED);
+INSERT INTO t (id, v) VALUES (1, 10);
+SELECT * FROM t;
+
+--echo # While the table is open, use_count blocks UNINSTALL.
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Cold-cache UNINSTALL succeeds: no custom column to pin the extension.
+FLUSH TABLES;
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Reads and writes on the table now error like a missing UDF.
+--error ER_SP_DOES_NOT_EXIST
+SELECT * FROM t;
+
+--error ER_SP_DOES_NOT_EXIST
+INSERT INTO t (id, v) VALUES (2, 20);
+
+DROP TABLE t;

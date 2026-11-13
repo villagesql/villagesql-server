@@ -1,0 +1,81 @@
+# Test that UNINSTALL fails at multiple stages during ALTER TABLE DROP COLUMN
+# until the DROP completes and removes the column dependency.
+# DROP COLUMN intentionally skips extension MDL lock.
+#
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+--echo #
+--echo # Test Case 1: UNINSTALL fails during DROP COLUMN at multiple sync points
+--echo # Verify no extension MDL locks are held by DROP COLUMN
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX) ENGINE=InnoDB;
+
+--echo # Verify column exists before DROP
+--source include/villagesql/query_custom_columns.inc
+
+connect (con1,localhost,root);
+--echo # Connection con1: Skip refcount to test pure MDL and dependency protection
+SET SESSION debug = '+d,skip_victionary_refcount';
+--echo # Connection con1: Set up two debug sync points for DROP COLUMN
+SET DEBUG_SYNC= 'metadata_before_extension_lock SIGNAL before_lock WAIT_FOR continue_drop_1';
+SET DEBUG_SYNC= 'metadata_after_extension_lock SIGNAL after_lock WAIT_FOR continue_drop_2';
+--send ALTER TABLE t1 DROP COLUMN val
+
+connection default;
+--echo # Connection default: Wait for DROP COLUMN to reach first sync point (before lock)
+SET DEBUG_SYNC= 'now WAIT_FOR before_lock';
+
+--echo # Connection default: Check MDL queue - should have NO extension locks
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex';
+
+--echo # Connection default: Try UNINSTALL at stage 1 (should fail - column exists)
+connect (con2,localhost,root);
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Connection default: Signal DROP COLUMN to continue to second sync point
+connection default;
+SET DEBUG_SYNC= 'now SIGNAL continue_drop_1';
+SET DEBUG_SYNC= 'now WAIT_FOR after_lock';
+
+--echo # Connection default: Check MDL queue again - should still have NO extension locks
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex';
+
+--echo # Connection con2: Try UNINSTALL at stage 2 (should still fail - column not dropped yet)
+connection con2;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Connection default: Signal DROP COLUMN to complete
+connection default;
+SET DEBUG_SYNC= 'now SIGNAL continue_drop_2';
+
+connection con1;
+--echo # Connection con1: Reaping ALTER TABLE (should succeed)
+reap;
+SET SESSION debug = '-d,skip_victionary_refcount';
+
+--echo # Connection con1: Verify column is dropped
+SHOW CREATE TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+
+connection con2;
+--echo # Connection con2: Now UNINSTALL should succeed (column dropped)
+UNINSTALL EXTENSION vsql_complex;
+
+disconnect con1;
+disconnect con2;
+
+connection default;
+DROP TABLE t1;
+SET DEBUG_SYNC= 'RESET';
+--source include/wait_until_count_sessions.inc

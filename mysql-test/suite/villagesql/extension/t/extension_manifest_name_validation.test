@@ -1,0 +1,16 @@
+# Test that manifest name must match VEB filename
+# Verifies that installing a VEB with mismatched manifest name is rejected
+
+--source include/not_windows.inc
+
+--let $veb_dir = `SELECT @@veb_dir`
+
+# Copy vsql_complex.veb to my_vebname.veb (manifest has name "vsql_complex")
+--exec cp $veb_dir/vsql_complex.veb $veb_dir/my_vebname.veb
+
+# Try to install - should fail due to name mismatch
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION my_vebname;
+
+# Clean up the copied VEB file
+--exec rm -f $veb_dir/my_vebname.veb

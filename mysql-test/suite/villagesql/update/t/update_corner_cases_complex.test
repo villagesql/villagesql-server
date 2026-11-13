@@ -1,0 +1,92 @@
+# Test UPDATE corner cases with COMPLEX type
+# This test covers edge cases not covered by other UPDATE tests
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Test scientific notation values
+INSERT INTO t1 VALUES
+    (1, '(1e10,2e10)'),
+    (2, '(1.5e-10,-2.5e-10)'),
+    (3, '(1e100,-1e100)'),
+    (4, '(0,0)');
+
+# Update scientific notation to regular notation
+UPDATE t1 SET val = '(100.0,200.0)' WHERE id = 1;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Update regular to scientific notation
+UPDATE t1 SET val = '(3e20,4e20)' WHERE id = 4;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Test whitespace variations in COMPLEX literals
+INSERT INTO t1 VALUES
+    (5, '(1.0,2.0)'),
+    (6, '( 3.0 , 4.0 )'),
+    (7, '(  5.0  ,  6.0  )');
+
+# Update using whitespace variations - should all work
+UPDATE t1 SET val = '( 10.0 , 20.0 )' WHERE id = 5;
+UPDATE t1 SET val = '(30.0,40.0)' WHERE id = 6;
+UPDATE t1 SET val = '(  50.0  ,  60.0  )' WHERE id = 7;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Test UPDATE affecting 0 rows
+UPDATE t1 SET val = '(100.0,100.0)' WHERE val = '(999.0,999.0)';
+
+# Verify nothing changed for rows 5-7
+SELECT * FROM t1 WHERE id IN (5, 6, 7) ORDER BY id;
+
+# Test zero canonicalization
+INSERT INTO t1 VALUES
+    (11, '(0,0)'),
+    (12, '(-0,0)'),
+    (13, '(0,-0)'),
+    (14, '(-0,-0)');
+
+# Update all zero variants to a non-zero value - should match all 4 rows
+UPDATE t1 SET val = '(100.0,100.0)' WHERE val = '(0,0)';
+
+SELECT * FROM t1 WHERE id >= 11 ORDER BY id;
+
+# Update back to different zero representations
+UPDATE t1 SET val = '(-0,-0)' WHERE id IN (11, 12);
+UPDATE t1 SET val = '(0,-0)' WHERE id = 13;
+
+# All zero variants should be canonicalized to (0,0) in output
+SELECT * FROM t1 WHERE id >= 11 ORDER BY id;
+
+# Test NULL handling - IS NULL vs = NULL behavior
+INSERT INTO t1 VALUES
+    (21, NULL),
+    (22, '(1.0,2.0)'),
+    (23, NULL);
+
+# This should update 0 rows (= NULL doesn't match NULL)
+UPDATE t1 SET val = '(100.0,100.0)' WHERE val = NULL;
+
+SELECT * FROM t1 WHERE id >= 21 ORDER BY id;
+
+# This should update 2 rows (IS NULL correctly matches NULL)
+UPDATE t1 SET val = '(200.0,200.0)' WHERE val IS NULL;
+
+SELECT * FROM t1 WHERE id >= 21 ORDER BY id;
+
+# Update value back to NULL
+UPDATE t1 SET val = NULL WHERE id = 21;
+
+# Update NULL based on combined conditions
+UPDATE t1 SET val = '(300.0,300.0)' WHERE val IS NULL AND id > 22;
+
+SELECT * FROM t1 WHERE id >= 21 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,33 @@
+# Test CREATE TABLE AS SELECT with WHERE clause and COMPLEX type
+# Grammar: CREATE TABLE table_name AS SELECT ... WHERE ...
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE measurements (
+    id INT PRIMARY KEY,
+    `signal` COMPLEX,
+    magnitude DOUBLE,
+    category VARCHAR(50)
+);
+
+INSERT INTO measurements VALUES (1, '(3.0,4.0)', 5.0, 'active');
+INSERT INTO measurements VALUES (2, '(1.0,1.0)', 1.414, 'weak');
+INSERT INTO measurements VALUES (3, '(5.0,12.0)', 13.0, 'active');
+INSERT INTO measurements VALUES (4, '(0.5,0.5)', 0.707, 'weak');
+
+# Create table using AS SELECT with WHERE clause
+CREATE TABLE strong_signals AS
+SELECT id, `signal`, magnitude
+FROM measurements
+WHERE magnitude > 2.0;
+
+SHOW COLUMNS FROM strong_signals;
+
+SELECT * FROM strong_signals;
+
+DROP TABLE strong_signals;
+DROP TABLE measurements;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

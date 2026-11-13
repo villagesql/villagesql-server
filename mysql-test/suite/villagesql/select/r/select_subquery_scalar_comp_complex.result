@@ -1,0 +1,9 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+CREATE TABLE t2 (filter_val COMPLEX);
+INSERT INTO t2 VALUES ('(1.0,2.0)');
+SELECT * FROM t1 WHERE val = (SELECT filter_val FROM t2 LIMIT 1);
+id	val
+1	(1,2)
+DROP TABLE t1;
+DROP TABLE t2;

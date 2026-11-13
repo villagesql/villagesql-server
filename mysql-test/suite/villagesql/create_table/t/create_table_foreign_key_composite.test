@@ -1,0 +1,114 @@
+# Test CREATE TABLE with composite FOREIGN KEY including COMPLEX column
+# Tests multi-column FK where one column is COMPLEX type
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create parent table with composite primary key (INT + COMPLEX)
+CREATE TABLE signal_definitions (
+    sensor_id INT,
+    frequency COMPLEX,
+    description VARCHAR(50),
+    PRIMARY KEY (sensor_id, frequency)
+);
+
+# Create child table with composite foreign key
+CREATE TABLE logged_data (
+    log_id INT PRIMARY KEY,
+    ref_sensor_id INT,
+    ref_frequency COMPLEX,
+    signal_value DOUBLE,
+    FOREIGN KEY (ref_sensor_id, ref_frequency)
+        REFERENCES signal_definitions(sensor_id, frequency)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+SHOW CREATE TABLE logged_data;
+
+# Populate parent data
+INSERT INTO signal_definitions VALUES
+(101, '(1.0,0.0)', 'Fundamental'),
+(101, '(2.0,0.0)', 'First Harmonic'),
+(102, '(1.0,0.0)', 'Fundamental');
+
+SELECT * FROM signal_definitions ORDER BY sensor_id, frequency;
+
+# Test valid composite insert - both columns must match existing parent
+INSERT INTO logged_data VALUES (1, 101, '(1.0,0.0)', 5.5);
+INSERT INTO logged_data VALUES (2, 101, '(2.0,0.0)', 7.8);
+INSERT INTO logged_data VALUES (3, 102, '(1.0,0.0)', 9.2);
+
+SELECT * FROM logged_data ORDER BY log_id;
+
+# Test invalid composite insert - correct sensor_id, wrong COMPLEX value
+# Should fail because (101, '(3.0,0.0)') doesn't exist in parent
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO logged_data VALUES (4, 101, '(3.0,0.0)', 9.9);
+
+# Test invalid composite insert - wrong sensor_id, correct COMPLEX value
+# Should fail because (999, '(1.0,0.0)') doesn't exist in parent
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO logged_data VALUES (5, 999, '(1.0,0.0)', 8.8);
+
+# Test partial NULL behavior - MySQL skips FK check if ANY column is NULL
+# First column NULL
+INSERT INTO logged_data VALUES (6, NULL, '(1.0,0.0)', 0.0);
+# Second column NULL
+INSERT INTO logged_data VALUES (7, 101, NULL, 0.0);
+# Both columns NULL
+INSERT INTO logged_data VALUES (8, NULL, NULL, 0.0);
+
+SELECT * FROM logged_data ORDER BY log_id;
+
+# Test composite UPDATE CASCADE
+# Update parent's composite key, should cascade to child
+UPDATE signal_definitions
+SET sensor_id = 999
+WHERE sensor_id = 101 AND frequency = '(1.0,0.0)';
+
+# Verify child record cascaded correctly
+SELECT * FROM logged_data WHERE log_id = 1;
+
+# Verify parent updated
+SELECT * FROM signal_definitions ORDER BY sensor_id, frequency;
+
+# Test composite UPDATE CASCADE on COMPLEX column
+UPDATE signal_definitions
+SET frequency = '(2.5,0.0)'
+WHERE sensor_id = 101 AND frequency = '(2.0,0.0)';
+
+# Verify child record cascaded correctly
+SELECT * FROM logged_data WHERE log_id = 2;
+
+# Verify parent updated
+SELECT * FROM signal_definitions ORDER BY sensor_id, frequency;
+
+# Test DELETE RESTRICT - should block parent deletion when child references it
+--error ER_ROW_IS_REFERENCED_2
+DELETE FROM signal_definitions WHERE sensor_id = 999 AND frequency = '(1.0,0.0)';
+
+# Verify parent still exists
+SELECT * FROM signal_definitions WHERE sensor_id = 999;
+
+# Delete child first, then parent deletion should succeed
+DELETE FROM logged_data WHERE log_id = 1;
+DELETE FROM signal_definitions WHERE sensor_id = 999 AND frequency = '(1.0,0.0)';
+
+# Verify parent deleted
+SELECT COUNT(*) FROM signal_definitions WHERE sensor_id = 999;
+
+# Test deletion of parent still referenced by child - should fail with RESTRICT
+--error ER_ROW_IS_REFERENCED_2
+DELETE FROM signal_definitions WHERE sensor_id = 102 AND frequency = '(1.0,0.0)';
+
+# Verify parent still exists
+SELECT * FROM signal_definitions WHERE sensor_id = 102;
+
+# Verify final state
+SELECT * FROM signal_definitions ORDER BY sensor_id, frequency;
+SELECT * FROM logged_data ORDER BY log_id;
+
+DROP TABLE logged_data;
+DROP TABLE signal_definitions;
+
+--source include/villagesql/uninstall_complex_extension.inc

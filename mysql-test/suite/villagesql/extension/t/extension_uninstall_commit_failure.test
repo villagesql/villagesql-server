@@ -1,0 +1,35 @@
+# Regression test for issue #847: UNINSTALL EXTENSION unloaded the .so
+# before committing the transaction. If the commit failed, the rollback
+# restored the extension metadata but the .so stayed unloaded, so later
+# use of the extension's types or VDFs would call into unmapped memory.
+# The .so must be unloaded only after a successful commit.
+
+--source include/have_debug.inc
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # Install vsql_simple extension
+INSTALL EXTENSION vsql_simple;
+
+--echo # Force the transaction commit inside UNINSTALL EXTENSION to fail
+SET SESSION DEBUG="+d,pre_commit_error";
+--error ER_UNKNOWN_ERROR
+UNINSTALL EXTENSION vsql_simple;
+SET SESSION DEBUG="-d,pre_commit_error";
+
+--echo # The failed uninstall rolled back: extension must still be installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # The .so must still be loaded: exercise type resolution, encode,
+--echo # decode, and a VDF call (crashes if the .so was unloaded)
+CREATE TABLE t1 (id INT PRIMARY KEY, data BYTEARRAY);
+INSERT INTO t1 VALUES (1, 'hello');
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") AS rotated FROM t1;
+DROP TABLE t1;
+
+--echo # A normal uninstall must now succeed
+UNINSTALL EXTENSION vsql_simple;
+
+--echo # Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--source include/villagesql/binlog_check_end.inc

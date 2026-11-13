@@ -1,0 +1,279 @@
+--source include/have_hypergraph.inc
+--source include/elide_costs.inc
+
+--echo #
+--echo # Bug #34513359 	Cost for field=dependent_subquery not included
+--echo #
+
+# Note: We elide costs here because otherwise the test is not maintainable.
+# The test should include a comment about what to look for, or better yet, automate what is being checked.
+
+CREATE TABLE num (n INT);
+INSERT INTO num VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+INSERT INTO t1 SELECT n,n FROM num;
+
+ANALYZE TABLE t1;
+
+# Dependent subquery.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1
+WHERE x1.b = (SELECT MAX(b) FROM t1 x2 WHERE x2.a>x1.a);
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1
+WHERE x1.b IN (SELECT MAX(b) FROM t1 x2 WHERE x2.a>x1.a);
+
+# Independent subquery.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1
+WHERE x1.b = (SELECT MAX(b) FROM t1 x2 WHERE x2.a>5);
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1
+WHERE x1.b IN (SELECT MAX(b) FROM t1 x2 WHERE x2.a>5);
+
+# Independent subquery with random function. The subquery should be
+# reevaluated for each x1 row.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1
+WHERE x1.b = (SELECT MAX(b) FROM t1 x2 WHERE x2.a>10*rand(0));
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1
+WHERE x1.b IN (SELECT MAX(b) FROM t1 x2 WHERE x2.a>10*rand(0));
+
+# Single-row subquery in HAVING condition.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT SUM(x1.a) s FROM t1 x1
+GROUP BY x1.b HAVING s>(SELECT MAX(x2.a) FROM t1 x2);
+
+# Single-row subquery with random function in HAVING condition.
+# The subquery must be reevaluated for each aggregated row.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT SUM(x1.a) s FROM t1 x1
+GROUP BY x1.b HAVING s>(SELECT MAX(x2.a+RAND(0)) FROM t1 x2);
+
+DROP TABLE num,t1;
+
+--echo #
+--echo # Bug#34114563 EXPLAIN ANALYZE: Use at least one significant digit for average
+--echo # of actual rows
+--echo #
+
+CREATE TABLE num10 (n INT);
+INSERT INTO num10 VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+
+CREATE TABLE t1(
+  a INT,
+  b INT,
+  c INT,
+  d INT,
+  e INT,
+  f INT,
+  g INT,
+  h INT,
+  KEY(d)
+);
+
+INSERT INTO t1
+  SELECT n%17, n% 19, n, n, n, n, n, n
+  FROM (SELECT d1.n+d2.n*10+d3.n*100 n FROM num10 d1, num10 d2, num10 d3) num1000;
+
+ANALYZE TABLE t1 UPDATE HISTOGRAM ON a,b,c,d,e,f,g,h;
+ANALYZE TABLE t1;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE c<720;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1, t1 x2, t1 x3 WHERE x1.c<721 AND x2.c<900;
+
+--replace_regex $elide_costs_and_time
+EXPLAIN ANALYZE FORMAT=TREE SELECT * FROM t1 x1, t1 x2 WHERE x1.c=x2.d AND x1.d>900 AND x2.a=x2.b;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1, t1 x2, t1 x3 WHERE x1.c<921 AND x2.c<900;
+
+# A row estimate of 0.001 is the lowest number to be formatted as a decimal
+# number.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE e=0 AND c=0;
+
+# Here we switch to engineering format for the row estimate, as it is less
+# than 0.001.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE e=0 AND c=0 AND f<999;
+
+# Row estimate before 'Limit' should be in engineerig format, as it has more
+# than six digits. Row estimate after 'Limit' should be a decimal number.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1, t1 x2 LIMIT 999999;
+
+
+# The row estimate is equal to the lower limit of 1e-12, and therefore printed
+# in engineering format rather than as "0".
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE d=0 AND c=0 AND e=0 AND f=0 AND g=0;
+
+# The row estimate is less than 1e-12, therefore we print it as "0".
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE
+SELECT * FROM t1 WHERE a=0 AND b=0 AND c=0 AND e=0 AND f=0 AND g=0 AND h=0;
+
+# The row estimate should be rounded to 1e+9
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1, t1 x2, t1 x3 LIMIT 999500000;
+
+# The row estimate should be rounded to 999e+6
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 x1, t1 x2, t1 x3 LIMIT 999499999;
+
+DROP TABLE num10,t1;
+
+--echo #
+--echo # Bug#34527697: EXPLAIN and EXPLAIN ANALYZE disagree on
+--echo #               covering index scans
+--echo #
+
+CREATE TABLE t(
+  x INT,
+  y INT DEFAULT (x),
+  z VARCHAR(128) DEFAULT (REPEAT('z', 128)), KEY (x));
+INSERT INTO t(x) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
+INSERT INTO t SELECT * FROM t;
+INSERT INTO t SELECT * FROM t;
+INSERT INTO t SELECT * FROM t;
+INSERT INTO t SELECT * FROM t;
+ANALYZE TABLE t;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT 1 FROM t;
+--replace_regex $elide_costs_and_time
+EXPLAIN ANALYZE SELECT 1 FROM t;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT 1 FROM t WHERE x = 4;
+--replace_regex $elide_costs_and_time
+EXPLAIN ANALYZE SELECT 1 FROM t WHERE x = 4;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT 1 FROM t WHERE x > 4;
+--replace_regex $elide_costs_and_time
+EXPLAIN ANALYZE SELECT 1 FROM t WHERE x > 4;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT x FROM t ORDER BY MOD(x, 2);
+--replace_regex $elide_costs_and_time
+EXPLAIN ANALYZE SELECT x FROM t ORDER BY MOD(x, 2);
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT t1.x FROM t t1, t t2 WHERE t1.x < t2.y;
+--replace_regex $elide_costs_and_time
+EXPLAIN ANALYZE SELECT t1.x FROM t t1, t t2 WHERE t1.x < t2.y;
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#34727172 EXPLAIN FORMAT=JSON returns invalid JSON
+--echo #              on INSERT statements with hypergraph
+--echo #
+
+CREATE TABLE t (i INT);
+INSERT INTO t VALUES (1), (2), (3);
+
+EXPLAIN FORMAT=TREE INSERT INTO t VALUES (4), (5), (6);
+EXPLAIN FORMAT=TREE REPLACE INTO t VALUES (7), (8), (9);
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#35845129: Missing subqueries in EXPLAIN with hypergraph optimizer
+--echo #
+CREATE TABLE t(x INT, y INT);
+ANALYZE TABLE t;
+# The EXPLAIN output should show the plan for the subquery.
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE
+SELECT x IN (SELECT x FROM t) FROM t GROUP BY x ORDER BY MAX(y);
+DROP TABLE t;
+
+--echo #
+--echo # Bug#36614948 No information about MRR in EXPLAIN with explain_json_format_version=2
+--echo #
+
+SET @save_optimizer_switch = @@optimizer_switch;
+SET optimizer_switch='mrr_cost_based=off,mrr=on';
+
+CREATE TABLE t(x INT, y INT, z INT, KEY(x));
+INSERT INTO t WITH RECURSIVE qn(n) AS
+(SELECT 0 UNION ALL SELECT n+1 FROM qn WHERE n<99)
+SELECT n, NULL, NULL FROM qn;
+ANALYZE TABLE t;
+
+# Should show "(Multi-Range Read)" for the relevant access paths
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t WHERE x IN (3, 4, 6);
+
+DROP TABLE t;
+
+SET @@optimizer_switch = @save_optimizer_switch;
+
+--echo # Bug#36773414: Explain format=tree does not display
+--echo #               information about semijoin strategy used
+--echo #
+
+CREATE TABLE t(a INTEGER,b INTEGER);
+
+INSERT INTO t
+WITH RECURSIVE qn(n) AS
+(SELECT 0 UNION ALL SELECT n+1 FROM qn WHERE n<19)
+SELECT n,n+1 FROM qn;
+
+ANALYZE TABLE t;
+# FirstMatch strategy - Semijoin converted to inner join by
+# limiting one row from the table on the inner side.
+let $query = SELECT a FROM t WHERE 4 IN (SELECT b+1 FROM t);
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT=tree $query;
+eval EXPLAIN FORMAT=JSON INTO @var $query;
+SELECT
+JSON_EXTRACT(@var, '$**.semijoin_strategy') AS first_match,
+JSON_SEARCH(@var, 'one', '%FirstMatch%', NULL, '$**.operation') IS NOT NULL
+AS operation_contains_firstmatch;
+# FirstMatch strategy - Hash Semijoin
+let $query = SELECT * FROM t WHERE b IN (SELECT a FROM t);
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT=tree $query;
+eval EXPLAIN FORMAT=JSON INTO @var $query;
+SELECT
+JSON_EXTRACT(@var, '$**.semijoin_strategy') AS first_match,
+JSON_SEARCH(@var, 'one', '%FirstMatch%', NULL, '$**.operation') IS NOT NULL
+AS operation_contains_firstmatch;
+ALTER TABLE t ADD KEY(a,b);
+ALTER TABLE t ADD KEY(b);
+ANALYZE TABLE t;
+# FirstMatch strategy - Nested Loop Semijoin
+let $query = SELECT b FROM t WHERE a IN
+(SELECT /*+ SEMIJOIN(FIRSTMATCH) */t1.b FROM t AS t1) LIMIT 1;
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT=tree $query;
+eval EXPLAIN FORMAT=JSON INTO @var $query;
+SELECT
+JSON_EXTRACT(@var, '$**.semijoin_strategy') AS first_match,
+JSON_SEARCH(@var, 'one', '%FirstMatch%', NULL, '$**.operation') IS NOT NULL
+AS operation_contains_firstmatch;
+# LooseScan strategy
+let $query = SELECT * FROM t WHERE a IN
+(SELECT /*+ SEMIJOIN(LOOSESCAN) */ t1.a FROM t AS t1 JOIN t AS t2 ON t1.a=t2.b);
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT=tree $query;
+eval EXPLAIN FORMAT=JSON INTO @var $query;
+SELECT
+JSON_EXTRACT(@var, '$**.semijoin_strategy') AS loosescan,
+JSON_SEARCH(@var, 'one', '%LooseScan%', NULL, '$**.operation') IS NOT NULL
+AS operation_contains_loosescan;
+DROP TABLE t;
+
+--source include/disable_hypergraph.inc

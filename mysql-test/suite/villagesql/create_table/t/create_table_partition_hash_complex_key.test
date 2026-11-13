@@ -1,0 +1,21 @@
+# Test CREATE TABLE with HASH partitioning using COMPLEX as partition key
+# Tests that COMPLEX custom type gives proper error when used as HASH partition key
+# NOTE: Currently gives generic ERROR 1659 "Field 'value' is of a not allowed type for this type of partitioning"
+# Should give more specific error about COMPLEX type not being supported as partition key
+
+--source include/villagesql/not_implemented_complex_type.inc
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT,
+    value COMPLEX
+) PARTITION BY HASH(value) PARTITIONS 4;
+
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

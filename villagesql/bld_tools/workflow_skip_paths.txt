@@ -1,0 +1,17 @@
+# Paths exempt from the mandatory build + unit-test gate.
+#
+# This file is the full authoritative exemption policy for the PR
+# gate; keep the two deliberately in sync.
+#
+# A commit is skippable ONLY if EVERY changed file matches a pattern here.
+# Patterns are extended regular expressions (ERE), one per line, matched
+# against `git diff --name-only` output. Blank lines and lines starting
+# with '#' are ignored.
+#
+# NOTE: build.yml's `push:` trigger carries a coarse `paths-ignore` subset of
+# these patterns as a lightweight shortcut so simple cases don't even start a
+# runner; keep these in sync..
+
+\.md$
+^Docs/
+^\.github/workflows/sanitizer\.yml$

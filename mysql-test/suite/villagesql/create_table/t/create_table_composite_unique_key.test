@@ -1,0 +1,38 @@
+# Test CREATE TABLE with composite UNIQUE KEY involving COMPLEX columns
+# Tests composite unique key with COMPLEX and other types
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE composite_uk_table (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    sensor_type VARCHAR(50),
+    location_id INT,
+    complex_reading COMPLEX,
+    UNIQUE KEY uk_sensor_location (sensor_type, location_id, complex_reading)
+);
+
+SHOW COLUMNS FROM composite_uk_table;
+
+INSERT INTO composite_uk_table (sensor_type, location_id, complex_reading)
+    VALUES ('temperature', 1, '(45.0,46.0)');
+INSERT INTO composite_uk_table (sensor_type, location_id, complex_reading)
+    VALUES ('pressure', 1, '(47.0,48.0)');
+INSERT INTO composite_uk_table (sensor_type, location_id, complex_reading)
+    VALUES ('temperature', 2, '(49.0,50.0)');
+INSERT INTO composite_uk_table (sensor_type, location_id, complex_reading)
+    VALUES ('temperature', 1, '(51.0,52.0)');
+
+SELECT * FROM composite_uk_table ORDER BY id;
+
+# Test unique key constraint violation
+--error ER_DUP_ENTRY
+INSERT INTO composite_uk_table (sensor_type, location_id, complex_reading)
+    VALUES ('temperature', 1, '(51.0,52.0)');
+
+SELECT * FROM composite_uk_table ORDER BY id;
+
+DROP TABLE composite_uk_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

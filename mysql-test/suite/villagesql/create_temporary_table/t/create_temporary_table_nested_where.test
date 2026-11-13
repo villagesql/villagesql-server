@@ -1,0 +1,46 @@
+# Test multi-level nested temporary tables (3 levels deep) with WHERE on COMPLEX column
+# This mirrors view_nested_multilevel.test to compare behavior
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+
+INSERT INTO t1 VALUES
+  (1, '(1.0,2.0)', 100.50),
+  (2, '(3.0,4.0)', 200.75),
+  (3, '(5.0,6.0)', 150.25),
+  (4, '(7.0,8.0)', 300.00),
+  (5, '(1.0,2.0)', 175.50);
+
+# Level 1: Temp table from base table
+CREATE TEMPORARY TABLE temp_level1 AS
+SELECT id, val, amount FROM t1;
+
+SELECT * FROM temp_level1 ORDER BY id;
+
+# Level 2: Temp table from temp table with WHERE on numeric column
+CREATE TEMPORARY TABLE temp_level2 AS
+SELECT id, val, amount FROM temp_level1 WHERE amount > 150;
+
+SELECT * FROM temp_level2 ORDER BY id;
+
+# Level 3: Temp table from temp table with WHERE on id
+CREATE TEMPORARY TABLE temp_level3 AS
+SELECT id, val FROM temp_level2 WHERE id > 2;
+
+SELECT * FROM temp_level3 ORDER BY id;
+
+# Test WHERE on COMPLEX column in nested temp table
+# This is the critical test - does WHERE on COMPLEX work with nested temp tables?
+CREATE TEMPORARY TABLE temp_level3_complex_filter AS
+SELECT id, val, amount FROM temp_level2 WHERE val = '(1.0,2.0)';
+
+SELECT * FROM temp_level3_complex_filter ORDER BY id;
+
+DROP TEMPORARY TABLE temp_level3_complex_filter;
+DROP TEMPORARY TABLE temp_level3;
+DROP TEMPORARY TABLE temp_level2;
+DROP TEMPORARY TABLE temp_level1;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

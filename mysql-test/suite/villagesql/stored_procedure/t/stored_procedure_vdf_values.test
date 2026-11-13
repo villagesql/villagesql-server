@@ -1,0 +1,114 @@
+# A VDF that needs no reprepare, in a stored routine or trigger, run with
+# other values each time. The routine's instructions are parsed once and
+# reused, so each run must read the values it is given.
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE tc (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO tc VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(0.0,5.0)');
+
+--echo #
+--echo # SET from a parameter, called three times
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_set(c COMPLEX)
+BEGIN
+  DECLARE r DOUBLE;
+  SET r = complex_real(c);
+  SELECT r;
+END//
+delimiter ;//
+
+CALL p_set('(1.0,0.0)');
+CALL p_set('(2.0,0.0)');
+CALL p_set('(3.0,0.0)');
+DROP PROCEDURE p_set;
+
+--echo #
+--echo # RETURN of from_string of a parameter, called once per row
+--echo #
+
+CREATE TABLE ts (id INT PRIMARY KEY, s VARCHAR(64));
+INSERT INTO ts VALUES (1, '(3.0,4.0)'), (2, '(6.0,8.0)'), (3, NULL);
+
+CREATE FUNCTION f_abs(s VARCHAR(64)) RETURNS DOUBLE DETERMINISTIC
+  RETURN complex_abs(COMPLEX::from_string(s));
+
+SELECT id, f_abs(s) AS a FROM ts ORDER BY id;
+SELECT id, f_abs(s) AS a FROM ts ORDER BY id DESC;
+DROP FUNCTION f_abs;
+
+--echo #
+--echo # A cursor over a VDF, opened in each call
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_cur(n INT)
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE r DOUBLE;
+  DECLARE total DOUBLE DEFAULT 0;
+  DECLARE cur CURSOR FOR SELECT complex_real(val) FROM tc WHERE id <= n;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  OPEN cur;
+  read_loop: LOOP
+    FETCH cur INTO r;
+    IF done THEN
+      LEAVE read_loop;
+    END IF;
+    SET total = total + r;
+  END LOOP;
+  CLOSE cur;
+  SELECT n, total;
+END//
+delimiter ;//
+
+CALL p_cur(1);
+CALL p_cur(2);
+CALL p_cur(3);
+DROP PROCEDURE p_cur;
+
+--echo #
+--echo # SET NEW.col in a trigger, fired for each row
+--echo #
+
+CREATE TABLE tt (id INT PRIMARY KEY, s VARCHAR(64), r DOUBLE);
+CREATE TRIGGER tt_bi BEFORE INSERT ON tt FOR EACH ROW
+  SET NEW.r = complex_real(COMPLEX::from_string(NEW.s));
+
+INSERT INTO tt (id, s) VALUES (1, '(1.5,0.0)');
+INSERT INTO tt (id, s) VALUES (2, '(2.5,0.0)');
+INSERT INTO tt (id, s) SELECT id + 10, s FROM ts;
+SELECT * FROM tt ORDER BY id;
+DROP TABLE tt;
+
+--echo #
+--echo # from_string of a type whose parameters come from the value: the
+--echo # expression is parsed again at each run, and takes the new value
+--echo #
+
+CREATE FUNCTION f_dim(s VARCHAR(64)) RETURNS INT DETERMINISTIC
+  RETURN tvector_dim(TVECTOR::from_string(s));
+--echo # A routine parameter is not a constant, so its dimension is unknown
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT f_dim('[1,2]') AS d;
+DROP FUNCTION f_dim;
+
+--echo # A user variable is read as a constant when the expression is parsed
+CREATE FUNCTION f_dim_var() RETURNS INT NOT DETERMINISTIC
+  RETURN tvector_dim(TVECTOR::from_string(@s));
+SET @s = '[1,2]';
+SELECT f_dim_var() AS d;
+SET @s = '[1,2,3]';
+SELECT f_dim_var() AS d;
+SET @s = '[1,2,3,4]';
+SELECT f_dim_var() AS d;
+DROP FUNCTION f_dim_var;
+SET @s = NULL;
+
+DROP TABLE ts;
+DROP TABLE tc;
+--source include/villagesql/uninstall_tvector_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc

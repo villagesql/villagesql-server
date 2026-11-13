@@ -1,0 +1,18 @@
+#
+# WL#8196 TLSv1.2 support
+#
+#T1: Default TLS connection
+Variable_name	Value
+Ssl_version	TLS_VERSION
+#T2: Default SSL cipher
+Variable_name	Value
+Ssl_cipher	SSL_CIPHER
+#T3: Setting TLS version TLSv1.2 from the client
+Variable_name	Value
+Ssl_version	TLSv1.2
+#T7: Setting invalid TLS version value from the client, it should give error.
+#T9: Acceptable cipher, setting the server cipher as well
+Restart server and provide ssl-cipher at server startup
+Variable_name	Value
+Ssl_cipher	ECDHE-RSA-AES128-GCM-SHA256
+# restart server using restart

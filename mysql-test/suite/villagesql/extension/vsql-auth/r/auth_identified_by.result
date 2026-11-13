@@ -1,0 +1,8 @@
+INSTALL EXTENSION vsql_auth_test;
+CREATE USER by_ok IDENTIFIED WITH vsql_auth_test;
+DROP USER by_ok;
+CREATE USER by_bad IDENTIFIED WITH vsql_auth_test BY 'pw';
+ERROR HY000: The password hash doesn't have the expected format.
+DROP USER by_bad;
+ERROR HY000: Operation DROP USER failed for 'by_bad'@'%' (User account does not exist)
+UNINSTALL EXTENSION vsql_auth_test;

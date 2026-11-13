@@ -1,0 +1,53 @@
+# Index hints (FORCE INDEX / IGNORE INDEX) on a KNN ORDER BY query.
+#
+# Recognition of a KNN ordering finds the custom index by walking the table's
+# keys. This test records how FORCE INDEX and IGNORE INDEX interact with that:
+# whether forcing the KNN index changes anything (it already routes), and whether
+# ignoring it makes the ordering fall back to a plain sort. In every case the
+# rows returned must be correct.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[0,1,0,0]'),
+  (3, '[0,0,1,0]'),
+  (4, '[1,1,0,0]'),
+  (5, '[2,0,0,0]');
+
+--echo # FORCE INDEX on the KNN index: routes to the distance scan (as it does
+--echo # without the hint). Nearest 3 to [1,0,0,0]: 1, 4, 5.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t FORCE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t FORCE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--echo # IGNORE INDEX on the KNN index. Records whether the ordering still routes
+--echo # to the distance scan or falls back to a sort; either way the rows must be
+--echo # correct.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t IGNORE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t IGNORE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+--echo # FORCE INDEX on the PRIMARY key (not the KNN index): the KNN ordering
+--echo # cannot be served by PRIMARY.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t FORCE INDEX (PRIMARY)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+SELECT id FROM t FORCE INDEX (PRIMARY)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

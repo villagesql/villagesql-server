@@ -1,0 +1,26 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX,
+CHECK (COMPLEX_ABS(val) > 0.0),
+CHECK (COMPLEX_REAL(val) BETWEEN -100.0 AND 100.0)
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `val` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `t1_chk_1` CHECK ((vsql_complex.complex_abs(`val`) > 0.0)),
+  CONSTRAINT `t1_chk_2` CHECK ((vsql_complex.complex_real(`val`) between -(100.0) and 100.0))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, '(50.0,-30.0)');
+SELECT * FROM t1;
+id	val
+1	(1,2)
+2	(50,-30)
+INSERT INTO t1 VALUES (3, '(0.0,0.0)');
+ERROR HY000: Check constraint 't1_chk_1' is violated.
+INSERT INTO t1 VALUES (4, '(150.0,10.0)');
+ERROR HY000: Check constraint 't1_chk_2' is violated.
+DROP TABLE t1;

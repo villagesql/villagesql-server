@@ -1,0 +1,37 @@
+# Test that CREATE TABLE with COMPLEX type fails for non-InnoDB engines
+# Custom types are only supported with InnoDB storage engine
+--source include/villagesql/install_complex_extension.inc
+
+# Test that CREATE TABLE with MyISAM engine fails when using COMPLEX type
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+) ENGINE=MyISAM;
+
+# Verify the table was not created
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+
+# Test that CREATE TABLE with MEMORY engine fails when using COMPLEX type
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+) ENGINE=MEMORY;
+
+# Verify the table was not created
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t2;
+
+# Test that CREATE TABLE with InnoDB succeeds (baseline)
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t3;
+
+DROP TABLE t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

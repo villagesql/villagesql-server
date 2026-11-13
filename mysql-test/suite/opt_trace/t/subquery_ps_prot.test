@@ -1,0 +1,19 @@
+# Start server with MyISAM
+--source include/force_myisam_default.inc
+
+# Skip the test if MyISAM is not available
+--source include/have_myisam.inc
+
+--source include/have_ps_protocol.inc
+--source include/no_sp_protocol.inc
+--source include/no_view_protocol.inc
+--source include/no_cursor_protocol.inc
+
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
+
+# The main testing script
+--source suite/opt_trace/include/subquery.inc
+
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

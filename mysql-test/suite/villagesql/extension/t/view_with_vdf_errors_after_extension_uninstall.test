@@ -1,0 +1,20 @@
+# A view body that references a VDF over only-built-in inputs has no
+# persistent dependency in custom_columns. The SELECT releases its use_count
+# on the VDF when it completes, so nothing pins the extension and UNINSTALL
+# EXTENSION succeeds. The view body then carries a dangling VDF reference,
+# which surfaces as ER_VIEW_INVALID at SELECT time -- the same shape as a
+# view that references a now-removed stored function.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE VIEW v AS SELECT vsql_complex.complex_real('(1,2)') AS r;
+SELECT * FROM v;
+
+--echo # Nothing holds the VDF after the SELECT completes; UNINSTALL succeeds.
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # View body still references the now-removed VDF; SELECT errors at runtime.
+--error ER_VIEW_INVALID
+SELECT * FROM v;
+
+DROP VIEW v;

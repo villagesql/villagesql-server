@@ -1,0 +1,40 @@
+# Test CREATE TABLE IF NOT EXISTS (LIKE table) with COMPLEX type
+# Grammar: CREATE TABLE IF NOT EXISTS table_name (LIKE other_table)
+
+# Create source table with COMPLEX columns
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE source_table (
+    id INT PRIMARY KEY,
+    measurement COMPLEX,
+    f FLOAT
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO source_table VALUES (1, '(13.0,14.0)', 18.62);
+
+# Create table using IF NOT EXISTS (LIKE ...) syntax
+CREATE TABLE IF NOT EXISTS t1 (LIKE source_table);
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 VALUES (2, '(15.0,16.0)', 19.62);
+
+SELECT * FROM t1;
+
+# Second create should not fail
+CREATE TABLE IF NOT EXISTS t1 (LIKE source_table);
+
+--source include/villagesql/query_custom_columns.inc
+
+DROP TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE source_table;
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

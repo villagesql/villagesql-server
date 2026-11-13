@@ -1,0 +1,60 @@
+# A table rebuild (ALTER TABLE) must preserve a custom (USING EXTENDED) index on
+# the table: its type, its per-column profile, and its rows. The rebuild
+# re-creates the index on a new (#sql-xxx) table and re-inserts every row. This
+# covers both rebuild algorithms, a rebuild driven by a column change (not just
+# FORCE), that inserts still route through the index afterwards, and survival
+# across a restart.
+#
+# This is a pure custom-index test: an ordinary column-storage type, no vector
+# type and no primary-key change involved.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_ext_index_test;
+
+--echo # ===================================================================
+--echo # A custom index with an explicitly-named profile, so SHOW CREATE must be
+--echo # identical before and after every rebuild.
+--echo # ===================================================================
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  n  INT,
+  a  ext_index_wide_blob,
+  INDEX idx_a (a ext_index_default) USING EXTENDED(ext_index)
+);
+INSERT INTO t1 (id) VALUES (1), (2), (3);
+SHOW CREATE TABLE t1;
+
+--echo # --- Rebuild via COPY ---
+ALTER TABLE t1 FORCE, ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+
+--echo # --- Rebuild via INPLACE ---
+ALTER TABLE t1 FORCE, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+
+--echo # --- Rebuild driven by a (non-PK) column change, not FORCE ---
+ALTER TABLE t1 MODIFY n BIGINT;
+SHOW CREATE TABLE t1;
+
+--echo # The index and all rows survived every rebuild.
+SELECT COUNT(*) AS rows_total FROM t1;
+
+--echo # Inserts still route through the (re-created) custom indexes.
+INSERT INTO t1 (id) VALUES (4), (5);
+SELECT COUNT(*) AS rows_after_insert FROM t1;
+
+--echo # ===================================================================
+--echo # Restart: the rebuilt table's custom index loads from the data
+--echo # dictionary, and inserts still work.
+--echo # ===================================================================
+--source include/restart_mysqld.inc
+
+SHOW CREATE TABLE t1;
+INSERT INTO t1 (id) VALUES (6);
+SELECT COUNT(*) AS rows_after_restart FROM t1;
+
+DROP TABLE t1;
+
+UNINSTALL EXTENSION vsql_ext_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

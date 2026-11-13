@@ -1,0 +1,37 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t1
+WITH cte AS (
+SELECT 2 AS id, 'not_a_complex_value' AS val
+)
+SELECT * FROM cte;
+ERROR HY000: Incorrect COMPLEX value: 'not_a_complex_value' for column 'val' at row 1
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+INSERT INTO t1
+WITH cte AS (
+SELECT 3 AS id, '(3.0,4.0)' AS val
+UNION ALL SELECT 4, 'bad_value'
+)
+SELECT * FROM cte;
+ERROR HY000: Incorrect COMPLEX value: 'bad_value' for column 'val' at row 2
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+INSERT INTO t1
+WITH cte AS (
+SELECT 5 AS id, '' AS val
+)
+SELECT * FROM cte;
+ERROR HY000: Incorrect COMPLEX value: '' for column 'val' at row 1
+INSERT INTO t1
+WITH cte AS (
+SELECT 6 AS id, '(1.0' AS val
+)
+SELECT * FROM cte;
+ERROR HY000: Incorrect COMPLEX value: '(1.0' for column 'val' at row 1
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+DROP TABLE t1;

@@ -1,0 +1,52 @@
+# ==== Purpose ====
+#
+# This test will call mysqldump client program to dump the slave channels
+# configuration, showing that it is able to dump the configuration for
+# other channels than the default one, regardless of having a default
+# channel configured.
+#
+# Then, the test will apply the generated dump to ensure that it is
+# syntactically correct.
+#
+# ==== Related Bugs and Worklogs ====
+#
+# BUG#21855705 MYSQLDUMP --DUMP-SLAVE DOES NOT WORK WITH MULTI-SOURCE
+#
+
+call mtr.add_suppression("Invalid .* username when attempting to connect to the source server");
+
+--echo #
+--echo # 1. Without having a default channel configured
+--echo #
+
+--echo # Create two additional replication channels
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_LOG_FILE='binlog-ch1.000001', SOURCE_LOG_POS=4 FOR CHANNEL 'ch1';
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_LOG_FILE='binlog-ch2.000001', SOURCE_LOG_POS=4 FOR CHANNEL 'ch2';
+
+--echo # Execute mysqldump with --dump-replica
+--exec $MYSQL_DUMP_SLAVE --compact --dump-replica --set-gtid-purged=OFF test > $MYSQL_TMP_DIR/chm_1_dump.sql
+--cat_file $MYSQL_TMP_DIR/chm_1_dump.sql
+--echo # Execute mysql using the dump as input
+--exec $MYSQL --force < $MYSQL_TMP_DIR/chm_1_dump.sql
+--remove_file $MYSQL_TMP_DIR/chm_1_dump.sql
+--let $slave_io_errno= convert_error(ER_REPLICA_FATAL_ERROR)
+--source include/rpl/stop_replica.inc
+
+--echo #
+--echo # 2. With a default channel configured
+--echo #
+
+--echo # Setup the default replication channel
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_LOG_FILE="binlog-default.000001", SOURCE_LOG_POS=4 FOR CHANNEL '';
+
+--echo # Execute mysqldump with --dump-replica
+--replace_regex /SOURCE_LOG_POS=[0-9]+/SOURCE_LOG_POS=BINLOG_START/
+--exec $MYSQL_DUMP_SLAVE --compact --dump-replica --set-gtid-purged=OFF test > $MYSQL_TMP_DIR/chm_2_dump.sql
+--cat_file $MYSQL_TMP_DIR/chm_2_dump.sql
+--echo # Execute mysql using the dump as input
+--exec $MYSQL --force < $MYSQL_TMP_DIR/chm_2_dump.sql
+--remove_file $MYSQL_TMP_DIR/chm_2_dump.sql
+--source include/rpl/stop_replica.inc
+
+# Clean up
+RESET REPLICA ALL;

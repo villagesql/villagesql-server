@@ -1,0 +1,72 @@
+CREATE TABLE t_perm (
+id INT PRIMARY KEY,
+val COMPLEX,
+category VARCHAR(50)
+);
+INSERT INTO t_perm VALUES
+(1, '(2,0)', 'Category A'),
+(2, '(10,0)', 'Category B'),
+(3, '(-1,0)', 'Category C'),
+(4, '(5,5)', 'Category D');
+CREATE TEMPORARY TABLE t_temp (
+id INT PRIMARY KEY,
+val COMPLEX,
+amount DECIMAL(10,2)
+);
+INSERT INTO t_temp VALUES
+(10, '(2,0)', 100.50),
+(20, '(10,0)', 200.75),
+(30, '(10,0)', 150.00),
+(40, '(7,7)', 75.25);
+SELECT t_perm.id AS perm_id, t_temp.id AS temp_id, t_perm.val, t_perm.category, t_temp.amount
+FROM t_perm
+INNER JOIN t_temp ON t_perm.val = t_temp.val
+ORDER BY t_perm.id, t_temp.id;
+perm_id	temp_id	val	category	amount
+1	10	(2,0)	Category A	100.50
+2	20	(10,0)	Category B	200.75
+2	30	(10,0)	Category B	150.00
+SELECT t_temp.id AS temp_id, t_temp.val, t_perm.category
+FROM t_temp
+LEFT JOIN t_perm ON t_temp.val = t_perm.val
+ORDER BY t_temp.id;
+temp_id	val	category
+10	(2,0)	Category A
+20	(10,0)	Category B
+30	(10,0)	Category B
+40	(7,7)	NULL
+SELECT t_perm.id AS perm_id, t_perm.val, t_temp.amount
+FROM t_temp
+RIGHT JOIN t_perm ON t_temp.val = t_perm.val
+ORDER BY t_perm.id;
+perm_id	val	amount
+1	(2,0)	100.50
+2	(10,0)	150.00
+2	(10,0)	200.75
+3	(-1,0)	NULL
+4	(5,5)	NULL
+SELECT t_perm.val, t_perm.category, SUM(t_temp.amount) AS total_amount
+FROM t_perm
+INNER JOIN t_temp ON t_perm.val = t_temp.val
+GROUP BY t_perm.val, t_perm.category
+ORDER BY t_perm.val;
+val	category	total_amount
+(2,0)	Category A	100.50
+(10,0)	Category B	350.75
+SELECT t_perm.id, t_perm.val, t_perm.category, t_temp.amount
+FROM t_perm
+INNER JOIN t_temp ON t_perm.val = t_temp.val
+WHERE t_temp.amount > 100
+ORDER BY t_temp.amount;
+id	val	category	amount
+1	(2,0)	Category A	100.50
+2	(10,0)	Category B	150.00
+2	(10,0)	Category B	200.75
+EXPLAIN SELECT * FROM t_perm STRAIGHT_JOIN t_temp ON t_perm.val = t_temp.val;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_perm	NULL	ALL	NULL	NULL	NULL	NULL	#	#	NULL
+1	SIMPLE	t_temp	NULL	ALL	NULL	NULL	NULL	NULL	#	#	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_perm`.`id` AS `id`,`test`.`t_perm`.`val` AS `val`,`test`.`t_perm`.`category` AS `category`,`test`.`t_temp`.`id` AS `id`,`test`.`t_temp`.`val` AS `val`,`test`.`t_temp`.`amount` AS `amount` from `test`.`t_perm` straight_join `test`.`t_temp` where (`test`.`t_temp`.`val` = `test`.`t_perm`.`val`)
+DROP TABLE t_temp;
+DROP TABLE t_perm;

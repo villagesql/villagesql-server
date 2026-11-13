@@ -1,0 +1,116 @@
+# Test basic VDF calls with prepared statement parameters
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, str_val VARCHAR(50));
+
+INSERT INTO t1 VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(0.0,5.0)'),
+  (4, '(6.0,0.0)');
+
+INSERT INTO t2 VALUES
+  (1, '(10.0,11.0)'),
+  (2, '(12.0,13.0)'),
+  (3, '(14.0,15.0)');
+
+--echo #
+--echo # Test 1: VDF with COMPLEX argument (complex_conjugate)
+--echo #
+
+PREPARE stmt1 FROM 'SELECT id, vsql_complex.complex_conjugate(val) FROM t1 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt1 USING @id;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: VDF with COMPLEX argument (complex_real)
+--echo #
+
+PREPARE stmt2 FROM 'SELECT id, complex_real(val) FROM t1 WHERE id = ?';
+SET @id = 2;
+EXECUTE stmt2 USING @id;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: VDF with COMPLEX argument (complex_imag)
+--echo #
+
+PREPARE stmt3 FROM 'SELECT id, vsql_complex.complex_imag(val) FROM t1 WHERE id = ?';
+SET @id = 3;
+EXECUTE stmt3 USING @id;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: VDF returning COMPLEX from string (COMPLEX::from_string)
+--echo #
+
+PREPARE stmt4 FROM 'SELECT id, COMPLEX::from_string(str_val) FROM t2 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt4 USING @id;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: VDF with string parameter
+--echo #
+
+PREPARE stmt5 FROM 'SELECT vsql_complex.COMPLEX::from_string(?) AS result';
+SET @str = '(20.0,21.0)';
+EXECUTE stmt5 USING @str;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Test 6: Multiple VDF calls in SELECT list
+--echo #
+
+PREPARE stmt6 FROM 'SELECT id, vsql_complex.complex_real(val) AS real_part, vsql_complex.complex_imag(val) AS imag_part FROM t1 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt6 USING @id;
+DEALLOCATE PREPARE stmt6;
+
+--echo #
+--echo # Test 7: Multiple executions with different VDF arguments
+--echo #
+
+PREPARE stmt7 FROM 'SELECT vsql_complex.complex_real(val) AS real_part FROM t1 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt7 USING @id;
+SET @id = 2;
+EXECUTE stmt7 USING @id;
+SET @id = 3;
+EXECUTE stmt7 USING @id;
+DEALLOCATE PREPARE stmt7;
+
+--echo #
+--echo # Test 8: VDF with NULL argument
+--echo #
+
+INSERT INTO t1 VALUES (20, NULL);
+PREPARE stmt8 FROM 'SELECT id, vsql_complex.complex_real(val) AS result FROM t1 WHERE id = ?';
+SET @id = 20;
+EXECUTE stmt8 USING @id;
+DEALLOCATE PREPARE stmt8;
+
+--echo #
+--echo # Test 9: Error case - Invalid string format for COMPLEX::from_string
+--echo #
+
+PREPARE stmt9 FROM 'SELECT vsql_complex.COMPLEX::from_string(?)';
+SET @bad_str = 'not_a_complex_number';
+EXECUTE stmt9 USING @bad_str;
+SHOW WARNINGS;
+DEALLOCATE PREPARE stmt9;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1, t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

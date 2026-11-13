@@ -1,0 +1,37 @@
+# Test ALTER TABLE add HASH partitioning with COMPLEX columns
+# Grammar: ALTER TABLE table_name PARTITION BY HASH (expression) PARTITIONS num
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT,
+    name VARCHAR(50),
+    value COMPLEX
+);
+
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(3.5,-1.2)');
+INSERT INTO t1 VALUES (3, 'test3', '(2.5,1.5)');
+
+SHOW CREATE TABLE t1;
+
+# Add hash partitioning (COMPLEX columns should be preserved)
+ALTER TABLE t1 PARTITION BY HASH (id) PARTITIONS 4;
+
+SHOW CREATE TABLE t1;
+
+# Verify data is preserved across partitions
+SELECT * FROM t1;
+
+# Insert more data to test partitioning
+INSERT INTO t1 VALUES (4, 'test4', '(4.0,5.0)');
+INSERT INTO t1 VALUES (5, 'test5', '(6.0,-2.0)');
+INSERT INTO t1 VALUES (6, 'test6', '(1.5,3.5)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

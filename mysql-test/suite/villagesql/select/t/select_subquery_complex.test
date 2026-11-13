@@ -1,0 +1,17 @@
+# Test SELECT ... (SELECT ...) with COMPLEX type
+# Grammar: SELECT ... (SELECT ...) ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)');
+
+# Subquery in select list
+SELECT (SELECT val FROM t1) as sub_val;
+
+# Subquery in FROM clause (derived table)
+SELECT dt.val FROM (SELECT val FROM t1) AS dt;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

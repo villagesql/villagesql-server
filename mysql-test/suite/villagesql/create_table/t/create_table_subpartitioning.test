@@ -1,0 +1,34 @@
+# Test CREATE TABLE with subpartitioning and COMPLEX columns
+# Tests partitioning with subpartitions and COMPLEX type columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE subpartitioned_table (
+    id INT,
+    year_val INT,
+    complex_data COMPLEX,
+    device_id INT,
+    measurement_type VARCHAR(50),
+    PRIMARY KEY(id, year_val, device_id)
+) PARTITION BY RANGE (year_val)
+  SUBPARTITION BY HASH (device_id)
+  SUBPARTITIONS 2 (
+    PARTITION p_2022 VALUES LESS THAN (2023),
+    PARTITION p_2023 VALUES LESS THAN (2024),
+    PARTITION p_future VALUES LESS THAN MAXVALUE
+);
+
+SHOW COLUMNS FROM subpartitioned_table;
+
+INSERT INTO subpartitioned_table VALUES (1, 2022, '(87.0,88.0)', 101, 'temperature');
+INSERT INTO subpartitioned_table VALUES (2, 2023, '(89.0,90.0)', 102, 'pressure');
+INSERT INTO subpartitioned_table VALUES (3, 2023, '(91.0,92.0)', 103, 'humidity');
+INSERT INTO subpartitioned_table VALUES (4, 2024, '(93.0,94.0)', 104, 'voltage');
+
+SELECT * FROM subpartitioned_table ORDER BY id;
+
+DROP TABLE subpartitioned_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

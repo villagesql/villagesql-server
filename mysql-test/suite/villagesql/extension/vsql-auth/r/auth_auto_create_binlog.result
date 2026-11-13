@@ -1,0 +1,24 @@
+call mtr.add_suppression("routing unknown accounts");
+INSTALL EXTENSION vsql_auth_test;
+SET GLOBAL vsql_auth_test.auto_create = ON;
+CREATE ROLE vsql_role_granted;
+GRANT SELECT ON *.* TO vsql_role_granted;
+# Start from a known point in the log
+RESET BINARY LOGS AND GTIDS;
+# Log in as an account that does not exist: auto-create provisions it
+SELECT CURRENT_USER() AS who;
+who
+auto_created_user@%
+# The account was created
+SELECT user, host FROM mysql.user WHERE user = 'auto_created_user';
+user	host
+auto_created_user	%
+# ...but provisioning wrote nothing to the binary log.
+# Any CREATE USER / GRANT row here is the bug.
+SHOW BINLOG EVENTS IN 'binlog.000001' FROM 4;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+binlog.000001	4	Format_desc	1	127	Server ver: #, Binlog ver: 4
+binlog.000001	127	Previous_gtids	1	158	
+DROP USER 'auto_created_user'@'%';
+DROP ROLE vsql_role_granted;
+UNINSTALL EXTENSION vsql_auth_test;

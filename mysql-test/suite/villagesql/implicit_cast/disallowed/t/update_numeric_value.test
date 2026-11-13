@@ -1,0 +1,14 @@
+# Test UPDATE with numeric value
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE t_complex SET val = 123.45 WHERE id = 1;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

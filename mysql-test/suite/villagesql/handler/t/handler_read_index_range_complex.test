@@ -1,0 +1,30 @@
+# Test HANDLER READ (Index Range) with COMPLEX type
+# Grammar: HANDLER tbl_name READ index_name FIRST/NEXT/PREV/LAST
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+# Insert data in jumbled order with zero variants interleaved (~20 rows)
+INSERT INTO t1 VALUES (15, '(15.0,16.0)'), (3, '(3.0,4.0)'), (11, '(-0,0)'), (7, '(7.0,8.0)');
+INSERT INTO t1 VALUES (18, '(0,0)'), (1, '(1.0,2.0)'), (13, '(13.0,14.0)'), (9, '(9.0,10.0)');
+INSERT INTO t1 VALUES (5, '(5.0,6.0)'), (19, '(0,-0)'), (2, '(19.0,20.0)'), (14, '(21.0,22.0)');
+INSERT INTO t1 VALUES (8, '(-0,-0)'), (16, '(23.0,24.0)'), (4, '(25.0,26.0)'), (12, '(27.0,28.0)');
+INSERT INTO t1 VALUES (20, '(29.0,30.0)'), (6, '(31.0,32.0)'), (17, '(33.0,34.0)'), (10, '(35.0,36.0)');
+
+# Test HANDLER index traversal
+HANDLER t1 OPEN;
+HANDLER t1 READ `PRIMARY` FIRST;
+HANDLER t1 READ `PRIMARY` NEXT;
+HANDLER t1 READ `PRIMARY` NEXT;
+HANDLER t1 READ `PRIMARY` NEXT;
+HANDLER t1 READ `PRIMARY` NEXT;
+HANDLER t1 READ `PRIMARY` LAST;
+HANDLER t1 READ `PRIMARY` PREV;
+HANDLER t1 READ `PRIMARY` PREV;
+HANDLER t1 READ `PRIMARY` PREV;
+HANDLER t1 READ `PRIMARY` PREV;
+HANDLER t1 CLOSE;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

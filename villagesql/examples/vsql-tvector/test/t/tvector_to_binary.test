@@ -1,0 +1,48 @@
+# TVECTOR::to_binary: (TVECTOR) -> BINARY, the inverse of TVECTOR::from_binary.
+#
+# [1,2,3] as three little-endian floats is 0x0000803F0000004000004040.
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[1.5,2.25,3]'), (3, NULL);
+
+--echo # The binary form, labelled binary
+SELECT id, HEX(TVECTOR::to_binary(v)) AS bin,
+       LENGTH(TVECTOR::to_binary(v)) AS len,
+       CHARSET(TVECTOR::to_binary(v)) AS cs
+FROM t ORDER BY id;
+
+--echo # Back with TVECTOR::from_binary
+SET @b = (SELECT TVECTOR::to_binary(v) FROM t WHERE id = 1);
+SELECT TVECTOR::from_binary(@b) AS v;
+SET @b = (SELECT TVECTOR::to_binary(v) FROM t WHERE id = 2);
+SELECT TVECTOR::from_binary(@b) AS v;
+
+--echo # Through a VARBINARY column
+CREATE TABLE b (id INT PRIMARY KEY, raw VARBINARY(64));
+INSERT INTO b SELECT id, TVECTOR::to_binary(v) FROM t;
+SELECT id, HEX(raw) FROM b ORDER BY id;
+
+--echo # The same bytes as the binary form a value was given in
+SELECT HEX(TVECTOR::to_binary(TVECTOR::from_binary(0x0000803F0000004000004040)))
+  AS bin;
+
+--echo # A constant of the type
+SELECT HEX(TVECTOR::to_binary(TVECTOR::from_string('[4,5,6]'))) AS bin;
+
+--echo # Double elements: 8 bytes each
+CREATE TABLE d (id INT PRIMARY KEY, v TVECTOR('dimension=3,type=double'));
+INSERT INTO d VALUES (1, '[1,2,3]');
+SELECT HEX(TVECTOR::to_binary(v)) AS bin, LENGTH(TVECTOR::to_binary(v)) AS len
+FROM d;
+--echo # The binary form does not carry the element width. On a constant,
+--echo # from_binary reads floats, so these 24 bytes are six floats, and their
+--echo # bytes come back unchanged.
+SET @b = (SELECT TVECTOR::to_binary(v) FROM d WHERE id = 1);
+SELECT TVECTOR::from_binary(@b) AS v;
+SELECT HEX(TVECTOR::to_binary(TVECTOR::from_binary(@b))) AS bin;
+
+SET @b = NULL;
+DROP TABLE t, b, d;
+UNINSTALL EXTENSION vsql_tvector;

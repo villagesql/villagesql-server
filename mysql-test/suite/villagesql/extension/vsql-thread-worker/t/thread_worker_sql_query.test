@@ -1,0 +1,19 @@
+# Test thread_worker sql_query capability.
+#
+# Verifies:
+# - Worker accepts "SQL_FOR_EACH <sql>" commands (for_each interface)
+# - Worker accepts "SQL_EXECUTE <sql>" commands (execute+next interface)
+
+INSTALL EXTENSION vsql_thread_worker_test;
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
+
+--source init_thread_worker_test.inc
+
+--exec $tw_pl "SQL_FOR_EACH SELECT 42"
+
+--exec $tw_pl "SQL_EXECUTE SELECT 'hello'"
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
+
+UNINSTALL EXTENSION vsql_thread_worker_test;

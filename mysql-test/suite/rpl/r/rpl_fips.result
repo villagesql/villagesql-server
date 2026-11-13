@@ -1,0 +1,53 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+CALL mtr.add_suppression("Failed to set up SSL because of the following *");
+CALL mtr.add_suppression("Replica SQL for channel '': Request to stop replica SQL Thread received while *");
+[on master]
+SET PERSIST_ONLY ssl_fips_mode=ON;
+Warnings:
+Warning	1287	'@@ssl_fips_mode' is deprecated and will be removed in a future release.
+[on slave]
+SET PERSIST_ONLY ssl_fips_mode=ON;
+Warnings:
+Warning	1287	'@@ssl_fips_mode' is deprecated and will be removed in a future release.
+include/rpl/stop_replica.inc
+include/rpl/restart_server.inc [server_number=1]
+include/rpl/start_replica.inc
+[connection master]
+include/rpl/save_binlog_file_position.inc
+[on master]
+[on slave]
+include/rpl/stop_replica.inc
+include/rpl/restart_server.inc [server_number=2]
+# R1: Set the ssl connection OFF
+CHANGE REPLICATION SOURCE TO SOURCE_USER = 'root', SOURCE_PASSWORD = '', SOURCE_SSL = 0;;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+include/rpl/start_replica.inc
+include/rpl/assert_replica_no_error.inc
+[on slave]
+include/rpl/stop_replica.inc
+# R3: Set the ssl connection ON and strong cipher
+CHANGE REPLICATION SOURCE TO SOURCE_USER = 'root', SOURCE_PASSWORD = '', SOURCE_SSL = 1, SOURCE_TLS_VERSION = 'TLSv1.2', SOURCE_SSL_CIPHER = 'ECDHE-RSA-AES128-GCM-SHA256';
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+include/rpl/start_replica.inc
+include/rpl/assert_replica_no_error.inc
+include/rpl/stop_replica.inc
+==== Cleanup (Note that slave IO thread is not running) ====
+CHANGE REPLICATION SOURCE TO SOURCE_USER = 'root', SOURCE_PASSWORD = '', SOURCE_SSL=0;
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+include/rpl/reset.inc
+[on master]
+RESET PERSIST ssl_fips_mode;
+[on slave]
+RESET PERSIST ssl_fips_mode;
+[on master]
+include/rpl/deinit.inc

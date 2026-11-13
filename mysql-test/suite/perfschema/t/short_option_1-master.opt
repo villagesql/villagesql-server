@@ -1,0 +1,1 @@
+-a -Cutf8mb3 --collation-server=utf8mb3_bin -T12

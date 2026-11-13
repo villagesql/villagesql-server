@@ -1,0 +1,355 @@
+# Test error handling for invalid VEB files and extension names
+# This test verifies that appropriate errors are returned for malformed VEBs
+
+--echo # Test Error Handling for Invalid VEB Files
+
+# Setup VEB directory for testing
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+--source include/villagesql/binlog_check_begin.inc
+
+--echo #
+--echo # VEB FILE ISSUES
+--echo #
+
+--echo # Missing VEB file
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION nonexistent;
+
+--echo # Invalid archive format (not a tar file)
+--exec echo "not a tar file" > $veb_dir/bad_archive.veb
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION bad_archive;
+
+--echo # Empty VEB file
+--exec touch $veb_dir/empty.veb
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `empty`;
+
+--echo #
+--echo # MANIFEST ISSUES
+--echo #
+
+--echo # Missing manifest.json
+--let $extension_name = no_manifest
+--let $extension_files = --file other.txt 'some content'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION no_manifest;
+
+--echo # Invalid JSON syntax
+--let $extension_name = bad_json
+--let $extension_files = --file manifest.json '{invalid json'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION bad_json;
+
+--echo # manifest.json is an array
+--let $extension_name = json_array
+--let $extension_files = --file manifest.json '["array", "values"]'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION json_array;
+
+--echo # manifest.json is a string
+--let $extension_name = json_string
+--let $extension_files = --file manifest.json '"just a string"'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION json_string;
+
+--echo # Missing version field
+--let $extension_name = no_version
+--let $extension_files = --file manifest.json '{"name": "test"}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION no_version;
+
+--echo # version field is a number
+--let $extension_name = version_number
+--let $extension_files = --file manifest.json '{"version": 123}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION version_number;
+
+--echo # version field is an array
+--let $extension_name = version_array
+--let $extension_files = --file manifest.json '{"version": ["1", "0"]}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION version_array;
+
+--echo # version field is an object
+--let $extension_name = version_object
+--let $extension_files = --file manifest.json '{"version": {"major": 1}}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION version_object;
+
+--echo # version field is null
+--let $extension_name = version_null
+--let $extension_files = --file manifest.json '{"version": null}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION version_null;
+
+--echo # Empty version string
+--let $extension_name = version_empty
+--let $extension_version =
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+# This should succeed - empty string is a valid version
+INSTALL EXTENSION version_empty;
+UNINSTALL EXTENSION version_empty;
+
+--echo #
+--echo # EXTENSION NAME VALIDATION
+--echo #
+
+--echo # Name starting with number
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION 1test;
+
+--echo # Name starting with hyphen
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `-test`;
+
+--echo # Name starting with underscore
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `_test`;
+
+--echo # Name ending with underscore
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `test_`;
+
+--echo # Name ending with hyphen
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `test-`;
+
+--echo # Name starting with dot
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `.test`;
+
+--echo # Name containing slash
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `foo/bar`;
+
+--echo # Name containing double-dot
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `foo..bar`;
+
+--echo # Name with space
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `foo bar`;
+
+--echo # Name with special characters
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `foo@bar`;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `foo!bar`;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `foo$bar`;
+
+--echo # Reserved name _expanded
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION _expanded;
+
+--echo # Name too long (>64 characters)
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION this_is_a_very_long_extension_name_that_exceeds_sixty_four_characters_limit;
+
+--echo # Valid names with hyphens and underscores should work
+# Create extensions with proper VEF registration for each name
+--let $extension_name = test_underscore
+--let $extension_version = 1.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--let $extension_name = test-hyphen
+--let $extension_version = 1.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--let $extension_name = test_mix-123
+--let $extension_version = 1.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION test_underscore;
+UNINSTALL EXTENSION test_underscore;
+
+INSTALL EXTENSION `test-hyphen`;
+UNINSTALL EXTENSION `test-hyphen`;
+
+INSTALL EXTENSION `test_mix-123`;
+UNINSTALL EXTENSION `test_mix-123`;
+
+--echo # name field is missing
+--let $extension_name = empty_name
+--let $extension_files = --file manifest.json '{"version": "1.0.0"}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `empty_name`;
+
+--echo # name mismatch
+--let $extension_name = wrong_name
+--let $extension_files = --file manifest.json '{"version": "1.0.0", "name": "wrong"}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION `wrong_name`;
+
+--echo #
+--echo # CASE SENSITIVITY (normalization should make these conflict)
+--echo #
+
+# Create extensions with proper VEF registration for case sensitivity test
+--let $extension_name = CaseSensitive
+--let $extension_version = 1.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+INSTALL EXTENSION CaseSensitive;
+
+--echo # Try to install lowercase version (should fail - already exists after normalization)
+--let $extension_name = casesensitive
+--let $extension_version = 1.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/noop_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION casesensitive;
+
+--echo # Clean up
+UNINSTALL EXTENSION CaseSensitive;
+
+--echo #
+--echo # DIRECTORY TRAVERSAL TESTS
+--echo #
+
+--echo # Test: File path with ../ (directory traversal attempt)
+--perl
+use strict;
+use Archive::Tar;
+
+my $vardir = $ENV{'MYSQLTEST_VARDIR'};
+my $veb_dir = "$vardir/veb";
+
+# Create an Archive::Tar object
+my $tar = Archive::Tar->new();
+
+# Add manifest.json
+$tar->add_data('manifest.json', '{"name": "path_traversal", "version": "1.0.0"}');
+
+# Add a file with ../ in the path (attempts to escape)
+# Using Archive::Tar allows us to create tar entries with any path,
+# including malicious paths with ../ that tar command-line tool would reject
+$tar->add_data('../escape.txt', 'malicious content');
+
+# Write the tar file
+$tar->write("$veb_dir/path_traversal.veb", COMPRESS_GZIP);
+
+EOF
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION path_traversal;
+
+# Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo #
+--echo # SYMLINK SECURITY TESTS
+--echo #
+
+--echo # Test 1: Symlink with relative path pointing outside extraction directory
+--let $extension_name = symlink_relative
+--let $extension_files = --file manifest.json '{"name": "symlink_relative", "version": "1.0.0"}' --symlink evil_link ../outside_target.txt
+--source include/villagesql/create_extension.inc
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION symlink_relative;
+
+# Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+# Verify no expansion directory was left behind
+let MYSQLD_DATADIR= `SELECT @@datadir`;
+--error 1
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/symlink_relative
+
+--echo # Test 2: Symlink with absolute path pointing outside
+--let $extension_name = symlink_absolute
+--let $extension_files = --file manifest.json '{"name": "symlink_absolute", "version": "1.0.0"}' --symlink evil_absolute_link /etc/passwd
+--source include/villagesql/create_extension.inc
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION symlink_absolute;
+
+# Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+# Verify no expansion directory was left behind
+--error 1
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/symlink_absolute
+
+--echo # Test 3: Deep directory traversal with many ../
+--let $extension_name = deep_traversal
+--let $extension_files = --file manifest.json '{"name": "deep_traversal", "version": "1.0.0"}' --symlink deep_link ../../../../../../etc/passwd
+--source include/villagesql/create_extension.inc
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION deep_traversal;
+
+# Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Test 4: Symlink in subdirectory pointing outside
+--let $extension_name = nested_symlink
+--let $extension_files = --file manifest.json '{"name": "nested_symlink", "version": "1.0.0"}' --file subdir/file.txt 'content' --symlink subdir/evil ../../outside.txt
+--source include/villagesql/create_extension.inc
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION nested_symlink;
+
+# Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # MISSING SHARED LIBRARY
+
+--echo # Manifest is valid but the VEB carries no lib/{name}.so
+--let $extension_name = no_shared_library
+--let $extension_files = --file manifest.json '{"name": "no_shared_library", "version": "1.0.0"}'
+--source include/villagesql/create_extension.inc
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION no_shared_library;
+
+--echo # TRUNCATED VEB
+
+--echo # The manifest is intact but the archive ends inside lib/{name}.so
+--perl
+use strict;
+use Archive::Tar;
+
+my $veb = "$ENV{'MYSQLTEST_VARDIR'}/veb/truncated_veb.veb";
+my $tar = Archive::Tar->new();
+$tar->add_data('manifest.json', '{"name": "truncated_veb", "version": "1.0.0"}');
+$tar->add_data('lib/truncated_veb.so', 'x' x 65536);
+$tar->write($veb);
+truncate($veb, (-s $veb) / 2) or die "Can't truncate $veb: $!";
+EOF
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION truncated_veb;
+
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # No expansion or staging directory was left behind
+--error 1
+--file_exists $MYSQLD_DATADIR/.veb_expansion_cache/truncated_veb
+
+--source include/villagesql/binlog_check_end.inc

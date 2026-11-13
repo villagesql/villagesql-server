@@ -1,0 +1,27 @@
+INSTALL EXTENSION vsql_knn_index_test;
+# A constant: to_binary drops the placeholder, from_binary restores it
+SELECT HEX(KVECTOR::to_binary(KVECTOR::from_string('[1,2,3,4]'))) AS bin;
+bin
+0000803F000000400000404000008040
+SELECT KVECTOR::to_string(
+KVECTOR::from_binary(0x0000803F000000400000404000008040)) AS txt;
+txt
+[1,2,3,4]
+# A stored value, whose placeholder the server has filled in
+CREATE TABLE t (id INT PRIMARY KEY, v KVECTOR);
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES (1, '[1,2,3,4]'), (2, '[5,6,7,8]');
+SELECT id, HEX(KVECTOR::to_binary(v)) AS bin FROM t ORDER BY id;
+id	bin
+1	0000803F000000400000404000008040
+2	0000A0400000C0400000E04000000041
+SELECT id, KVECTOR::to_string(KVECTOR::from_binary(KVECTOR::to_binary(v)))
+AS txt FROM t ORDER BY id;
+id	txt
+1	[1,2,3,4]
+2	[5,6,7,8]
+# Only 16 bytes are a KVECTOR
+SELECT KVECTOR::from_binary(0x0000803F) AS v;
+ERROR HY000: VDF error in function 'kvector::from_binary': kvector: binary form must be 16 bytes
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

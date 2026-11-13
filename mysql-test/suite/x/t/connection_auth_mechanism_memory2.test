@@ -1,0 +1,50 @@
+## Test cases for authorization plugins
+
+--let SAVED_PASSWORD_STORAGE_FORMAT=`SELECT @@global.caching_sha2_password_storage_format`
+
+--let $xplugin_disable_ssl_for_x_at_client_side=1
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+#
+## Setup
+#
+
+--write_file $MYSQL_TMP_DIR/try_login_using_memory.xpl
+-->import connection_auth_mechanism_memory_helpers.macro
+
+callmacro Try_to_login_all_xusers_using_memory	%RESULT%;
+EOF
+
+--write_file $MYSQL_TMP_DIR/login_using_plain.xpl
+-->import connection_auth_mechanism_memory_helpers.macro
+
+callmacro Login_all_xusers_using_plain_to_fill_the_cache;
+EOF
+
+--let $MYSQLXTEST=$MYSQLXTEST -ux_root --ssl-cipher='ECDHE-RSA-AES128-GCM-SHA256'
+--let $memory_login_fail= --file=$MYSQL_TMP_DIR/try_login_using_memory.xpl -v%RESULT%=Login_failed
+--let $memory_login_ok= --file=$MYSQL_TMP_DIR/try_login_using_memory.xpl -v%RESULT%=Login_ok_and_verify
+--let $plain_login_ok= --file=$MYSQL_TMP_DIR/login_using_plain.xpl
+
+
+#
+## Test starts here
+#
+
+# Run the test with standard configuration of caching_sha2_password_storage_format.
+--let $test_param_run=1
+--source ../include/test_connection_auth_mechanism_memory.inc
+
+# Run the test with PBKDF2_SHA512 configuration set in caching_sha2_password_storage_format.
+SET GLOBAL caching_sha2_password_storage_format="PBKDF2_SHA512";
+--let $test_param_run=2
+--source ../include/test_connection_auth_mechanism_memory.inc
+
+
+#
+# Postamble
+#
+--eval SET GLOBAL caching_sha2_password_storage_format='$SAVED_PASSWORD_STORAGE_FORMAT'
+
+--source ../include/xplugin_cleanup.inc

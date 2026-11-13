@@ -1,0 +1,395 @@
+/* Copyright (c) 2021, 2026, Oracle and/or its affiliates.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
+#include <gtest/gtest.h>
+#include <set>
+#include <sstream>
+#include <string>
+
+#include "libchangestreams/include/mysql/cs/reader/binary/mysqlproto.h"
+#include "libchangestreams/src/lib/mysql/cs/codec/pb/reader_state_codec_pb.h"
+#include "my_compiler.h"              // MY_COMPILER_DIAGNOSTIC_PUSH
+#include "mysql/gtids/legacy_glue.h"  // old_to_new
+#include "mysql/meta/is_charlike.h"   // Is_charlike
+#include "mysql/utils/char_cast.h"    // char_cast
+
+using Log_event_type_helper = mysql::binlog::event::Log_event_type_helper;
+
+namespace cs::reader::binary::inttests {
+
+static char **argv;
+static int argc;
+
+/// Get the Gsid from a Gtid_event.
+auto event_gtid(const mysql::binlog::event::Gtid_event &gev) {
+  auto old_tsid = gev.get_tsid();
+  mysql::gtids::Tsid tsid;
+  old_to_new(old_tsid, tsid);
+  return mysql::gtids::Gtid::throwing_make(tsid, gev.get_gno());
+}
+
+/// Get the text form of the Gtid from a char buffer holding a Gtid_log_event.
+auto gtid_event_buffer_to_gtid_text(
+    const mysql::meta::Is_charlike auto *buffer) {
+  mysql::binlog::event::Format_description_event fde{BINLOG_VERSION, "8.0.26"};
+  mysql::binlog::event::Gtid_event gev(mysql::utils::char_cast(buffer), &fde);
+  return mysql::strconv::throwing::encode_text(event_gtid(gev));
+}
+
+/**
+ * @brief This is a test case that is called from an MTR test case.
+ *
+ * This test leverages GTest framework to implement assertions and
+ * run client side tests for binlog events.
+ */
+class TestMysqlProtoReader : public ::testing::Test {
+ public:
+  const static inline std::string S_UUID0{
+      "00000000-0000-0000-0000-000000000000"};
+  const static inline std::string S_UUID1{
+      "11111111-1111-1111-1111-111111111111"};
+  MYSQL *mysql1{nullptr};
+  MYSQL *mysql2{nullptr};
+  std::shared_ptr<cs::reader::State> state1{nullptr};
+  std::shared_ptr<cs::reader::State> state2{nullptr};
+  cs::reader::binary::Mysql_protocol *reader1{nullptr};
+  cs::reader::binary::Mysql_protocol *reader2{nullptr};
+  mysql::uuids::Uuid uuid0;
+  mysql::uuids::Uuid uuid1;
+  mysql::gtids::Tag tag_1 = mysql::gtids::Tag::throwing_make("tag_1");
+  mysql::gtids::Tag tag_2 = mysql::gtids::Tag::throwing_make("tag_2");
+  mysql::gtids::Gtid gtid0_1 = mysql::gtids::Gtid::throwing_make(uuid0, 1);
+  mysql::gtids::Gtid gtid0_2 = mysql::gtids::Gtid::throwing_make(uuid0, 2);
+  mysql::gtids::Gtid gtid1_1 = mysql::gtids::Gtid::throwing_make(uuid1, 1);
+  mysql::gtids::Gtid gtid1_2 = mysql::gtids::Gtid::throwing_make(uuid1, 2);
+
+  std::vector<mysql::gtids::Tag> tags{tag_1, tag_2};
+  std::vector<mysql::uuids::Uuid> uuids;
+  std::vector<mysql::gtids::Sequence_number> sequence_numbers{1, 2};
+
+  std::vector<mysql::gtids::Gtid> tagged_gtids;
+
+  void SetUp() override {
+    if (argc != 5) {
+      GTEST_SKIP();
+    }
+    // ASSERT_EQ(argc, 5);
+    auto host = argv[1];
+    auto user = argv[2];
+    auto pass = argv[3];
+    uint32_t port = std::atoi(argv[4]);
+    ASSERT_TRUE(mysql::strconv::decode_text(S_UUID0, uuid0).is_ok());
+    ASSERT_TRUE(mysql::strconv::decode_text(S_UUID1, uuid1).is_ok());
+    gtid0_1 = mysql::gtids::Gtid::throwing_make(uuid0, 1);
+    gtid0_2 = mysql::gtids::Gtid::throwing_make(uuid0, 2);
+    gtid1_1 = mysql::gtids::Gtid::throwing_make(uuid1, 1);
+    gtid1_2 = mysql::gtids::Gtid::throwing_make(uuid1, 2);
+
+    uuids.push_back(uuid0);
+    uuids.push_back(uuid1);
+
+    // record tagged
+    for (const auto &uuid : uuids) {
+      for (const auto &tag : tags) {
+        mysql::gtids::Tsid tsid(uuid, tag);
+        for (const auto &sequence_number : sequence_numbers) {
+          tagged_gtids.push_back(
+              mysql::gtids::Gtid::throwing_make(tsid, sequence_number));
+        }
+      }
+    }
+
+    uint32_t flags =
+        cs::reader::binary::Mysql_protocol::COM_BINLOG_DUMP_FLAG_NON_BLOCKING;
+
+    // setup reader1
+    MYSQL *mysql1 = mysql_init(nullptr);
+    ASSERT_TRUE(mysql1);
+    ASSERT_TRUE(mysql_real_connect(mysql1, host, user, pass, nullptr, port,
+                                   nullptr, 0));
+    reader1 = new cs::reader::binary::Mysql_protocol(mysql1, 24844, flags);
+
+    // setup reader2
+    MYSQL *mysql2 = mysql_init(nullptr);
+    ASSERT_TRUE(mysql2);
+    ASSERT_TRUE(mysql_real_connect(mysql2, host, user, pass, nullptr, port,
+                                   nullptr, 0));
+    reader2 = new cs::reader::binary::Mysql_protocol(mysql2, 24844, flags);
+  }
+
+  void TearDown() override {
+    if (reader2 != nullptr) mysql_close(reader2->get_mysql_connection());
+    if (reader1 != nullptr) mysql_close(reader1->get_mysql_connection());
+
+    delete reader1;
+    delete reader2;
+  }
+};
+
+TEST_F(TestMysqlProtoReader, ReadEmptyState) {
+  std::vector<uint8_t> buffer;
+  std::set<std::string> expected_gtids{
+      mysql::strconv::throwing::encode_text(gtid0_1),
+      mysql::strconv::throwing::encode_text(gtid0_2),
+      mysql::strconv::throwing::encode_text(gtid1_1),
+      mysql::strconv::throwing::encode_text(gtid1_2)};
+
+  for (const auto &gtid : tagged_gtids) {
+    expected_gtids.insert(mysql::strconv::throwing::encode_text(gtid));
+  }
+
+  std::set<std::string> received_gtids{};
+
+  // At this point we have 12 transactions in the log UUID0:1, UUID0:2,
+  // UUID1:1, UUID1:2 and tagged_gtids
+  ASSERT_FALSE(reader1->open(std::make_shared<cs::reader::State>()));
+
+  while (!reader1->read(buffer)) {
+    auto evt_type =
+        (mysql::binlog::event::Log_event_type)buffer[EVENT_TYPE_OFFSET];
+    if (Log_event_type_helper::is_assigned_gtid_event(evt_type)) {
+      received_gtids.insert(gtid_event_buffer_to_gtid_text(buffer.data()));
+    }
+  }
+
+  ASSERT_EQ(received_gtids, expected_gtids);
+
+  reader1->close();
+}
+
+TEST_F(TestMysqlProtoReader, ReadUpdatedState) {
+  std::vector<uint8_t> buffer;
+  // we will receive the other two (gtid1_1, gtid1_2) and tagged_gtids, since we
+  // are adding gtid0_1 and gitd0_2 to the state.
+  std::set<std::string> expected_gtids{
+      mysql::strconv::throwing::encode_text(gtid1_1),
+      mysql::strconv::throwing::encode_text(gtid1_2)};
+
+  for (const auto &gtid : tagged_gtids) {
+    expected_gtids.insert(mysql::strconv::throwing::encode_text(gtid));
+  }
+
+  std::set<std::string> received_gtids{};
+
+  state1 = std::make_shared<cs::reader::State>();
+  auto gtid0_1 = mysql::gtids::Gtid::throwing_make(uuid0, 1);
+  auto gtid0_2 = mysql::gtids::Gtid::throwing_make(uuid0, 2);
+
+  // lets add both gtids to the state
+  state1->add_gtid(gtid0_1);
+  state1->add_gtid(gtid0_2);
+
+  ASSERT_FALSE(reader1->open(state1));
+
+  while (!reader1->read(buffer)) {
+    auto evt_type =
+        (mysql::binlog::event::Log_event_type)buffer[EVENT_TYPE_OFFSET];
+    if (Log_event_type_helper::is_assigned_gtid_event(evt_type)) {
+      received_gtids.insert(gtid_event_buffer_to_gtid_text(buffer.data()));
+    }
+  }
+
+  ASSERT_EQ(received_gtids, expected_gtids);
+
+  reader1->close();
+}
+
+TEST_F(TestMysqlProtoReader, RereadUpdatedState) {
+  std::vector<uint8_t> buffer;
+
+  /* *****************************************************************************
+   * * First Connection *
+   * *****************************************************************************
+   */
+  std::set<std::string> expected_gtids{
+      mysql::strconv::throwing::encode_text(gtid0_1),
+      mysql::strconv::throwing::encode_text(gtid0_2),
+      mysql::strconv::throwing::encode_text(gtid1_1),
+      mysql::strconv::throwing::encode_text(gtid1_2)};
+  for (const auto &gtid : tagged_gtids) {
+    expected_gtids.insert(mysql::strconv::throwing::encode_text(gtid));
+  }
+  std::set<std::string> received_gtids{};
+
+  state1 = std::make_shared<cs::reader::State>();
+  ASSERT_FALSE(reader1->open(state1));
+
+  while (!reader1->read(buffer)) {
+    auto evt_type =
+        (mysql::binlog::event::Log_event_type)buffer[EVENT_TYPE_OFFSET];
+    if (Log_event_type_helper::is_assigned_gtid_event(evt_type)) {
+      received_gtids.insert(gtid_event_buffer_to_gtid_text(buffer.data()));
+    }
+  }
+
+  ASSERT_EQ(received_gtids, expected_gtids);
+  reader1->close();
+
+  /* *****************************************************************************
+   * * Second Connection *
+   * *****************************************************************************
+   */
+  expected_gtids.clear();
+  // we will add the ':1' terminated to the state, so we expect the rest (':2')
+  expected_gtids.insert(mysql::strconv::throwing::encode_text(gtid0_2));
+  expected_gtids.insert(mysql::strconv::throwing::encode_text(gtid1_2));
+  expected_gtids.insert(mysql::strconv::throwing::encode_text(tagged_gtids[1]));
+  expected_gtids.insert(mysql::strconv::throwing::encode_text(tagged_gtids[3]));
+  expected_gtids.insert(mysql::strconv::throwing::encode_text(tagged_gtids[5]));
+  expected_gtids.insert(mysql::strconv::throwing::encode_text(tagged_gtids[7]));
+  received_gtids.clear();
+
+  state2 = std::make_shared<cs::reader::State>();
+  state2->add_gtid(gtid0_1);
+  state2->add_gtid(gtid1_1);
+  state2->add_gtid(tagged_gtids[0]);
+  state2->add_gtid(tagged_gtids[2]);
+  state2->add_gtid(tagged_gtids[4]);
+  state2->add_gtid(tagged_gtids[6]);
+  ASSERT_FALSE(reader2->open(state2));
+
+  while (!reader2->read(buffer)) {
+    auto evt_type =
+        (mysql::binlog::event::Log_event_type)buffer[EVENT_TYPE_OFFSET];
+    if (Log_event_type_helper::is_assigned_gtid_event(evt_type)) {
+      received_gtids.insert(gtid_event_buffer_to_gtid_text(buffer.data()));
+    }
+  }
+
+  // at this point, we have only received gtids with GNO equal to 2
+  ASSERT_EQ(received_gtids, expected_gtids);
+
+  reader2->close();
+}
+
+TEST_F(TestMysqlProtoReader, RereadSerializedState) {
+  std::vector<uint8_t> buffer;
+
+  /* *****************************************************************************
+   * * First Connection *
+   * *****************************************************************************
+   */
+
+  std::set<std::string> expected_gtids{
+      mysql::strconv::throwing::encode_text(gtid0_1),
+      mysql::strconv::throwing::encode_text(gtid0_2),
+      mysql::strconv::throwing::encode_text(gtid1_1),
+      mysql::strconv::throwing::encode_text(gtid1_2)};
+  for (const auto &gtid : tagged_gtids) {
+    expected_gtids.insert(mysql::strconv::throwing::encode_text(gtid));
+  }
+  std::set<std::string> received_gtids{};
+  state1 = std::make_shared<cs::reader::State>();
+  ASSERT_FALSE(reader1->open(state1));
+
+  while (!reader1->read(buffer)) {
+    auto evt_type =
+        (mysql::binlog::event::Log_event_type)buffer[EVENT_TYPE_OFFSET];
+    if (Log_event_type_helper::is_assigned_gtid_event(evt_type)) {
+      received_gtids.insert(gtid_event_buffer_to_gtid_text(buffer.data()));
+    }
+  }
+
+  ASSERT_EQ(received_gtids, expected_gtids);
+  reader1->close();
+
+  /* *****************************************************************************
+   * * Second Connection *
+   * *****************************************************************************
+   */
+  expected_gtids.clear();
+  received_gtids.clear();
+
+  // emulate that we are loading the state from some storage and rereading
+  MY_COMPILER_DIAGNOSTIC_PUSH()
+  // This tests a deprecated feature, so the deprecation warning is expected.
+  MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wdeprecated-declarations")
+  cs::reader::codec::pb::example::stringstream pb_ss;
+  MY_COMPILER_DIAGNOSTIC_POP()
+  state2 = std::make_shared<cs::reader::State>();
+
+  // serialize the old state
+  pb_ss << *reader1->get_state();
+
+  // load the old state and reread
+  pb_ss >> *state2;
+
+  // there shall not be any new transaction transferred, since we had
+  // transferred everything in the first readion
+
+  ASSERT_FALSE(reader2->open(state2));
+
+  while (!reader2->read(buffer)) {
+    auto evt_type =
+        (mysql::binlog::event::Log_event_type)buffer[EVENT_TYPE_OFFSET];
+    if (Log_event_type_helper::is_assigned_gtid_event(evt_type)) {
+      received_gtids.insert(gtid_event_buffer_to_gtid_text(buffer.data()));
+    }
+  }
+
+  ASSERT_EQ(received_gtids, expected_gtids);
+
+  reader2->close();
+}
+
+TEST_F(TestMysqlProtoReader, ReadUpdateImplicitState) {
+  std::vector<uint8_t> buffer;
+  state1 = nullptr;
+
+  // since state1 is null, the reader1->open will create an empty state
+  // and it will pull binary logs from the start
+  std::set<std::string> expected_gtids{
+      mysql::strconv::throwing::encode_text(gtid0_1),
+      mysql::strconv::throwing::encode_text(gtid0_2),
+      mysql::strconv::throwing::encode_text(gtid1_1),
+      mysql::strconv::throwing::encode_text(gtid1_2)};
+  for (const auto &gtid : tagged_gtids) {
+    expected_gtids.insert(mysql::strconv::throwing::encode_text(gtid));
+  }
+  std::set<std::string> received_gtids{};
+
+  ASSERT_FALSE(reader1->open(state1));
+
+  while (!reader1->read(buffer)) {
+    auto evt_type =
+        (mysql::binlog::event::Log_event_type)buffer[EVENT_TYPE_OFFSET];
+    if (Log_event_type_helper::is_assigned_gtid_event(evt_type)) {
+      received_gtids.insert(gtid_event_buffer_to_gtid_text(buffer.data()));
+    }
+  }
+
+  ASSERT_EQ(received_gtids, expected_gtids);
+
+  reader1->close();
+}
+
+}  // namespace cs::reader::binary::inttests
+
+int main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  cs::reader::binary::inttests::argv = argv;
+  cs::reader::binary::inttests::argc = argc;
+  auto res = RUN_ALL_TESTS();
+  mysql_library_end();  // TODO: check this
+  return res;
+}

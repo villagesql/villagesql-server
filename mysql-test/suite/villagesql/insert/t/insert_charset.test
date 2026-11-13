@@ -1,0 +1,118 @@
+# Does the right value reach the custom type?
+#
+# Storage correctness only. What a client can display is a separate concern,
+# and not specific to custom types: a built-in VARCHAR renders the same way
+# when the connection charset cannot represent the stored value.
+#
+# A type's encode reads the value as text, so it is given the value in
+# utf8mb4. A value in any other charset is converted first.
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, vec TVECTOR(3));
+
+--echo #
+--echo # Test 1: latin1 and utf8mb4, which store the same value
+--echo #
+
+SET NAMES latin1;
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+SET NAMES utf8mb4;
+INSERT INTO t1 VALUES (2, '(3.0,4.0)');
+SELECT id, val FROM t1 ORDER BY id;
+
+--echo #
+--echo # Test 2: a wide charset is refused for the connection
+--echo #
+--echo # So a value can only arrive in one by being written as such.
+
+--error ER_WRONG_VALUE_FOR_VAR
+SET NAMES ucs2;
+
+--echo #
+--echo # Test 3: a well-formed value written in a wide charset
+--echo #
+--echo # Given as bytes, because an introducer on a quoted literal labels the
+--echo # string without encoding it.
+
+INSERT INTO t1 VALUES (3, _ucs2 0x00280035002E0030002C0036002E00300029);
+SELECT id, val FROM t1 ORDER BY id;
+
+--echo #
+--echo # Test 4: the same, from a column of that charset
+--echo #
+
+CREATE TABLE t3 (id INT PRIMARY KEY, txt VARCHAR(32) CHARACTER SET ucs2);
+INSERT INTO t3 VALUES (1, '(7.0,8.0)');
+INSERT INTO t1 SELECT id + 10, txt FROM t3;
+SELECT id, val FROM t1 ORDER BY id;
+
+--echo #
+--echo # Test 5: a charset that reassigns characters the grammar uses
+--echo #
+--echo # swe7 is single-byte, so it is allowed for the connection, but it is
+--echo # not ASCII-based: 0x5B is 'A-umlaut' and 0x5D is 'A-ring'. What was
+--echo # written is not a vector, and converting makes that visible.
+--echo #
+--echo # The error renders back into swe7, where those characters are again
+--echo # shown as brackets.
+
+SET NAMES swe7;
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t2 VALUES (1, '[1,2,3]');
+SET NAMES utf8mb4;
+SELECT id, vec FROM t2 ORDER BY id;
+
+--echo #
+--echo # Test 6: the same value through a prepared-statement parameter
+--echo #
+--echo # A parameter's bytes can still be labelled binary when they reach the
+--echo # type, so the charset they arrived in is looked up separately: a
+--echo # different route than a literal takes. It should store the same value
+--echo # either way.
+
+PREPARE p FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 20;
+SET @v = _ucs2 0x00280039002E0030002C0039002E00300029;
+EXECUTE p USING @id, @v;
+
+--echo # And one already in utf8mb4
+SET @id = 21;
+SET @v = '(10.0,11.0)';
+EXECUTE p USING @id, @v;
+DEALLOCATE PREPARE p;
+
+SELECT id, val FROM t1 ORDER BY id;
+
+--echo #
+--echo # Test 7: the same through LOAD DATA, which reads in the file's charset
+--echo #
+--echo # A data file cannot be in a wide charset, so this uses swe7 as in
+--echo # Test 5: the file's brackets are 'A-umlaut' and 'A-ring' there, and the
+--echo # load is refused. The same bytes loaded as latin1 are a vector.
+
+--write_file $MYSQLTEST_VARDIR/tmp/insert_charset.dat
+1	[1,2,3]
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/insert_charset.dat' INTO TABLE t2 CHARACTER SET swe7
+SELECT id, vec FROM t2 ORDER BY id;
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/insert_charset.dat' INTO TABLE t2 CHARACTER SET latin1
+SELECT id, vec FROM t2 ORDER BY id;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/insert_charset.dat
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1, t2, t3;
+
+--source include/villagesql/uninstall_tvector_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc

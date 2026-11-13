@@ -1,0 +1,802 @@
+
+
+# Testing the MySQL command line client(mysql)
+#
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+#
+# Test the "delimiter" functionality
+# Bug#9879
+#
+create table t1(a int);
+insert into t1 values(1);
+
+# Test delimiters
+--exec $MYSQL test --commands 2>&1 < "./t/mysql_delimiter.sql"
+
+--disable_query_log
+# Test delimiter : supplied on the command line
+select "Test delimiter : from command line" as "_";
+--exec $MYSQL test --delimiter=":" -e "select * from t1:"
+# Test delimiter :; supplied on the command line
+select "Test delimiter :; from command line" as "_";
+--exec $MYSQL test --delimiter=":;" -e "select * from t1:;"
+# Test 'go' command (vertical output) \G
+select "Test 'go' command(vertical output) \G" as "_";
+--exec $MYSQL test --commands -e "select * from t1\G"
+# Test 'go' command \g
+select "Test  'go' command \g" as "_";
+--exec $MYSQL test --commands -e "select * from t1\g"
+--enable_query_log
+drop table t1;
+
+#
+# BUG9998 - MySQL client hangs on USE "database"
+#
+create table t1(a int);
+lock tables t1 write;
+--exec $MYSQL -e "use test; select database();"
+unlock tables;
+drop table t1;
+
+#
+# Bug#16859 -- NULLs in columns must not truncate data as if a C-language "string".
+#
+--exec $MYSQL -t test -e "create table t1 (col1 binary(4), col2 varchar(10), col3 int); insert into t1 values ('a', 'b', 123421),('a ', '0123456789', 4), ('abcd', '', 4); select concat('>',col1,'<'), col2, col3 from t1; drop table t1;" 2>&1
+
+#
+# Bug#17939 Wrong table format when using utf8mb3 strings
+#
+--character_set utf8mb3
+--execw $MYSQL --default-character-set=utf8mb3 --table -e "SELECT 'John Doe' as '__tañgè Ñãmé'" 2>&1
+--execw $MYSQL --default-character-set=utf8mb3 --table -e "SELECT '__tañgè Ñãmé' as 'John Doe'" 2>&1
+
+#
+# Bug#18265 -- mysql client: No longer right-justifies numeric columns
+#
+--execw $MYSQL -t --default-character-set utf8mb3 test -e "create table t1 (i int, j int, k char(25) charset utf8mb3); insert into t1 (i) values (1); insert into t1 (k) values ('<----------------------->'); insert into t1 (k) values ('<-----'); insert into t1 (k) values ('Τη γλώσσα'); insert into t1 (k) values ('ᛖᚴ ᚷᛖᛏ'); select * from t1; DROP TABLE t1;"
+
+#
+# "DESCRIBE" commands may return strange NULLness flags.
+#
+--exec $MYSQL --default-character-set utf8mb3 test -e "create table t1 (i int, j int not null, k int); insert into t1 values (null, 1, null); select * from t1; describe t1; drop table t1;"
+--exec $MYSQL -t --default-character-set utf8mb3 test -e "create table t1 (i int, j int not null, k int); insert into t1 values (null, 1, null); select * from t1; describe t1; drop table t1;"
+
+#
+# Bug#19564: mysql displays NULL instead of space
+#
+--exec $MYSQL test -e "create table b19564 (i int, s1 char(1)); insert into b19564 values (1, 'x'); insert into b19564 values (2, NULL); insert into b19564 values (3, ' '); select * from b19564 order by i; drop table b19564;" 
+--exec $MYSQL -t test -e "create table b19564 (i int, s1 char(1)); insert into b19564 values (1, 'x'); insert into b19564 values (2, NULL); insert into b19564 values (3, ' '); select * from b19564 order by i; drop table b19564;" 
+
+#
+# Bug#21618: NULL shown as empty string in client
+#
+--exec $MYSQL test -e "select concat(null);"
+--exec $MYSQL -t test -e "select concat(null);"
+
+# Bug#19265 describe command does not work from mysql prompt
+#
+
+create table t1(a int, b varchar(255), c int);
+--exec $MYSQL test -e "desc t1"
+--exec $MYSQL test --commands -e "desc t1\g"
+drop table t1;
+
+#
+# Bug#21042  	mysql client segfaults on importing a mysqldump export
+#
+--error 1
+--exec $MYSQL test --commands -e "connect verylongdatabasenamethatshouldblowthe256byteslongbufferincom_connectfunctionxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxkxendcccccccdxxxxxxxxxxxxxxxxxkskskskskkskskskskskskskskskskkskskskskkskskskskskskskskskend" 2>&1
+
+#
+# Bug #20432: mysql client interprets commands in comments
+#
+
+--let $file = $MYSQLTEST_VARDIR/tmp/bug20432.sql
+
+# if the client sees the 'use' within the comment, we haven't fixed
+--exec echo "/*"          >  $file
+--exec echo "use"         >> $file
+--exec echo "*/"          >> $file
+--exec $MYSQL              < $file 2>&1
+
+# SQL can have embedded comments => workie
+--exec echo "select /*"   >  $file
+--exec echo "use"         >> $file
+--exec echo "*/ 1"        >> $file
+--exec $MYSQL              < $file 2>&1
+
+# client commands on the other hand must be at BOL => error
+--exec echo "/*"          >  $file
+--exec echo "xxx"         >> $file
+--exec echo "*/ use"      >> $file
+--error 1
+--exec $MYSQL              < $file 2>&1
+
+# client comment recognized, but parameter missing => error
+--exec echo "use"         >  $file
+--exec $MYSQL --commands  < $file 2>&1
+
+--remove_file $file
+
+#
+# Bug #20328: mysql client interprets commands in comments
+#
+--let $file1 = $MYSQLTEST_VARDIR/tmp/bug20328_1.result
+--let $file2 = $MYSQLTEST_VARDIR/tmp/bug20328_2.result
+--exec $MYSQL --commands -e "help" > $file1
+--exec $MYSQL --commands -e "help " > $file2
+--diff_files $file1 $file2
+--remove_file $file1
+--remove_file $file2
+
+#
+# Bug #19216: Client crashes on long SELECT
+#
+# Create large SELECT
+# - 3400 * 20 makes 68000 columns that is more than the
+#   max number that can fit in a 16 bit number.
+
+--perl
+open(FILE,">","$ENV{'MYSQLTEST_VARDIR'}/tmp/b19216.tmp") or die;
+print FILE "select\n";
+print FILE "'a','a','a','a','a','a','a','a','a','a','a','a','a','a','a','a','a','a','a','a',\n" x 3400;
+print FILE "'b';\n";
+close FILE;
+EOF
+
+--disable_query_log
+--exec $MYSQL < $MYSQLTEST_VARDIR/tmp/b19216.tmp >/dev/null
+--enable_query_log
+
+--remove_file $MYSQLTEST_VARDIR/tmp/b19216.tmp
+
+#
+# Bug #20103: Escaping with backslash does not work
+#
+--let $file = $MYSQLTEST_VARDIR/tmp/bug20103.sql
+--exec echo "SET SQL_MODE = 'NO_BACKSLASH_ESCAPES';"  > $file
+--exec echo "SELECT '\';" >> $file
+--exec $MYSQL < $file 2>&1
+
+--exec echo "SET SQL_MODE = '';"  > $file
+--exec echo "SELECT '\';';" >> $file
+--exec $MYSQL              < $file 2>&1
+--remove_file $file
+
+#
+# Bug#17583: mysql drops connection when stdout is not writable
+#
+create table t17583 (a int);
+insert into t17583 (a) values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+insert into t17583 select a from t17583;
+insert into t17583 select a from t17583;
+insert into t17583 select a from t17583;
+insert into t17583 select a from t17583;
+insert into t17583 select a from t17583;
+insert into t17583 select a from t17583;
+insert into t17583 select a from t17583;
+# Close to the minimal data needed to exercise bug.
+select count(*) from t17583;
+--exec echo "select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; select count(*) from t17583; " |$MYSQL test >&-
+drop table t17583;
+
+#
+# Bug#20984: Reproducible MySQL client segmentation fault
+#  + additional tests for the "com_connect" function in mysql
+#
+#
+--echo Test connect without db- or host-name => reconnect
+--exec $MYSQL test --commands -e "\r" 2>&1
+--exec $MYSQL test --commands -e "connect" 2>&1
+
+--echo Test connect with dbname only => new dbname, old hostname
+--exec $MYSQL test --commands -e "\r test" 2>&1
+--exec $MYSQL test --commands -e "connect test" 2>&1
+--exec $MYSQL test --commands -e "\rtest" 2>&1
+--error 1
+--exec $MYSQL test --commands -e "connecttest" 2>&1
+
+--echo Test connect with _invalid_ dbname only => new invalid dbname, old hostname
+--error 1
+--exec $MYSQL test --commands -e "\r invalid" 2>&1
+--error 1
+--exec $MYSQL test --commands -e "connect invalid" 2>&1
+
+--echo Test connect with dbname + hostname
+--exec $MYSQL test --commands -e "\r test localhost" 2>&1
+--exec $MYSQL test --commands -e "connect test localhost" 2>&1
+
+--echo Test connect with dbname + _invalid_ hostname
+# Mask the errno of the error message
+--replace_regex /\([-0-9]*\)/(errno)/
+--error 1
+--exec $MYSQL test --commands -e "\r test invalid_hostname" 2>&1
+--replace_regex /\([-0-9]*\)/(errno)/
+--error 1
+--exec $MYSQL test --commands -e "connect test invalid_hostname" 2>&1
+
+--echo The commands reported in the bug report
+--replace_regex /\([-0-9]*\)/(errno)/
+--error 1
+--exec $MYSQL test --commands -e "\r\r\n\r\n cyril\ has\ found\ a\ bug\ :)XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" 2>&1
+
+#--replace_regex /\([-0-9]*\)/(errno)/
+#--error 1
+#--exec echo '\r\r\n\r\n cyril\ has\ found\ a\ bug\ :)XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' | $MYSQL 2>&1
+
+--echo Too long dbname
+--error 1
+--exec $MYSQL test --commands -e "\r test_really_long_dbnamexxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx localhost" 2>&1
+
+--echo Too long hostname
+--replace_regex /\([-0-9]*\)/(errno)/
+--error 1
+--exec $MYSQL test --commands -e "\r  test cyrils_superlonghostnameXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" 2>&1
+
+
+#
+# Bug #21412: mysql cmdline client allows backslash(es) 
+# as delimiter but can't recognize them
+#
+
+# This should work just fine...
+--write_file $MYSQLTEST_VARDIR/tmp/bug21412.sql
+DELIMITER /
+SELECT 1/
+EOF
+--exec $MYSQL             < $MYSQLTEST_VARDIR/tmp/bug21412.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/bug21412.sql;
+
+# This should give an error...
+--write_file $MYSQLTEST_VARDIR/tmp/bug21412.sql
+DELIMITER \
+EOF
+--exec $MYSQL             < $MYSQLTEST_VARDIR/tmp/bug21412.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/bug21412.sql;
+
+# As should this...
+--write_file $MYSQLTEST_VARDIR/tmp/bug21412.sql
+DELIMITER \\
+EOF
+--exec $MYSQL             < $MYSQLTEST_VARDIR/tmp/bug21412.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/bug21412.sql;
+
+#
+# Some coverage of not normally used parts
+#
+
+--disable_query_log
+--exec $MYSQL test -e "show status" 2>&1 > /dev/null
+--exec $MYSQL --help 2>&1 > /dev/null
+--exec $MYSQL --version 2>&1 > /dev/null
+--enable_query_log
+
+#
+# bug #26851: Mysql Client --pager Buffer Overflow
+#
+
+# allow error 7(invalid argument) since --pager does not always exist in mysql
+--error 0,7
+--exec $MYSQL --pager="540bytelengthstringxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" -e "select 1" > /dev/null 2>&1
+--exec $MYSQL --character-sets-dir="540bytelengthstringxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" -e "select 1" 2>&1
+
+#
+# bug #30164: Using client side macro inside server side comments generates broken queries
+#
+--exec $MYSQL test -e "/*! \C latin1 */ select 1;"
+
+#
+# Bug#29323 mysql client only accetps ANSI encoded files
+#
+--write_file $MYSQLTEST_VARDIR/tmp/bug29323.sql
+﻿select "This is a file starting with utf8mb3 BOM 0xEFBBBF";
+EOF
+--exec $MYSQL < $MYSQLTEST_VARDIR/tmp/bug29323.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/bug29323.sql;
+
+#
+# Bug #33812: mysql client incorrectly parsing DELIMITER
+#
+# The space and ; after delimiter are important
+--exec $MYSQL -e "select 1 delimiter ;"
+
+#
+# Bug #38158: mysql client regression, can't read dump files
+#
+--write_file $MYSQLTEST_VARDIR/tmp/bug38158.sql
+-- Testing
+--
+delimiter ||
+select 2 ||
+EOF
+--exec $MYSQL < $MYSQLTEST_VARDIR/tmp/bug38158.sql 2>&1
+--exec $MYSQL -c < $MYSQLTEST_VARDIR/tmp/bug38158.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/bug38158.sql;
+
+#
+# Bug #41437: Value stored in 'case' lacks charset, causees segfault
+#
+--exec $MYSQL -e "select @z:='1',@z=database()"
+
+
+#
+# Bug #31060: MySQL CLI parser bug 2
+#
+
+--write_file $MYSQLTEST_VARDIR/tmp/bug31060.sql
+;DELIMITER DELIMITER
+;
+SELECT 1DELIMITER
+DELIMITER ;
+SELECT 1;
+EOF
+
+--exec $MYSQL < $MYSQLTEST_VARDIR/tmp/bug31060.sql 2>&1
+
+remove_file $MYSQLTEST_VARDIR/tmp/bug31060.sql;
+
+#
+# Bug #39101: client -i (--ignore-spaces) option does not seem to work
+#
+--exec $MYSQL -i -e "SELECT COUNT (*)"
+--exec $MYSQL --ignore-spaces -e "SELECT COUNT (*)"
+--exec $MYSQL -b -i -e "SELECT COUNT (*)"
+
+#
+# Bug#37268 'binary' character set makes CLI-internal commands case sensitive
+#
+--replace_regex /\([-0-9]*\)/(errno)/
+--error 1
+--exec $MYSQL --default-character-set=binary test --commands -e "CONNECT test invalid_hostname" 2>&1
+--exec $MYSQL --default-character-set=binary test --commands -e "DELIMITER //" 2>&1
+
+--echo End of 5.0 tests
+
+#
+# Bug#26780: patch to add auto vertical output option to the cli.
+#
+# Make this wide enough that it will wrap almost everywhere.
+--exec $MYSQL test --auto-vertical-output --table -e "SELECT 1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0;"
+# Too short to wrap.
+--exec $MYSQL test --auto-vertical-output --table -e "SELECT 1;"
+
+#
+# Bug #25146: Some warnings/errors not shown when using --show-warnings
+#
+
+SET @@global.sql_mode='';
+
+# This one should succeed with no warnings
+--exec $MYSQL --show-warnings test -e "create table t1 (id int)"
+
+# This should succeed, with warnings about conversion from nonexistent engine
+--exec $MYSQL --show-warnings test -e "create table t2 (id int) engine=nonexistent"
+
+# This should fail, with warnings as well
+--error 1
+--exec $MYSQL --show-warnings test -e "create table t2 (id int) engine=nonexistent2"
+
+drop tables t1, t2;
+
+SET @@global.sql_mode=DEFAULT;
+
+#
+# mysql client with 'init-command' and 'init-command-add' options
+# WL#15662: Add options to mysqldump to skip views and utilize read ahead
+#
+--echo "Only with --init-command ============================================="
+--exec $MYSQL --init-command="SET lc_messages=ru_RU" -e "SHOW VARIABLES LIKE 'lc_messages';"
+
+--echo "With --init-command and --init-command-add ==========================="
+--exec $MYSQL --init-command="SET @init_var_1=1"  --init-command-add="SET @init_var_2=2"  --init-command-add="SET @init_var_3=3" -e "SELECT @init_var_1, @init_var_2, @init_var_3;"
+
+--echo "Only with --init-command-add ========================================="
+--exec $MYSQL --init-command-add="SET @init_var_1=1"  --init-command-add="SET @init_var_2=2"  --init-command-add="SET @init_var_3=3" -e "SELECT @init_var_1, @init_var_2, @init_var_3;"
+
+--echo "With --init-command-add ovewritten by --init-command ================="
+--exec $MYSQL --init-command-add="SET @init_var_1=1"  --init-command="SET @init_var_2=2"  --init-command-add="SET @init_var_3=3" -e "SELECT @init_var_1, @init_var_2, @init_var_3;"
+
+--echo "Test if the commands are executed in order ==========================="
+--exec $MYSQL --init-command="SET @init_var_1=1"  --init-command-add="SET @init_var_2=@init_var_1"  --init-command-add="SET @init_var_1=99" -e "SELECT @init_var_1, @init_var_2;"
+
+--echo "Test multiple --init-command and --init-command-add =================="
+--exec $MYSQL --init-command="CREATE DATABASE init_command_db_1" --init-command-add="CREATE TABLE init_command_db_1.t(a INT)" --init-command-add="INSERT INTO init_command_db_1.t VALUES (1)" --init-command="CREATE DATABASE init_command_db_2" --init-command-add="CREATE TABLE init_command_db_2.t(a INT)" --init-command-add="INSERT INTO init_command_db_2.t VALUES (1)" -e "SHOW DATABASES LIKE 'init_command_db%'"
+DROP DATABASE init_command_db_2;
+
+#
+# Bug #27884: mysql --html does not quote HTML special characters in output
+#
+--write_file $MYSQLTEST_VARDIR/tmp/bug27884.sql
+SELECT '< & >' AS `<`;
+EOF
+--exec $MYSQL --html test < $MYSQLTEST_VARDIR/tmp/bug27884.sql
+
+remove_file $MYSQLTEST_VARDIR/tmp/bug27884.sql;
+
+
+#
+# Bug #28203: mysql client + null byte
+# 
+create table t1 (a char(5));
+insert into t1 values ('\0b\0');
+--exec $MYSQL test -e "select a from t1"
+--exec $MYSQL -r test -e "select a from t1"
+--exec $MYSQL -s test -e "select a from t1"
+--exec $MYSQL --table test -e "select a from t1"
+--exec $MYSQL --vertical test -e "select a from t1"
+--exec $MYSQL --html test -e "select a from t1"
+--exec $MYSQL --xml test -e "select a from t1"
+drop table t1;
+
+--echo
+--echo Bug #47147: mysql client option --skip-column-names does not apply to vertical output
+--echo
+--exec $MYSQL --skip-column-names --vertical test -e "select 1 as a"
+
+#
+# Bug#57450: mysql client enter in an infinite loop if the standard input is a directory
+#
+--error 1
+--exec $MYSQL < .
+
+--echo
+
+--echo #
+--echo # Bug #54899: --one-database option cannot handle DROP/CREATE DATABASE 
+--echo #             commands.
+--echo #
+--write_file $MYSQLTEST_VARDIR/tmp/bug54899.sql
+DROP DATABASE connected_db;
+CREATE DATABASE connected_db;
+USE connected_db;
+CREATE TABLE `table_in_connected_db`(a INT);
+EOF
+
+CREATE DATABASE connected_db;
+--exec $MYSQL --one-database connected_db < $MYSQLTEST_VARDIR/tmp/bug54899.sql
+USE connected_db;
+SHOW TABLES;
+DROP DATABASE connected_db;
+--remove_file $MYSQLTEST_VARDIR/tmp/bug54899.sql
+
+--echo
+
+--echo #
+--echo # Testing --one-database option
+--echo #
+--write_file $MYSQLTEST_VARDIR/tmp/one_db.sql
+CREATE TABLE t1 (i INT);
+CREATE TABLE test.t1 (i INT);
+USE test;
+# Following statements should be filtered.
+CREATE TABLE connected_db.t2 (i INT);
+CREATE TABLE t2 (i INT);
+EOF
+
+CREATE DATABASE connected_db;
+--exec $MYSQL --commands --one-database connected_db < $MYSQLTEST_VARDIR/tmp/one_db.sql
+SHOW TABLES IN connected_db;
+SHOW TABLES IN test;
+USE test;
+DROP TABLE t1;
+DROP DATABASE connected_db;
+--remove_file $MYSQLTEST_VARDIR/tmp/one_db.sql
+
+--echo
+--write_file $MYSQLTEST_VARDIR/tmp/one_db.sql
+CREATE DATABASE test1;
+USE test1;
+USE test1;
+# Following statements should be filtered.
+CREATE TABLE connected_db.t1 (i INT);
+EOF
+
+--exec $MYSQL --commands --one-database test < $MYSQLTEST_VARDIR/tmp/one_db.sql
+SHOW TABLES IN test;
+SHOW TABLES IN test1;
+DROP DATABASE test1;
+--remove_file $MYSQLTEST_VARDIR/tmp/one_db.sql
+
+--echo
+
+--echo #
+--echo # Checking --one-database option followed by the execution of 
+--echo # connect command.
+--echo #
+--write_file $MYSQLTEST_VARDIR/tmp/one_db.sql
+CREATE TABLE t1 (i INT);
+CREATE TABLE test.t1 (i INT);
+CONNECT test;
+CREATE TABLE connected_db.t2 (i INT);
+CREATE TABLE t2 (i INT);
+USE connected_db;
+# Following statements should be filtered.
+CREATE TABLE connected_db.t3 (i INT);
+CREATE TABLE t3 (i INT);
+EOF
+
+CREATE DATABASE connected_db;
+--exec $MYSQL --commands --one-database connected_db < $MYSQLTEST_VARDIR/tmp/one_db.sql
+SHOW TABLES IN connected_db;
+SHOW TABLES IN test;
+DROP TABLE test.t1;
+DROP TABLE test.t2;
+DROP DATABASE connected_db;
+--remove_file $MYSQLTEST_VARDIR/tmp/one_db.sql
+
+--echo
+
+--echo #
+--echo # Checking --one-database option with no database specified
+--echo # at command-line.
+--echo #
+--write_file $MYSQLTEST_VARDIR/tmp/one_db.sql
+# All following statements should be filtered.
+CREATE TABLE t1 (i INT);
+CREATE TABLE test.t1 (i INT);
+USE test;
+CREATE TABLE test.t2 (i INT);
+CREATE TABLE t2 (i INT);
+EOF
+
+--exec $MYSQL --one-database < $MYSQLTEST_VARDIR/tmp/one_db.sql
+SHOW TABLES IN test;
+--remove_file $MYSQLTEST_VARDIR/tmp/one_db.sql
+
+--echo
+
+--echo #
+--echo # Checking --one-database option with non_existent_db 
+--echo # specified with USE command
+--echo #
+
+# CASE 1 : When 'connected_db' database exists and passed at commandline.
+--write_file $MYSQLTEST_VARDIR/tmp/one_db_1.sql
+CREATE TABLE `table_in_connected_db`(i INT);
+USE non_existent_db;
+# Following statement should be filtered out.
+CREATE TABLE `table_in_non_existent_db`(i INT);
+EOF
+
+# CASE 2 : When 'connected_db' database exists but dropped and recreated in
+# load file.
+--write_file $MYSQLTEST_VARDIR/tmp/one_db_2.sql
+DROP DATABASE connected_db;
+CREATE DATABASE connected_db;
+USE non_existent_db;
+# Following statements should be filtered out.
+CREATE TABLE `table_in_non_existent_db`(i INT);
+USE connected_db;
+# Following statements should not be filtered out.
+CREATE TABLE `table_in_connected_db`(i INT);
+EOF
+
+CREATE DATABASE connected_db;
+--exec $MYSQL --commands --one-database connected_db < $MYSQLTEST_VARDIR/tmp/one_db_1.sql
+SHOW TABLES IN connected_db;
+--echo
+--exec $MYSQL --commands --one-database connected_db < $MYSQLTEST_VARDIR/tmp/one_db_2.sql
+SHOW TABLES IN connected_db;
+DROP DATABASE connected_db;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/one_db_1.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/one_db_2.sql
+
+#
+# WL#3126 TCP address binding for mysql client library;
+# - running mysql --protocol=tcp --bind-address=127.0.0.1
+#
+--exec $MYSQL --protocol=tcp --bind-address=127.0.0.1 -e "select 1 as Connected"
+
+--echo #
+--echo # Bug#12688860 : SECURITY RECOMMENDATION: PASSWORDS ON CLI
+--echo #
+
+--exec $MYSQL -uroot --password="" -e "SELECT 1" 2>&1
+# This too should throw single warning message.
+--exec $MYSQL -uroot --password="" --password="" -e "SELECT 1" 2>&1
+
+#
+# WL#6797 Method for clearing session state
+#
+
+--write_file $MYSQLTEST_VARDIR/tmp/WL6797.sql
+
+# this case is added for code coverage
+# clean session state
+resetconnection;
+CREATE DATABASE wl6797;
+USE wl6797;
+CREATE TABLE t1 (a int);
+PREPARE x FROM 'INSERT INTO t1 VALUES (1), (2)';
+EXECUTE x;
+SELECT * FROM t1 ORDER BY 1;
+# clean session state which will clear the prepare
+# statement from internal cache
+resetconnection;
+# below execute should report error
+EXECUTE x;
+EOF
+
+--write_file $MYSQLTEST_VARDIR/tmp/WL6797_cleanup.sql
+DROP TABLE wl6797.t1;
+DROP DATABASE wl6797;
+EOF
+
+--error 1
+--exec $MYSQL --commands < $MYSQLTEST_VARDIR/tmp/WL6797.sql 2>&1
+--remove_file $MYSQLTEST_VARDIR/tmp/WL6797.sql
+--exec $MYSQL --commands < $MYSQLTEST_VARDIR/tmp/WL6797_cleanup.sql 2>&1
+--remove_file $MYSQLTEST_VARDIR/tmp/WL6797_cleanup.sql
+
+
+--echo #
+--echo # Bug #16102788: INDETERMINATE BEHAVIOR DUE TO EMPTY OPTION VALUES
+--echo #
+
+--replace_regex /mysql: .ERROR. [^ ]*: Empty value for 'port' specified/mysql: [ERROR] mysql: Empty value for 'port' specified/
+--error 5
+--exec $MYSQL --port= -e "SELECT 1" 2>&1
+
+--replace_regex /mysql: .ERROR. [^ ]*: Empty value for 'port' specified/mysql: [ERROR] mysql: Empty value for 'port' specified/
+--error 5
+--exec $MYSQL -P "" -e "SELECT 1" 2>&1
+
+--echo #
+--echo # Bug #21464621: MYSQL CLI SHOULD SUGGEST CONNECT-EXPIRED-PASSWORD WHEN ERROR 1862 OCCURS
+--echo #
+
+CREATE USER bug21464621 IDENTIFIED BY 'password' PASSWORD EXPIRE;
+--error 1
+--exec $MYSQL -u bug21464621 --password="password" -e "SET PASSWORD='123';" 2>&1
+# change the password using set password
+--exec $MYSQL -u bug21464621 --password="password" -e "SET PASSWORD='123';" --connect-expired-password 2>&1
+--exec $MYSQL -u bug21464621 --password="123" -e "SELECT user();" 2>&1
+
+#cleanup
+DROP USER bug21464621;
+
+
+--echo #
+--echo # WL#13038: Make mysql command line tool's --binary-as-hex be on by
+--echo #   default for interactive terminals
+--echo #
+
+--let $file = $MYSQLTEST_VARDIR/tmp/wl13038.out
+--exec $MYSQL --commands --binary-as-hex -e "\s" 2>&1 > $file
+--let $assert_text=check the output of mysql for the binary-as-hex mark in mysql status
+--let $assert_file=$file
+--let $assert_select="Binary data as.*Hexadecimal"
+--let $assert_count=0
+--source include/assert_grep.inc
+--remove_file $file
+
+--echo #
+--echo # Bug #31549724: MYSQL --BINARY-AS-HEX PRINTS NULL AS EMPTY STRING
+--echo # Bug #31638968: SELECT ON AN UNDEFINED VARIABLE RETURNS 0X NOT NULL
+--echo #
+--exec $MYSQL --binary-as-hex -e "SELECT SUBSTR(NULL, 0, 0), @novar" 2>&1
+
+--echo #
+--echo # Bug #32092739: MYSQL HELP OUTPUT INCORRECT FOR QUERY_ATTRIBUTES
+--echo #
+
+--let $file = $MYSQLTEST_VARDIR/tmp/b32092739.out
+--exec $MYSQL --commands -e "help" 2>&1 > $file
+--let $assert_text= look for query_attributes in help
+--let $assert_file= $file
+--let $assert_select= query_attributes[\t ]*Sets string parameters
+--let $assert_count= 1
+--source include/assert_grep.inc
+--remove_file $file
+
+--echo #
+--echo # Bug #30787660: CONTRIBUTION: INCLUDE PORT NUMBER IN CLIENT ERROR
+--echo #   MESSAGE
+--echo #
+
+--echo # Success criteria: port number present in the error text
+# Some OSes return "Unknown host" in this case. Skipping these.
+# Windows returns a different error code. Adjusting for this
+--replace_regex /ERROR 2005 .HY000.: Unknown MySQL server host '127.0.0.1' \([0-9]*\)/ERROR 2003 (HY000): Can't connect to MySQL server on '127.0.0.1:99999' (XXX)/ /\([0-9]+\)/(XXX)/
+--error 1
+--exec $MYSQL -h 127.0.0.1 -P 99999 2>&1
+
+--echo
+--echo # Test support for dollar quoting
+--echo
+
+--exec $MYSQL test --show-warnings -e "CREATE FUNCTION f(i INTEGER) returns INTEGER LANGUAGE JAVASCRIPT AS \$mle\$ if (--i == 0) console.log('Hi!\nOops!'); return i; // Don't mess this up!\$mle\$;" 2>&1
+
+--exec $MYSQL test -e "DROP FUNCTION f;"
+
+--error 1
+--exec $MYSQL test -e "SELECT \$mle\$test\$mle\$;" 2>&1
+
+--error 1
+--exec $MYSQL test -e "SELECT \$mle\$test\$mle;" 2>&1
+
+--error 1
+--exec $MYSQL test -e "SELECT \$mle\$test\$ml\$;" 2>&1
+
+--error 1
+--exec $MYSQL test -e "SELECT \$mle+\$mle;" 2>&1
+
+--error 1
+--exec $MYSQL test -e "SELECT e\$mle\$ test e\$mle\$;" 2>&1
+
+--echo #
+--echo # Bug#35290350: mysql client has issues determining end of comment
+--echo #  when --comments=on
+--echo #
+
+--write_file $MYSQLTEST_VARDIR/tmp/bug35290350.sql
+/* comment */
+delimiter //
+SELECT "1comment prev line prior to delimiter no end" AS "what"//
+delimiter ;
+SELECT "2check if delimiter is restored" AS "what";
+/* comment */ delimiter //
+SELECT "3ml comment same line as delimier no end" AS "what"//
+delimiter ;
+SELECT "4check if delimiter is restored" AS "what";
+-- comment2
+delimiter //
+SELECT "5single line comment prior to delimiter no end" AS "what"//
+delimiter ;
+SELECT "6check if delimiter is restored" AS "what";
+/* comment *//*comment*/
+delimiter o
+SELECT "7two comments back to back" AS "what"o
+delimiter ;
+select "8check if delimiter is restored" AS "what";
+EOF
+
+--echo # Test: must pass without an error
+exec $MYSQL < $MYSQLTEST_VARDIR/tmp/bug35290350.sql;
+
+--echo # Cleanup
+remove_file $MYSQLTEST_VARDIR/tmp/bug35290350.sql;
+
+--echo #
+--echo # Bug # 36377685: mysqldump blindly trusting SHOW CREATE TABLE leads to
+--echo #   arbitrary code execution.
+--echo #
+
+--echo # Test "system": Must return an error
+--error 1
+--exec $MYSQL --commands test -e "system ls;" 2>&1
+
+--echo # Test "!": Must return an error
+--error 1
+--exec $MYSQL --commands test -e "\\! ls" 2>&1
+
+--echo # Test "system": Must pass
+--exec $MYSQL --commands test --system-command -e "system echo Hello World;" 2>&1
+
+--echo #
+--echo # Bug#37510263: Contribution: Report third decimal place for milliseconds
+--echo #
+--exec $MYSQL test -e "SELECT 12" --verbose --verbose --verbose > $MYSQLTEST_VARDIR/tmp/bug37510263.output
+
+--let $assert_text=Find 3 digits post-decimal
+--let $assert_file=$MYSQLTEST_VARDIR/tmp/bug37510263.output
+--let $assert_select=1 row in set .[0-9]+\.[0-9]{3} sec.
+--let $assert_count=1
+--source include/assert_grep.inc
+
+--remove_file $MYSQLTEST_VARDIR/tmp/bug37510263.output
+
+--echo #
+--echo # Bug#37765445:  Mysql client confused if an extra semicolon is used with "use database;;" 
+--echo #
+
+--echo # Test: should not produce an error
+--exec $MYSQL test -e "use test;;"
+
+--echo
+--echo End of tests

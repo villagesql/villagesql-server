@@ -1,0 +1,6 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+LOAD XML INFILE 'MYSQLTEST_VARDIR/tmp/complex_mismatch.xml' INTO TABLE t1 ROWS IDENTIFIED BY '<row>' (id, @v) SET val = @v;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	NULL
+DROP TABLE t1;

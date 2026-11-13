@@ -1,0 +1,482 @@
+#
+# Tests for the iteration-based FORMAT=JSON, that works with hypergraph
+# optimizer
+#
+
+--source include/have_hypergraph.inc
+--source include/elide_costs.inc
+
+--echo #
+--echo # Table scan, subquery, aggregates
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE f1 = ( SELECT MIN(f1) FROM t1 AS i WHERE i.f1 > t1.f1 );
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON SELECT * FROM t1 WHERE f1 = ( SELECT MIN(f1) FROM t1 AS i WHERE i.f1 > t1.f1 );
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE f1 > ( SELECT f1 FROM t1 LIMIT 1 );
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON SELECT * FROM t1 WHERE f1 > ( SELECT f1 FROM t1 LIMIT 1 );
+drop table t1;
+
+
+--echo #
+--echo # Index range scan
+create table t1 ( a int, b int, c int, d int, primary key(a,b));
+insert into t1 values
+(1,1,1,1), (2,2,2,2), (3,3,3,3), (4,4,4,4),
+(1,2,5,1), (1,3,1,2), (1,4,2,3),
+(2,1,3,4), (2,3,4,5), (2,4,5,1),
+(3,1,1,2), (3,2,2,3), (3,4,3,4),
+(4,1,4,5), (4,2,5,1), (4,3,1,2);
+--replace_regex $elide_costs
+explain format=TREE select * from t1 where a > 2;
+--replace_regex $elide_trace_costs_and_rows
+explain format=JSON select * from t1 where a > 2;
+drop table t1;
+
+
+--echo # Index lookup. Nested loop join
+set @old_opt_switch=@@optimizer_switch;
+set optimizer_switch='firstmatch=off,materialization=off,duplicateweedout=off,loosescan=on';
+CREATE TABLE t1 ( i INTEGER, PRIMARY KEY (i) );
+CREATE TABLE t2 ( i INTEGER, INDEX i1 (i) );
+INSERT INTO t1 VALUES (2), (3), (4), (5), (6), (7), (8), (9);
+INSERT INTO t2 VALUES (1), (2), (3), (4), (5), (6), (7), (8);
+ANALYZE TABLE t1, t2;
+--replace_regex $elide_costs
+EXPLAIN format=TREE SELECT * FROM t1 WHERE t1.i IN (SELECT t2.i FROM t2);
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN format=JSON SELECT * FROM t1 WHERE t1.i IN (SELECT t2.i FROM t2);
+DROP TABLE t1,t2;
+set optimizer_switch=@old_opt_switch;
+
+
+--echo # Index lookup. Nested loop join. Filter.
+CREATE TABLE t1 (col_int INT, pk INT) ENGINE=InnoDB STATS_PERSISTENT=0;
+INSERT INTO t1 VALUES (-100,1),(1,6);
+ANALYZE TABLE t1;
+CREATE TABLE t2 (
+col_int_key INT,
+col_varchar VARCHAR(100) NOT NULL DEFAULT "DEFAULT",
+pk INT NOT NULL,
+PRIMARY KEY (pk),
+KEY (col_int_key)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+ANALYZE TABLE t2;
+INSERT INTO t2
+WITH RECURSIVE qn(n) AS
+(SELECT 0 UNION ALL SELECT n+1 FROM qn WHERE n<99)
+SELECT n, "XXX", n FROM qn;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT t1.*,t2.* FROM t1 straight_join t2
+ON t2.col_int_key = t1.col_int WHERE t2.pk < t1.pk;
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON SELECT t1.*,t2.* FROM t1 straight_join t2
+ON t2.col_int_key = t1.col_int WHERE t2.pk < t1.pk;
+DROP TABLE t1,t2;
+
+
+--echo # Group aggregates, hash join, sort.
+--echo # This plan depends on the cost. The intention here is unclear.
+CREATE TABLE t1 (
+pk int NOT NULL AUTO_INCREMENT,
+col_varchar varchar(1),
+col_varchar_key varchar(1),
+PRIMARY KEY (pk),
+KEY idx_CC_col_varchar_key (col_varchar_key)
+);
+INSERT INTO t1 VALUES (1,'n','X'),(2,'Y','8'),(3,'R','l');
+ANALYZE TABLE t1;
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT SQL_BIG_RESULT
+t1.col_varchar_key AS field1 FROM (t1, t1 as alias1)
+WHERE NOT EXISTS( SELECT alias2.col_varchar_key FROM t1 AS alias2
+                  WHERE alias2.col_varchar_key >= t1.col_varchar)
+GROUP BY field1;
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON SELECT SQL_BIG_RESULT
+t1.col_varchar_key AS field1 FROM (t1, t1 as alias1)
+WHERE NOT EXISTS( SELECT alias2.col_varchar_key FROM t1 AS alias2
+                  WHERE alias2.col_varchar_key >= t1.col_varchar)
+GROUP BY field1;
+drop table t1;
+
+--echo # Information Schema
+--replace_regex $elide_costs
+explain format=TREE select * from information_schema.engines e WHERE e.ENGINE="MyISAM";
+--replace_regex $elide_trace_costs_and_rows
+explain format=JSON select * from information_schema.engines e WHERE e.ENGINE="MyISAM";
+
+
+--echo # Materialize, window aggregates, Stream
+CREATE TABLE t0 (i0 INTEGER);
+INSERT INTO t0 VALUES (0),(1),(2),(3),(4);
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, f3 INTEGER,
+KEY(f1), KEY(f1,f2), KEY(f3));
+INSERT INTO t1
+SELECT i0, i0 + 10*i0,
+i0 + 10*i0 + 100*i0
+FROM t0 AS a0;
+INSERT INTO t1
+SELECT i0, i0 + 10*i0,
+i0 + 10*i0 + 100*i0
+FROM t0 AS a0;
+INSERT INTO t1 VALUES (NULL, 1, 2);
+INSERT INTO t1 VALUES (NULL, 1, 3);
+ANALYZE TABLE t0, t1;
+
+set sql_mode="";
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM
+    (SELECT SQL_BIG_RESULT f1, SUM(f2) OVER() FROM t1 GROUP BY f1) as dt
+    WHERE f1 > 2;
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON SELECT * FROM
+    (SELECT SQL_BIG_RESULT f1, SUM(f2) OVER() FROM t1 GROUP BY f1) as dt
+    WHERE f1 > 2;
+
+##--echo # Filter, nested loop
+##--replace_regex $elide_costs
+## The below queries are not yet supported. Support for hints with subqueries will be added in patch 3.
+##EXPLAIN FORMAT=TREE SELECT /*+ JOIN_ORDER(t0, dt) */ * FROM
+##(SELECT f1, f2, f3 FROM t1) as dt, t0
+##WHERE f1 > 3 and f2 < 50 and i0 > 3;
+##--replace_regex $elide_trace_costs_and_rows
+##EXPLAIN FORMAT=JSON SELECT /*+ JOIN_ORDER(t0, dt) */ * FROM
+##(SELECT f1, f2, f3 FROM t1) as dt, t0
+##WHERE f1 > 3 and f2 < 50 and i0 > 3;
+
+drop table t0, t1;
+
+--echo # Explain analyze; Temporary table.
+CREATE TABLE t1 (a INT NOT NULL, b CHAR(3) NOT NULL, PRIMARY KEY (a));
+INSERT INTO t1 VALUES (1,'ABC'), (2,'EFG'), (3,'HIJ');
+CREATE TABLE t2 (a INT NOT NULL,b CHAR(3) NOT NULL,PRIMARY KEY (a, b));
+INSERT INTO t2 VALUES (1,'a'),(1,'b'),(3,'F');
+ANALYZE TABLE t1, t2;
+# Mask out all actual times
+--replace_regex $elide_metrics
+EXPLAIN analyze FORMAT=TREE SELECT t1.a, GROUP_CONCAT(t2.b) AS b FROM t1 LEFT JOIN t2 ON t1.a=t2.a GROUP BY t1.a ORDER BY t1.b;
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON SELECT t1.a, GROUP_CONCAT(t2.b) AS b FROM t1 LEFT JOIN t2 ON t1.a=t2.a GROUP BY t1.a ORDER BY t1.b;
+drop table t1;
+drop table t2;
+
+
+--echo # Zero rows.
+CREATE TABLE t1 (a INTEGER NOT NULL);
+INSERT INTO t1 VALUES (1),(2),(3),(4);
+ANALYZE TABLE t1;
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 AS a LEFT JOIN t1 AS b ON FALSE
+  LEFT JOIN t1 AS c ON b.a=c.a;
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON SELECT * FROM t1 AS a LEFT JOIN t1 AS b ON FALSE
+  LEFT JOIN t1 AS c ON b.a=c.a;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#35382014: Mysqld crash: Assertion `item_name.is_set()' failed
+--echo #               in sql/item.cc
+--echo #
+
+CREATE TABLE t (a INT);
+--echo # Used to hit assertion in debug builds.
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON INTO @var
+SELECT 1 + 1 AS x FROM t GROUP BY x WITH ROLLUP HAVING x = 1;
+--echo # Used to show the GROUP BY clause as "group by ``".
+SELECT JSON_UNQUOTE(JSON_EXTRACT(@var, '$.query')) AS query;
+DROP TABLE t;
+
+--echo #
+--echo # Bug#35537921 Contribution by Tencent:
+--echo # explain format=tree lost the subquery in the hash join
+--echo #
+
+CREATE TABLE t1 (a INT NOT NULL, b INT NOT NULL);
+
+let $query =
+SELECT * FROM t1 x1 JOIN t1 x2 ON x2.a=
+  (SELECT MIN(x3.a) FROM t1 x3 WHERE x1.a=x3.a);
+
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+
+--replace_regex $elide_json_costs
+--eval EXPLAIN FORMAT=JSON $query
+
+let $query =
+SELECT * FROM t1 x1 JOIN t1 x2 ON x2.a<
+  (SELECT MIN(x3.a) FROM t1 x3 WHERE x1.a=x3.a);
+
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+
+--replace_regex $elide_trace_costs_and_rows
+--eval EXPLAIN FORMAT=JSON $query
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#34569685 No explain output for subquery
+--echo #
+
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+
+ANALYZE TABLE  t1;
+
+let $query =
+SELECT LAST_VALUE((SELECT x1.a FROM t1))
+OVER (PARTITION BY b) FROM t1 x1;
+
+--replace_regex $elide_costs_and_rows
+--eval EXPLAIN FORMAT=TREE $query
+
+--replace_regex $elide_trace_costs_and_rows
+--eval EXPLAIN FORMAT=JSON $query
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#34727172 EXPLAIN FORMAT=JSON returns invalid JSON
+--echo #              on INSERT statements with hypergraph
+--echo #
+
+CREATE TABLE t (i INT);
+INSERT INTO t VALUES (1), (2), (3);
+
+ANALYZE TABLE t;
+
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON INSERT INTO t VALUES (4), (5), (6);
+--replace_regex $elide_trace_costs_and_rows
+EXPLAIN FORMAT=JSON REPLACE INTO t VALUES (7), (8), (9);
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#36134568 Add query type to iterator-based EXPLAIN FORMAT=JSON
+--echo #
+
+CREATE TABLE t1 (i1 INT PRIMARY KEY, i2 INT);
+CREATE TABLE t2 (i3 INT, i4 INT);
+INSERT INTO t1 VALUES (1,2), (2,3), (3,4);
+INSERT INTO t2 SELECT i2, i1 FROM t1;
+ANALYZE TABLE t1, t2;
+
+EXPLAIN FORMAT=JSON INTO @v1 SELECT * FROM t1 JOIN t2 ON i1 = i3 WHERE i2 = 2;
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'select';
+
+SET @v1 = NULL;
+
+EXPLAIN FORMAT=JSON INTO @v1 SELECT * FROM t1;
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'select';
+
+SET @v1 = NULL;
+
+EXPLAIN FORMAT=JSON INTO @v1 INSERT INTO t1 VALUES (4,5);
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'insert';
+
+SET @v1 = NULL;
+
+EXPLAIN FORMAT=JSON INTO @v1 INSERT INTO t1 SELECT * FROM t2;
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'insert';
+
+SET @v1 = NULL;
+
+EXPLAIN FORMAT=JSON INTO @v1 UPDATE t1 SET i2 = i2 + 1 WHERE i1 = 1;
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'update';
+
+SET @v1 = NULL;
+
+EXPLAIN FORMAT=JSON INTO @v1 REPLACE t1 SELECT * FROM t2;
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'replace';
+
+SET @v1 = NULL;
+
+EXPLAIN FORMAT=JSON INTO @v1 DELETE FROM t1;
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'delete';
+
+SET @v1 = NULL;
+
+EXPLAIN FORMAT=JSON INTO @v1 UPDATE t1, t2 SET i1 = i1 - 1, i3 = i3 + 1;
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'update';
+
+SET @v1 = NULL;
+
+EXPLAIN FORMAT=JSON INTO @v1 DELETE t1, t2 FROM t1, t2;
+SELECT JSON_EXTRACT(@v1, '$.query_type') = 'delete';
+
+DROP TABLE t1, t2;
+SET @v1=NULL;
+
+--echo #
+--echo # Bug#35443375 Explain format=json gives error when optimizer hint hypergraph_optimizer=ON
+--echo #
+
+SET @saved_optimizer_switch = @@optimizer_switch;
+
+CREATE TABLE t1 (i int);
+SET optimizer_switch="hypergraph_optimizer=OFF";
+SET explain_json_format_version = 1;
+
+EXPLAIN FORMAT=JSON INTO @v1 SELECT /*+ SET_VAR(optimizer_switch='hypergraph_optimizer=OFF')*/ * FROM t1;
+SELECT JSON_CONTAINS_PATH(@v1, 'one', '$.query_type') AS using_hypergraph;
+
+EXPLAIN FORMAT=JSON INTO @v1 SELECT /*+ SET_VAR(optimizer_switch='hypergraph_optimizer=ON')*/ * FROM t1;
+SELECT JSON_CONTAINS_PATH(@v1, 'one', '$.query_type') AS using_hypergraph;
+
+SET optimizer_switch="hypergraph_optimizer=ON";
+
+EXPLAIN FORMAT=JSON INTO @v1 SELECT /*+ SET_VAR(optimizer_switch='hypergraph_optimizer=OFF')*/ * FROM t1;
+SELECT JSON_CONTAINS_PATH(@v1, 'one', '$.query_type') AS using_hypergraph;
+
+EXPLAIN FORMAT=JSON INTO @v1 SELECT /*+ SET_VAR(optimizer_switch='hypergraph_optimizer=ON')*/ * FROM t1;
+SELECT JSON_CONTAINS_PATH(@v1, 'one', '$.query_type') AS using_hypergraph;
+
+DROP TABLE t1;
+SET @v1 = NULL;
+SET optimizer_switch = @saved_optimizer_switch;
+SET explain_json_format_version = DEFAULT;
+
+--echo #
+--echo # Bug#37199800: EXPLAIN FORMAT=TREE doesn't show clustered primary key
+--echo #               scan in ROR intersection
+--echo #
+
+CREATE TABLE t(pk1 INT NOT NULL,
+               pk2 INT NOT NULL,
+               f1 INT,
+               f2 INT,
+               PRIMARY KEY (pk1, pk2),
+               KEY k(f1));
+
+INSERT INTO t(pk1, pk2, f1) VALUES (1, 1, 1), (1, 2, 2), (1, 3, 3), (1, 4, 4),
+  (1, 5, 5), (1, 6, 6), (1, 7, 7), (1, 8, 8), (1, 9, 9), (1, 10, 10);
+INSERT INTO t(pk1, pk2, f1) SELECT 2, pk2, f1 FROM t;
+ANALYZE TABLE t;
+
+EXPLAIN FORMAT=JSON INTO @explain
+SELECT /*+ SET_VAR(optimizer_switch='use_index_extensions=off')
+           INDEX_MERGE(t) */
+  * FROM t WHERE pk1 = 1 AND f1 = 1;
+
+# We expect an intersection of two index range scans; one on the
+# primary index (pk) and one on the secondary index (k). Only the scan
+# on the secondary index used to be shown.
+SELECT JSON_PRETTY(JSON_EXTRACT(@explain, '$**.operation'));
+DROP TABLE t;
+
+--echo #
+--echo # Bug#37126176 Add lookup references to iterator-based EXPLAIN FORMAT=JSON for index lookups
+--echo #
+
+SET @v1 = NULL;
+CREATE TABLE t (pk INT PRIMARY KEY AUTO_INCREMENT, i INT DEFAULT NULL, INDEX idx(i));
+INSERT INTO t(i)
+WITH RECURSIVE qn(n) AS
+(SELECT 0 UNION ALL SELECT n+1 FROM qn WHERE n<19)
+SELECT 19 - n FROM qn;
+INSERT INTO t(i) VALUES (NULL);
+ANALYZE TABLE t;
+
+# Even though these plans are mostly pretty simple we use JSON functions to
+# extract the relevant paths from the EXPLAIN output in case the plan should
+# change in the future but still contains the desired path.
+# As long as the EXPLAIN output contains the desired fields and values in the
+# right relative position we do not care about other parts of the plan.
+
+# CONCAT(SUBSTRING_INDEX(path, '.', CHAR_LENGTH - CHAR_LENGTH)) extracts the
+# path to the lookup object found with the JSON_SEARCH.
+# The same effect could probably be achieved with
+# JSON_EXTRACT(@v1, '$**.lookup_references[0]'), but this way we make sure the
+# access type is right and from the right object.
+# This is probably more useful with more complex plans.
+
+--echo # Index lookup shows correct reference type in "lookup_references".
+# Single-row index lookup (EQ_REF)
+EXPLAIN FORMAT=JSON INTO @v1 SELECT pk FROM t WHERE pk = 1;
+SELECT JSON_EXTRACT(@v1,
+  CONCAT(
+    SUBSTRING_INDEX(index_access_type_path, '.',
+      CHAR_LENGTH(index_access_type_path)
+        -
+      CHAR_LENGTH(REPLACE(index_access_type_path, '.', ''))),
+    '.lookup_references[0]'))
+  = "const"
+  AS index_lookup_references_const
+FROM (SELECT JSON_UNQUOTE(JSON_SEARCH(@v1, 'one', 'index_lookup')) AS index_access_type_path) AS t;
+
+SET @v1 = NULL;
+
+# Index lookup (REF)
+EXPLAIN FORMAT=JSON INTO @v1 SELECT t1.i FROM t t1, t t2
+WHERE t1.i = t2.i + 1 LIMIT 1;
+SELECT JSON_EXTRACT(@v1,
+  CONCAT(
+    SUBSTRING_INDEX(index_access_type_path, '.',
+      CHAR_LENGTH(index_access_type_path)
+        -
+      CHAR_LENGTH(REPLACE(index_access_type_path, '.', ''))),
+    '.lookup_references[0]'))
+  = "func"
+  AS index_lookup_references_func
+FROM (SELECT JSON_UNQUOTE(JSON_SEARCH(@v1, 'one', 'index_lookup')) AS index_access_type_path) AS t;
+
+SET @v1 = NULL;
+
+# Single-row index lookup (EQ_REF)
+# "lookup_references" can be either '["test.t1.pk"]' or '["test.t2.pk"]'.
+# The important thing is that lookup_references contains a column name.
+EXPLAIN FORMAT=JSON INTO @v1 SELECT t1.pk FROM t t1, t t2
+WHERE t1.pk = t2.pk LIMIT 1;
+SELECT JSON_EXTRACT(@v1,
+  CONCAT(
+    SUBSTRING_INDEX(index_access_type_path, '.',
+      CHAR_LENGTH(index_access_type_path)
+        -
+      CHAR_LENGTH(REPLACE(index_access_type_path, '.', ''))),
+    '.lookup_references[0]'))
+  IN ("test.t1.pk", "test.t2.pk")
+  AS index_lookup_references_column
+FROM (SELECT JSON_UNQUOTE(JSON_SEARCH(@v1, 'one', 'index_lookup')) AS index_access_type_path) AS t;
+
+SET @v1 = NULL;
+DROP TABLE t;
+
+# Fulltext search (FULLTEXT)
+--echo # Fulltext search has "lookup_references", should only show "const"
+CREATE TABLE t (a VARCHAR(200), b TEXT, FULLTEXT (a,b)) ENGINE = InnoDB charset utf8mb4;
+INSERT INTO t VALUES  ('This is a sample text', 'I made up for this test.'),
+                      ('We want to show that fulltext', 'search references a constant in the "lookup_condition".'),
+                      ('In this test the EXPLAIN output', 'should contain a field called "lookup_references".'),
+                      ('"lookup_references" should be an array.', 'That array should contain an element that is "const".'),
+                      ('Function MATCH ... AGAINST()','is used to do a fulltext search.'),
+                      ('Fulltext search in MySQL', 'are confusing.');
+ANALYZE TABLE t;
+
+# Fulltext search (FULLTEXT)
+EXPLAIN FORMAT=JSON INTO @v1 SELECT * FROM t WHERE MATCH(a,b) AGAINST ("fulltext");
+SELECT JSON_EXTRACT(@v1,
+  CONCAT(
+    SUBSTRING_INDEX(index_access_type_path, '.',
+      CHAR_LENGTH(index_access_type_path)
+        -
+      CHAR_LENGTH(REPLACE(index_access_type_path, '.', ''))),
+    '.lookup_references[0]'))
+  = "const"
+  AS fulltext_search_references_const
+FROM (SELECT JSON_UNQUOTE(JSON_SEARCH(@v1, 'one', 'full_text_search')) AS index_access_type_path) AS t;
+
+SET @v1 = NULL;
+DROP TABLE t;
+
+--source include/disable_hypergraph.inc

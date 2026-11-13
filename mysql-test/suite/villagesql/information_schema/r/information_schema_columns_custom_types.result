@@ -1,0 +1,69 @@
+# Create table with both standard and custom type columns
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+name VARCHAR(100),
+data COMPLEX,
+score DOUBLE
+);
+# DESCRIBE should show custom type name
+DESCRIBE t1;
+Field	Type	Null	Key	Default	Extra
+id	int	NO	PRI	NULL	
+name	varchar(100)	YES		NULL	
+data	vsql_complex.COMPLEX	YES		NULL	
+score	double	YES		NULL	
+# SHOW COLUMNS should show custom type name
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+id	int	NO	PRI	NULL	
+name	varchar(100)	YES		NULL	
+data	vsql_complex.COMPLEX	YES		NULL	
+score	double	YES		NULL	
+# Query INFORMATION_SCHEMA.COLUMNS directly
+SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1'
+ORDER BY ORDINAL_POSITION;
+TABLE_NAME	COLUMN_NAME	DATA_TYPE	COLUMN_TYPE
+t1	id	int	int
+t1	name	varchar	varchar(100)
+t1	data	vsql_complex.COMPLEX	vsql_complex.COMPLEX
+t1	score	double	double
+# Create another table with multiple custom type columns
+CREATE TABLE t2 (
+id INT,
+vec1 COMPLEX,
+vec2 COMPLEX2,
+metadata JSON
+);
+DESCRIBE t2;
+Field	Type	Null	Key	Default	Extra
+id	int	YES		NULL	
+vec1	vsql_complex.COMPLEX	YES		NULL	
+vec2	vsql_complex.COMPLEX2	YES		NULL	
+metadata	json	YES		NULL	
+# Test with different database
+CREATE DATABASE test_db;
+USE test_db;
+CREATE TABLE t3 (
+id INT,
+value COMPLEX2
+);
+DESCRIBE t3;
+Field	Type	Null	Key	Default	Extra
+id	int	YES		NULL	
+value	vsql_complex.COMPLEX2	YES		NULL	
+# Query across databases
+SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE DATA_TYPE LIKE '%.%'
+ORDER BY TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME;
+TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	DATA_TYPE
+test	t1	data	vsql_complex.COMPLEX
+test	t2	vec1	vsql_complex.COMPLEX
+test	t2	vec2	vsql_complex.COMPLEX2
+test_db	t3	value	vsql_complex.COMPLEX2
+# Cleanup
+USE test;
+DROP TABLE t1, t2;
+DROP DATABASE test_db;

@@ -1,0 +1,47 @@
+# Test INSERT triggers with custom types
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  val COMPLEX
+);
+
+delimiter //;
+
+# BEFORE INSERT trigger reading custom column
+CREATE TRIGGER tr_before_insert BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+  SET @before_val = NEW.val;
+  SET @before_id = NEW.id;
+END//
+
+# AFTER INSERT trigger reading custom column
+CREATE TRIGGER tr_after_insert AFTER INSERT ON t1
+FOR EACH ROW
+BEGIN
+  SET @after_val = NEW.val;
+END//
+
+delimiter ;//
+
+# Verify BEFORE/AFTER INSERT triggers
+INSERT INTO t1 VALUES (1, 'test', '(1.0,2.0)');
+SELECT @before_val, @before_id, @after_val;
+
+# Verify table contents
+SELECT * FROM t1;
+
+# Cleanup
+DROP TRIGGER tr_before_insert;
+DROP TRIGGER tr_after_insert;
+DROP TABLE t1;
+
+# Clear user variables
+SET @before_val = NULL;
+SET @before_id = NULL;
+SET @after_val = NULL;
+
+--source include/villagesql/uninstall_complex_extension.inc

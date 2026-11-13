@@ -1,0 +1,127 @@
+# Test MDL synchronization between ALTER TABLE RENAME operations with custom types
+# and concurrent UNINSTALL EXTENSION.
+# RENAME operations acquire extension MDL lock, and UNINSTALL fails anyway due to
+# table dependency (column still uses the type, just with different name/location).
+#
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+--echo #
+--echo # Test Case 1: UNINSTALL blocked by RENAME COLUMN, then fails due to dependency
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX) ENGINE=InnoDB;
+
+connect (con1,localhost,root);
+--echo # Connection con1: ALTER TABLE RENAME COLUMN paused AFTER acquiring extension lock
+SET DEBUG_SYNC= 'metadata_after_extension_lock SIGNAL lock_acquired WAIT_FOR continue_alter';
+--send ALTER TABLE t1 RENAME COLUMN val TO value
+
+connection default;
+--echo # Connection default: Wait for ALTER TABLE to acquire extension lock
+SET DEBUG_SYNC= 'now WAIT_FOR lock_acquired';
+
+--echo # Connection default: Start UNINSTALL EXTENSION (will block on MDL)
+connect (con2,localhost,root);
+SET DEBUG_SYNC='mdl_acquire_lock_wait SIGNAL uninstall_waiting';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+--echo # Connection default: Wait for UNINSTALL to block on MDL
+SET DEBUG_SYNC='now WAIT_FOR uninstall_waiting';
+
+--echo # Connection default: Check MDL locks - RENAME holds SHARED, UNINSTALL waits for EXCLUSIVE
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex'
+ORDER BY LOCK_STATUS;
+
+--echo # Connection default: Signal ALTER TABLE to continue
+SET DEBUG_SYNC= 'now SIGNAL continue_alter';
+
+connection con1;
+--echo # Connection con1: Reaping ALTER TABLE (should succeed)
+reap;
+SHOW CREATE TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+
+connection con2;
+--echo # Connection con2: Reaping UNINSTALL (should fail - renamed column still uses the type)
+--error ER_VILLAGESQL_GENERIC_ERROR
+reap;
+
+connection con1;
+--echo # Connection con1: DROP TABLE to remove dependency
+DROP TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+
+disconnect con1;
+disconnect con2;
+
+connection default;
+--echo # Connection default: Now UNINSTALL should succeed
+--source include/villagesql/uninstall_complex_extension.inc
+SET DEBUG_SYNC= 'RESET';
+
+--echo #
+--echo # Test Case 2: UNINSTALL blocked by RENAME TABLE, then fails due to dependency
+--echo #
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX) ENGINE=InnoDB;
+
+connect (con1,localhost,root);
+--echo # Connection con1: ALTER TABLE RENAME paused AFTER acquiring extension lock
+SET DEBUG_SYNC= 'metadata_after_extension_lock SIGNAL lock_acquired WAIT_FOR continue_alter';
+--send ALTER TABLE t1 RENAME TO t2
+
+connection default;
+--echo # Connection default: Wait for ALTER TABLE to acquire extension lock
+SET DEBUG_SYNC= 'now WAIT_FOR lock_acquired';
+
+--echo # Connection default: Start UNINSTALL EXTENSION (will block on MDL)
+connect (con2,localhost,root);
+SET DEBUG_SYNC='mdl_acquire_lock_wait SIGNAL uninstall_waiting';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+--echo # Connection default: Wait for UNINSTALL to block on MDL
+SET DEBUG_SYNC='now WAIT_FOR uninstall_waiting';
+
+--echo # Connection default: Check MDL locks - RENAME holds SHARED, UNINSTALL waits for EXCLUSIVE
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex'
+ORDER BY LOCK_STATUS;
+
+--echo # Connection default: Signal ALTER TABLE to continue
+SET DEBUG_SYNC= 'now SIGNAL continue_alter';
+
+connection con1;
+--echo # Connection con1: Reaping ALTER TABLE (should succeed)
+reap;
+SHOW CREATE TABLE t2;
+--source include/villagesql/query_custom_columns.inc
+
+connection con2;
+--echo # Connection con2: Reaping UNINSTALL (should fail - table still uses the type)
+--error ER_VILLAGESQL_GENERIC_ERROR
+reap;
+
+connection con1;
+--echo # Connection con1: DROP TABLE to remove dependency
+DROP TABLE t2;
+--source include/villagesql/query_custom_columns.inc
+
+disconnect con1;
+disconnect con2;
+
+connection default;
+--echo # Connection default: Now UNINSTALL should succeed
+--source include/villagesql/uninstall_complex_extension.inc
+SET DEBUG_SYNC= 'RESET';
+--source include/wait_until_count_sessions.inc

@@ -1,0 +1,20 @@
+# Test SELECT ... GROUP BY with COMPLEX type
+# Grammar: SELECT ... GROUP BY ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX, cnt INT);
+INSERT INTO t1 VALUES
+  ('(0.0,0.0)', 1), ('(0.0,-0.0)', 2), ('(-0.0,0.0)', 3),
+  ('(-0,-0)', 4), ('(1.0,-2.0)', 5), ('(6.0,7.0)', 6);
+
+# This should show all (0,0) variants as grouped.
+SELECT val, COUNT(*) FROM t1 GROUP BY val ORDER BY val DESC;
+
+SELECT val, COUNT(*) FROM t1 GROUP BY val ORDER BY val;
+
+SELECT val, COUNT(*) FROM t1 GROUP BY val ORDER BY COUNT(*) DESC, val DESC;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

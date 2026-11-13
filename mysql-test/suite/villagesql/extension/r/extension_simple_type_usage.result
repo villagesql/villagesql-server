@@ -1,0 +1,141 @@
+# Install vsql_simple extension
+INSTALL EXTENSION vsql_simple;
+# Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_simple	0.0.1
+# Create a table with BYTEARRAY column
+CREATE TABLE test_bytearray (
+id INT PRIMARY KEY,
+data BYTEARRAY
+);
+# Insert data using the type
+INSERT INTO test_bytearray VALUES (1, 'hello');
+INSERT INTO test_bytearray VALUES (2, 'world123');
+INSERT INTO test_bytearray VALUES (3, 'abcdefgh');
+# Query the data
+SELECT id, data FROM test_bytearray ORDER BY id;
+id	data
+1	hello   
+2	world123
+3	abcdefgh
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data FROM test_bytearray ORDER BY id;
+id	data
+1	'hello   '
+2	'world123'
+3	'abcdefgh'
+# Test rot13 function
+SELECT id, data, vsql_simple.rot13(data) as rotated FROM test_bytearray ORDER BY id;
+id	data	rotated
+1	hello   	uryyb   
+2	world123	jbeyq123
+3	abcdefgh	nopqrstu
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") as rotated FROM test_bytearray ORDER BY id;
+id	data	rotated
+1	'hello   '	'uryyb   '
+2	'world123'	'jbeyq123'
+3	'abcdefgh'	'nopqrstu'
+# Test even_chars function (extracts bytes at positions 0, 2, 4, 6)
+SELECT id, data, vsql_simple.even_chars(data) as even FROM test_bytearray ORDER BY id;
+id	data	even
+1	hello   	hlo     
+2	world123	wrd2    
+3	abcdefgh	aceg    
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.even_chars(data)), "'") as even FROM test_bytearray ORDER BY id;
+id	data	even
+1	'hello   '	'hlo     '
+2	'world123'	'wrd2    '
+3	'abcdefgh'	'aceg    '
+# Test odd_chars function (extracts bytes at positions 1, 3, 5, 7)
+SELECT id, data, vsql_simple.odd_chars(data) as odd FROM test_bytearray ORDER BY id;
+id	data	odd
+1	hello   	el      
+2	world123	ol13    
+3	abcdefgh	bdfh    
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(data), "'") as data, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.odd_chars(data)), "'") as odd FROM test_bytearray ORDER BY id;
+id	data	odd
+1	'hello   '	'el      '
+2	'world123'	'ol13    '
+3	'abcdefgh'	'bdfh    '
+# Test ba_concat function (returns STRING, not BYTEARRAY)
+SELECT vsql_simple.ba_concat(t1.data, t2.data) as concatenated
+FROM test_bytearray t1, test_bytearray t2
+WHERE t1.id = 1 AND t2.id = 2;
+concatenated
+hello   world123
+SELECT CONCAT("'", vsql_simple.ba_concat(t1.data, t2.data), "'") as concatenated
+FROM test_bytearray t1, test_bytearray t2
+WHERE t1.id = 1 AND t2.id = 2;
+concatenated
+'hello   world123'
+# Test ba_len function (zero-arity, returns a constant)
+SELECT vsql_simple.ba_len() AS len;
+len
+8
+# ba_concat (declared with two params) rejects a single-arg call
+SELECT vsql_simple.ba_concat(t.data) FROM test_bytearray t WHERE t.id = 1;
+ERROR HY000: Cannot initialize function 'ba_concat': wrong number of arguments (expected 2, got 1)
+# Test ba_concat_all function (varargs, returns STRING)
+SELECT vsql_simple.ba_concat_all(t.data) AS one
+FROM test_bytearray t WHERE t.id = 1;
+one
+hello   
+SELECT vsql_simple.ba_concat_all(t1.data, t2.data, t3.data) AS three
+FROM test_bytearray t1, test_bytearray t2, test_bytearray t3
+WHERE t1.id = 1 AND t2.id = 2 AND t3.id = 3;
+three
+hello   world123abcdefgh
+SELECT CONCAT("'", vsql_simple.ba_concat_all(t1.data, t2.data, t3.data), "'") AS three
+FROM test_bytearray t1, test_bytearray t2, test_bytearray t3
+WHERE t1.id = 1 AND t2.id = 2 AND t3.id = 3;
+three
+'hello   world123abcdefgh'
+# ba_concat_all rejects zero arguments via prerun
+SELECT vsql_simple.ba_concat_all();
+ERROR HY000: Can't initialize function 'ba_concat_all'; ba_concat_all requires at least one argument
+# ba_concat_all rejects non-BYTEARRAY arguments via prerun
+SELECT vsql_simple.ba_concat_all(1);
+ERROR HY000: Can't initialize function 'ba_concat_all'; ba_concat_all: argument 0 must be either BYTEARRAY or NULL
+# ba_concat_all propagates NULL
+SELECT vsql_simple.ba_concat_all(t1.data, NULL) AS with_null
+FROM test_bytearray t1 WHERE t1.id = 1;
+with_null
+NULL
+# ba_concat_all rejects a STRING literal via prerun, which tells it apart
+# from a constant NULL
+SELECT vsql_simple.ba_concat_all(t1.data, 'abc') AS with_str
+FROM test_bytearray t1 WHERE t1.id = 1;
+ERROR HY000: Can't initialize function 'ba_concat_all'; ba_concat_all: argument 1 must be either BYTEARRAY or NULL
+# Test ba_call_index (exercises typed prerun/postrun + state-passing VDF)
+SELECT vsql_simple.ba_call_index() as idx FROM test_bytearray ORDER BY id;
+idx
+1
+2
+3
+# Clean up
+DROP TABLE test_bytearray;
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_simple;
+# Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Query	#	#	use `test`; CREATE TABLE `test_bytearray` (
+  `id` int NOT NULL,
+  `data` vsql_simple.bytearray DEFAULT NULL,
+  PRIMARY KEY (`id`)
+)
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (test.test_bytearray)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (test.test_bytearray)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (test.test_bytearray)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	use `test`; DROP TABLE `test_bytearray` /* generated by server */

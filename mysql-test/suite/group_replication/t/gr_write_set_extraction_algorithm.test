@@ -1,0 +1,49 @@
+# This test does the basic validations around transaction-write-set-extraction
+#
+# Test outline
+# 1) Test that you cannot join a group if your algorithm is different.
+#
+
+--source include/have_debug.inc
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--source include/group_replication.inc
+
+--echo #
+--echo # 1. Try to join a member with a different algorithm
+--echo #    It will be disallowed.
+--echo #
+--let $rpl_connection_name= server1
+--source include/connection.inc
+# Force server1 to use MURMUR32 write set extraction algorithm.
+SET @@GLOBAL.DEBUG= '+d,group_replication_write_set_extraction_algorithm_murmur32';
+--source include/start_and_bootstrap_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+
+--disable_query_log
+--eval SET GLOBAL group_replication_group_name= "$group_replication_group_name"
+--enable_query_log
+
+# server2 will use XXHASH64 write set extraction algorithm.
+--disable_warnings ER_WARN_DEPRECATED_SYNTAX_NO_REPLACEMENT,ER_WARN_DEPRECATED_SYNTAX ONCE
+--error ER_GROUP_REPLICATION_CONFIGURATION
+START GROUP_REPLICATION;
+
+--replace_regex /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]\.[0-9][0-9][0-9][0-9][0-9][0-9][-+Z][0-9:]* *[0-9]* *\[/DATE_TIME [/
+--let $grep_file=$MYSQLTEST_VARDIR/tmp/group_replication_write_set_extraction_algorithm.err
+--let $grep_pattern=The member is configured with a transaction-write-set-extraction option value
+--source include/grep_pattern.inc
+
+--echo #
+--echo # 2. Cleanup
+--echo #
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+
+--source include/stop_group_replication.inc
+SET @@GLOBAL.DEBUG= '-d,group_replication_write_set_extraction_algorithm_murmur32';
+
+--source include/group_replication_end.inc

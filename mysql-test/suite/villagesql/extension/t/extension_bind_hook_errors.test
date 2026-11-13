@@ -1,0 +1,34 @@
+# Scenario: a bind_and_check_types hook's answers come from an extension, so
+# the server validates them rather than trusting them. These are the checks
+# against a hook that lies or overflows, as opposed to a hook that rejects the
+# call itself, which every other bind-hook test already covers.
+#
+# Fixture: vsql_test_only exposes five variadic functions whose hooks each
+# break one rule.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # The hook asks for return parameters longer than the server's buffer.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_test_only.bad_bind_return_overflow(1, 2) AS c;
+
+--echo # The same for an argument's parameters.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_test_only.bad_bind_arg_overflow(1, 2) AS c;
+
+--echo # A type name longer than the server's buffer. No parameters are set,
+--echo # so the name is the only fault.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_test_only.bad_bind_name_too_long(1, 2) AS c;
+
+--echo # A name that fits but belongs to no type in this extension.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_test_only.bad_bind_unknown_type(1, 2) AS c;
+
+--echo # Parameters for an argument whose type the hook never named. A variadic
+--echo # call has no signature to take the type from, so there is nothing for
+--echo # the parameters to apply to.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_test_only.bad_bind_params_no_type(1, 2) AS c;
+
+UNINSTALL EXTENSION vsql_test_only;

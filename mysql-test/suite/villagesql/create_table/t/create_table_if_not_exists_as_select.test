@@ -1,0 +1,39 @@
+# Test CREATE TABLE IF NOT EXISTS AS SELECT with COMPLEX type
+# Grammar: CREATE TABLE IF NOT EXISTS table_name AS SELECT ...
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE existing_data (
+    id INT PRIMARY KEY,
+    impedance COMPLEX,
+    phase_angle DOUBLE
+);
+
+INSERT INTO existing_data VALUES (1, '(33.0,34.0)', 45.0);
+INSERT INTO existing_data VALUES (2, '(35.0,36.0)', 90.0);
+
+# Create table using IF NOT EXISTS AS SELECT
+CREATE TABLE IF NOT EXISTS analysis_results AS
+SELECT id, impedance, phase_angle
+FROM existing_data;
+
+SHOW COLUMNS FROM analysis_results;
+
+SELECT * FROM analysis_results;
+
+# Second create should not fail due to IF NOT EXISTS
+CREATE TABLE IF NOT EXISTS analysis_results AS
+SELECT id * 2 as id, impedance, phase_angle
+FROM existing_data;
+
+SHOW COLUMNS FROM analysis_results;
+
+# Should still have original data
+SELECT * FROM analysis_results;
+
+DROP TABLE analysis_results;
+DROP TABLE existing_data;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

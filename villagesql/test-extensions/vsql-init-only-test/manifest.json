@@ -1,0 +1,7 @@
+{
+  "name": "vsql_init_only_test",
+  "version": "0.0.1",
+  "description": "VEF extension registering on_init without on_deinit; must fail to load.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

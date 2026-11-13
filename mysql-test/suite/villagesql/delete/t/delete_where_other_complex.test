@@ -1,0 +1,48 @@
+# Test DELETE FROM ... WHERE other_col = ... with COMPLEX type
+# Grammar: DELETE [FROM] tbl_name WHERE ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert 10 rows with zero variants
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(0,0)'),
+    (3, '(-3.5,4.5)'),
+    (4, '(-0,0)'),
+    (5, '(5.0,-6.0)'),
+    (6, '(0,-0)'),
+    (7, '(-7.5,-8.5)'),
+    (8, '(-0,-0)'),
+    (9, '(9.0,10.0)'),
+    (10, '(0,0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Delete based on ID =
+DELETE FROM t1 WHERE id = 2;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Delete based on ID >
+DELETE FROM t1 WHERE id > 8;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Delete based on ID BETWEEN
+DELETE FROM t1 WHERE id BETWEEN 4 AND 6;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Delete based on ID IN
+DELETE FROM t1 WHERE id IN (1, 7);
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,61 @@
+CREATE DATABASE mixed_db;
+USE mixed_db;
+CREATE TABLE regular_complex (
+id INT PRIMARY KEY,
+complex_col COMPLEX
+);
+CREATE TEMPORARY TABLE temp_complex (
+id INT PRIMARY KEY,
+temp_complex_col COMPLEX
+);
+CREATE TABLE mixed_columns (
+id INT PRIMARY KEY,
+text_col TEXT,
+json_col JSON,
+complex_col COMPLEX,
+float_col FLOAT DEFAULT 1.1
+);
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+mixed_db	mixed_columns	complex_col	vsql_complex	0.0.1	COMPLEX	{}
+mixed_db	regular_complex	complex_col	vsql_complex	0.0.1	COMPLEX	{}
+INSERT INTO regular_complex VALUES (1, '(1.0,1.0)');
+INSERT INTO temp_complex VALUES (1, '(2.0,2.0)');
+INSERT INTO mixed_columns (id, text_col, json_col, complex_col) VALUES
+(1, 'test', '{"key": "value"}', '(3.0,3.0)');
+SHOW TABLES;
+Tables_in_mixed_db
+mixed_columns
+regular_complex
+DROP TABLE temp_complex;
+USE test;
+DROP DATABASE mixed_db;
+SHOW DATABASES LIKE 'mixed_db';
+Database (mixed_db)
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Query	#	#	CREATE DATABASE mixed_db
+#	#	Query	#	#	use `mixed_db`; CREATE TABLE `regular_complex` (
+  `id` int NOT NULL,
+  `complex_col` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+)
+#	#	Query	#	#	use `mixed_db`; CREATE TABLE `mixed_columns` (
+  `id` int NOT NULL,
+  `text_col` text,
+  `json_col` json DEFAULT NULL,
+  `complex_col` vsql_complex.COMPLEX DEFAULT NULL,
+  `float_col` float DEFAULT '1.1',
+  PRIMARY KEY (`id`)
+)
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (mixed_db.regular_complex)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (mixed_db.mixed_columns)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	DROP DATABASE mixed_db

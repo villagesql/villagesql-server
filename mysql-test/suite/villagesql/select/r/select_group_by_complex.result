@@ -1,0 +1,20 @@
+CREATE TABLE t1 (val COMPLEX, cnt INT);
+INSERT INTO t1 VALUES
+('(0.0,0.0)', 1), ('(0.0,-0.0)', 2), ('(-0.0,0.0)', 3),
+('(-0,-0)', 4), ('(1.0,-2.0)', 5), ('(6.0,7.0)', 6);
+SELECT val, COUNT(*) FROM t1 GROUP BY val ORDER BY val DESC;
+val	COUNT(*)
+(6,7)	1
+(1,-2)	1
+(0,0)	4
+SELECT val, COUNT(*) FROM t1 GROUP BY val ORDER BY val;
+val	COUNT(*)
+(0,0)	4
+(1,-2)	1
+(6,7)	1
+SELECT val, COUNT(*) FROM t1 GROUP BY val ORDER BY COUNT(*) DESC, val DESC;
+val	COUNT(*)
+(0,0)	4
+(6,7)	1
+(1,-2)	1
+DROP TABLE t1;

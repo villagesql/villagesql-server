@@ -1,0 +1,6 @@
+Add test file with intentional style violations
+
+This file is used for testing the villint ignore functionality.
+It intentionally lacks proper copyright headers.
+
+villint-ignore: sql/villint_ignore_test.cc

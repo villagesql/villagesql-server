@@ -1,0 +1,40 @@
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension agg_vdf_ext using SDK...
+Created agg_vdf_ext.veb
+INSTALL EXTENSION agg_vdf_ext;
+CREATE TABLE s_data (id INT PRIMARY KEY AUTO_INCREMENT, s VARCHAR(60));
+SELECT LENGTH(agg_vdf_ext.vdf_concat(s)) AS len FROM s_data WHERE id <= 30;
+len
+1529
+SELECT LENGTH(agg_vdf_ext.vdf_concat(s)) AS len FROM s_data;
+len
+5099
+SELECT INSTR(agg_vdf_ext.vdf_concat(s), REPEAT('A', 50)) > 0 AS field_intact
+FROM s_data;
+field_intact
+1
+CREATE TABLE g_data (id INT PRIMARY KEY AUTO_INCREMENT, grp INT, s VARCHAR(60));
+SELECT grp, LENGTH(agg_vdf_ext.vdf_concat(s)) AS len
+FROM g_data
+GROUP BY grp
+ORDER BY grp;
+grp	len
+0	1019
+1	1019
+DROP TABLE g_data;
+SET @old_map = @@global.max_allowed_packet;
+SET GLOBAL max_allowed_packet = 1024;
+Warnings:
+Warning	1708	The value of 'max_allowed_packet' should be no less than the value of 'net_buffer_length'
+SELECT LENGTH(agg_vdf_ext.vdf_concat(s)) AS len FROM s_data;
+len
+NULL
+Warnings:
+Warning	1301	Result of vdf_concat() was larger than max_allowed_packet (1024) - truncated
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1301	Result of vdf_concat() was larger than max_allowed_packet (1024) - truncated
+SET GLOBAL max_allowed_packet = @old_map;
+DROP TABLE s_data;
+UNINSTALL EXTENSION agg_vdf_ext;

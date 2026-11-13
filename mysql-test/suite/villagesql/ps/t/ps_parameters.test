@@ -1,0 +1,89 @@
+# Test parameter-specific behavior with custom types
+# Covers parameter encoding, validation, and persistence across executes
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+
+--echo #
+--echo # Test 1: Parameter encoding on multiple EXECUTE calls
+--echo #
+
+PREPARE stmt1 FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id1 = 1;
+SET @val1 = '(1.0,2.0)';
+EXECUTE stmt1 USING @id1, @val1;
+
+SET @id2 = 2;
+SET @val2 = '(3.0,4.0)';
+EXECUTE stmt1 USING @id2, @val2;
+
+SET @id3 = 3;
+SET @val3 = '(5.0,6.0)';
+EXECUTE stmt1 USING @id3, @val3;
+
+SELECT * FROM t1 ORDER BY id;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: WHERE parameter executed multiple times with different values
+--echo #
+
+PREPARE stmt2 FROM 'SELECT id FROM t1 WHERE val = ?';
+SET @search = '(1.0,2.0)';
+EXECUTE stmt2 USING @search;
+
+SET @search = '(3.0,4.0)';
+EXECUTE stmt2 USING @search;
+
+SET @search = '(5.0,6.0)';
+EXECUTE stmt2 USING @search;
+
+SET @search = '(1.0,2.0)';
+EXECUTE stmt2 USING @search;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: UPDATE with parameter executed multiple times
+--echo #
+
+PREPARE stmt3 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @new_val = '(10.0,20.0)';
+SET @target_id = 1;
+EXECUTE stmt3 USING @new_val, @target_id;
+
+SET @new_val = '(30.0,40.0)';
+SET @target_id = 2;
+EXECUTE stmt3 USING @new_val, @target_id;
+
+SELECT * FROM t1 ORDER BY id;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: Verify invalid value still produces error on subsequent execute
+--echo #
+
+PREPARE stmt4 FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 10;
+SET @bad_val = 'invalid';
+--error 1366
+EXECUTE stmt4 USING @id, @bad_val;
+
+SET @id = 11;
+SET @good_val = '(7.0,8.0)';
+EXECUTE stmt4 USING @id, @good_val;
+
+SELECT * FROM t1 WHERE id >= 10 ORDER BY id;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

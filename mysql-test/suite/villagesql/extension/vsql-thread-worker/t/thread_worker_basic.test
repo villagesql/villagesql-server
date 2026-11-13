@@ -1,0 +1,24 @@
+# Test thread_worker dynamic wakeup control.
+#
+# Verifies:
+# - ENABLE opens socket on OS-assigned port; active_port() returns it
+# - SQL_EXECUTE runs a query
+# - DISABLE closes socket; active_port() returns 0
+
+INSTALL EXTENSION vsql_thread_worker_test;
+
+--echo # Thread should NOT be running yet
+SELECT vsql_thread_worker_test.active_port();
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
+
+--source init_thread_worker_test.inc
+
+--exec $tw_pl "SQL_EXECUTE SELECT 1"
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
+
+--echo # After disable: active_port should be 0
+SELECT vsql_thread_worker_test.active_port();
+
+UNINSTALL EXTENSION vsql_thread_worker_test;

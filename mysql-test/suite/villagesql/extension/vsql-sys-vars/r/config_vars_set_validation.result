@@ -1,0 +1,67 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_config_vars_test;
+# Baseline: max_items holds its default
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+100
+# SET GLOBAL refuses a non-numeric value for an INT variable
+SET GLOBAL vsql_config_vars_test.max_items = 'abc';
+ERROR 42000: Incorrect argument type to variable 'vsql_config_vars_test.max_items'
+# The string overload refuses an INT variable, whatever the value.
+# Each returns 1 (error) and leaves max_items untouched.
+SELECT vsql_config_vars_test.write_var_str('max_items', 'abc') AS err;
+err
+1
+SELECT vsql_config_vars_test.write_var_str('max_items', '42') AS err;
+err
+1
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+100
+# The typed path sets it, with no text form in between
+SELECT vsql_config_vars_test.write_max_items(42) AS err;
+err
+0
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+42
+# The server still applies the declared range (0..1000000)
+SELECT vsql_config_vars_test.write_max_items(9999999) AS err;
+err
+0
+Warnings:
+Warning	1292	Truncated incorrect vsql_config_vars_test.max_items value: '9999999'
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+1000000
+# A STRING variable goes through the string overload
+SELECT vsql_config_vars_test.write_var_str('label', 'abc') AS err;
+err
+0
+SELECT @@global.vsql_config_vars_test.label;
+@@global.vsql_config_vars_test.label
+abc
+# An ENUM is set by name
+SELECT vsql_config_vars_test.write_var_str('mode', 'sync') AS err;
+err
+0
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+sync
+# A name outside the enum is refused
+SELECT vsql_config_vars_test.write_var_str('mode', 'nonesuch') AS err;
+ERROR 42000: Variable 'vsql_config_vars_test.mode' can't be set to the value of 'nonesuch'
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+sync
+# A variable the extension never registered is refused on both paths
+SELECT vsql_config_vars_test.write_var_str('no_such_var', '1') AS err;
+err
+1
+# Reading a STRING variable through get() still works
+SELECT vsql_config_vars_test.read_label() AS label;
+label
+abc
+UNINSTALL EXTENSION vsql_config_vars_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

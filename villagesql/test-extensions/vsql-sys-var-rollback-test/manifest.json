@@ -1,0 +1,7 @@
+{
+  "name": "vsql_sys_var_rollback_test",
+  "version": "0.0.1",
+  "description": "VillageSQL extension testing sys var rollback on partial registration failure",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

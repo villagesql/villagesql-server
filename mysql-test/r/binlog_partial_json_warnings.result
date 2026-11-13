@@ -1,0 +1,22 @@
+call mtr.add_suppression("When binlog_format=STATEMENT, the option binlog_row_value_options=PARTIAL_JSON");
+call mtr.add_suppression("When binlog_row_image=FULL, the option binlog_row_value_options=PARTIAL_JSON");
+call mtr.add_suppression("When the binary log is disabled, the option binlog_row_value_options=PARTIAL_JSON");
+call mtr.add_suppression("You need to use --log-bin to make --binlog-format work.");
+# binlog-format=stmt is not compatible with partial json
+# restart: --log-bin --binlog-format=statement --binlog-row-value-options=PARTIAL_JSON --binlog-row-image=MINIMAL
+include/assert_grep.inc [There shall be a warning when binlog_format=STATEMENT]
+SET @@GLOBAL.BINLOG_ROW_VALUE_OPTIONS= PARTIAL_JSON;
+Warnings:
+Warning	3645	When binlog_format=STATEMENT, the option binlog_row_value_options=PARTIAL_JSON will be ignored and updates will be written in full format to binary log.
+# binlog-row-image=full causes partial json to be used only in after image
+# restart: --log-bin --binlog-format=row --binlog-row-value-options=PARTIAL_JSON --binlog-row-image=FULL
+include/assert_grep.inc [There shall be a warning when binlog_row_image=FULL]
+SET @@GLOBAL.BINLOG_ROW_VALUE_OPTIONS= PARTIAL_JSON;
+Warnings:
+Warning	3647	When binlog_row_image=FULL, the option binlog_row_value_options=PARTIAL_JSON will be used only for the after-image. Full values will be written in the before-image, so the saving in disk space due to binlog_row_value_options is limited to less than 50%.
+# the binlog is disabled
+# restart: --binlog-row-value-options=PARTIAL_JSON --binlog-row-image=MINIMAL --skip-log-bin --skip-log-replica-updates
+include/assert_grep.inc [There shall be a warning when when the binary log is disabled]
+SET @@GLOBAL.BINLOG_ROW_VALUE_OPTIONS= PARTIAL_JSON;
+Warnings:
+Warning	3645	When the binary log is closed, the option binlog_row_value_options=PARTIAL_JSON will be ignored and updates will be written in full format to binary log.

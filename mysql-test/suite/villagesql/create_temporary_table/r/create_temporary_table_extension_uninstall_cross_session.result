@@ -1,0 +1,18 @@
+#
+# Test Case 1: UNINSTALL blocked while another session has a temp table
+#
+# con1: Create temporary table using COMPLEX type
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(3.0,4.0)');
+SELECT * FROM t1;
+id	val
+1	(3,4)
+# default: UNINSTALL should fail - con1 holds a reference via temp table
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': type 'COMPLEX' is currently in use
+#
+# Test Case 2: UNINSTALL succeeds after temp table is dropped
+#
+# con1: Drop the temporary table, releasing the reference
+DROP TEMPORARY TABLE t1;
+# default: UNINSTALL should now succeed

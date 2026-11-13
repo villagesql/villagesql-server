@@ -1,0 +1,108 @@
+# The 0.0.5 -> 0.0.6 upgrade converts the villagesql system tables to
+# utf8mb4_bin. Prove that an existing 0.0.5 datadir reaches utf8mb4_bin on a
+# plain restart.
+#
+# Ordering is the part worth pinning: validate_villagesql_tables() now rejects
+# any collation other than utf8mb4_bin, and it runs from
+# init_extension_infrastructure(). The upgrade runs earlier, from
+# dd::upgrade::upgrade_system_schemas(). If that order ever inverted, a 0.0.5
+# datadir would be rejected before the upgrade could fix it, and the restart
+# below would fail outright instead of converting.
+
+--source include/have_debug.inc
+
+# The deliberately-failed startup at the end logs these. Added before the
+# datadir copy below so the copy inherits them.
+call mtr.add_suppression("Incorrect collation for column");
+call mtr.add_suppression("table structure is incorrect");
+call mtr.add_suppression("Failed to validate system schema");
+call mtr.add_suppression("Failed to initialize");
+call mtr.add_suppression("Aborting");
+
+--let $DDIR_005 = $MYSQL_TMP_DIR/vsql_005_datadir
+--let $MYSQLD_DATADIR = `SELECT @@datadir`
+
+--let $COLLATIONS_QUERY = SELECT DISTINCT c.name AS collation FROM mysql.columns col JOIN mysql.tables t ON col.table_id = t.id JOIN mysql.schemata s ON t.schema_id = s.id JOIN mysql.collations c ON col.collation_id = c.id WHERE s.name = 'villagesql' ORDER BY c.name
+--let $VERSION_QUERY = SELECT value = 'mysql-9.7_0.0.5' AS still_at_0_0_5 FROM villagesql.properties WHERE name = 'version'
+
+# Work on a copy of the datadir; downgrading it makes it unrepresentative of
+# the datadir the rest of the suite shares.
+--source include/shutdown_mysqld.inc
+--force-cpdir $MYSQLD_DATADIR $DDIR_005
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--let $restart_parameters = restart: --datadir=$DDIR_005
+--source include/start_mysqld.inc
+
+--echo # Collations on the copy as created by this build
+--let $query = $COLLATIONS_QUERY
+--source include/villagesql/query_hidden_tables.inc
+
+--echo # Turn the copy into a 0.0.5 datadir: pre-0.0.6 collation, stored version
+--source include/villagesql/internal_schema_test.inc
+ALTER TABLE villagesql.extensions
+  CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.custom_columns
+  CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.custom_sp_params
+  CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.custom_indexes
+  CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.custom_index_columns
+  CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.properties
+  CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+UPDATE villagesql.properties SET value = 'mysql-9.7_0.0.5' WHERE name = 'version';
+
+--echo # Collations before the upgrade
+--let $query = $COLLATIONS_QUERY
+--source include/villagesql/query_hidden_tables.inc
+
+--let $query = $VERSION_QUERY
+--source include/villagesql/query_hidden_tables.inc
+
+--echo # Restart: the 0.0.5 stored version must trigger the upgrade
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--let $restart_parameters = restart: --datadir=$DDIR_005
+--source include/restart_mysqld.inc
+
+--echo # Collations after the upgrade
+--let $query = $COLLATIONS_QUERY
+--source include/villagesql/query_hidden_tables.inc
+
+--let $query = $VERSION_QUERY
+--source include/villagesql/query_hidden_tables.inc
+
+--echo # A custom-type column still resolves through the converted tables
+--source include/villagesql/install_complex_extension.inc
+CREATE DATABASE upgraded_db;
+USE upgraded_db;
+CREATE TABLE t1 (c vsql_complex.COMPLEX);
+SHOW FIELDS FROM t1;
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = 'upgraded_db' AND TABLE_NAME = 't1';
+DROP DATABASE upgraded_db;
+--source include/villagesql/uninstall_complex_extension.inc
+
+--echo # The collation check is what makes the upgrade mandatory. Revert the
+--echo # collation without rewinding the stored version, so no upgrade runs,
+--echo # and startup must fail rather than accept the old collation.
+--source include/villagesql/internal_schema_test.inc
+ALTER TABLE villagesql.custom_columns
+  CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+--source include/shutdown_mysqld.inc
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--let $restart_parameters = --datadir=$DDIR_005
+--source include/start_mysqld_expecting_crash.inc
+
+--let $grep_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $grep_pattern = Incorrect collation for column villagesql.custom_columns
+--source include/wait_for_pattern_in_file.inc
+--echo # Error log reports the rejected collation
+
+--echo # Back to the original datadir
+--let $restart_parameters = restart
+--source include/start_mysqld.inc
+
+--force-rmdir $DDIR_005

@@ -1,0 +1,209 @@
+# Test JOIN operations with prepared statements and COMPLEX custom types
+# Covers: INNER JOIN, LEFT JOIN, RIGHT JOIN, CROSS JOIN, self-join, multi-table joins
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX, t1_id INT);
+CREATE TABLE t3 (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t1 VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(5.0,6.0)'),
+  (4, '(7.0,8.0)');
+
+INSERT INTO t2 VALUES
+  (10, '(10.0,11.0)', 1),
+  (11, '(12.0,13.0)', 1),
+  (12, '(14.0,15.0)', 2),
+  (13, '(16.0,17.0)', 99);
+
+INSERT INTO t3 VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (5, '(9.0,10.0)');
+
+--echo #
+--echo # Test 1: INNER JOIN on INT column
+--echo #
+
+PREPARE stmt1 FROM 'SELECT t1.id, t1.val, t2.val FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt1 USING @id;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: INNER JOIN on COMPLEX column
+--echo #
+
+PREPARE stmt2 FROM 'SELECT t1.id, t3.id FROM t1 JOIN t3 ON t1.val = t3.val WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt2 USING @id;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: LEFT JOIN with COMPLEX column
+--echo #
+
+PREPARE stmt3 FROM 'SELECT t1.id, t1.val, t3.id FROM t1 LEFT JOIN t3 ON t1.val = t3.val WHERE t1.id > ? ORDER BY t1.id';
+SET @min_id = 0;
+EXECUTE stmt3 USING @min_id;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: LEFT JOIN with parameter in WHERE on joined table
+--echo #
+
+PREPARE stmt4 FROM 'SELECT t1.id, t1.val, t2.val FROM t1 LEFT JOIN t2 ON t1.id = t2.t1_id WHERE t2.id = ? OR t2.id IS NULL ORDER BY t1.id';
+SET @t2_id = 10;
+EXECUTE stmt4 USING @t2_id;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: RIGHT JOIN
+--echo #
+
+PREPARE stmt5 FROM 'SELECT t1.id, t2.id, t2.val FROM t1 RIGHT JOIN t2 ON t1.id = t2.t1_id WHERE t2.t1_id > ?';
+SET @min_id = 0;
+EXECUTE stmt5 USING @min_id;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Test 6: Self-join on COMPLEX column
+--echo #
+
+PREPARE stmt6 FROM 'SELECT a.id, b.id FROM t1 a JOIN t1 b ON a.val = b.val WHERE a.id < b.id AND a.val = ?';
+SET @val = '(1.0,2.0)';
+EXECUTE stmt6 USING @val;
+DEALLOCATE PREPARE stmt6;
+
+--echo #
+--echo # Test 7: Multi-table join (3 tables)
+--echo #
+
+PREPARE stmt7 FROM 'SELECT t1.id, t1.val, t2.val, t3.val FROM t1 JOIN t2 ON t1.id = t2.t1_id JOIN t3 ON t1.val = t3.val WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt7 USING @id;
+DEALLOCATE PREPARE stmt7;
+
+--echo #
+--echo # Test 8: CROSS JOIN with WHERE on COMPLEX
+--echo #
+
+PREPARE stmt8 FROM 'SELECT t1.id, t3.id FROM t1 CROSS JOIN t3 WHERE t1.val = t3.val AND t1.id = ?';
+SET @id = 2;
+EXECUTE stmt8 USING @id;
+DEALLOCATE PREPARE stmt8;
+
+--echo #
+--echo # Test 9: JOIN with GROUP BY on COMPLEX column
+--echo #
+
+PREPARE stmt9 FROM 'SELECT t1.val, COUNT(*) FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t2.t1_id > ? GROUP BY t1.val';
+SET @min_id = 0;
+EXECUTE stmt9 USING @min_id;
+DEALLOCATE PREPARE stmt9;
+
+--echo #
+--echo # Test 10: JOIN with ORDER BY on COMPLEX column
+--echo #
+
+PREPARE stmt10 FROM 'SELECT t1.id, t1.val, t2.val FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id > ? ORDER BY t1.val';
+SET @min_id = 0;
+EXECUTE stmt10 USING @min_id;
+DEALLOCATE PREPARE stmt10;
+
+--echo #
+--echo # Test 11: JOIN with multiple WHERE conditions on COMPLEX
+--echo #
+
+PREPARE stmt11 FROM 'SELECT t1.id FROM t1 JOIN t3 ON t1.val = t3.val WHERE t1.val = ? AND t3.val = ?';
+SET @val1 = '(1.0,2.0)';
+SET @val2 = '(1.0,2.0)';
+EXECUTE stmt11 USING @val1, @val2;
+DEALLOCATE PREPARE stmt11;
+
+--echo #
+--echo # Test 12: JOIN with HAVING clause
+--echo #
+
+PREPARE stmt12 FROM 'SELECT t1.val, COUNT(*) AS cnt FROM t1 JOIN t2 ON t1.id = t2.t1_id GROUP BY t1.val HAVING cnt > ?';
+SET @min_cnt = 1;
+EXECUTE stmt12 USING @min_cnt;
+DEALLOCATE PREPARE stmt12;
+
+--echo #
+--echo # Test 13: JOIN with DISTINCT on COMPLEX column
+--echo #
+
+INSERT INTO t2 VALUES (14, '(1.0,2.0)', 1);
+
+PREPARE stmt13 FROM 'SELECT DISTINCT t1.val FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id = ? ORDER BY t1.val';
+SET @id = 1;
+EXECUTE stmt13 USING @id;
+DEALLOCATE PREPARE stmt13;
+
+--echo #
+--echo # Test 14: JOIN with VDF on COMPLEX column
+--echo #
+
+PREPARE stmt14 FROM 'SELECT t1.id, vsql_complex.complex_conjugate(t1.val) FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt14 USING @id;
+DEALLOCATE PREPARE stmt14;
+
+--echo #
+--echo # Test 15: Multiple JOINs with mixed join types
+--echo #
+
+CREATE TABLE t4 (id INT PRIMARY KEY, t1_id INT, val COMPLEX);
+INSERT INTO t4 VALUES (100, 1, '(20.0,21.0)'), (101, 2, '(22.0,23.0)');
+
+PREPARE stmt15 FROM 'SELECT t1.id, t1.val, t2.val, t4.val FROM t1 INNER JOIN t2 ON t1.id = t2.t1_id LEFT JOIN t4 ON t1.id = t4.t1_id WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt15 USING @id;
+DEALLOCATE PREPARE stmt15;
+
+--echo #
+--echo # Test 16: NATURAL JOIN
+--echo #
+
+CREATE TABLE t5 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t5 VALUES (1, '(30.0,31.0)'), (2, '(32.0,33.0)'), (4, '(7.0,8.0)');
+
+PREPARE stmt16 FROM 'SELECT * FROM t1 NATURAL JOIN t5 WHERE t1.id = ?';
+SET @id = 4;
+EXECUTE stmt16 USING @id;
+DEALLOCATE PREPARE stmt16;
+
+--echo #
+--echo # Test 17: JOIN with UNION
+--echo #
+
+PREPARE stmt17 FROM 'SELECT t1.id, t1.val FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id = ? UNION SELECT t1.id, t1.val FROM t1 WHERE t1.id = ?';
+SET @id1 = 1;
+SET @id2 = 3;
+EXECUTE stmt17 USING @id1, @id2;
+DEALLOCATE PREPARE stmt17;
+
+--echo #
+--echo # Test 18: JOIN with subquery
+--echo #
+
+PREPARE stmt18 FROM 'SELECT t1.id, t1.val FROM t1 JOIN (SELECT t1_id FROM t2 WHERE id > ?) AS sub ON t1.id = sub.t1_id';
+SET @min_id = 10;
+EXECUTE stmt18 USING @min_id;
+DEALLOCATE PREPARE stmt18;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1, t2, t3, t4, t5;
+
+--source include/villagesql/uninstall_complex_extension.inc

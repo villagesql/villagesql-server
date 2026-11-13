@@ -1,0 +1,69 @@
+# === Purpose ===
+#
+# When using the hash_scan algorithm to apply update row events,
+# and the algorithm has updated a row, the new row needs to be
+# looked up again in the hash. This ensures that successive updates
+# of the same row within one event are applied correctly. The test
+# verifies that this is the case when using binlog_row_value_options=PARTIAL_JSON.
+#
+# ==== Implementation ====
+#
+# 1. Create source-replica topology.
+# 2. Set binlog_row_value_options value to PARTIAL_JSON on source.
+# 3. Create tables, insert data and procedures.
+# 4. Sync replica with source.
+# 5. Cleanup.
+
+# === References===
+#
+# Bug#32221703 ERROR APPLYING EVENT UPDATING SAME ROW MULTIPLE TIMES WHEN USING PARTIAL JSON
+#
+
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+--let $skip_configuration_privilege_checks_user= 'skip'
+--let $rpl_privilege_checks_user_grant_all= 1
+# 1. Create source-replica topology.
+--source include/rpl/init_source_replica.inc
+
+# 2. Set binlog_row_value_options value to PARTIAL_JSON.
+SET @old_binlog_row_value_options= @@session.BINLOG_ROW_VALUE_OPTIONS;
+SET @@session.binlog_row_value_options = 'PARTIAL_JSON';
+
+# 3. Create tables, procedures and insert data.
+--source include/rpl/connection_source.inc
+CREATE TABLE t1 (a INT UNIQUE KEY, b JSON);
+INSERT INTO t1 VALUES (1, '{ "long string": "long string", "x": 2}');
+CREATE TABLE t2 (a INT);
+
+--delimiter |
+CREATE FUNCTION f () RETURNS INT BEGIN
+  UPDATE t1 SET a = 3, b = JSON_SET(b, '$.x', 3);
+  UPDATE t1 SET a = 2;
+  UPDATE t1 SET a = 4;
+  RETURN 1;
+END|
+--delimiter ;
+
+BEGIN;
+INSERT INTO t2 VALUES (f());
+COMMIT;
+
+# 4. Sync replica with source server.
+--source include/rpl/sync_to_replica.inc
+
+--let diff_tables=master:test.t1, slave:test.t1
+--source include/diff_tables.inc
+
+--let diff_tables=master:test.t2, slave:test.t2
+--source include/diff_tables.inc
+
+SHOW STATUS LIKE 'Slave_rows_last_search_algorithm_used';
+
+# 6. Cleanup.
+--source include/rpl/connection_source.inc
+SET @@SESSION.BINLOG_ROW_VALUE_OPTIONS= @old_binlog_row_value_options;
+DROP TABLE t1;
+DROP TABLE t2;
+DROP FUNCTION f;
+--source include/rpl/deinit.inc

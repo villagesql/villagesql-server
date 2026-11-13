@@ -1,0 +1,354 @@
+--echo #
+--echo # Bug#24289 Status Variable "Questions" gets wrong values with Stored Routines
+--echo #
+FLUSH STATUS;
+DELIMITER $$;
+CREATE FUNCTION testQuestion() RETURNS INTEGER
+BEGIN
+  DECLARE foo INTEGER;
+  DECLARE bar INTEGER;
+  SET foo=1;
+  SET bar=2;
+  RETURN foo;
+END $$
+CREATE PROCEDURE testQuestion2()
+BEGIN
+  SELECT 1;
+END $$
+DELIMITER ;$$
+--disable_warnings
+DROP TABLE IF EXISTS t1,t2;
+--enable_warnings
+CREATE TABLE t1 (c1 INT);
+CREATE TABLE t2 (c1 INT);
+CREATE EVENT ev1 ON SCHEDULE EVERY 1 SECOND
+  DO INSERT INTO t1 VALUES(1);
+
+--echo Assert Questions == 7
+SHOW STATUS LIKE 'Questions';
+SELECT testQuestion();
+--echo Assert Questions == 9
+SHOW STATUS LIKE 'Questions';
+CALL testQuestion2();
+--echo Assert Questions == 11
+SHOW STATUS LIKE 'Questions';
+SELECT 1;
+--echo Assert Questions == 13
+SHOW STATUS LIKE 'Questions';
+connect (con1,localhost,root,,);
+connection con1;
+SELECT 1;
+connection default;
+disconnect con1;
+--echo Assert Questions == 14
+SHOW STATUS LIKE 'Questions';
+DELIMITER $$;
+CREATE TRIGGER trigg1 AFTER INSERT ON t1
+  FOR EACH ROW BEGIN
+   INSERT INTO t2 VALUES (1);
+  END;
+$$
+DELIMITER ;$$
+--echo Assert Questions == 16
+SHOW STATUS LIKE 'Questions';
+INSERT INTO t1 VALUES (1);
+--echo Assert Questions == 18
+SHOW STATUS LIKE 'Questions';
+# TODO: Uncomment the lines below when FLUSH GLOBAL STATUS is implemented.
+# FLUSH STATUS;
+# SHOW GLOBAL STATUS LIKE 'Questions';
+DROP PROCEDURE testQuestion2;
+DROP TRIGGER trigg1;
+DROP FUNCTION testQuestion;
+DROP EVENT ev1;
+DROP TABLE t1,t2;
+--echo End of 6.0 tests
+
+--echo #
+--echo # Bug#34096590: Hypergraph optimizer doesn't update select_*
+--echo #               status variables
+--echo #
+
+--source include/elide_costs.inc
+
+CREATE TABLE t(
+  id INT,
+  x INT NOT NULL DEFAULT (id % 5),
+  y INT NOT NULL DEFAULT (id % 2),
+  KEY (id),
+  KEY (x));
+INSERT INTO t(id) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
+ANALYZE TABLE t;
+
+# Table scan is counted as "select_scan", and "no_index_used".
+let $query = SELECT * FROM t;
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+--disable_ps_protocol
+--disable_result_log
+--eval $query
+--enable_result_log
+
+# Do not execute this in --ps-protocol:
+# The test client will create prepared statements,
+# adding noise to digests, polluting the output.
+SELECT SUM_NO_INDEX_USED, SUM_NO_GOOD_INDEX_USED
+FROM performance_schema.events_statements_summary_by_digest
+WHERE QUERY_SAMPLE_TEXT LIKE 'SELECT %';
+--enable_ps_protocol
+
+# Covering index scan is counted as "select_scan", but not as "no_index_used".
+let $query = SELECT 1 FROM t ORDER BY x;
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+--disable_ps_protocol
+--disable_result_log
+--eval $query
+--enable_result_log
+SELECT SUM_NO_INDEX_USED, SUM_NO_GOOD_INDEX_USED
+FROM performance_schema.events_statements_summary_by_digest
+WHERE QUERY_SAMPLE_TEXT LIKE 'SELECT %';
+--enable_ps_protocol
+
+# An index lookup is not counted.
+let $query = SELECT x FROM t WHERE x = 1;
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# Uses a Row ID Ordered Union, which is counted as a "select_range"
+# scan. Even though there are multiple range scans on t as children of
+# the ROR Union, it should be counted only once.
+let $query = SELECT /*+ INDEX_MERGE(t) */ 1 FROM t WHERE x < 0 OR id > 100;
+# Hypergraph doesn't have a redundant filter on top.
+--let $normalize = $elide_metrics /^-> Filter.*\n// / +->/->/
+--replace_regex $normalize
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--eval $query
+SHOW STATUS LIKE 'select%';
+
+# Joins count table scans on left side as "select_scan" and table
+# scans on right side as "select_full_join".
+let $query = SELECT * FROM t AS t1 STRAIGHT_JOIN t AS t2 WHERE t1.y = t2.y;
+--let $normalize = $elide_costs /t2\.y = t1\.y/t1.y = t2.y/
+--replace_regex $normalize
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# Range scans on the left side of a join are counted as "select_range", and
+# table scans on the right side as "select_full_join".
+let $query =
+SELECT /*+ JOIN_INDEX(t1) */ * FROM t AS t1 STRAIGHT_JOIN t AS t2
+WHERE t1.y = t2.y AND t1.x < 1;
+--let $normalize = $elide_costs /t2\.y = t1\.y/t1.y = t2.y/ /, with index condition:.*?\)//
+--replace_regex $normalize
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# Range scans on the right side of a join are counted as
+# "select_full_range_join", and table scans on the left side as
+# "select_scan".
+let $query =
+SELECT /*+ JOIN_INDEX(t2) */ * FROM t AS t1 STRAIGHT_JOIN t AS t2
+WHERE t1.y = t2.y AND t2.x < 1;
+--replace_regex $normalize
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# A join with a table scan on the left side and a primary index lookup
+# on the right side will count the table scan as "select_scan", and
+# the index lookup is not counted at all.
+let $query = SELECT * FROM t AS t1, t AS t2 WHERE t1.y = t2.id LIMIT 1;
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# Dynamic range scans are counted as "select_range_check",
+# "no_good_index_used" and "no_index_used". (Additionally
+# "select_scan" for the index scan on the left side of the join.)
+let $query = SELECT 1 FROM t AS t1, t AS t2 WHERE t1.x < t2.x;
+--skip_if_hypergraph  # Does not support dynamic range scans.
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+--skip_if_hypergraph  # Does not support dynamic range scans.
+SHOW STATUS LIKE 'select%';
+
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+--disable_ps_protocol
+--disable_result_log
+--eval $query
+--enable_result_log
+--skip_if_hypergraph  # Does not support dynamic range scans.
+SELECT SUM_NO_INDEX_USED, SUM_NO_GOOD_INDEX_USED
+FROM performance_schema.events_statements_summary_by_digest
+WHERE QUERY_SAMPLE_TEXT LIKE 'SELECT %';
+--enable_ps_protocol
+
+# INSERT SELECT should also count the scans. Should see one
+# "select_scan" for the table scan.
+CREATE TABLE tt(x INT);
+FLUSH STATUS;
+INSERT INTO tt SELECT y FROM t;
+SHOW STATUS LIKE 'select%';
+
+# Multi-table UPDATE should count scans. Sees one "select_scan" for
+# the outer table and one "select_full_join" for the inner table of
+# the join.
+FLUSH STATUS;
+UPDATE tt, t SET tt.x = t.x WHERE tt.x = t.y;
+SHOW STATUS LIKE 'select%';
+
+# Similarly, multi-table DELETE counts scans. One "select_scan" for
+# the outer table and one "select_full_join" for the inner table of
+# the join.
+FLUSH STATUS;
+DELETE tt FROM tt, t WHERE tt.x = t.y;
+SHOW STATUS LIKE 'select%';
+
+DROP TABLE tt;
+
+# SET statements should count the scans.
+FLUSH STATUS;
+SET @var = (SELECT SUM(y) FROM t);
+SHOW STATUS LIKE 'select%';
+
+# Scans in scalar subqueries in the SELECT list should be counted.
+# There's one "select_scan" in the subquery and one in the main query.
+FLUSH STATUS;
+--disable_result_log
+SELECT (SELECT MAX(y) FROM t), y FROM t;
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# Same with IN subqueries in the SELECT list.
+# There's one "select_scan" in the subquery and one in the main query.
+FLUSH STATUS;
+--disable_result_log
+SELECT y IN (SELECT y + 1 FROM t) FROM t;
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# For a query with (non-merged) derived tables, the first table in
+# each query block should be treated as first table. So we count two
+# "select_scan" (first table in each query block), and two
+# "select_full_join" (second table in each query block).
+FLUSH STATUS;
+--disable_result_log
+SELECT *
+FROM t AS t1,
+     (SELECT DISTINCT t3.y + t4.y FROM t t3, t t4 WHERE t3.y < t4.y) AS t2(y)
+WHERE t1.y <> t2.y;
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# Counts three scans. Once for each operand of the UNION, and once for
+# the resulting temporary table in which duplicates are removed.
+let $query = SELECT y FROM t UNION DISTINCT SELECT y + 1 FROM t;
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# Counts two scans. Once for each operand of the UNION. There is no
+# duplicate elimination for UNION ALL.
+let $query = SELECT y FROM t UNION ALL SELECT y + 1 FROM t;
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+# Counts three scans. One for each operand of the UNION, and one for
+# the scan of the temporary table.
+let $query =
+SELECT * FROM (SELECT y FROM t UNION DISTINCT SELECT y + 1 FROM t) AS dt;
+--replace_regex $elide_costs
+--eval EXPLAIN FORMAT=TREE $query
+FLUSH STATUS;
+--disable_result_log
+--eval $query
+--enable_result_log
+SHOW STATUS LIKE 'select%';
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#36775485: Hypergraph optimizer does not set SUM_ROWS_EXAMINED in
+--echo #               ps.events_statements_summary_by_digest for index range
+--echo #               scans, and some index lookup
+--echo #
+
+CREATE TABLE t(x INT, KEY (x));
+INSERT INTO t VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
+ANALYZE TABLE t;
+
+--disable_ps_protocol
+
+# Table scan. Expect all ten rows to be examined.
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+SELECT /*+ NO_INDEX(t) */ * FROM t WHERE x > 10;
+SELECT SUM_ROWS_EXAMINED, SUM_ROWS_SENT
+FROM performance_schema.events_statements_summary_by_digest
+WHERE QUERY_SAMPLE_TEXT LIKE 'SELECT %';
+
+# Range scan. Expect two rows examined.
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+SELECT /*+ JOIN_INDEX(t x) */ * FROM t WHERE x < 3;
+SELECT SUM_ROWS_EXAMINED, SUM_ROWS_SENT
+FROM performance_schema.events_statements_summary_by_digest
+WHERE QUERY_SAMPLE_TEXT LIKE 'SELECT %';
+
+# Index lookup. Expect one row examined.
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+SELECT /*+ JOIN_INDEX(t x) */ * FROM t WHERE x = 3;
+SELECT SUM_ROWS_EXAMINED, SUM_ROWS_SENT
+FROM performance_schema.events_statements_summary_by_digest
+WHERE QUERY_SAMPLE_TEXT LIKE 'SELECT %';
+
+--enable_ps_protocol
+
+DROP TABLE t;

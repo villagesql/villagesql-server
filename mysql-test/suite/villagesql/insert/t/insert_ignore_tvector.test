@@ -1,0 +1,16 @@
+# Test INSERT IGNORE with NULL on a NOT NULL TVECTOR column.
+# TVECTOR has an intrinsic default of N zero floats (e.g. [0,0,0] for TVECTOR(3)).
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t (
+    id INT PRIMARY KEY,
+    vec TVECTOR(3) NOT NULL
+);
+
+INSERT IGNORE INTO t VALUES (1, NULL);
+SELECT * FROM t;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION vsql_tvector;

@@ -1,0 +1,18 @@
+###############################################################################
+# Bug#12161 Xa recovery and client disconnection
+# Testing new server options and binary logging prepared XA transaction.
+###############################################################################
+--source include/not_valgrind.inc
+--source include/have_log_bin.inc
+--let $option_name = xa_detach_on_prepare
+--let $option_value = 0
+--source include/only_with_option.inc
+
+#
+# ROW mode is chosen because formats are varied inside the sourced tests.
+#
+
+# This test is binary_log format agnostic so row is chosen.
+--source include/have_binlog_format_row.inc
+CALL mtr.add_suppression("Statement is unsafe because it is being used inside a XA transaction");
+--source common/binlog/binlog_xa_prepared.test

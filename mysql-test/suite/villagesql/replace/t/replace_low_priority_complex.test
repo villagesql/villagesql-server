@@ -1,0 +1,47 @@
+# Test REPLACE LOW_PRIORITY ... with COMPLEX type
+# Grammar: REPLACE LOW_PRIORITY [INTO] ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert 10 rows with zero variants
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(0,0)'),
+    (3, '(-3.5,4.5)'),
+    (4, '(-0,0)'),
+    (5, '(5.0,-6.0)'),
+    (6, '(0,-0)'),
+    (7, '(-7.5,-8.5)'),
+    (8, '(-0,-0)'),
+    (9, '(9.0,10.0)'),
+    (10, '(0,0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Low priority replace on existing rows
+REPLACE LOW_PRIORITY INTO t1 VALUES (1, '(11.0,12.0)');
+REPLACE LOW_PRIORITY INTO t1 VALUES (2, '(13.0,14.0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Low priority replace with multiple rows
+REPLACE LOW_PRIORITY INTO t1 VALUES
+    (3, '(15.0,16.0)'),
+    (11, '(17.0,18.0)'),
+    (5, '(19.0,20.0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Low priority replace on zero variant rows
+REPLACE LOW_PRIORITY INTO t1 VALUES (6, '(21.0,22.0)'), (8, '(23.0,24.0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

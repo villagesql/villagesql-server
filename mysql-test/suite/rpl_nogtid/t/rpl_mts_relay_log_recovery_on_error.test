@@ -1,0 +1,115 @@
+###############################################################################
+# Bug#21507981: REPLICATION POSITION LOST AFTER CRASH ON MTS CONFIGURED SLAVE
+#
+# Problem:
+# ========
+# Enable MTS along with crash-safe replication tables. Make sure that the server
+# is busily inserting data with multiple threads in parallel. Shutdown mysqld
+# uncleanly (kill -9 or power off server without notice).
+#
+# Now users are restarting the server with --relay-log-recovery=1 to recover the
+# crashed slave.
+#
+# This results in following error:
+# ================================
+# 2015-06-24 13:49:03 3895 [ERROR] --relay-log-recovery cannot be executed when
+# the slave was stopped with an error or killed in MTS mode; consider using
+# RESET REPLICA or restart the server with --relay-log-recovery = 0 followed by
+# START REPLICA UNTIL SQL_AFTER_MTS_GAPS.
+#
+# i.e relay-log-recovery will not work in MTS mode.
+###############################################################################
+# Following test demonstrates that when a gap is generated because MTS has
+# stopped due to an error then attempting 'relay-log-recovery' will not be
+# successful. Once the route cause of the error is eliminated restarting the
+# recovery with relay-log-recovery=1 should fix the issue.
+#
+# Testing Method:
+# ===============
+# It first creates two databases (d1 and d2) and setup slave to use two parallel
+# workers. The test case then insert on the slave a tuple that will block
+# writes on d2 and generate gaps. Now COMMIT the blocking tuple on slave so
+# that workers will proceed and apply the pending transactions. This will
+# result in duplicate key error and slave will stop. Now crash the slave
+# server and initiate relay-log-recovery. It should fail as slave has stopped
+# due to an error. Eliminate the cause of duplicate key error by removing the
+# local changes on slave. Restart the recovery process it should be
+# successful.
+--source include/force_restart.inc
+--source include/have_binlog_format_row.inc
+--source include/rpl/init_source_replica.inc
+
+--source include/rpl/connection_replica.inc
+call mtr.add_suppression("Duplicate entry*");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("Failed to initialize the connection metadata structure");
+call mtr.add_suppression("Replica failed to initialize applier metadata*");
+call mtr.add_suppression("MTA recovery: automatic recovery failed.*");
+call mtr.add_suppression("Recovery from source pos");
+
+--source common/rpl/rpl_generate_mta_gap.test
+
+--source include/rpl/connection_replica.inc
+COMMIT;
+--let $slave_sql_errno= convert_error(ER_DUP_ENTRY)
+source include/rpl/wait_for_applier_error.inc;
+
+# Restart the slave server - Recovery will fail as MTS has stopped due to an
+# error.
+--let $rpl_server_number= 2
+--let $rpl_server_parameters= --skip_replica_start=TRUE --sync_source_info=1 --relay-log-recovery=1
+--source include/rpl/restart_server.inc
+
+--source include/rpl/connection_replica.inc
+--exec echo "Relay log recovery should fail as MTS stopped due to an error"
+
+--error ER_REPLICA_AM_INIT_REPOSITORY
+START REPLICA;
+
+# Remove the affending rows from slave.
+--exec echo "Eliminate the cause of MTS error"
+DELETE FROM d2.t WHERE a=2;
+DELETE FROM d2.t WHERE a=3;
+DELETE FROM d1.t WHERE a=3;
+
+--let $table=d2.t
+--let $count=1
+--source include/wait_until_rows_count.inc
+
+--let $table=d1.t
+--let $count=2
+--source include/wait_until_rows_count.inc
+
+# Restart the slave server this should fix the gaps.
+--let $rpl_server_number= 2
+--let $rpl_server_parameters= --skip_replica_start=TRUE --sync_source_info=1 --relay-log-recovery=1
+--source include/rpl/restart_server.inc
+
+--exec echo "MTS recovery should be successful. Check that gaps are filled."
+
+--let $assert_text= Table d1.t should contain 2 rows.
+--let $assert_cond= [select count(*) from d1.t] = 2
+--source include/assert.inc
+
+--let $assert_text= Table d2.t should contain 3 rows.
+--let $assert_cond= [select count(*) from d2.t] = 3
+--source include/assert.inc
+
+--source include/rpl/start_replica.inc
+
+# Check consistency
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--let $diff_tables= master:d1.t, slave:d1.t
+--source include/diff_tables.inc
+
+--let $diff_tables= master:d2.t, slave:d2.t
+--source include/diff_tables.inc
+
+#
+# Cleanup
+#
+--source include/rpl/connection_source.inc
+DROP DATABASE d1;
+DROP DATABASE d2;
+--source include/rpl/deinit.inc

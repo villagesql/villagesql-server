@@ -1,0 +1,51 @@
+# Test CREATE TABLE with named constraints and COMPLEX columns
+# Tests named PRIMARY KEY, UNIQUE, and CHECK constraints
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE named_constraints_table (
+    id INT,
+    code VARCHAR(20),
+    complex_value COMPLEX,
+    measurement DOUBLE,
+    CONSTRAINT pk_named PRIMARY KEY (id),
+    CONSTRAINT uk_code_named UNIQUE KEY (code),
+    CONSTRAINT uk_complex UNIQUE KEY (complex_value),
+    CONSTRAINT chk_complex CHECK (complex_value >= '(0,0)'),
+    CONSTRAINT chk_measurement_named CHECK (measurement >= 0.0)
+);
+
+SHOW COLUMNS FROM named_constraints_table;
+
+INSERT INTO named_constraints_table VALUES (1, 'A001', '(53.0,54.0)', 10.5);
+INSERT INTO named_constraints_table VALUES (2, 'B002', '(55.0,56.0)', 15.2);
+
+SELECT * FROM named_constraints_table;
+
+# Test named primary key constraint violation
+--error ER_DUP_ENTRY
+INSERT INTO named_constraints_table VALUES (1, 'C003', '(57.0,58.0)', 12.1);
+
+# Test named unique constraint violation
+--error ER_DUP_ENTRY
+INSERT INTO named_constraints_table VALUES (3, 'A001', '(59.0,60.0)', 8.7);
+
+# Check custom type's unique key
+--error ER_DUP_ENTRY
+INSERT INTO named_constraints_table VALUES (72, 'Z001', '(53.0,54.0)', 90.7);
+
+# Test named check constraint violation
+--error ER_CHECK_CONSTRAINT_VIOLATED
+INSERT INTO named_constraints_table VALUES (4, 'D004', '(61.0,62.0)', -5.0);
+
+# Test named check constraint violation for custom type
+--error ER_CHECK_CONSTRAINT_VIOLATED
+INSERT INTO named_constraints_table VALUES (40, 'E704', '(-0.1,62.0)', 99.9);
+
+SELECT * FROM named_constraints_table;
+
+DROP TABLE named_constraints_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

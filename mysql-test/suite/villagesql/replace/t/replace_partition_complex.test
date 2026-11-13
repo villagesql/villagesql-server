@@ -1,0 +1,59 @@
+# Test REPLACE INTO ... PARTITION ... with COMPLEX type
+# Grammar: REPLACE [INTO] tbl_name PARTITION (partition_name) ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT,
+    val COMPLEX,
+    PRIMARY KEY (id)
+)
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN (20)
+);
+
+# Insert 10 rows with zero variants across both partitions
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(0,0)'),
+    (3, '(-3.5,4.5)'),
+    (4, '(-0,0)'),
+    (5, '(5.0,-6.0)'),
+    (11, '(11.0,12.0)'),
+    (12, '(0,-0)'),
+    (13, '(13.0,14.0)'),
+    (14, '(-0,-0)'),
+    (15, '(15.0,16.0)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Verify initial partition distribution
+SELECT * FROM t1 PARTITION (p0) ORDER BY id;
+SELECT * FROM t1 PARTITION (p1) ORDER BY id;
+
+# Replace into p0 partition (id < 10)
+REPLACE INTO t1 PARTITION (p0) VALUES (1, '(21.0,22.0)');
+REPLACE INTO t1 PARTITION (p0) VALUES (2, '(23.0,24.0)');
+
+SELECT * FROM t1 ORDER BY id;
+SELECT * FROM t1 PARTITION (p0) ORDER BY id;
+
+# Replace into p1 partition (id >= 10 and < 20)
+REPLACE INTO t1 PARTITION (p1) VALUES (11, '(25.0,26.0)');
+REPLACE INTO t1 PARTITION (p1) VALUES (12, '(27.0,28.0)');
+
+SELECT * FROM t1 ORDER BY id;
+SELECT * FROM t1 PARTITION (p1) ORDER BY id;
+
+# Replace multiple rows in same partition
+REPLACE INTO t1 PARTITION (p0) VALUES (3, '(31.0,32.0)'), (6, '(33.0,34.0)');
+REPLACE INTO t1 PARTITION (p1) VALUES (13, '(35.0,36.0)'), (16, '(37.0,38.0)');
+
+SELECT * FROM t1 ORDER BY id;
+SELECT * FROM t1 PARTITION (p0) ORDER BY id;
+SELECT * FROM t1 PARTITION (p1) ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,72 @@
+# Test INSERT INTO ... SELECT ... ON DUPLICATE KEY UPDATE with COMPLEX type
+# Grammar: INSERT [INTO] tbl_name ... SELECT ... ON DUPLICATE KEY UPDATE assignment_list
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_source (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    name VARCHAR(50)
+);
+
+# Insert 30+ rows into source table with zero variants and negative values
+INSERT INTO t_source VALUES
+    (1, '(15.0,20.0)', 'source1'),
+    (2, '(-0,0)', 'source2'),
+    (3, '(-7.5,-8.5)', 'source3'),
+    (4, '(0,0)', 'source4'),
+    (5, '(22.0,-13.0)', 'source5'),
+    (6, '(0,-0)', 'source6'),
+    (7, '(-18.0,9.0)', 'source7'),
+    (8, '(3.5,4.2)', 'source8'),
+    (9, '(-0,-0)', 'source9'),
+    (10, '(11.5,-12.5)', 'source10'),
+    (11, '(0,0)', 'source11'),
+    (12, '(-25.0,-30.0)', 'source12'),
+    (13, '(19.0,21.0)', 'source13'),
+    (14, '(-0,0)', 'source14'),
+    (15, '(7.0,-5.0)', 'source15'),
+    (16, '(-14.0,16.0)', 'source16'),
+    (17, '(0,-0)', 'source17'),
+    (18, '(26.0,28.0)', 'source18'),
+    (19, '(-9.5,11.5)', 'source19'),
+    (20, '(-0,-0)', 'source20'),
+    (21, '(33.0,-35.0)', 'source21'),
+    (22, '(0,0)', 'source22'),
+    (23, '(-22.0,24.0)', 'source23'),
+    (24, '(17.5,19.5)', 'source24'),
+    (25, '(0,-0)', 'source25'),
+    (26, '(-31.0,-32.0)', 'source26'),
+    (27, '(29.0,30.0)', 'source27'),
+    (28, '(-0,0)', 'source28'),
+    (29, '(12.0,-14.0)', 'source29'),
+    (30, '(-27.0,28.0)', 'source30');
+
+CREATE TABLE t_target (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    name VARCHAR(50)
+);
+
+# Pre-populate target with some rows that will be updated
+INSERT INTO t_target VALUES
+    (1, '(0.0,0.0)', 'original1'),
+    (5, '(0.0,0.0)', 'original5'),
+    (10, '(0.0,0.0)', 'original10'),
+    (15, '(0.0,0.0)', 'original15'),
+    (20, '(0.0,0.0)', 'original20');
+
+# Insert/Update from SELECT - existing rows should be updated, new rows inserted
+INSERT INTO t_target (id, val, name)
+SELECT id, val, name FROM t_source
+ON DUPLICATE KEY UPDATE val = VALUES(val), name = VALUES(name);
+
+SELECT * FROM t_target ORDER BY id;
+
+# Test ordering by COMPLEX column
+SELECT * FROM t_target ORDER BY val, id;
+
+DROP TABLE t_source;
+DROP TABLE t_target;
+
+--source include/villagesql/uninstall_complex_extension.inc

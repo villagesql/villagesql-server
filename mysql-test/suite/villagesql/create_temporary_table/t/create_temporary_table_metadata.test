@@ -1,0 +1,33 @@
+# Test if custom_columns metadata is written for temporary tables
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE source_signals (
+    id INT PRIMARY KEY,
+    waveform COMPLEX,
+    frequency DOUBLE
+);
+
+INSERT INTO source_signals VALUES (1, '(27.0,28.0)', 440.0);
+
+# Create temporary table
+CREATE TEMPORARY TABLE temp_analysis AS
+SELECT id, waveform, frequency
+FROM source_signals
+WHERE frequency > 400.0;
+
+# Check if metadata shows up in INFORMATION_SCHEMA
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 'temp_analysis';
+
+# Check DESCRIBE
+SHOW COLUMNS FROM temp_analysis;
+
+# Query works
+SELECT * FROM temp_analysis;
+
+DROP TABLE temp_analysis;
+DROP TABLE source_signals;
+
+--source include/villagesql/uninstall_complex_extension.inc

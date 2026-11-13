@@ -1,0 +1,132 @@
+# Test INSERT ... AS alias ON DUPLICATE KEY UPDATE with COMPLEX type
+# Grammar: INSERT INTO ... AS alias ... ON DUPLICATE KEY UPDATE ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    name VARCHAR(50)
+);
+
+# Insert initial 20 rows with zero variants and negative values
+INSERT INTO t1 VALUES (1, '(15.0,20.0)', 'row1');
+INSERT INTO t1 VALUES (2, '(-0,0)', 'row2');
+INSERT INTO t1 VALUES (3, '(-7.5,-8.5)', 'row3');
+INSERT INTO t1 VALUES (4, '(0,0)', 'row4');
+INSERT INTO t1 VALUES (5, '(22.0,-13.0)', 'row5');
+INSERT INTO t1 VALUES (6, '(0,-0)', 'row6');
+INSERT INTO t1 VALUES (7, '(-18.0,9.0)', 'row7');
+INSERT INTO t1 VALUES (8, '(3.5,4.2)', 'row8');
+INSERT INTO t1 VALUES (9, '(-0,-0)', 'row9');
+INSERT INTO t1 VALUES (10, '(11.5,-12.5)', 'row10');
+INSERT INTO t1 VALUES (11, '(0,0)', 'row11');
+INSERT INTO t1 VALUES (12, '(-25.0,-30.0)', 'row12');
+INSERT INTO t1 VALUES (13, '(19.0,21.0)', 'row13');
+INSERT INTO t1 VALUES (14, '(-0,0)', 'row14');
+INSERT INTO t1 VALUES (15, '(7.0,-5.0)', 'row15');
+INSERT INTO t1 VALUES (16, '(-14.0,16.0)', 'row16');
+INSERT INTO t1 VALUES (17, '(0,-0)', 'row17');
+INSERT INTO t1 VALUES (18, '(26.0,28.0)', 'row18');
+INSERT INTO t1 VALUES (19, '(-9.5,11.5)', 'row19');
+INSERT INTO t1 VALUES (20, '(-0,-0)', 'row20');
+
+# Insert new rows using row alias (no duplicates)
+INSERT INTO t1 VALUES (21, '(33.0,-35.0)', 'row21') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (22, '(0,0)', 'row22') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+# Update existing rows using row alias to reference new value
+INSERT INTO t1 VALUES (1, '(1.1,2.1)', 'updated1') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (5, '(5.5,-6.5)', 'updated5') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (10, '(10.1,-11.1)', 'updated10') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+# Update with zero variants using row alias
+INSERT INTO t1 VALUES (2, '(0,0)', 'updated_zero') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (9, '(-0,-0)', 'updated_zero') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+# Insert more new rows to reach 30+
+INSERT INTO t1 VALUES (23, '(-22.0,24.0)', 'row23') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (24, '(17.5,19.5)', 'row24') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (25, '(0,-0)', 'row25') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (26, '(-31.0,-32.0)', 'row26') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (27, '(29.0,30.0)', 'row27') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (28, '(-0,0)', 'row28') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (29, '(12.0,-14.0)', 'row29') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+INSERT INTO t1 VALUES (30, '(-27.0,28.0)', 'row30') AS new_row
+ON DUPLICATE KEY UPDATE val = new_row.val, name = new_row.name;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Test ordering by COMPLEX column
+SELECT * FROM t1 ORDER BY val, id;
+
+DROP TABLE t1;
+
+# Test with multiple COMPLEX columns
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    val_a COMPLEX,
+    val_b COMPLEX,
+    val_c COMPLEX
+);
+
+# Insert initial rows
+INSERT INTO t2 VALUES (1, '(1.0,2.0)', '(3.0,4.0)', '(5.0,6.0)');
+INSERT INTO t2 VALUES (2, '(0,0)', '(-0,0)', '(0,-0)');
+INSERT INTO t2 VALUES (3, '(-7.0,8.0)', '(9.0,-10.0)', '(-11.0,-12.0)');
+INSERT INTO t2 VALUES (4, '(13.5,14.5)', '(-15.5,16.5)', '(17.5,-18.5)');
+INSERT INTO t2 VALUES (5, '(-19.0,-20.0)', '(21.0,22.0)', '(-23.0,24.0)');
+
+# Insert new row using row alias (no duplicate)
+INSERT INTO t2 VALUES (6, '(0,-0)', '(24.0,-25.0)', '(-0,0)') AS new_row
+ON DUPLICATE KEY UPDATE val_a = new_row.val_a, val_b = new_row.val_b, val_c = new_row.val_c;
+
+# Update existing row using row alias
+INSERT INTO t2 VALUES (1, '(1.1,2.1)', '(3.1,4.1)', '(5.1,6.1)') AS new_row
+ON DUPLICATE KEY UPDATE val_a = new_row.val_a, val_b = new_row.val_b, val_c = new_row.val_c;
+
+# Update with zero variants using row alias
+INSERT INTO t2 VALUES (2, '(-0,-0)', '(0,-0)', '(-0,0)') AS new_row
+ON DUPLICATE KEY UPDATE val_a = new_row.val_a, val_b = new_row.val_b, val_c = new_row.val_c;
+
+# Insert more rows
+INSERT INTO t2 VALUES (7, '(26.0,27.0)', '(-0,-0)', '(28.0,29.0)') AS new_row
+ON DUPLICATE KEY UPDATE val_a = new_row.val_a, val_b = new_row.val_b, val_c = new_row.val_c;
+
+INSERT INTO t2 VALUES (8, '(-30.0,31.0)', '(32.0,33.0)', '(0,0)') AS new_row
+ON DUPLICATE KEY UPDATE val_a = new_row.val_a, val_b = new_row.val_b, val_c = new_row.val_c;
+
+SELECT * FROM t2 ORDER BY id;
+
+# Test ordering by multiple COMPLEX columns
+SELECT * FROM t2 ORDER BY val_a, val_b;
+SELECT * FROM t2 ORDER BY val_b, val_c;
+
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

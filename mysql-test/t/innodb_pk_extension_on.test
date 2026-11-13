@@ -1,0 +1,15 @@
+--source include/not_hypergraph.inc
+
+--echo #
+--echo #  WL#6266 Make use of hidden key parts
+--echo #
+
+--echo #
+--echo # Optimizer switch use_index_extensions=on
+--echo #
+
+set optimizer_switch= "use_index_extensions=on";
+
+--source include/innodb_pk_extension.inc
+
+set optimizer_switch=default;

@@ -1,0 +1,25 @@
+CREATE TEMPORARY TABLE IF NOT EXISTS t1 (
+id INT PRIMARY KEY,
+temp_value COMPLEX
+);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+id	int	NO	PRI	NULL	NULL
+temp_value	vsql_complex.COMPLEX	YES		NULL	NULL
+INSERT INTO t1 VALUES (1, '(-1.5,2.8)');
+INSERT INTO t1 VALUES (2, '(4.0,0.0)');
+SELECT * FROM t1;
+id	temp_value
+1	(-1.5,2.8)
+2	(4,0)
+CREATE TEMPORARY TABLE IF NOT EXISTS t1 (
+different_col INT
+);
+Warnings:
+Note	1050	Table 't1' already exists
+SELECT * FROM t1;
+id	temp_value
+1	(-1.5,2.8)
+2	(4,0)
+DROP TABLE t1;
+include/rpl/deprecated/show_binlog_events.inc

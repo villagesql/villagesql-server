@@ -1,0 +1,7 @@
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+
+NOT YET IMPLEMENTED: cursor tests
+--------------------------------------------------------------------------------
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead

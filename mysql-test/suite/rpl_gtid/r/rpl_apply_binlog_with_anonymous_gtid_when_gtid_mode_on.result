@@ -1,0 +1,32 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+#
+# Stop replica threads and clear slave datadir.
+#
+include/rpl/stop_replica.inc
+RESET REPLICA;
+#
+# Copy the binlog with Anonymous_GTID log events and
+# relay log index to slave datadir.
+#
+#
+# Process the binlog with Anonymous_GTID log events.
+#
+START REPLICA;
+#
+# Wait for SQL thread error.
+#
+call mtr.add_suppression("Replica.* @@SESSION.GTID_NEXT cannot be set to ANONYMOUS when @@GLOBAL.GTID_MODE = ON.");
+call mtr.add_suppression("Replica worker thread has failed to apply an event");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped");
+include/rpl/wait_for_applier_error.inc [errno=1782]
+include/rpl/stop_replica.inc
+RESET BINARY LOGS AND GTIDS;
+RESET REPLICA;
+include/rpl/start_replica.inc
+[connection master]
+include/rpl/deinit.inc
