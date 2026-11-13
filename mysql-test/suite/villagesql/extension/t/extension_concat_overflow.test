@@ -109,4 +109,3 @@ DROP TABLE t;
 --echo # Uninstall the extensions
 UNINSTALL EXTENSION vsql_simple;
 UNINSTALL EXTENSION vsql_complex;
-
