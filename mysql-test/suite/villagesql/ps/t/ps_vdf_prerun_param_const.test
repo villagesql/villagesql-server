@@ -20,7 +20,8 @@ SET @p = 'abc';
 EXECUTE s USING @p;
 SET @p = 1.5e0;
 EXECUTE s USING @p;
---echo # A DECIMAL's digits are lent to the reprepared ? before prerun
+--echo # A DECIMAL's digits are lent to the reprepared ? before prerun.
+--echo # VDFs have no DECIMAL type, so prerun sees it as a STRING.
 SET @p = 123.25;
 EXECUTE s USING @p;
 SET @p = -7.5;
