@@ -106,9 +106,25 @@ SET_TESTS_PROPERTIES(custom_type_item-t PROPERTIES
   LABELS "villagesql"
 )
 
+# These tests create a session and inspect its query and connection metadata.
+MYSQL_ADD_EXECUTABLE(statement_event_charset-t statement_event_charset-t.cc
+  COMPONENT Test
+  ENABLE_EXPORTS
+  EXCLUDE_FROM_ALL
+  SKIP_INSTALL
+  LINK_LIBRARIES gunit_large server_unittest_library
+  DEPENDENCIES GenError ${GTEST_LIBRARIES}
+  ADD_TEST statement_event_charset-t
+  ADD_GCOV_TEST statement_event_charset-t
+)
+SET_TESTS_PROPERTIES(statement_event_charset-t PROPERTIES
+  TIMEOUT ${VILLAGESQL_TEST_TIMEOUT}
+  LABELS "villagesql"
+)
+
 # Custom target to build all VillageSQL unit tests
 ADD_CUSTOM_TARGET(villagesql-unit-tests
-  DEPENDS ${VILLAGESQL_UNIT_TESTS} custom_type_item-t
+  DEPENDS ${VILLAGESQL_UNIT_TESTS} custom_type_item-t statement_event_charset-t
 )
 
 # Also add them to the main test-unit dependencies if we're building unit tests

@@ -272,6 +272,7 @@ void log_execute_line(THD *thd) {
 class Statement_backup {
   LEX *m_lex;
   LEX_CSTRING m_query_string;
+  const CHARSET_INFO *m_query_charset;
   String m_rewritten_query;
   bool m_safe_to_display;
 
@@ -291,7 +292,8 @@ class Statement_backup {
     mysql_mutex_unlock(&thd->LOCK_thd_data);
 
     m_query_string = thd->query();
-    thd->set_query(stmt->m_query_string);
+    m_query_charset = thd->query_charset();
+    thd->set_query(stmt->m_query_string, stmt->m_query_charset);
 
     m_safe_to_display = thd->safe_to_display();
 
@@ -317,7 +319,8 @@ class Statement_backup {
     thd->set_safe_display(m_safe_to_display);
 
     stmt->m_query_string = thd->query();
-    thd->set_query(m_query_string);
+    stmt->m_query_charset = thd->query_charset();
+    thd->set_query(m_query_string, m_query_charset);
   }
 
   /**
@@ -2359,7 +2362,12 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
   stmt_backup.save_rlb(thd);
   thd->swap_query_arena(m_arena, &arena_backup);
 
-  if (alloc_query(thd, query_str, query_length)) {
+  // SQL PREPARE receives text in the connection charset; COM_STMT_PREPARE
+  // receives client bytes. Reprepare retains the original source charset.
+  if (m_query_charset == nullptr)
+    m_query_charset =
+        is_sql_prepare() ? thd->variables.collation_connection : thd->charset();
+  if (alloc_query(thd, query_str, query_length, m_query_charset)) {
     stmt_backup.restore_thd(thd, this);
     stmt_backup.restore_rlb(thd);
     thd->swap_query_arena(arena_backup, &m_arena);
@@ -3137,6 +3145,7 @@ bool Prepared_statement::reprepare(THD *thd) {
   const unsigned saved_sql_prepare = is_sql_prepare();
   set_sql_prepare();
   m_arena.is_repreparing = true;  // To check whether this is a reprepare.
+  m_query_charset = copy.m_query_charset;
   const bool prepare_error =
       prepare(thd, copy.m_query_string.str, copy.m_query_string.length,
               copy.m_param_array);
@@ -3239,6 +3248,7 @@ void Prepared_statement::swap_prepared_statement(Prepared_statement *copy) {
   std::swap(m_lex, copy->m_lex);
 
   std::swap(m_query_string, copy->m_query_string);
+  std::swap(m_query_charset, copy->m_query_charset);
 
   /* Swap mem_roots back, they must continue pointing at the m_mem_roots */
   std::swap(m_arena.mem_root, copy->m_arena.mem_root);
@@ -3423,7 +3433,8 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
     mysql_mutex_lock(&thd->LOCK_thd_data);
     thd->lex = stmt_backup.lex();
     mysql_mutex_unlock(&thd->LOCK_thd_data);
-    alloc_query(thd, thd->query().str, thd->query().length);
+    alloc_query(thd, thd->query().str, thd->query().length,
+                thd->query_charset());
 
     thd->stmt_arena = old_stmt_arena;
 
@@ -3456,7 +3467,8 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
 
   // Allocate the expanded query on the THD memroot
   if (expanded_query->length() != 0 &&
-      alloc_query(thd, expanded_query->ptr(), expanded_query->length())) {
+      alloc_query(thd, expanded_query->ptr(), expanded_query->length(),
+                  expanded_query->charset())) {
     my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), expanded_query->length());
     return true;
   }
