@@ -442,13 +442,10 @@ bool on_populate_sys_var(const PopulateContext &ctx,
       // below, which unregisters by name.
       {
         std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-        auto it = std::remove_if(g_sys_vars.begin(), g_sys_vars.end(),
-                                 [&](const RegisteredSysVar &rv) {
-                                   return rv.capability_config ==
-                                              ctx.capability_config &&
-                                          rv.value_ptr == value_ptr;
-                                 });
-        g_sys_vars.erase(it, g_sys_vars.end());
+        std::erase_if(g_sys_vars, [&](const RegisteredSysVar &rv) {
+          return rv.capability_config == ctx.capability_config &&
+                 rv.value_ptr == value_ptr;
+        });
       }
       LogVSQL(ERROR_LEVEL,
               "Failed to register system variable '%s' for extension '%s'",
@@ -460,16 +457,13 @@ bool on_populate_sys_var(const PopulateContext &ctx,
         std::vector<std::string> to_unreg;
         {
           std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-          auto it = std::remove_if(
-              g_sys_vars.begin(), g_sys_vars.end(),
-              [&](const RegisteredSysVar &rv) {
-                if (rv.capability_config == ctx.capability_config) {
-                  to_unreg.push_back(rv.var_name);
-                  return true;
-                }
-                return false;
-              });
-          g_sys_vars.erase(it, g_sys_vars.end());
+          std::erase_if(g_sys_vars, [&](const RegisteredSysVar &rv) {
+            if (rv.capability_config == ctx.capability_config) {
+              to_unreg.push_back(rv.var_name);
+              return true;
+            }
+            return false;
+          });
         }
         my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
             "component_sys_variable_unregister", registry);

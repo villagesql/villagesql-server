@@ -271,7 +271,7 @@ std::optional<ValidatedRegistration> parse_extension_registration(
   // A name that resolves to no function has already failed validation in the
   // type builder, so each name here matches exactly one entry.
   for (FuncDescriptor &func : result.funcs) {
-    if (intrinsic_default_vdf_names.count(func.function_name()) > 0) {
+    if (intrinsic_default_vdf_names.contains(func.function_name())) {
       func.set_not_callable_from_sql();
     }
   }

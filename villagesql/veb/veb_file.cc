@@ -215,7 +215,7 @@ static constexpr const char *kStagingPrefix = ".tmp.";
 // True when an entry name begins with the staging prefix, marking it as
 // expansion scratch rather than a completed {sha256} expansion.
 static bool is_staging_dir_name(const std::string &entry_name) {
-  return entry_name.rfind(kStagingPrefix, 0) == 0;
+  return entry_name.starts_with(kStagingPrefix);
 }
 
 // Path of the staging directory used to build {name_dir}/{sha256}.
@@ -337,9 +337,7 @@ bool find_veb_version(const std::string &name, std::string &version) {
     }
 
     if (filename.size() > prefix.size() + suffix.size() &&
-        filename.rfind(prefix, 0) == 0 &&
-        filename.compare(filename.size() - suffix.size(), suffix.size(),
-                         suffix) == 0) {
+        filename.starts_with(prefix) && filename.ends_with(suffix)) {
       found_versions.push_back(filename.substr(
           prefix.size(), filename.size() - prefix.size() - suffix.size()));
     }

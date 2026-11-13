@@ -131,10 +131,8 @@ void on_depopulate_statement_event(const DepopulateContext &ctx) {
   {
     std::lock_guard<std::mutex> lock(g_mu);
     auto new_list = std::make_shared<HookList>(*g_hooks);
-    new_list->erase(
-        std::remove_if(new_list->begin(), new_list->end(),
-                       [&](const RegisteredHook &h) { return h.cc == cc; }),
-        new_list->end());
+    std::erase_if(*new_list,
+                  [&](const RegisteredHook &h) { return h.cc == cc; });
     g_hook_count.store(new_list->size(), std::memory_order_release);
     g_hooks = std::move(new_list);
   }

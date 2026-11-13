@@ -160,15 +160,13 @@ void rollback_registered_vars(SERVICE_TYPE(registry) * registry,
   std::vector<std::string> to_unreg;
   {
     std::lock_guard<std::mutex> lock(g_session_vars_mutex);
-    auto it = std::remove_if(g_session_vars.begin(), g_session_vars.end(),
-                             [&](const RegisteredSessionVar &rv) {
-                               if (rv.capability_config == capability_config) {
-                                 to_unreg.push_back(rv.var_name);
-                                 return true;
-                               }
-                               return false;
-                             });
-    g_session_vars.erase(it, g_session_vars.end());
+    std::erase_if(g_session_vars, [&](const RegisteredSessionVar &rv) {
+      if (rv.capability_config == capability_config) {
+        to_unreg.push_back(rv.var_name);
+        return true;
+      }
+      return false;
+    });
   }
   my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
       "component_sys_variable_unregister", registry);
@@ -347,18 +345,14 @@ void on_depopulate_session_var(const DepopulateContext &ctx) {
   std::string extension_name;
   {
     std::lock_guard<std::mutex> lock(g_session_vars_mutex);
-    auto it =
-        std::remove_if(g_session_vars.begin(), g_session_vars.end(),
-                       [&](const RegisteredSessionVar &v) {
-                         if (v.capability_config == ctx.capability_config) {
-                           if (extension_name.empty())
-                             extension_name = v.extension_name;
-                           var_names.push_back(v.var_name);
-                           return true;
-                         }
-                         return false;
-                       });
-    g_session_vars.erase(it, g_session_vars.end());
+    std::erase_if(g_session_vars, [&](const RegisteredSessionVar &v) {
+      if (v.capability_config == ctx.capability_config) {
+        if (extension_name.empty()) extension_name = v.extension_name;
+        var_names.push_back(v.var_name);
+        return true;
+      }
+      return false;
+    });
   }
 
   if (var_names.empty()) return;

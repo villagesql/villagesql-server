@@ -708,7 +708,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   // 2. Handle RENAME COLUMN - update custom_columns entry
   for (const Alter_column *alter : alter_info->alter_list) {
     if (alter->change_type() == Alter_column::Type::RENAME_COLUMN) {
-      if (custom_column_names.count(canonical_column_name(alter->name))) {
+      if (custom_column_names.contains(canonical_column_name(alter->name))) {
         // Find the existing entry to get full metadata
         const ColumnEntry *old_entry_ptr = nullptr;
         for (const ColumnEntry *col : custom_columns) {
@@ -738,7 +738,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
       if (!field.change) continue;
       bool is_custom_type = (field.custom_type_context != nullptr);
       bool was_custom_type =
-          custom_column_names.count(canonical_column_name(field.change));
+          custom_column_names.contains(canonical_column_name(field.change));
 
       if (!was_custom_type && is_custom_type) {
         // Non-custom → custom: not allowed. Use explicit conversion functions.
@@ -775,7 +775,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
     bool is_custom_type = (field.custom_type_context != nullptr);
     bool was_custom_type =
         field.change &&
-        custom_column_names.count(canonical_column_name(field.change));
+        custom_column_names.contains(canonical_column_name(field.change));
 
     if (field.change) {
       // This is MODIFY COLUMN or CHANGE COLUMN
@@ -836,7 +836,7 @@ bool Metadata_modifier::remove_indexes(THD *thd [[maybe_unused]],
   auto guard = vclient.get_read_lock();
   for (const IndexEntry *entry :
        vclient.GetCustomIndexesForTable(db, table_name)) {
-    if (!entry || !dropping.count(canonical_index_name(entry->index_name())))
+    if (!entry || !dropping.contains(canonical_index_name(entry->index_name())))
       continue;
 
     // Queue child column rows for deletion before the parent index row.
@@ -899,7 +899,7 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   // Lambda to add MDL request for an extension (if not already added)
   auto add_mdl_request = [&](const std::string &ext_name) -> bool {
     if (ext_name.empty() ||
-        seen_extensions.count(canonical_extension_name(ext_name))) {
+        seen_extensions.contains(canonical_extension_name(ext_name))) {
       return false;  // Already processed or empty
     }
 

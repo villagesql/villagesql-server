@@ -435,10 +435,8 @@ void on_depopulate_auth(const DepopulateContext &ctx) {
 
   {
     std::lock_guard<std::mutex> lock(g_mu);
-    g_methods.erase(
-        std::remove_if(g_methods.begin(), g_methods.end(),
-                       [&](const RegisteredMethod &m) { return m.cc == cc; }),
-        g_methods.end());
+    std::erase_if(g_methods,
+                  [&](const RegisteredMethod &m) { return m.cc == cc; });
   }
 
   // Drain: wait for any in-flight authenticate() using this (or any) method to

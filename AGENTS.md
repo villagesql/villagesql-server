@@ -214,6 +214,22 @@ When adding VillageSQL features:
 
 ## Coding Guidelines
 
+### C++ Language Standard
+
+Server code is C++20. C++23 is not available. The following must stay
+C++17-compatible because extension authors compile them with
+`CMAKE_CXX_STANDARD 17`:
+- `villagesql/sdk/include/`
+- `villagesql/stable_sdk/`
+- `villagesql/examples/`
+- `villagesql/test-extensions/`
+
+In C++20 code, prefer the clearer standard idioms:
+- `c.contains(k)` over `c.find(k) != c.end()` or `c.count(k)`
+- `s.starts_with(p)` / `s.ends_with(p)` over `rfind(p, 0) == 0` or `compare(0, ...)`
+- `std::erase_if(v, pred)` over the erase-remove idiom
+- `std::ranges::` algorithms over `begin()`/`end()` pairs
+
 ### Comments and Documentation
 - Use `//` style comments for inline code comments and explanations
 - For header guards, use `// HEADER_GUARD_NAME_H` at the `#endif`
