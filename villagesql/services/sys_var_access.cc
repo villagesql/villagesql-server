@@ -180,12 +180,9 @@ void unregister_one_sys_var(std::string_view extension_name,
   {
     std::lock_guard<std::mutex> lock(g_one_vars_mutex);
     auto &vec = g_one_vars;
-    vec.erase(std::remove_if(vec.begin(), vec.end(),
-                             [&](const OneVarEntry &e) {
-                               return e.extension_name == ext_name &&
-                                      e.var_name == var_name;
-                             }),
-              vec.end());
+    std::erase_if(vec, [&](const OneVarEntry &e) {
+      return e.extension_name == ext_name && e.var_name == var_name;
+    });
   }
 
   PluginRegistry registry;

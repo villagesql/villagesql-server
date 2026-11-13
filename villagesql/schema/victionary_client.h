@@ -668,7 +668,7 @@ class SystemTableMap {
     // Add staged inserts whose keys don't appear in committed.
     for (const auto &[key, op_type] : op_by_key) {
       if (op_type != OperationType::INSERT) continue;
-      if (m_committed.find(key) != m_committed.end()) continue;
+      if (m_committed.contains(key)) continue;
       result.push_back(entry_by_key[key]);
     }
 
