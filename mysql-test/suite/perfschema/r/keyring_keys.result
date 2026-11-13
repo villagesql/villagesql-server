@@ -1,0 +1,33 @@
+# ----------------------------------------------------------------------
+# Setup
+# Creating local configuration file for keyring component: component_keyring_file
+# Creating manifest file for current MySQL server instance
+# Re-starting mysql server with manifest file
+# ----------------------------------------------------------------------
+CREATE DATABASE WL_11543_PERF_SCHEMA_KEYRING;
+USE WL_11543_PERF_SCHEMA_KEYRING;
+SELECT count(*) FROM performance_schema.keyring_keys;
+count(*)
+0
+CREATE TABLE t1(c1 INT, c2 char(20)) ENGINE = InnoDB ENCRYPTION="Y";
+SELECT count(*) FROM performance_schema.keyring_keys;
+count(*)
+1
+ALTER INSTANCE ROTATE INNODB MASTER KEY;
+SELECT count(*) FROM performance_schema.keyring_keys;
+count(*)
+2
+SELECT * FROM performance_schema.keyring_keys;
+KEY_ID	KEY_OWNER	BACKEND_KEY_ID
+SOME_KEY_ID		
+SOME_KEY_ID		
+# cleanup
+DROP TABLE t1;
+DROP DATABASE WL_11543_PERF_SCHEMA_KEYRING;
+# ----------------------------------------------------------------------
+# Teardown
+# Removing manifest file for current MySQL server instance
+# Removing local keyring file for keyring component: component_keyring_file
+# Removing local configuration file for keyring component: component_keyring_file
+# Restarting server without the manifest file
+# ----------------------------------------------------------------------

@@ -1,0 +1,16 @@
+INSTALL EXTENSION vsql_test_only;
+# TYPE(N): int_to_params leaves the map empty -> empty parameter string
+# -> rejected at parse time.
+CREATE TABLE t (id INT PRIMARY KEY, v EMPTY_PARAMS_TYPE(4));
+ERROR 42000: Invalid parameter string for type 'vsql_test_only.EMPTY_PARAMS_TYPE' near 'EMPTY_PARAMS_TYPE(4))' at line 1
+# The explicit parameter string supplies 'length' directly and succeeds.
+CREATE TABLE t (id INT PRIMARY KEY, v EMPTY_PARAMS_TYPE('length=4'));
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `v` vsql_test_only.EMPTY_PARAMS_TYPE('length=4') DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_test_only;

@@ -1,0 +1,25 @@
+# Test LOAD DATA REPLACE with COMPLEX type
+# Grammar: LOAD DATA ... REPLACE ...
+# But with a bad delimiter: ','
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+
+--write_file $MYSQLTEST_VARDIR/tmp/complex_replace.dat
+1,(5.0,6.0)
+2,(7.0,8.0)
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+# The delimiter is a comma, and we will think this is 3 columns instead of two.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/complex_replace.dat' REPLACE INTO TABLE t1 FIELDS TERMINATED BY ','
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex_replace.dat
+
+--source include/villagesql/uninstall_complex_extension.inc

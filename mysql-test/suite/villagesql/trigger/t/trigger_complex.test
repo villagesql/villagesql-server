@@ -1,0 +1,32 @@
+# Basic test that triggers can access custom type columns
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val COMPLEX
+);
+
+delimiter //;
+
+# Test BEFORE INSERT trigger reading custom column
+CREATE TRIGGER tr_before_insert BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+  SET @inserted_val = NEW.val;
+END//
+
+delimiter ;//
+
+# Verify trigger works
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+SELECT @inserted_val;
+
+# Cleanup
+DROP TRIGGER tr_before_insert;
+DROP TABLE t1;
+
+# Clear user variable
+SET @inserted_val = NULL;
+
+--source include/villagesql/uninstall_complex_extension.inc

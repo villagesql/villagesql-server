@@ -1,0 +1,86 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_ext_index_test;
+# ===================================================================
+# A custom index with an explicitly-named profile, so SHOW CREATE must be
+# identical before and after every rebuild.
+# ===================================================================
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+n  INT,
+a  ext_index_wide_blob,
+INDEX idx_a (a ext_index_default) USING EXTENDED(ext_index)
+);
+INSERT INTO t1 (id) VALUES (1), (2), (3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `n` int DEFAULT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# --- Rebuild via COPY ---
+ALTER TABLE t1 FORCE, ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `n` int DEFAULT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# --- Rebuild via INPLACE ---
+ALTER TABLE t1 FORCE, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `n` int DEFAULT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# --- Rebuild driven by a (non-PK) column change, not FORCE ---
+ALTER TABLE t1 MODIFY n BIGINT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `n` bigint DEFAULT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# The index and all rows survived every rebuild.
+SELECT COUNT(*) AS rows_total FROM t1;
+rows_total
+3
+# Inserts still route through the (re-created) custom indexes.
+INSERT INTO t1 (id) VALUES (4), (5);
+SELECT COUNT(*) AS rows_after_insert FROM t1;
+rows_after_insert
+5
+# ===================================================================
+# Restart: the rebuilt table's custom index loads from the data
+# dictionary, and inserts still work.
+# ===================================================================
+# restart
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `n` bigint DEFAULT NULL,
+  `a` vsql_ext_index_test.ext_index_wide_blob DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_a` (`a` `vsql_ext_index_test`.`ext_index_default`) USING EXTENDED(`vsql_ext_index_test`.`ext_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (id) VALUES (6);
+SELECT COUNT(*) AS rows_after_restart FROM t1;
+rows_after_restart
+6
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_ext_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

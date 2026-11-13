@@ -1,0 +1,21 @@
+# Test CREATE TABLE with virtual generated column using COMPLEX
+# Tests virtual generated column with COMPLEX type expressions
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_input COMPLEX,
+    real_part DOUBLE GENERATED ALWAYS AS (COMPLEX_REAL(complex_input)) VIRTUAL
+);
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 (id, complex_input) VALUES (1, '(5.5,7.7)');
+INSERT INTO t1 (id, complex_input) VALUES (2, '(9.9,11.1)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

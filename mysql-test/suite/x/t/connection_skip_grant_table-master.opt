@@ -1,0 +1,1 @@
+--authentication-policy=*:caching_sha2_password

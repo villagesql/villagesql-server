@@ -1,0 +1,14 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_preview_ping_test;
+# ping() works before restart
+SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
+ping_positive
+1
+# Restart server (extension reinstated from villagesql.extensions)
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+# ping() works after restart
+SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
+ping_positive
+1
+UNINSTALL EXTENSION vsql_preview_ping_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;

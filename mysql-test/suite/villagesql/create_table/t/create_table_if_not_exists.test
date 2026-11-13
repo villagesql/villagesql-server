@@ -1,0 +1,28 @@
+# Test CREATE TABLE IF NOT EXISTS with COMPLEX type
+# Grammar: CREATE TABLE IF NOT EXISTS table_name (column_list)
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE IF NOT EXISTS t1 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+);
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 VALUES (1, '(1.0,0.0)');
+INSERT INTO t1 VALUES (2, '(0.0,1.0)');
+
+SELECT * FROM t1;
+
+# Second create should not fail
+CREATE TABLE IF NOT EXISTS t1 (
+    id INT PRIMARY KEY,
+    value COMPLEX
+);
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

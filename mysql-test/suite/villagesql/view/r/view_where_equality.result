@@ -1,0 +1,14 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, name VARCHAR(50));
+INSERT INTO t1 VALUES
+(1, '(1,2)', 'first'),
+(2, '(3,4)', 'second'),
+(3, '(1,2)', 'third'),
+(4, '(5,6)', 'fourth');
+CREATE VIEW v_filtered AS
+SELECT id, val, name FROM t1 WHERE val = '(1,2)';
+SELECT * FROM v_filtered ORDER BY id;
+id	val	name
+1	(1,2)	first
+3	(1,2)	third
+DROP VIEW v_filtered;
+DROP TABLE t1;

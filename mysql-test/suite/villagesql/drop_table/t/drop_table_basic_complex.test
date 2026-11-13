@@ -1,0 +1,29 @@
+# Test basic DROP TABLE with COMPLEX columns
+# Grammar: DROP TABLE table_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    value COMPLEX
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(3.5,-1.2)');
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+
+# Verify table no longer exists
+SHOW TABLES LIKE 't1';
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,39 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+# Initial setup
+[connection master]
+CREATE TABLE t1 (c1 INT) ENGINE=InnoDB;
+# Sync slave with master and setup debug sync point
+include/rpl/sync_to_replica.inc
+SET @save_debug=@@global.debug;
+SET GLOBAL DEBUG='+d,stop_io_after_reading_write_rows_log_event';
+# Insert the data in the master
+[connection master]
+BEGIN;
+INSERT INTO t1 (c1) VALUES (0);
+INSERT INTO t1 (c1) VALUES (1);
+COMMIT;
+# Restart the IO thread keeping SQL thread running until last relay log split
+[connection slave]
+include/rpl/wait_for_receiver_to_stop.inc
+START REPLICA IO_THREAD;
+include/rpl/wait_for_receiver_to_stop.inc
+# Stop the SQL thread (it should be in the middle of the transaction/group)
+include/rpl/stop_applier.inc
+# Remove the debug point and restart the both threads
+SET GLOBAL DEBUG= @save_debug;
+include/rpl/start_replica.inc
+# Do one more insert on master and then sync slave with master
+[connection master]
+INSERT INTO t1 (c1) VALUES (2);
+include/rpl/sync_to_replica.inc
+# Now compare master and slave's t1 table data
+[connection master]
+include/diff_tables.inc [master:t1, slave:t1]
+# Cleanup
+[connection master]
+DROP TABLE t1;
+include/rpl/deinit.inc

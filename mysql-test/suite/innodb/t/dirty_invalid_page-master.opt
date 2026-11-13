@@ -1,0 +1,2 @@
+--innodb-doublewrite=off
+--innodb-doublewrite-pages=512

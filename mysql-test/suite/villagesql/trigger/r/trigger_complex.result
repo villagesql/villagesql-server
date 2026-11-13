@@ -1,0 +1,16 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+CREATE TRIGGER tr_before_insert BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+SET @inserted_val = NEW.val;
+END//
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+SELECT @inserted_val;
+@inserted_val
+(1,2)
+DROP TRIGGER tr_before_insert;
+DROP TABLE t1;
+SET @inserted_val = NULL;

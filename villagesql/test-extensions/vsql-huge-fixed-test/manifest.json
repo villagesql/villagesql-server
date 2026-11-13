@@ -1,0 +1,7 @@
+{
+  "name": "vsql_huge_fixed_test",
+  "version": "0.0.1",
+  "description": "VEF extension declaring a fixed-length custom type wider than the supported column size; INSTALL must be rejected.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

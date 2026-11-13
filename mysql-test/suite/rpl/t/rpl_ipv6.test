@@ -1,0 +1,64 @@
+# Test of ipv6 format, especially "change replication source host=..."
+# Options: --skip-name-resolve, --bind-address=:: (see corresponding cnf file)
+# for master and slave.
+#
+
+--connection default
+
+--source include/check_ipv6.inc
+
+--let $extra_root_users_for_slave= 1
+--source include/add_extra_root_users.inc
+
+# Can't be tested with windows due to mixed format like 0::0000:FFFF:127.0.0.1
+--source include/not_windows.inc
+--source include/have_log_bin.inc
+
+let $IPv6= ::1;
+--echo #################### IP: $IPv6 ###########################
+--source common/rpl/ipv6.inc
+
+let $IPv6= ::1/128;
+#--echo #################### IP: $IPv6 ###########################
+#--source common/rpl/ipv6.inc
+
+let $IPv6= 0000:0000:0000:0000:0000:0000:0000:0001;
+--echo #################### IP: $IPv6 ###########################
+--source common/rpl/ipv6.inc
+
+let $IPv6= 0:0:0:0:0:0:0:1;
+--echo #################### IP: $IPv6 ###########################
+--source common/rpl/ipv6.inc
+
+let $IPv6= ::1;
+--echo #################### IP: $IPv6 mix #######################
+--echo connect (master,127.0.0.1,root,,test,MASTER_MYPORT);
+connect (master,127.0.0.1,root,,test,$MASTER_MYPORT);
+--echo connect (slave,127.0.0.1,root,,test,SLAVE_MYPORT);
+connect (slave,127.0.0.1,root,,test,$SLAVE_MYPORT);
+--echo connection master;
+connection master;
+reset binary logs and gtids;
+source include/rpl/deprecated/show_binary_log_status.inc;
+save_master_pos;
+--echo connection slave;
+connection slave;
+RESET REPLICA;
+let $source_host= query_get_value(SHOW REPLICA STATUS, Source_Host, 1);
+--echo Source-Host: $source_host
+eval change replication source to source_host='$IPv6';
+let $source_host= query_get_value(SHOW REPLICA STATUS, Source_Host, 1);
+--echo Source-Host: $source_host
+eval change replication source to source_host='127.0.0.1';
+let $source_host= query_get_value(SHOW REPLICA STATUS, Source_Host, 1);
+--echo Source-Host: $source_host
+eval change replication source to source_host='0:0:0:0:0:0:0:1';
+let $source_host= query_get_value(SHOW REPLICA STATUS, Source_Host, 1);
+--echo Source-Host: $source_host
+
+# clean up
+--replace_column 2 ####
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_USER='root';
+
+connection master;
+--source include/remove_extra_root_users.inc

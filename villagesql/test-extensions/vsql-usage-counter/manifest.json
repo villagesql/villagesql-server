@@ -1,0 +1,7 @@
+{
+  "name": "vsql_usage_counter",
+  "version": "0.0.1",
+  "description": "VillageSQL test extension demonstrating status variable usage counters",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

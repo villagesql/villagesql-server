@@ -1,0 +1,51 @@
+# Test WITH CHECK OPTION on updatable VIEW with COMPLEX column
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+
+INSERT INTO t1 VALUES
+  (1, '(1,2)', 100.00),
+  (2, '(3,4)', 200.00),
+  (3, '(5,6)', 150.00);
+
+# Create view with WHERE clause and WITH CHECK OPTION
+CREATE VIEW v_check AS
+SELECT id, val, amount FROM t1 WHERE amount > 100
+WITH CHECK OPTION;
+
+# Verify initial view contents
+SELECT * FROM v_check ORDER BY id;
+
+# Valid INSERT - meets WHERE condition (amount > 100)
+INSERT INTO v_check VALUES (4, '(7,8)', 175.00);
+
+# Verify insert succeeded
+SELECT * FROM v_check WHERE id = 4;
+
+# Invalid INSERT - does NOT meet WHERE condition (amount <= 100)
+# Should fail with CHECK OPTION violation
+--error 1369
+INSERT INTO v_check VALUES (5, '(9,10)', 50.00);
+
+# Verify the invalid insert was blocked (not in base table)
+SELECT COUNT(*) FROM t1 WHERE id = 5;
+
+# Valid UPDATE - new value meets WHERE condition
+UPDATE v_check SET amount = 250.00 WHERE id = 2;
+
+# Verify update succeeded
+SELECT amount FROM v_check WHERE id = 2;
+
+# Invalid UPDATE - new value does NOT meet WHERE condition
+# Should fail with CHECK OPTION violation
+--error 1369
+UPDATE v_check SET amount = 75.00 WHERE id = 3;
+
+# Verify the invalid update was blocked (value unchanged)
+SELECT amount FROM t1 WHERE id = 3;
+
+DROP VIEW v_check;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

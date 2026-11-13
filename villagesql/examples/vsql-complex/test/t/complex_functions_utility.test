@@ -1,0 +1,103 @@
+# Install vsql-complex extension
+INSTALL EXTENSION vsql_complex;
+
+########################################################################
+#
+# Test: Utility Functions for COMPLEX type (real, imag, abs, conjugate)
+#
+########################################################################
+#
+# Setup test table
+#
+########################################################################
+
+CREATE TABLE test_udf_utility (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50),
+    complex_val COMPLEX
+);
+
+# Insert test data with various values
+INSERT INTO test_udf_utility (name, complex_val) VALUES
+    ('basic', '(3,4)'),
+    ('negative_both', '(-3,-4)'),
+    ('negative_real', '(-2.7,1.8)'),
+    ('zero_real', '(0,4.2)'),
+    ('zero_imag', '(5,0)'),
+    ('5-12 triangle', '(5,12)'),
+    ('scientific', '(1.5e-10,2.3e+15)'),
+    ('pure_real', '(42,0)'),
+    ('pure_imaginary', '(0,7)');
+
+########################################################################
+#
+# Test 1: All utility functions together
+#
+########################################################################
+
+SELECT id, name, complex_val,
+    vsql_complex.complex_real(complex_val) as real_part,
+    vsql_complex.complex_imag(complex_val) as imag_part,
+    vsql_complex.complex_abs(complex_val) as magnitude,
+    vsql_complex.complex_conjugate(complex_val) as conjugate
+FROM test_udf_utility
+ORDER BY id;
+
+########################################################################
+#
+# Test 2: Filtering by real part
+#
+########################################################################
+
+SELECT id, name, complex_val, vsql_complex.complex_real(complex_val) as real_part
+FROM test_udf_utility
+WHERE vsql_complex.complex_real(complex_val) > 0
+ORDER BY id;
+
+########################################################################
+#
+# Test 3: Filtering by imaginary part
+#
+########################################################################
+
+SELECT id, name, complex_val, vsql_complex.complex_imag(complex_val) as imag_part
+FROM test_udf_utility
+WHERE vsql_complex.complex_imag(complex_val) > 0
+ORDER BY id;
+
+########################################################################
+#
+# Test 4: Ordering by magnitude
+#
+########################################################################
+
+SELECT id, name, complex_val, vsql_complex.complex_abs(complex_val) as magnitude
+FROM test_udf_utility
+ORDER BY vsql_complex.complex_abs(complex_val) ASC;
+
+########################################################################
+#
+# Test 5: Testing with NULL values
+#
+########################################################################
+
+INSERT INTO test_udf_utility (name, complex_val) VALUES ('null_value', NULL);
+
+SELECT id, name, complex_val,
+    vsql_complex.complex_real(complex_val) as real_part,
+    vsql_complex.complex_imag(complex_val) as imag_part,
+    vsql_complex.complex_abs(complex_val) as magnitude,
+    vsql_complex.complex_conjugate(complex_val) as conjugate
+FROM test_udf_utility
+WHERE name = 'null_value';
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE test_udf_utility;
+
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_complex;

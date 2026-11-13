@@ -1,0 +1,32 @@
+# Test CREATE TABLE with FOREIGN KEY and COMPLEX columns
+# Tests FOREIGN KEY constraint alongside COMPLEX columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE parent_table (
+    id INT PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+INSERT INTO parent_table VALUES (1, 'parent1'), (2, 'parent2');
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    parent_id INT,
+    complex_data COMPLEX,
+    FOREIGN KEY (parent_id) REFERENCES parent_table(id)
+);
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (1, 1, '(7.0,8.0)');
+INSERT INTO t1 VALUES (2, 2, '(9.0,10.0)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+DROP TABLE parent_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

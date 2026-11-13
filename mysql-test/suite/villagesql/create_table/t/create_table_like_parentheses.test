@@ -1,0 +1,36 @@
+# Test CREATE TABLE (LIKE table) with COMPLEX type
+# Grammar: CREATE TABLE table_name (LIKE other_table)
+
+# Create source table with COMPLEX type
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE source_table (
+    id INT PRIMARY KEY,
+    complex_col COMPLEX,
+    description TEXT
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO source_table VALUES (1, '(7.0,8.0)', 'source data');
+
+# Create table using LIKE with parentheses
+CREATE TABLE t1 (LIKE source_table);
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 VALUES (1, '(9.0,10.0)', 'copied structure');
+INSERT INTO t1 VALUES (2, '(11.0,12.0)', 'more data');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE source_table;
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

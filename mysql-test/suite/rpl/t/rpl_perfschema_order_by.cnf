@@ -1,0 +1,15 @@
+!include ../my.cnf
+
+[mysqld.1]
+log-replica-updates
+
+[mysqld.2]
+log-replica-updates
+
+[mysqld.3]
+log-replica-updates
+
+[ENV]
+SERVER_MYPORT_3=                @mysqld.3.port
+SERVER_MYSOCK_3=                @mysqld.3.socket
+

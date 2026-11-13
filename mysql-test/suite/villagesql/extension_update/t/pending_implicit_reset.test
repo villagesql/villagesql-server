@@ -1,0 +1,23 @@
+# `ALTER EXTENSION ... VERSION '<current>' AT RESTART` cancels any pending
+# update on the extension (implicit reset). With no pending action, it is
+# a Note + no-op.
+
+INSTALL EXTENSION update_test VERSION '1.0.0';
+
+# No pending action and target == current: Note + no-op.
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'update_test';
+
+# Queue a pending update.
+ALTER EXTENSION update_test VERSION '2.0.0' AT RESTART;
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'update_test';
+
+# Re-issue with the current installed version: pending update is cleared
+# with a Note.
+ALTER EXTENSION update_test VERSION '1.0.0' AT RESTART;
+SELECT pending_version FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE extension_name = 'update_test';
+
+UNINSTALL EXTENSION update_test;

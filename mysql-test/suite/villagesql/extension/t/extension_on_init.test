@@ -1,0 +1,67 @@
+# Test the extension-side on_init / on_deinit builder hooks.
+#
+# vsql_on_init_test appends a line to a marker file from on_init() (at load)
+# and from on_deinit() (at unload). A file is used rather than an in-memory
+# counter because the .so is dlclose'd at UNINSTALL, so on_deinit's effect
+# cannot be observed from SQL. This verifies:
+# - on_init() runs when the extension is installed
+# - on_deinit() runs when the extension is uninstalled
+#
+# The extension writes the marker under MYSQL_TMP_DIR (inherited from
+# mysql-test-run), so the path below must match marker_path() in the extension.
+call mtr.add_suppression("on_deinit hook without an on_init");
+call mtr.add_suppression("on_init hook without an on_deinit");
+
+--let $marker = $MYSQL_TMP_DIR/vsql_on_init_test.marker
+
+# Remove any marker left by a previous run.
+--error 0,1
+--remove_file $marker
+
+--echo # Install the on_init test extension (fires on_init)
+INSTALL EXTENSION vsql_on_init_test;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # After install, the marker file records on_init (and not yet on_deinit)
+--cat_file $marker
+
+--echo # Uninstall the extension (fires on_deinit)
+UNINSTALL EXTENSION vsql_on_init_test;
+
+--echo # Verify extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # After uninstall, the marker file records both on_init and on_deinit
+--cat_file $marker
+
+--remove_file $marker
+
+# The hooks are a pair, either way round: a registration carrying one without
+# the other is rejected at load, and a rejected load runs neither hook. The
+# builder refuses the combination at compile time, so these two extensions
+# patch their own registrations to get past that and reach the server's check.
+--let $deinit_marker = $MYSQL_TMP_DIR/vsql_deinit_only_test.marker
+--error 0,1
+--remove_file $deinit_marker
+
+--echo # Install fails: the registration has on_deinit and no on_init
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_deinit_only_test;
+
+--echo # Neither hook ran, so neither wrote a marker file
+--error 1
+--file_exists $deinit_marker
+
+--let $init_marker = $MYSQL_TMP_DIR/vsql_init_only_test.marker
+--error 0,1
+--remove_file $init_marker
+
+--echo # The mirror is rejected the same way: on_init with no on_deinit
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_init_only_test;
+
+--echo # Again, neither hook ran
+--error 1
+--file_exists $init_marker

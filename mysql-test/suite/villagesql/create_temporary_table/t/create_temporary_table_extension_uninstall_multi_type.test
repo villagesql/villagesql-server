@@ -1,0 +1,43 @@
+# Test that extension uninstall is correctly blocked/allowed as temporary table
+# columns using those types are added and removed via ALTER TABLE.
+
+INSTALL EXTENSION vsql_tvector;
+INSTALL EXTENSION vsql_complex;
+
+# Start with a temp table using only TVECTOR
+CREATE TEMPORARY TABLE t1 (id INT, vec TVECTOR(3));
+
+# COMPLEX can be uninstalled - t1 only uses TVECTOR
+UNINSTALL EXTENSION vsql_complex;
+
+# TVECTOR cannot be uninstalled - t1 still uses it
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_tvector;
+
+# Add a COMPLEX column via ALTER
+INSTALL EXTENSION vsql_complex;
+ALTER TABLE t1 ADD COLUMN val COMPLEX;
+
+# Neither can be uninstalled now
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_tvector;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+# Remove the TVECTOR column via ALTER
+ALTER TABLE t1 DROP COLUMN vec;
+
+# TVECTOR can now be uninstalled
+UNINSTALL EXTENSION vsql_tvector;
+
+# COMPLEX still cannot
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+# Remove the COMPLEX column via ALTER
+ALTER TABLE t1 DROP COLUMN val;
+
+# COMPLEX can now be uninstalled
+UNINSTALL EXTENSION vsql_complex;
+
+DROP TEMPORARY TABLE t1;

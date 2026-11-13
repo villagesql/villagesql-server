@@ -1,0 +1,19 @@
+INSTALL EXTENSION vsql_tvector;
+INSTALL EXTENSION vsql_complex;
+CREATE TEMPORARY TABLE t1 (id INT, vec TVECTOR(3));
+UNINSTALL EXTENSION vsql_complex;
+UNINSTALL EXTENSION vsql_tvector;
+ERROR HY000: Cannot uninstall extension 'vsql_tvector': type 'TVECTOR' is currently in use
+INSTALL EXTENSION vsql_complex;
+ALTER TABLE t1 ADD COLUMN val COMPLEX;
+UNINSTALL EXTENSION vsql_tvector;
+ERROR HY000: Cannot uninstall extension 'vsql_tvector': type 'TVECTOR' is currently in use
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': type 'COMPLEX' is currently in use
+ALTER TABLE t1 DROP COLUMN vec;
+UNINSTALL EXTENSION vsql_tvector;
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': type 'COMPLEX' is currently in use
+ALTER TABLE t1 DROP COLUMN val;
+UNINSTALL EXTENSION vsql_complex;
+DROP TEMPORARY TABLE t1;

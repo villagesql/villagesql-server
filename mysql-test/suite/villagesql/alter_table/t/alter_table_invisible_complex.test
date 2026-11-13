@@ -1,0 +1,109 @@
+# Test ALTER TABLE with INVISIBLE COMPLEX columns
+#
+--source include/villagesql/install_complex_extension.inc
+
+# Test ALTER TABLE ADD COLUMN INVISIBLE
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+INSERT INTO t1 VALUES (1, 'test1'), (2, 'test2');
+
+# Add INVISIBLE COMPLEX column
+ALTER TABLE t1 ADD COLUMN val COMPLEX INVISIBLE;
+
+SHOW CREATE TABLE t1;
+
+# SELECT * should not show new INVISIBLE column
+SELECT * FROM t1 ORDER BY id;
+
+# Update INVISIBLE column
+UPDATE t1 SET val = '(1.0,1.0)' WHERE id = 1;
+UPDATE t1 SET val = '(2.0,2.0)' WHERE id = 2;
+
+# Explicit SELECT shows INVISIBLE column
+SELECT id, val, name FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+# Test ALTER TABLE MODIFY to change visibility
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    name VARCHAR(50)
+);
+
+INSERT INTO t2 VALUES (1, '(1.0,1.0)', 'visible');
+
+# SELECT * shows visible COMPLEX column
+SELECT * FROM t2;
+
+# Make column INVISIBLE
+ALTER TABLE t2 MODIFY COLUMN val COMPLEX INVISIBLE;
+
+SHOW CREATE TABLE t2;
+
+# SELECT * should NOT show val anymore
+SELECT * FROM t2;
+
+# Explicit SELECT still shows it
+SELECT id, val, name FROM t2;
+
+# Make column VISIBLE again
+ALTER TABLE t2 MODIFY COLUMN val COMPLEX;
+
+SHOW CREATE TABLE t2;
+
+# SELECT * shows val again
+SELECT * FROM t2;
+
+DROP TABLE t2;
+
+# Test ALTER TABLE DROP COLUMN with INVISIBLE
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    val COMPLEX INVISIBLE,
+    name VARCHAR(50)
+);
+
+INSERT INTO t3 (id, val, name) VALUES (1, '(1.0,1.0)', 'test');
+
+SELECT * FROM t3;
+SELECT id, val, name FROM t3;
+
+# Drop INVISIBLE column
+ALTER TABLE t3 DROP COLUMN val;
+
+SHOW CREATE TABLE t3;
+
+--error ER_BAD_FIELD_ERROR
+SELECT id, val, name FROM t3;
+
+DROP TABLE t3;
+
+# Test ALTER TABLE with INVISIBLE column and INDEX
+CREATE TABLE t4 (
+    id INT PRIMARY KEY,
+    val COMPLEX INVISIBLE
+);
+
+INSERT INTO t4 (id, val) VALUES (1, '(1.0,1.0)'), (2, '(2.0,2.0)'), (3, '(1.0,1.0)');
+
+# Add index on INVISIBLE column
+ALTER TABLE t4 ADD INDEX idx_val (val);
+
+SHOW CREATE TABLE t4;
+
+# Query using index
+EXPLAIN SELECT id, val FROM t4 WHERE val = '(1.0,1.0)';
+SELECT id, val FROM t4 WHERE val = '(1.0,1.0)' ORDER BY id;
+
+# Drop index
+ALTER TABLE t4 DROP INDEX idx_val;
+
+SHOW CREATE TABLE t4;
+
+DROP TABLE t4;
+
+--source include/villagesql/uninstall_complex_extension.inc

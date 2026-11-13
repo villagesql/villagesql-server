@@ -1,0 +1,34 @@
+# Test that stored procedures and functions with COMPLEX type work after server restart.
+# Verifies that custom type metadata survives cache invalidation and DD round-trip.
+
+--source include/villagesql/install_complex_extension.inc
+
+delimiter //;
+CREATE PROCEDURE p1(IN x COMPLEX, OUT y COMPLEX)
+BEGIN
+  SET y = x;
+END//
+delimiter ;//
+
+delimiter //;
+CREATE FUNCTION f1(x COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+  RETURN x;
+END//
+delimiter ;//
+
+# Restart to clear SP cache - types must be restored from DD + custom_sp_params.
+--source include/restart_mysqld.inc
+
+CALL p1('(1.0,2.0)', @out);
+SELECT @out;
+
+SELECT f1('(3.0,4.0)');
+
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+
+# Clear user variables so TypeContext refs are released before UNINSTALL.
+SET @out = NULL;
+
+--source include/villagesql/uninstall_complex_extension.inc

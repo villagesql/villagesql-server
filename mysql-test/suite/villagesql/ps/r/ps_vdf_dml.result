@@ -1,0 +1,63 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t3 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(0.0,5.0)');
+INSERT INTO t3 VALUES (1, '(1.0,-2.0)'), (2, '(3.0,-4.0)');
+#
+# Test 1: VDF with INSERT
+#
+PREPARE stmt1 FROM 'INSERT INTO t1 VALUES (?, vsql_complex.COMPLEX::from_string(?))';
+SET @id = 10;
+SET @str = '(30.0,31.0)';
+EXECUTE stmt1 USING @id, @str;
+SELECT * FROM t1 WHERE id = 10;
+id	val
+10	(30,31)
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: VDF with UPDATE
+#
+PREPARE stmt2 FROM 'UPDATE t1 SET val = vsql_complex.complex_conjugate(val) WHERE id = ?';
+SET @id = 10;
+EXECUTE stmt2 USING @id;
+SELECT * FROM t1 WHERE id = 10;
+id	val
+10	(30,-31)
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: VDF in JOIN condition
+#
+PREPARE stmt3 FROM 'SELECT t1.id, t3.id FROM t1 JOIN t3 ON vsql_complex.complex_conjugate(t1.val) = t3.val WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt3 USING @id;
+id	id
+1	1
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: VDF in subquery
+#
+PREPARE stmt4 FROM 'SELECT id FROM t1 WHERE val = (SELECT vsql_complex.complex_conjugate(val) FROM t3 WHERE id = ?)';
+SET @id = 1;
+EXECUTE stmt4 USING @id;
+id
+1
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: VDF in CTE
+#
+PREPARE stmt5 FROM 'WITH cte AS (SELECT id, vsql_complex.complex_real(val) AS real_part FROM t1 WHERE id > ?) SELECT * FROM cte WHERE real_part = ?';
+SET @min_id = 0;
+SET @real = 1.0;
+EXECUTE stmt5 USING @min_id, @real;
+id	real_part
+1	1
+DEALLOCATE PREPARE stmt5;
+#
+# Cleanup
+#
+DROP TABLE t1, t3;

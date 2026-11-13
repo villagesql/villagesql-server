@@ -1,0 +1,64 @@
+# Test CREATE TABLE with FOREIGN KEY SET NULL behavior and COMPLEX columns
+# Tests ON DELETE SET NULL and ON UPDATE SET NULL with COMPLEX data
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create parent table with COMPLEX column
+CREATE TABLE parents (
+    id INT PRIMARY KEY,
+    val COMPLEX UNIQUE
+);
+
+INSERT INTO parents VALUES (1, '(1.0,1.0)');
+INSERT INTO parents VALUES (2, '(2.0,2.0)');
+INSERT INTO parents VALUES (3, '(3.0,3.0)');
+
+# Create child table with FK using SET NULL actions
+CREATE TABLE children (
+    id INT PRIMARY KEY,
+    parent_val COMPLEX,
+    description VARCHAR(50),
+    FOREIGN KEY (parent_val) REFERENCES parents(val)
+        ON DELETE SET NULL
+        ON UPDATE SET NULL
+);
+
+SHOW CREATE TABLE children;
+
+# Insert child rows that reference parents
+INSERT INTO children VALUES (10, '(1.0,1.0)', 'child_of_parent_1');
+INSERT INTO children VALUES (11, '(1.0,1.0)', 'another_child_of_parent_1');
+INSERT INTO children VALUES (20, '(2.0,2.0)', 'child_of_parent_2');
+INSERT INTO children VALUES (30, '(3.0,3.0)', 'child_of_parent_3');
+
+SELECT * FROM children ORDER BY id;
+
+# Test ON DELETE SET NULL - delete parent, child's FK becomes NULL
+DELETE FROM parents WHERE id = 1;
+
+# Verify child rows still exist but parent_val is NULL
+SELECT * FROM children ORDER BY id;
+
+# Verify both children of parent 1 have NULL parent_val
+SELECT COUNT(*) AS null_count FROM children WHERE parent_val IS NULL;
+
+# Test ON UPDATE SET NULL - update parent key, child's FK becomes NULL
+UPDATE parents SET val = '(2.5,2.5)' WHERE id = 2;
+
+# Verify child of parent 2 now has NULL parent_val
+SELECT * FROM children ORDER BY id;
+
+# Count NULL parent_val entries (should be 3 now)
+SELECT COUNT(*) AS null_count FROM children WHERE parent_val IS NULL;
+
+# Test with child that has NULL FK - should allow parent deletion
+DELETE FROM parents WHERE val = '(2.5,2.5)';
+
+# Verify remaining data
+SELECT * FROM parents ORDER BY id;
+SELECT * FROM children ORDER BY id;
+
+DROP TABLE children;
+DROP TABLE parents;
+
+--source include/villagesql/uninstall_complex_extension.inc

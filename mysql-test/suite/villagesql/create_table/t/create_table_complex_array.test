@@ -1,0 +1,23 @@
+# Test CREATE TABLE with COMPLEX array syntax (should fail)
+# Tests that COMPLEX[] array syntax is not supported and fails appropriately
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+--error ER_PARSE_ERROR
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    signal_array COMPLEX[]
+);
+
+--error ER_PARSE_ERROR
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    fixed_array COMPLEX[3]
+);
+
+# Verify no tables were created
+SHOW TABLES LIKE 't_';
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

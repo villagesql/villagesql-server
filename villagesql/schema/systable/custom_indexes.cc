@@ -1,0 +1,201 @@
+/* Copyright (c) 2026 VillageSQL Contributors
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ */
+
+#include "villagesql/schema/systable/custom_indexes.h"
+
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "sql/field.h"
+#include "sql/table.h"
+#include "villagesql/include/error.h"
+#include "villagesql/schema/systable/helpers.h"
+
+namespace villagesql {
+
+// Field layout for villagesql.custom_indexes:
+//   field[0] = index_id               BIGINT UNSIGNED
+//   field[1] = db_name                VARCHAR(64)
+//   field[2] = table_name             VARCHAR(64)
+//   field[3] = index_name             VARCHAR(64)
+//   field[4] = extension_name         VARCHAR(64)
+//   field[5] = extension_version      VARCHAR(64)
+//   field[6] = index_type_name        VARCHAR(64)
+//   field[7] = index_type_parameters  JSON
+//
+// Key layout:
+//   key_info[0] = PRIMARY KEY (index_id)
+//   key_info[1] = UNIQUE KEY idx_natural (db_name, table_name, index_name)
+//
+// update_in_table and delete_from_table use key_info[1] (the natural unique
+// key) because callers hold a natural key string, not index_id.
+
+bool TableTraits<IndexEntry>::read_from_table(TABLE &table, IndexEntry &entry) {
+  Field **field = table.field;
+
+  entry.index_id = static_cast<uint64_t>(field[0]->val_int());
+
+  std::string db, tbl, idx;
+  read_string_field(field[1], db);
+  read_string_field(field[2], tbl);
+  read_string_field(field[3], idx);
+  entry.set_key(IndexKey(std::move(db), std::move(tbl), std::move(idx)));
+
+  read_string_field(field[4], entry.extension_name);
+  read_string_field(field[5], entry.extension_version);
+  read_string_field(field[6], entry.index_type_name);
+  read_string_field(field[7], entry.index_type_parameters);
+
+  return false;
+}
+
+bool TableTraits<IndexEntry>::write_to_table(TABLE &table,
+                                             const IndexEntry &entry) {
+  Field **field = table.field;
+
+  field[0]->store(static_cast<longlong>(entry.index_id), true);
+  field[1]->store(entry.db_name().c_str(), entry.db_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[2]->store(entry.table_name().c_str(), entry.table_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[3]->store(entry.index_name().c_str(), entry.index_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[4]->store(entry.extension_name.c_str(), entry.extension_name.length(),
+                  &my_charset_utf8mb4_bin);
+  field[5]->store(entry.extension_version.c_str(),
+                  entry.extension_version.length(), &my_charset_utf8mb4_bin);
+  field[6]->store(entry.index_type_name.c_str(), entry.index_type_name.length(),
+                  &my_charset_utf8mb4_bin);
+  field[7]->store(entry.index_type_parameters.c_str(),
+                  entry.index_type_parameters.length(),
+                  &my_charset_utf8mb4_bin);
+
+  int error = table.file->ha_write_row(table.record[0]);
+  if (should_assert_if_true(error)) {
+    LogVSQL(ERROR_LEVEL,
+            "Failed to write row for index '%s' in table '%s.%s': error %d",
+            entry.index_name().c_str(), entry.db_name().c_str(),
+            entry.table_name().c_str(), error);
+    return true;
+  }
+
+  return false;
+}
+
+bool TableTraits<IndexEntry>::update_in_table(TABLE &table,
+                                              const IndexEntry &entry,
+                                              const IndexKey &old_key) {
+  const IndexKey &lookup_key = old_key.str().empty() ? entry.key() : old_key;
+
+  Field **field = table.field;
+
+  // Set fields[1-3] for natural unique key lookup (key_info[1])
+  field[1]->store(lookup_key.db().c_str(), lookup_key.db().length(),
+                  &my_charset_utf8mb4_bin);
+  field[2]->store(lookup_key.table().c_str(), lookup_key.table().length(),
+                  &my_charset_utf8mb4_bin);
+  field[3]->store(lookup_key.index_name().c_str(),
+                  lookup_key.index_name().length(), &my_charset_utf8mb4_bin);
+
+  RowLookup row(table, 1);
+  int error = row.read_for_update();
+  if (error) {
+    LogVSQL(ERROR_LEVEL, "Failed to find row for index update: error %d",
+            error);
+    return true;
+  }
+
+  // Update all fields; index_id is preserved (rename does not change it)
+  field[0]->store(static_cast<longlong>(entry.index_id), true);
+  field[1]->store(entry.db_name().c_str(), entry.db_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[2]->store(entry.table_name().c_str(), entry.table_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[3]->store(entry.index_name().c_str(), entry.index_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[4]->store(entry.extension_name.c_str(), entry.extension_name.length(),
+                  &my_charset_utf8mb4_bin);
+  field[5]->store(entry.extension_version.c_str(),
+                  entry.extension_version.length(), &my_charset_utf8mb4_bin);
+  field[6]->store(entry.index_type_name.c_str(), entry.index_type_name.length(),
+                  &my_charset_utf8mb4_bin);
+  field[7]->store(entry.index_type_parameters.c_str(),
+                  entry.index_type_parameters.length(),
+                  &my_charset_utf8mb4_bin);
+
+  error = table.file->ha_update_row(table.record[1], table.record[0]);
+  if (error && error != HA_ERR_RECORD_IS_THE_SAME) {
+    LogVSQL(ERROR_LEVEL, "Failed to update index row: error %d", error);
+    return true;
+  }
+
+  return false;
+}
+
+bool TableTraits<IndexEntry>::delete_from_table(TABLE &table,
+                                                const IndexEntry &entry) {
+  Field **field = table.field;
+
+  // Set fields[1-3] for natural unique key lookup (key_info[1])
+  field[1]->store(entry.db_name().c_str(), entry.db_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[2]->store(entry.table_name().c_str(), entry.table_name().length(),
+                  &my_charset_utf8mb4_bin);
+  field[3]->store(entry.index_name().c_str(), entry.index_name().length(),
+                  &my_charset_utf8mb4_bin);
+
+  RowLookup row(table, 1);
+  int error = row.read();
+  if (error) {
+    if (error == HA_ERR_KEY_NOT_FOUND) {
+      LogVSQL(WARNING_LEVEL, "Custom index row not found for delete: %s.%s.%s",
+              entry.db_name().c_str(), entry.table_name().c_str(),
+              entry.index_name().c_str());
+      return false;
+    }
+    LogVSQL(ERROR_LEVEL, "Failed to find row for index delete: error %d",
+            error);
+    return true;
+  }
+
+  error = table.file->ha_delete_row(table.record[0]);
+  if (error) {
+    LogVSQL(ERROR_LEVEL, "Failed to delete index row: error %d", error);
+    return true;
+  }
+
+  return false;
+}
+
+std::string params_to_json(const Mem_root_array<IndexWithParam> &params) {
+  StringPairs pairs;
+  pairs.reserve(params.size());
+
+  for (const IndexWithParam &p : params) {
+    // Numbers become JSON strings: json_object_to_pairs() rejects a non-string
+    // member.
+    pairs.emplace_back(std::string(p.key.str, p.key.length),
+                       p.is_string
+                           ? std::string(p.value.str.str, p.value.str.length)
+                           : std::to_string(p.value.num));
+  }
+
+  return json_object_from_pairs(pairs);
+}
+
+}  // namespace villagesql

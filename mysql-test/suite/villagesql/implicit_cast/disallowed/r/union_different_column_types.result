@@ -1,0 +1,37 @@
+CREATE TABLE t_complex (id INT, val COMPLEX);
+CREATE TABLE t_numeric (id INT, val DECIMAL(10,2));
+CREATE TABLE t_string (id INT, val VARCHAR(100));
+CREATE TABLE t_complex_same (id INT, val COMPLEX);
+CREATE TABLE t_complex2_type (id INT, val COMPLEX2);
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+INSERT INTO t_numeric VALUES (1, 10.50), (2, 20.75);
+INSERT INTO t_string VALUES (1, '(9.0,10.0)'), (2, '(11.0,12.0)');
+INSERT INTO t_complex_same VALUES (1, '(5.0,6.0)'), (2, '(7.0,8.0)');
+INSERT INTO t_complex2_type VALUES (1, '(9.0,10.0)'), (2, '(11.0,12.0)');
+SELECT val FROM t_complex UNION SELECT val FROM t_numeric;
+ERROR HY000: Cannot use UNION with mixed custom and non-custom types
+SELECT val FROM t_complex UNION SELECT val FROM t_string;
+ERROR HY000: Cannot use UNION with mixed custom and non-custom types
+SELECT val FROM t_complex UNION SELECT val FROM t_complex_same ORDER BY val;
+val
+(1,2)
+(3,4)
+(5,6)
+(7,8)
+SELECT val FROM t_complex UNION SELECT val FROM t_complex2_type;
+ERROR HY000: Cannot use UNION with different custom types 'vsql_complex.COMPLEX' and 'vsql_complex.COMPLEX2'
+SELECT val FROM t_complex UNION ALL SELECT val FROM t_numeric;
+ERROR HY000: Cannot use UNION with mixed custom and non-custom types
+SELECT val FROM t_complex UNION SELECT val FROM t_complex_same UNION SELECT val FROM t_numeric;
+ERROR HY000: Cannot use UNION with mixed custom and non-custom types
+SELECT val FROM t_complex UNION SELECT vsql_complex.COMPLEX::from_string(val) FROM t_string ORDER BY val;
+val
+(1,2)
+(3,4)
+(9,10)
+(11,12)
+DROP TABLE t_complex;
+DROP TABLE t_numeric;
+DROP TABLE t_string;
+DROP TABLE t_complex_same;
+DROP TABLE t_complex2_type;

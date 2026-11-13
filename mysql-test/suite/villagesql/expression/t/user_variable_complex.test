@@ -1,0 +1,40 @@
+# Test SET @var = complex_function(...) retains COMPLEX type
+# Verifies user variables assigned from VDF functions preserve custom type
+
+--source include/villagesql/install_complex_extension.inc
+
+# Test 1: SET @var = COMPLEX::from_string(...) creates COMPLEX type
+SET @a = vsql_complex.COMPLEX::from_string('(1.0,2.0)');
+SET @b = vsql_complex.COMPLEX::from_string('(3.0,4.0)');
+SELECT @a, @b;
+
+# Test 2: SET @var = complex_add(...) retains COMPLEX type
+SET @sum = vsql_complex.complex_add(@a, @b);
+SELECT @sum;
+
+# Test 3: Verify @sum can be used in another complex function
+# (This proves it's a COMPLEX type, not just a string)
+SELECT vsql_complex.complex_real(@sum) as real_part;
+SELECT vsql_complex.complex_imag(@sum) as imag_part;
+
+# Test 4: Chain of SET operations with complex functions
+SET @result = vsql_complex.complex_multiply(@a, @b);
+SELECT @result;
+SELECT vsql_complex.complex_real(@result) as real_part;
+
+# Test 5: Nested complex function calls in SET
+SET @nested = vsql_complex.complex_add(
+  vsql_complex.complex_multiply(@a, @b),
+  vsql_complex.COMPLEX::from_string('(1.0,1.0)')
+);
+SELECT @nested;
+
+# Test 6: Extension cannot be uninstalled while user variables hold references
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+# Clear user variables to release TypeContext references
+SET @a = NULL, @b = NULL, @sum = NULL, @result = NULL, @nested = NULL;
+
+# Now uninstall should succeed
+--source include/villagesql/uninstall_complex_extension.inc

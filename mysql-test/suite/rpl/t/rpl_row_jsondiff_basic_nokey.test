@@ -1,0 +1,15 @@
+# See common/rpl/row_jsondiff_init.inc for overview.
+# See common/rpl/row_jsondiff_basic.inc for test scenarios.
+#
+# This script runs without any key.
+
+--source include/big_test.inc
+--source include/have_binlog_format_row.inc
+--source include/not_parallel.inc
+
+
+--let $key=
+
+--source common/rpl/row_jsondiff_init.inc
+--source common/rpl/row_jsondiff_basic.inc
+--source common/rpl/row_jsondiff_exit.inc

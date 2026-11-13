@@ -1,0 +1,71 @@
+# Test SELECT ... ORDER BY with COMPLEX type
+# Grammar: SELECT ... ORDER BY ...
+
+--source include/villagesql/install_complex_extension.inc
+
+# Basic ORDER BY test with edge cases
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES
+    ('(3.0,4.0)'),
+    ('(1.0,2.0)'),
+    ('(-1.0,-2.0)'),     # negative values
+    ('(0.0,0.0)'),       # zero
+    ('(1.0,1.99)'),      # close to existing value
+    ('(100.0,200.0)');   # large values
+
+SELECT * FROM t1 ORDER BY val ASC;
+SELECT * FROM t1 ORDER BY val DESC;
+
+DROP TABLE t1;
+
+# Test ORDER BY with index
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    INDEX idx_val (val)
+);
+
+INSERT INTO t2 VALUES
+    (1, '(5.0,6.0)'),
+    (2, '(1.0,2.0)'),
+    (3, '(3.0,4.0)'),
+    (4, '(7.0,8.0)'),
+    (5, '(-10.0,5.0)'),    # negative real part
+    (6, '(0.0,0.0)'),      # zero
+    (7, '(1.0,1.99)');     # close values test precision
+
+# Should use index for ordering
+SELECT val FROM t2 ORDER BY val ASC;
+SELECT val FROM t2 ORDER BY val DESC;
+
+DROP TABLE t2;
+
+# Test ORDER BY without index - small data (in-memory sort)
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+INSERT INTO t3 VALUES
+    (1, '(9.0,10.0)'),
+    (2, '(1.0,2.0)'),
+    (3, '(5.0,6.0)'),
+    (4, '(3.0,4.0)'),
+    (5, '(7.0,8.0)'),
+    (6, '(-5.0,-10.0)'),   # both negative
+    (7, '(0.0,1.0)'),      # zero real part
+    (8, '(1.0,0.0)'),      # zero imaginary part
+    (9, '(1.0,1.0)'),      # equal real and imaginary
+    (10, '(999.0,999.0)'); # large values
+
+# Small dataset - should sort in memory (filesort)
+SELECT val FROM t3 ORDER BY val ASC;
+SELECT val FROM t3 ORDER BY val DESC;
+
+# Test mixed column ordering
+SELECT id, val FROM t3 ORDER BY val ASC, id ASC;
+SELECT id, val FROM t3 ORDER BY val DESC, id DESC;
+
+DROP TABLE t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

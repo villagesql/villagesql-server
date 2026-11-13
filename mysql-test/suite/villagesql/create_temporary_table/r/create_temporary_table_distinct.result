@@ -1,0 +1,38 @@
+CREATE TABLE t1 (id INT, val COMPLEX, category VARCHAR(50));
+INSERT INTO t1 VALUES
+(1, '(2,0)', 'A'),
+(2, '(2,0)', 'B'),
+(3, '(10,0)', 'A'),
+(4, '(-1,0)', 'C'),
+(5, '(10,0)', 'B');
+SELECT DISTINCT val FROM t1 ORDER BY val;
+val
+(-1,0)
+(2,0)
+(10,0)
+CREATE TEMPORARY TABLE temp_unique AS
+SELECT DISTINCT val FROM t1;
+SHOW COLUMNS FROM temp_unique;
+Field	Type	Null	Key	Default	Extra
+val	vsql_complex.COMPLEX	YES		NULL	NULL
+SELECT * FROM temp_unique ORDER BY val;
+val
+(-1,0)
+(2,0)
+(10,0)
+DROP TABLE temp_unique;
+CREATE TEMPORARY TABLE temp_unique AS
+SELECT DISTINCT val, category FROM t1;
+SHOW COLUMNS FROM temp_unique;
+Field	Type	Null	Key	Default	Extra
+val	vsql_complex.COMPLEX	YES		NULL	NULL
+category	varchar(50)	YES		NULL	NULL
+SELECT * FROM temp_unique ORDER BY val, category;
+val	category
+(-1,0)	C
+(2,0)	A
+(2,0)	B
+(10,0)	A
+(10,0)	B
+DROP TABLE temp_unique;
+DROP TABLE t1;

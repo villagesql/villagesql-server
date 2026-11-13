@@ -1,0 +1,37 @@
+# A failure in dd::init(DD_RESTART_OR_UPGRADE) must abort the server cleanly
+# with exit code 1. It must not crash inside VillageSQL's upgrade predicate.
+#
+# Guards the upgrade_needed assert found in the Percona Server 8.4.10 merge;
+# burn-down entries innodb.autoinc_persist_debug and main.lowercase_fs_off.
+#
+# dd::init() runs SchemaManager::preinit(), and runs it even when
+# restart_dictionary() has already failed. preinit_for_restart() then cannot
+# read villagesql.properties, so it returns early without recording whether a
+# VillageSQL upgrade is needed. The failure branch of init_server_components()
+# -- added by Percona's PS-8257 -- calls
+# dd::upgrade::no_server_upgrade_required(), which reaches
+# SchemaManager::is_villagesql_upgrade_needed(). Asking that question before it
+# had an answer aborted on an assert in a debug build, and dereferenced a null
+# pointer in a release build, instead of returning.
+#
+# Covered upstream only incidentally, by two tests that assert on the exit code
+# for unrelated reasons: innodb.autoinc_persist_debug (BUG#31763837, a DD
+# truncate assert) and main.lowercase_fs_off, which reaches this path for real
+# via a mismatched --lower_case_table_names but runs only on a case-sensitive
+# filesystem. error_during_bootstrap returns from restart_dictionary() ten lines
+# above that LCTN check, so this pins the same path on every platform.
+
+--source include/have_debug.inc
+
+--echo # Stop the server, then start it with a forced bootstrap failure.
+--source include/kill_mysqld.inc
+
+--echo # Expect a clean abort (exit 1), not a crash (exit 2).
+--error 1
+--exec $MYSQLD_CMD --debug=+d,error_during_bootstrap
+
+--echo # The server still starts normally afterwards.
+let $restart_parameters = "restart:";
+--source include/start_mysqld.inc
+
+SELECT 1 AS server_started;

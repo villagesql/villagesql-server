@@ -1,0 +1,32 @@
+# Test ALTER TABLE CONVERT TO CHARACTER SET with COMPLEX columns
+# Grammar: ALTER TABLE table_name CONVERT TO CHARACTER SET charset_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    value COMPLEX
+) CHARACTER SET latin1;
+
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(3.5,-1.2)');
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+# Convert character set (COMPLEX should remain unaffected)
+ALTER TABLE t1 CONVERT TO CHARACTER SET utf8mb4;
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+# COMPLEX data should be preserved
+INSERT INTO t1 VALUES (3, 'test3', '(2.5,3.5)');
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

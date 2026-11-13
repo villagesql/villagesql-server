@@ -1,0 +1,50 @@
+CREATE TABLE t1 (id INT, c1 COMPLEX, c2 COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', '(3.0,4.0)');
+INSERT INTO t1 VALUES (2, '(5.0,6.0)', '(7.0,8.0)');
+SELECT vsql_complex.COMPLEX::from_string('(3.14159,2.71828)') AS result;
+result
+(3.14159,2.71828)
+SELECT vsql_complex.complex_add(c1, c2) AS sum FROM t1 ORDER BY id;
+sum
+(4,6)
+(12,14)
+SELECT id,
+CASE
+WHEN id = 1 THEN vsql_complex.complex_add(c1, c2)
+ELSE vsql_complex.complex_subtract(c1, c2)
+END as result
+FROM t1 ORDER BY id;
+id	result
+1	(4,6)
+2	(-2,-2)
+CREATE TABLE t2 (id INT, complex_result COMPLEX);
+INSERT INTO t2 SELECT id, vsql_complex.complex_add(c1, c2) FROM t1;
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't2' AND COLUMN_NAME = 'complex_result';
+COLUMN_NAME	DATA_TYPE	COLUMN_TYPE
+complex_result	vsql_complex.COMPLEX	vsql_complex.COMPLEX
+SELECT id, complex_result FROM t2 ORDER BY id;
+id	complex_result
+1	(4,6)
+2	(12,14)
+SELECT id, vsql_complex.complex_real(complex_result) as real_part FROM t2 ORDER BY id;
+id	real_part
+1	4
+2	12
+DROP TABLE t2;
+SELECT
+vsql_complex.complex_add(c1, c2) as sum,
+vsql_complex.complex_subtract(c1, c2) as diff,
+vsql_complex.complex_multiply(c1, c2) as product
+FROM t1 ORDER BY id;
+sum	diff	product
+(4,6)	(-2,-2)	(-5,10)
+(12,14)	(-2,-2)	(-13,82)
+SELECT * FROM (
+SELECT id, vsql_complex.complex_add(c1, c2) as result FROM t1
+) t ORDER BY id;
+id	result
+1	(4,6)
+2	(12,14)
+DROP TABLE t1;

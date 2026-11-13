@@ -1,0 +1,51 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+CREATE TABLE t2 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(2,0)'), (2, '(10,0)'), (3, '(-1,0)');
+INSERT INTO t2 VALUES (4, '(5,0)'), (5, '(10,0)'), (6, '(2,0)');
+CREATE TEMPORARY TABLE temp_union AS
+SELECT val FROM t1
+UNION
+SELECT val FROM t2;
+SHOW COLUMNS FROM temp_union;
+Field	Type	Null	Key	Default	Extra
+val	vsql_complex.COMPLEX	YES		NULL	NULL
+SELECT * FROM temp_union ORDER BY val;
+val
+(-1,0)
+(2,0)
+(5,0)
+(10,0)
+DROP TABLE temp_union;
+CREATE TEMPORARY TABLE temp_union_all AS
+SELECT val FROM t1
+UNION ALL
+SELECT val FROM t2;
+SELECT * FROM temp_union_all ORDER BY val;
+val
+(-1,0)
+(2,0)
+(2,0)
+(5,0)
+(10,0)
+(10,0)
+DROP TABLE temp_union_all;
+CREATE TEMPORARY TABLE temp_union_multi AS
+SELECT id, val, 'table1' AS source FROM t1
+UNION
+SELECT id, val, 'table2' AS source FROM t2;
+SHOW COLUMNS FROM temp_union_multi;
+Field	Type	Null	Key	Default	Extra
+id	int	YES		NULL	NULL
+val	vsql_complex.COMPLEX	YES		NULL	NULL
+source	varchar(6)	NO			NULL
+SELECT * FROM temp_union_multi ORDER BY val, source;
+id	val	source
+3	(-1,0)	table1
+1	(2,0)	table1
+6	(2,0)	table2
+4	(5,0)	table2
+2	(10,0)	table1
+5	(10,0)	table2
+DROP TABLE temp_union_multi;
+DROP TABLE t2;
+DROP TABLE t1;

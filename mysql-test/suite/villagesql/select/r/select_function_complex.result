@@ -1,0 +1,37 @@
+CREATE TABLE t1 (
+complex_col COMPLEX,
+complex2_col COMPLEX2,
+str_col VARCHAR(100),
+int_col INT
+);
+INSERT INTO t1 VALUES ('(1.0778787,2.71828)', '(2.5,3.5)', '(3.14159,1)', 42);
+INSERT INTO t1 VALUES ('(3.0,4.0)', '(6.5,7.5)', '(5.0,6.0)', 99);
+SELECT vsql_complex.complex_real(complex_col) AS real_part FROM t1 ORDER BY complex_col;
+real_part
+1.0778787
+3
+SELECT vsql_complex.complex_real('(7.0,8.0)') AS real_part;
+real_part
+7
+SELECT vsql_complex.complex_real(vsql_complex.COMPLEX::from_string('(9.0,10.0)')) AS real_part;
+real_part
+9
+SELECT vsql_complex.complex_real(vsql_complex.COMPLEX::from_string(str_col)) AS real_part FROM t1 ORDER BY str_col;
+real_part
+3.14159
+5
+SELECT vsql_complex.complex_imag(vsql_complex.complex_conjugate(complex_col)) AS conjugate_imag FROM t1 ORDER BY complex_col;
+conjugate_imag
+-2.71828
+-4
+SELECT vsql_complex.complex_real(complex2_col) AS real_part FROM t1 ORDER BY complex2_col;
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 type mismatch (expected vsql_complex.COMPLEX, got vsql_complex.COMPLEX2)
+SELECT vsql_complex.complex_real(str_col) AS real_part FROM t1 ORDER BY str_col;
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 must be a custom type or string constant
+SELECT vsql_complex.complex_real(int_col) AS real_part FROM t1 ORDER BY int_col;
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 must be a custom type or string constant
+SELECT vsql_complex.complex_real(12) AS real_part;
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 must be a custom type or string constant
+SELECT vsql_complex.complex_real('[1,1]') AS real_part;
+ERROR HY000: Incorrect COMPLEX value: '[1,1]'
+DROP TABLE t1;

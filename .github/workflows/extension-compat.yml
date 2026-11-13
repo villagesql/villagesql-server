@@ -1,0 +1,73 @@
+name: Extension SDK Compatibility
+
+# Nightly + manual entry point for extension compatibility testing.
+# Delegates the actual build/test matrix to the reusable
+# extension-compat-suite.yml. Tests bundled extensions against the SDK at HEAD.
+#
+#   - nightly-dispatch.yml starts a run after each successful nightly build.
+#   - Can be triggered manually to test a single platform, extension, or ABI.
+#
+# For on-demand testing against a PR's commit, see /testextensions in
+# slash-commands.yml, which calls the same reusable workflow.
+#
+# DO NOT RENAME THIS FILE. The filename `extension-compat.yml` is a public
+# contract: https://github.com/villagesql/extension-actions looks up the
+# latest successful nightly run by filename via
+#     gh run list --workflow extension-compat.yml
+# to download the `devserver-*` and `sdk-*` artifacts. That action is consumed
+# by every extension repo (vsql-ai, etc.), so renaming this file silently
+# breaks nightly CI across all of them. See cpp/action.yml in extension-actions.
+#
+# A non-empty run-tag is appended to the run name as [<run-tag>].
+# nightly-dispatch.yml passes run-tag=nightly, and extension-actions selects
+# the latest successful [nightly] run by its displayTitle.
+
+run-name: >-
+  ${{ inputs.run-tag
+      && format('Extension SDK Compatibility [{0}]', inputs.run-tag)
+      || 'Extension SDK Compatibility' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Single platform to test (linux-x86_64, linux-aarch64, macos-arm64), or leave empty for all'
+        required: false
+        default: ''
+      extension:
+        description: 'Single extension to test (e.g. vsql-ai), or leave empty for all'
+        required: false
+        default: ''
+      abi:
+        description: 'ABI variant to test (stable, dev), or leave empty for both'
+        required: false
+        default: ''
+      ref:
+        description: 'Branch, tag, or commit SHA to test, or leave empty for the default branch'
+        required: false
+        default: ''
+      run-tag:
+        description: 'Tag appended to the run name as [<run-tag>], or leave empty for none'
+        required: false
+        default: ''
+      slack_notify:
+        description: 'Send Slack notification with results'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: Extension SDK Compatibility
+    uses: ./.github/workflows/extension-compat-suite.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      platform_filter: ${{ inputs.platform }}
+      extension_filter: ${{ inputs.extension }}
+      abi_filter: ${{ inputs.abi }}
+      # The suite takes slack_notify as a string; format() coerces the boolean.
+      slack_notify: ${{ format('{0}', inputs.slack_notify) }}
+    secrets: inherit

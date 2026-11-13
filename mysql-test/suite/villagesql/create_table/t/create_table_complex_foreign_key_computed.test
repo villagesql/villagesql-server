@@ -1,0 +1,44 @@
+# Test CREATE TABLE with FOREIGN KEY on computed COMPLEX values
+# Tests foreign key relationships using COMPLEX type derived values
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE measurements (
+    measurement_id INT PRIMARY KEY,
+    raw_signal COMPLEX,
+    magnitude_key DOUBLE GENERATED ALWAYS AS (COMPLEX_ABS(raw_signal)) STORED
+);
+
+# Reference table for magnitude ranges
+CREATE TABLE magnitude_categories (
+    magnitude DOUBLE PRIMARY KEY,
+    category_name VARCHAR(50)
+);
+
+INSERT INTO magnitude_categories VALUES (5.0, 'Medium'), (10.0, 'High');
+
+# Child table with foreign key to computed magnitude
+CREATE TABLE classified_signals (
+    id INT PRIMARY KEY,
+    measurement_ref INT,
+    category_magnitude DOUBLE,
+    complex_value COMPLEX,
+    FOREIGN KEY (measurement_ref) REFERENCES measurements(measurement_id),
+    FOREIGN KEY (category_magnitude) REFERENCES magnitude_categories(magnitude)
+);
+
+SHOW CREATE TABLE classified_signals;
+
+# Insert test data
+INSERT INTO measurements (measurement_id, raw_signal) VALUES (1, '(3.0,4.0)'); # magnitude = 5.0
+INSERT INTO classified_signals VALUES (1, 1, 5.0, '(3.0,4.0)');
+
+SELECT * FROM classified_signals;
+
+DROP TABLE classified_signals;
+DROP TABLE magnitude_categories;
+DROP TABLE measurements;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

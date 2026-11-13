@@ -1,0 +1,39 @@
+# Test DROP DATABASE IF EXISTS containing tables with COMPLEX columns
+# Grammar: DROP DATABASE IF EXISTS database_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE DATABASE test_complex_db2;
+USE test_complex_db2;
+
+CREATE TABLE complex_table (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    complex_field COMPLEX
+);
+
+INSERT INTO complex_table VALUES (1, 'test', '(5.0,6.0)');
+
+# Verify the custom_columns entry
+--source include/villagesql/query_custom_columns.inc
+
+USE test;
+
+# Drop existing database
+DROP DATABASE IF EXISTS test_complex_db2;
+
+# Verify the custom_columns entry is gone
+--source include/villagesql/query_custom_columns.inc
+
+# Drop non-existing database (should not error)
+DROP DATABASE IF EXISTS test_complex_db2;
+
+# Verify database no longer exists
+SHOW DATABASES LIKE 'test_complex_db2';
+
+# Verify the custom_columns entry is gone
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

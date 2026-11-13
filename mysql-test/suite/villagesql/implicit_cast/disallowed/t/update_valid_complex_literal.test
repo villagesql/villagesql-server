@@ -1,0 +1,18 @@
+# Test UPDATE with valid COMPLEX literal
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(5.0,6.0)'),
+  (4, '(7.0,8.0)');
+
+UPDATE t_complex SET val = '(9.0,10.0)' WHERE id = 4;
+SELECT val FROM t_complex WHERE id = 4;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

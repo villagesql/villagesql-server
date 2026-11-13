@@ -1,0 +1,68 @@
+# Test INSERT INTO ... VALUES with COMPLEX type
+# Grammar: INSERT [INTO] tbl_name [(col_name [, col_name] ...)] VALUES (value_list) [, (value_list)] ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Single row inserts with negative values and zero variants interleaved (~20 rows)
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t1 (id, val) VALUES (2, '(0,0)');
+INSERT INTO t1 VALUES (3, '(-3.5,1.2)');
+INSERT INTO t1 (id, val) VALUES (4, '(-0,0)');
+INSERT INTO t1 VALUES (5, '(5.0,-6.0)');
+INSERT INTO t1 (id, val) VALUES (6, '(0,-0)');
+INSERT INTO t1 VALUES (7, '(-7.5,-8.5)');
+INSERT INTO t1 (id, val) VALUES (8, '(-0,-0)');
+INSERT INTO t1 VALUES (9, '(9.0,10.0)');
+INSERT INTO t1 (id, val) VALUES (10, '(11.5,-12.5)');
+INSERT INTO t1 VALUES (11, '(-13.0,14.0)');
+INSERT INTO t1 (id, val) VALUES (12, '(15.5,16.5)');
+INSERT INTO t1 VALUES (13, '(-17.0,-18.0)');
+INSERT INTO t1 (id, val) VALUES (14, '(19.0,20.0)');
+INSERT INTO t1 VALUES (15, '(21.5,-22.5)');
+INSERT INTO t1 (id, val) VALUES (16, '(-23.0,24.0)');
+INSERT INTO t1 VALUES (17, '(25.0,26.0)');
+INSERT INTO t1 (id, val) VALUES (18, '(-27.5,-28.5)');
+INSERT INTO t1 VALUES (19, '(29.0,30.0)');
+INSERT INTO t1 (id, val) VALUES (20, '(-31.5,32.5)');
+
+SELECT * FROM t1 ORDER BY id;
+
+# Test ordering by COMPLEX column with secondary sort
+SELECT * FROM t1 ORDER BY val, id;
+
+DROP TABLE t1;
+
+# Test table with multiple COMPLEX columns
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    val_a COMPLEX,
+    val_b COMPLEX,
+    val_c COMPLEX,
+    val_d COMPLEX
+);
+
+# Insert into multiple COMPLEX columns with zero variants and negative values
+# Some val_a values match to ensure val_b and val_c sorting matters
+INSERT INTO t2 VALUES (1, '(1.0,2.0)', '(3.0,4.0)', '(5.0,6.0)', '(7.0,8.0)');
+INSERT INTO t2 (id, val_a, val_b, val_c, val_d) VALUES (2, '(0,0)', '(-0,0)', '(0,-0)', '(-0,-0)');
+INSERT INTO t2 VALUES (3, '(1.0,2.0)', '(11.0,-12.0)', '(-13.0,-14.0)', '(15.0,16.0)');
+INSERT INTO t2 (id, val_a, val_b, val_c, val_d) VALUES (4, '(17.5,18.5)', '(-19.5,20.5)', '(21.5,-22.5)', '(-23.5,-24.5)');
+INSERT INTO t2 VALUES (5, '(25.0,26.0)', '(27.0,28.0)', '(-29.0,30.0)', '(31.0,-32.0)');
+INSERT INTO t2 (id, val_a, val_b, val_c, val_d) VALUES (6, '(17.5,18.5)', '(35.0,36.0)', '(37.0,-38.0)', '(-39.0,40.0)');
+INSERT INTO t2 VALUES (7, '(25.0,26.0)', '(-43.5,-44.5)', '(45.5,46.5)', '(47.5,-48.5)');
+INSERT INTO t2 (id, val_a, val_b, val_c, val_d) VALUES (8, '(1.0,2.0)', '(51.0,52.0)', '(-53.0,-54.0)', '(55.0,56.0)');
+
+SELECT * FROM t2 ORDER BY id;
+
+# Test ordering by multiple COMPLEX columns
+SELECT * FROM t2 ORDER BY val_a, val_b, val_c;
+SELECT * FROM t2 ORDER BY val_b, val_c, val_d;
+
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

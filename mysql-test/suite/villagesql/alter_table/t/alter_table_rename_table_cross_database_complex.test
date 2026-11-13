@@ -1,0 +1,35 @@
+# ALTER TABLE ... RENAME TO a different database, combined with ADD COLUMN of
+# a custom type.
+#
+# The added column's victionary entry must be keyed by both the new database
+# and the new table name. Keying it by the old ones leaves an orphaned row in
+# the source database, which a later CREATE TABLE reusing that name collides
+# with.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE DATABASE db2;
+CREATE TABLE t1 (c3 COMPLEX);
+--source include/villagesql/query_custom_columns.inc
+
+ALTER TABLE t1 RENAME TO db2.t2, ADD COLUMN c4 COMPLEX;
+
+# Both columns moved to the new database, and c4 kept its custom type.
+--source include/villagesql/query_custom_columns.inc
+SHOW CREATE TABLE db2.t2;
+
+INSERT INTO db2.t2 VALUES ('(1.0,2.0)', '(3.0,4.0)');
+SELECT * FROM db2.t2;
+
+# Dropping the renamed table clears every row it owns.
+DROP TABLE db2.t2;
+--source include/villagesql/query_custom_columns.inc
+
+# Reusing the old name in the source database must not collide.
+CREATE TABLE t1 (c4 COMPLEX);
+--source include/villagesql/query_custom_columns.inc
+
+DROP TABLE t1;
+DROP DATABASE db2;
+
+--source include/villagesql/uninstall_complex_extension.inc

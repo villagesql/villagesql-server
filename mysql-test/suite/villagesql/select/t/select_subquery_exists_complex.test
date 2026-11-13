@@ -1,0 +1,29 @@
+# Test Subquery with EXISTS/NOT EXISTS for COMPLEX type
+# Grammar: SELECT ... WHERE [NOT] EXISTS (SELECT ...)
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (4, '(0,0)'), (1, '(1.0,2.0)'), (3, '(1,-2)'), (2, '(3.0,4.0)');
+
+CREATE TABLE t2 (id INT, val COMPLEX);
+INSERT INTO t2 VALUES (1, '(1.0,-2.0)'), (2, '(-1.0,-2.0)'), (3, '(-0,-0)');
+
+# EXISTS subquery
+SELECT * FROM t1 WHERE EXISTS (SELECT 1 FROM t2 WHERE t1.id = t2.id) ORDER BY id;
+
+SELECT * FROM t1 WHERE EXISTS (SELECT 1 FROM t2 WHERE t1.val = t2.val) ORDER BY val DESC, id DESC;
+
+# NOT EXISTS subquery
+SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t1.id = t2.id AND t2.val = '(9.0,9.0)') ORDER BY id;
+
+SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t1.id = t2.id AND t2.val = '(-0,-0)') ORDER BY id DESC;
+
+SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t1.val = t2.val) ORDER BY id DESC;
+
+SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t1.id = t2.id AND t2.val < '(0,0)') ORDER BY val;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,61 @@
+CREATE DATABASE complex_relationships_db;
+USE complex_relationships_db;
+CREATE TABLE users (
+id INT PRIMARY KEY,
+name VARCHAR(50),
+profile_data COMPLEX
+);
+CREATE TABLE orders (
+id INT PRIMARY KEY,
+user_id INT,
+complex_metadata COMPLEX,
+FOREIGN KEY (user_id) REFERENCES users(id)
+);
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+complex_relationships_db	orders	complex_metadata	vsql_complex	0.0.1	COMPLEX	{}
+complex_relationships_db	users	profile_data	vsql_complex	0.0.1	COMPLEX	{}
+INSERT INTO users VALUES (1, 'John', '(1.0,1.0)');
+INSERT INTO orders VALUES (1, 1, '(2.0,3.0)');
+SHOW CREATE TABLE orders;
+Table	Create Table
+orders	CREATE TABLE `orders` (
+  `id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `complex_metadata` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+USE test;
+DROP DATABASE complex_relationships_db;
+SHOW DATABASES LIKE 'complex_relationships_db';
+Database (complex_relationships_db)
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Query	#	#	CREATE DATABASE complex_relationships_db
+#	#	Query	#	#	use `complex_relationships_db`; CREATE TABLE `users` (
+  `id` int NOT NULL,
+  `name` varchar(50) DEFAULT NULL,
+  `profile_data` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+)
+#	#	Query	#	#	use `complex_relationships_db`; CREATE TABLE `orders` (
+  `id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `complex_metadata` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+)
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (complex_relationships_db.users)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (complex_relationships_db.orders)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	DROP DATABASE complex_relationships_db

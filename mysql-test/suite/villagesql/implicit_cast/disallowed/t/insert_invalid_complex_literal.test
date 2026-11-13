@@ -1,0 +1,12 @@
+# Test INSERT with invalid COMPLEX literal - should fail with encode error
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t_complex VALUES (1, 'invalid_complex_value');
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

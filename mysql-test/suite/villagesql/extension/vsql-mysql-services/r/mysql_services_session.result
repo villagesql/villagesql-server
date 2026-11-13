@@ -1,0 +1,10 @@
+INSTALL EXTENSION vsql_mysql_services_session_test;
+SELECT vsql_mysql_services_session_test.session_sql_command() AS sql_command;
+sql_command
+select
+UNINSTALL EXTENSION vsql_mysql_services_session_test;
+INSTALL EXTENSION vsql_mysql_services_session_test;
+SELECT vsql_mysql_services_session_test.session_sql_command() AS sql_command_again;
+sql_command_again
+select
+UNINSTALL EXTENSION vsql_mysql_services_session_test;

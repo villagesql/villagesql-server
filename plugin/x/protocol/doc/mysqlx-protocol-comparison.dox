@@ -1,0 +1,75 @@
+/*
+ * Copyright (c) 2015, 2026, Oracle and/or its affiliates.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License, version 2.0,
+ * as published by the Free Software Foundation.
+ *
+ * This program is designed to work with certain software (including
+ * but not limited to OpenSSL) that is licensed under separate terms,
+ * as designated in a particular file or component or in included license
+ * documentation.  The authors of MySQL hereby grant you an additional
+ * permission to link the program and your derivative works with the
+ * separately licensed software that they have either included with
+ * the program or referenced in the documentation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License, version 2.0, for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+
+/** @page mysqlx_protocol_comparison Comparison to MySQL C/S %Protocol
+
+
+| Feature                              | MySQL C/S protocol                                                                      | X %Protocol                                      |
+|--------------------------------------|-----------------------------------------------------------------------------------------|--------------------------------------------------|
+| plaintext auth                       | ✓                                                                                       | ✓ via SASL                                       |
+| extentisible auth                    | ✓ (5.6)                                                                                 | ✓ via SASL                                       |
+| TLS extension                        | ✓                                                                                       | ✓                                                |
+| max message size >= 1Gb              | ✓                                                                                       | ✓                                                |
+| compression extension                | ✓                                                                                       | ✓ zlib, lz4, zstd                                |
+| resettable sessions                  | [COM_RESET_CONNECTION](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_reset_connection.html) | @ref Mysqlx::Session::Reset                      |
+| multiple, sequential sessions        | [COM_CHANGE_USER](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_change_user.html)           | @ref Mysqlx::Session::AuthenticateStart          |
+| out-of-band notifications            | ✕                                                                                       | @ref Mysqlx::Notice::Frame                       |
+| extensible messages                  | ✕                                                                                       | via protobuf                                     |
+| extensible protocol                  | via capability flags                                                                    | @ref Mysqlx::Connection::CapabilitiesGet         |
+| prepared SQL                         | ✓                                                                                       | ✓                                                |
+| prepared CRUD                        | ✕                                                                                       | ✓                                                |
+| multi-statement                      | ✓ (5.0)                                                                                 | ✕                                                |
+| multi-resultset                      | ✓ (5.0)                                                                                 | @ref Mysqlx::Resultset::FetchDoneMoreResultsets  |
+| OUT-paramset                         | ✓ (5.5)                                                                                 | @ref Mysqlx::Resultset::FetchDoneMoreOutParams   |
+
+@par Mapping of MySQL C/S @c COM_ to Mysqlx Messages
+
+| Command                                                                                       | X %Protocol                                       |
+|-----------------------------------------------------------------------------------------------|---------------------------------------------------|
+| [COM_QUIT](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_quit.html)                               | @ref Mysqlx::Connection::Close                    |
+| [COM_INIT_DB](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_init_db.html)                         | ✕                                                 |
+| [COM_QUERY](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html)                             | @ref Mysqlx::Sql::StmtExecute namespace="sql"     |
+| [COM_FIELD_LIST](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_field_list.html)                   | ✕, deprecated                                     |
+| [COM_CREATE_DB](https://dev.mysql.com/doc/dev/mysql-server/latest/my__command_8h.html)                     | ✕, deprecated                                     |
+| [COM_DROP_DB](https://dev.mysql.com/doc/dev/mysql-server/latest/my__command_8h.html)                         | ✕, deprecated                                     |
+| [COM_REFRESH](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_refresh.html)                         | ✕, deprecated                                     |
+| [COM_SHUTDOWN](https://dev.mysql.com/doc/dev/mysql-server/latest/my__command_8h.html)                       | ✕, use SQL ``SHUTDOWN``                           |
+| [COM_STATISTICS](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_statistics.html)                   | ✕, deprecated                                     |
+| [COM_PROCESS_INFO](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_process_info.html)               | ✕, deprecated                                     |
+| [COM_PROCESS_KILL](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_process_kill.html)               | ✕, deprecated                                     |
+| [COM_DEBUG](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_debug.html)                             | ✕, deprecated                                     |
+| [COM_PING](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_ping.html)                               | @ref Mysqlx::Sql::StmtExecute namespace="mysqlx"  |
+| [COM_CHANGE_USER](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_change_user.html)                 | @ref Mysqlx::Session::AuthenticateStart           |
+| [COM_RESET_CONNECTION](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_reset_connection.html)       | @ref Mysqlx::Session::Reset                       |
+| [COM_STMT_PREPARE](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_prepare.html)               | @ref Mysqlx::Prepare::Prepare                     |
+| [COM_STMT_SEND_LONG_DATA](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_send_long_data.html) | ✕                                                 |
+| [COM_STMT_EXECUTE](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html)               | @ref Mysqlx::Prepare::Execute                     |
+| [COM_STMT_CLOSE](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_close.html)                   | @ref Mysqlx::Prepare::Deallocate                  |
+| [COM_STMT_RESET](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_reset.html)                   | ✕                                                 |
+| [COM_SET_OPTION](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_set_option.html)                   | ✕                                                 |
+| [COM_STMT_FETCH](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_fetch.html)                   | @ref Mysqlx::Cursor::Fetch                        |
+
+
+*/

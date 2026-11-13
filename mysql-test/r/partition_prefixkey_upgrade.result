@@ -1,0 +1,21 @@
+
+# Copy the 8.0.19 data zip file to working directory.
+
+# Check that the zip file exists in the working directory.
+
+# Unzip 8.0.19 data directory.
+
+# Set data directory to the 8.0.19 data directory.
+
+# Set log directory.
+
+# Restart server to trigger upgrade.
+
+# Check for errors in the error log.
+Pattern "\[ERROR\]" found
+
+# Should show error message in the error log when upgrading
+# from 8.4
+Pattern "Column 'test\.t1\.a' having prefix key part 'a\(100\)' in the PARTITION BY KEY\(\) clause is not supported\." found
+
+# Cleanup.

@@ -1,0 +1,30 @@
+# Test CREATE TABLE with CHECK constraints on COMPLEX columns
+# Tests CHECK constraints using COMPLEX type functions
+
+--source include/villagesql/install_complex_extension.inc
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    CHECK (COMPLEX_ABS(val) > 0.0),
+    CHECK (COMPLEX_REAL(val) BETWEEN -100.0 AND 100.0)
+);
+
+SHOW CREATE TABLE t1;
+
+# Insert valid data
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, '(50.0,-30.0)');
+
+# This should pass the constraints
+SELECT * FROM t1;
+
+# Test constraint violations
+--error ER_CHECK_CONSTRAINT_VIOLATED
+INSERT INTO t1 VALUES (3, '(0.0,0.0)'); # COMPLEX_ABS = 0, should fail
+
+--error ER_CHECK_CONSTRAINT_VIOLATED
+INSERT INTO t1 VALUES (4, '(150.0,10.0)'); # COMPLEX_REAL > 100, should fail
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

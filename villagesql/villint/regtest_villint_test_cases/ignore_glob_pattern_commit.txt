@@ -1,0 +1,7 @@
+Add generated test files
+
+These files are auto-generated and should not require
+copyright headers. They match the *.generated.cc pattern
+and should be ignored by villint.
+
+villint-ignore: *.generated.cc

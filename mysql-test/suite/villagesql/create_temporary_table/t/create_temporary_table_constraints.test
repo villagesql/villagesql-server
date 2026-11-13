@@ -1,0 +1,71 @@
+# Test constraints on COMPLEX columns in temporary tables
+# Verifies NOT NULL and CHECK constraints work correctly
+
+--source include/villagesql/install_complex_extension.inc
+
+# Test 1: NOT NULL constraint
+CREATE TEMPORARY TABLE t_not_null (
+  id INT PRIMARY KEY,
+  val COMPLEX NOT NULL
+);
+
+INSERT INTO t_not_null VALUES (1, '(2,0)');
+SELECT * FROM t_not_null;
+
+--error ER_BAD_NULL_ERROR
+INSERT INTO t_not_null VALUES (2, NULL);
+
+SELECT * FROM t_not_null;
+
+DROP TABLE t_not_null;
+
+# Test 2: CHECK constraint on COMPLEX column
+# Note: CHECK constraints in MySQL can validate custom type values
+CREATE TEMPORARY TABLE t_check (
+  id INT PRIMARY KEY,
+  val COMPLEX,
+  CHECK (val IS NOT NULL)
+);
+
+INSERT INTO t_check VALUES (1, '(3.0,4.0)');
+SELECT * FROM t_check;
+
+--error ER_CHECK_CONSTRAINT_VIOLATED
+INSERT INTO t_check VALUES (2, NULL);
+
+DROP TABLE t_check;
+
+# Test 3: Combination of constraints
+CREATE TEMPORARY TABLE t_combined (
+  id INT PRIMARY KEY,
+  val COMPLEX NOT NULL,
+  amount DECIMAL(10,2) CHECK (amount > 0)
+);
+
+INSERT INTO t_combined VALUES (1, '(5.0,5.0)', 100.50);
+
+--error ER_BAD_NULL_ERROR
+INSERT INTO t_combined VALUES (2, NULL, 50.00);
+
+--error ER_CHECK_CONSTRAINT_VIOLATED
+INSERT INTO t_combined VALUES (3, '(1.0,1.0)', -10.00);
+
+SELECT * FROM t_combined;
+
+DROP TABLE t_combined;
+
+# Test 4: DEFAULT value with NOT NULL
+CREATE TEMPORARY TABLE t_default (
+  id INT PRIMARY KEY,
+  val COMPLEX NOT NULL DEFAULT '(0.0,0.0)',
+  description VARCHAR(50)
+);
+
+INSERT INTO t_default (id, description) VALUES (1, 'uses default');
+INSERT INTO t_default VALUES (2, '(1.0,2.0)', 'explicit value');
+
+SELECT * FROM t_default ORDER BY id;
+
+DROP TABLE t_default;
+
+--source include/villagesql/uninstall_complex_extension.inc

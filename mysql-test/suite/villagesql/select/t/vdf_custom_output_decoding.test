@@ -1,0 +1,58 @@
+# Test automatic decoding of custom types returned by VDF functions
+# VDF functions returning custom types should automatically decode to readable
+# strings for SELECT output, but remain binary for storage (INSERT/UPDATE)
+
+--source include/villagesql/install_complex_extension.inc
+
+# Setup test table
+CREATE TABLE t1 (id INT, c1 COMPLEX, c2 COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', '(3.0,4.0)');
+INSERT INTO t1 VALUES (2, '(5.0,6.0)', '(7.0,8.0)');
+
+# Test 1: Basic VDF returning custom type
+SELECT vsql_complex.COMPLEX::from_string('(3.14159,2.71828)') AS result;
+
+# Test 2: VDF with COMPLEX arithmetic
+SELECT vsql_complex.complex_add(c1, c2) AS sum FROM t1 ORDER BY id;
+
+# Test 3: CASE Expression with Custom Types
+SELECT id,
+    CASE
+        WHEN id = 1 THEN vsql_complex.complex_add(c1, c2)
+        ELSE vsql_complex.complex_subtract(c1, c2)
+    END as result
+FROM t1 ORDER BY id;
+
+# Test 4: INSERT INTO ... SELECT (should insert binary, not decoded strings)
+CREATE TABLE t2 (id INT, complex_result COMPLEX);
+INSERT INTO t2 SELECT id, vsql_complex.complex_add(c1, c2) FROM t1;
+
+# Verify column type is COMPLEX (not VARCHAR or other string type)
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't2' AND COLUMN_NAME = 'complex_result';
+
+# Verify data was inserted as COMPLEX type (not as decoded string)
+SELECT id, complex_result FROM t2 ORDER BY id;
+
+# Verify we can use COMPLEX functions on the result
+SELECT id, vsql_complex.complex_real(complex_result) as real_part FROM t2 ORDER BY id;
+
+DROP TABLE t2;
+
+# Test 5: Multiple custom type results in same SELECT
+SELECT
+    vsql_complex.complex_add(c1, c2) as sum,
+    vsql_complex.complex_subtract(c1, c2) as diff,
+    vsql_complex.complex_multiply(c1, c2) as product
+FROM t1 ORDER BY id;
+
+# Test 6: Subqueries/Derived Tables - works correctly
+SELECT * FROM (
+    SELECT id, vsql_complex.complex_add(c1, c2) as result FROM t1
+) t ORDER BY id;
+
+# Cleanup
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

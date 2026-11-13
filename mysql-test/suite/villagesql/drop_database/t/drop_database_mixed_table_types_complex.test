@@ -1,0 +1,54 @@
+# Test DROP DATABASE with mixed table types including COMPLEX columns
+# Grammar: DROP DATABASE database_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE DATABASE mixed_db;
+USE mixed_db;
+
+# Regular table with COMPLEX columns
+CREATE TABLE regular_complex (
+    id INT PRIMARY KEY,
+    complex_col COMPLEX
+);
+
+# Temporary table with COMPLEX columns
+CREATE TEMPORARY TABLE temp_complex (
+    id INT PRIMARY KEY,
+    temp_complex_col COMPLEX
+);
+
+# Table with mixed column types including COMPLEX
+CREATE TABLE mixed_columns (
+    id INT PRIMARY KEY,
+    text_col TEXT,
+    json_col JSON,
+    complex_col COMPLEX,
+    float_col FLOAT DEFAULT 1.1
+);
+
+# Verify the custom_columns entries
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO regular_complex VALUES (1, '(1.0,1.0)');
+INSERT INTO temp_complex VALUES (1, '(2.0,2.0)');
+INSERT INTO mixed_columns (id, text_col, json_col, complex_col) VALUES
+    (1, 'test', '{"key": "value"}', '(3.0,3.0)');
+
+SHOW TABLES;
+
+# Temp tables are not dropped when the database is.
+DROP TABLE temp_complex;
+USE test;
+
+DROP DATABASE mixed_db;
+
+# Verify database no longer exists
+SHOW DATABASES LIKE 'mixed_db';
+
+# Verify the custom_columns entries are gone
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

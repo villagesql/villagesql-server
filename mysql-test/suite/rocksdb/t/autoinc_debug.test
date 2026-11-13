@@ -1,0 +1,70 @@
+--source include/have_rocksdb.inc
+--source include/have_debug.inc
+--source include/have_log_bin.inc
+--source include/not_valgrind.inc
+
+--echo #
+--echo # Testing crash safety of transactions.
+--echo #
+create table t (i int primary key auto_increment) engine=rocksdb;
+insert into t values ();
+insert into t values ();
+insert into t values ();
+
+--echo # Before anything
+begin;
+insert into t values ();
+insert into t values ();
+--source include/expect_crash.inc
+set debug="+d,crash_commit_before";
+--error CR_SERVER_LOST
+commit;
+--source include/wait_until_disconnected.inc
+
+--source include/start_mysqld.inc
+select max(i) into @row_max from t;
+select table_schema, table_name, auto_increment > @row_max from information_schema.tables where table_name = 't';
+
+--echo # After engine prepare
+begin;
+insert into t values ();
+insert into t values ();
+--source include/expect_crash.inc
+set debug="+d,crash_commit_after_prepare";
+--error CR_SERVER_LOST
+commit;
+--source include/wait_until_disconnected.inc
+
+--source include/start_mysqld.inc
+select max(i) into @row_max from t;
+select table_schema, table_name, auto_increment > @row_max from information_schema.tables where table_name = 't';
+
+--echo # After binlog
+begin;
+insert into t values ();
+insert into t values ();
+--source include/expect_crash.inc
+set debug="+d,crash_commit_after_log";
+--error CR_SERVER_LOST
+commit;
+--source include/wait_until_disconnected.inc
+
+--source include/start_mysqld.inc
+select max(i) into @row_max from t;
+select table_schema, table_name, auto_increment > @row_max from information_schema.tables where table_name = 't';
+
+--echo # After everything
+begin;
+insert into t values ();
+insert into t values ();
+--source include/expect_crash.inc
+set debug="+d,crash_commit_after";
+--error CR_SERVER_LOST
+commit;
+--source include/wait_until_disconnected.inc
+
+--source include/start_mysqld.inc
+select max(i) into @row_max from t;
+select table_schema, table_name, auto_increment > @row_max from information_schema.tables where table_name = 't';
+
+drop table t;

@@ -1,0 +1,18 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (5, '(0,-0)'), (2, '(3.0,4.0)'), (4, '(0,0)'), (3, '(5.0,6.0)');
+CREATE TABLE t2 (filter_val COMPLEX);
+INSERT INTO t2 VALUES ('(1.0,2.0)'), ('(5.0,6.0)'), ('(-0,-0)');
+SELECT * FROM t1 WHERE val IN (SELECT filter_val FROM t2) ORDER BY id;
+id	val
+1	(1,2)
+3	(5,6)
+4	(0,0)
+5	(0,0)
+SELECT * FROM t1 WHERE val = ANY (SELECT filter_val FROM t2) ORDER BY val, id;
+id	val
+4	(0,0)
+5	(0,0)
+1	(1,2)
+3	(5,6)
+DROP TABLE t1;
+DROP TABLE t2;

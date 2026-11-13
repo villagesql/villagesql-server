@@ -1,0 +1,31 @@
+# Test that TypeDecoder on Item_func is correctly reset between PS
+# re-executions. TypeDecoder is lazily allocated on thd->mem_root for
+# Items (VDF result expressions). Item::cleanup() nulls type_decoder_
+# between executions so the next execution re-allocates on the fresh
+# thd->mem_root. Without this reset, re-execution would use a dangling
+# pointer from the prior execution's mem_root.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, c1 COMPLEX, c2 COMPLEX);
+INSERT INTO t1 VALUES (1,'(1.0,2.0)','(3.0,4.0)'),(2,'(5.0,6.0)','(7.0,8.0)'),(3,'(1.0,2.0)','(5.0,6.0)');
+
+# Execute the same prepared statement three times with different parameter
+# values. Each execution must decode the COMPLEX result correctly using a
+# fresh TypeDecoder, not a stale pointer from a prior execution.
+PREPARE stmt FROM 'SELECT vsql_complex.complex_add(c1, c2) AS result FROM t1 WHERE id = ?';
+
+SET @p = 1;
+EXECUTE stmt USING @p;
+
+SET @p = 2;
+EXECUTE stmt USING @p;
+
+SET @p = 3;
+EXECUTE stmt USING @p;
+
+DEALLOCATE PREPARE stmt;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

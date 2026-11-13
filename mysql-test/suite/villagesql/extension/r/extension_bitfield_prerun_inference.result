@@ -1,0 +1,13 @@
+INSTALL EXTENSION vsql_bitfield_test;
+# BINARY parameter.
+SELECT vsql_bitfield_test.bitfield_from_bytes_counted(_binary x'FF') IS NOT NULL AS computed;
+computed
+1
+SELECT vsql_bitfield_test.bitfield_from_bytes_counted(x'FF') IS NOT NULL AS computed;
+computed
+1
+# STRING parameter.
+SELECT vsql_bitfield_test.bitfield_from_text_counted('A') IS NOT NULL AS computed;
+computed
+1
+UNINSTALL EXTENSION vsql_bitfield_test;

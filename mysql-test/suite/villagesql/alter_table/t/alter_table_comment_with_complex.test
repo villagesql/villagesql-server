@@ -1,0 +1,29 @@
+# Test ALTER TABLE COMMENT change on table with COMPLEX columns
+# Grammar: ALTER TABLE table_name COMMENT='comment_text'
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    value COMPLEX
+);
+
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(3.5,-1.2)');
+
+SHOW CREATE TABLE t1;
+
+# Add table comment
+ALTER TABLE t1 COMMENT='Table with COMPLEX number data';
+
+SHOW CREATE TABLE t1;
+
+# Verify data is preserved
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

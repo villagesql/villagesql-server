@@ -1,0 +1,46 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(0.0,5.0)'),
+(4, '(6.0,0.0)'),
+(5, '(1.0,99.0)'),
+(6, '(3.0,88.0)');
+#
+# Test 1: VDF in GROUP BY clause
+#
+PREPARE stmt1 FROM 'SELECT vsql_complex.complex_real(val) AS real_part, COUNT(*) FROM t1 WHERE id > ? GROUP BY vsql_complex.complex_real(val)';
+SET @min_id = 0;
+EXECUTE stmt1 USING @min_id;
+real_part	COUNT(*)
+1	2
+3	2
+0	1
+6	1
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: VDF in HAVING clause
+#
+PREPARE stmt2 FROM 'SELECT vsql_complex.complex_real(val) AS real_part, COUNT(*) AS cnt FROM t1 GROUP BY vsql_complex.complex_real(val) HAVING cnt > ?';
+SET @min_cnt = 1;
+EXECUTE stmt2 USING @min_cnt;
+real_part	cnt
+1	2
+3	2
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: VDF with aggregate function
+#
+PREPARE stmt3 FROM 'SELECT COUNT(DISTINCT vsql_complex.complex_real(val)) FROM t1 WHERE id > ?';
+SET @min_id = 0;
+EXECUTE stmt3 USING @min_id;
+COUNT(DISTINCT vsql_complex.complex_real(val))
+4
+DEALLOCATE PREPARE stmt3;
+#
+# Cleanup
+#
+DROP TABLE t1;

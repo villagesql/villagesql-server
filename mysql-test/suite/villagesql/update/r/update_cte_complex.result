@@ -1,0 +1,64 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(0,0)'),
+(3, '(-3.5,4.5)'),
+(4, '(-0,0)'),
+(5, '(5.0,-6.0)'),
+(6, '(0,-0)'),
+(7, '(-7.5,-8.5)'),
+(8, '(-0,-0)'),
+(9, '(9.0,10.0)'),
+(10, '(0,0)');
+WITH cte AS (
+SELECT id FROM t1 WHERE id = 1
+)
+UPDATE t1 JOIN cte ON t1.id = cte.id SET t1.val = '(100.0,100.0)';
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(100,100)
+2	(0,0)
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	(0,0)
+9	(9,10)
+10	(0,0)
+WITH cte AS (
+SELECT id FROM t1 WHERE id IN (2, 4, 6, 8)
+)
+UPDATE t1 JOIN cte ON t1.id = cte.id SET t1.val = '(200.0,200.0)';
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(100,100)
+2	(200,200)
+3	(-3.5,4.5)
+4	(200,200)
+5	(5,-6)
+6	(200,200)
+7	(-7.5,-8.5)
+8	(200,200)
+9	(9,10)
+10	(0,0)
+WITH cte AS (
+SELECT id FROM t1 WHERE id BETWEEN 5 AND 7
+)
+UPDATE t1 JOIN cte ON t1.id = cte.id SET t1.val = '(300.0,300.0)';
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(100,100)
+2	(200,200)
+3	(-3.5,4.5)
+4	(200,200)
+5	(300,300)
+6	(300,300)
+7	(300,300)
+8	(200,200)
+9	(9,10)
+10	(0,0)
+DROP TABLE t1;

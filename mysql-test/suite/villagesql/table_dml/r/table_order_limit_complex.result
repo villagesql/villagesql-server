@@ -1,0 +1,12 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(10,1)'), ('(2,5)'), ('(5,2)');
+TABLE t1 ORDER BY val DESC LIMIT 2;
+val
+(10,1)
+(5,2)
+SELECT val, vsql_complex.complex_conjugate(val) as conjugate FROM t1 ORDER BY val;
+val	conjugate
+(2,5)	(2,-5)
+(5,2)	(5,-2)
+(10,1)	(10,-1)
+DROP TABLE t1;

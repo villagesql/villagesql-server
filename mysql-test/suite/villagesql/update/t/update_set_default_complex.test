@@ -1,0 +1,42 @@
+# Test UPDATE ... SET col=DEFAULT ... with COMPLEX type
+# Grammar: UPDATE ... SET col_name = DEFAULT ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX DEFAULT '(0.0,0.0)',
+    name VARCHAR(50)
+);
+
+# Insert multiple rows with varied values
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)', 'one'),
+    (2, '(3.0,4.0)', 'two'),
+    (3, '(-5.0,-6.0)', 'three'),
+    (4, '(7.0,8.0)', 'four'),
+    (5, '(9.0,10.0)', 'five');
+
+# Update single row to default
+UPDATE t1 SET val = DEFAULT WHERE id = 1;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Update multiple rows to default
+UPDATE t1 SET val = DEFAULT WHERE id IN (2, 3);
+
+SELECT * FROM t1 ORDER BY id;
+
+# Update with both DEFAULT and explicit value
+UPDATE t1 SET val = DEFAULT, name = 'updated' WHERE id = 4;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Update all rows to default
+UPDATE t1 SET val = DEFAULT;
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

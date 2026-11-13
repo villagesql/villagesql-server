@@ -1,0 +1,25 @@
+# Test that a preview extension reloads correctly after server restart when
+# vsql_allow_preview_extensions = ON was persisted.
+#
+# Verifies that vsql_allow_preview_extensions is applied early enough during
+# startup that extensions in villagesql.extensions can be reloaded.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_preview_ping_test;
+
+--echo # ping() works before restart
+SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
+
+--echo # Restart server (extension reinstated from villagesql.extensions)
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo # ping() works after restart
+SELECT vsql_preview_ping_test.ping() > 0 AS ping_positive;
+
+UNINSTALL EXTENSION vsql_preview_ping_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;

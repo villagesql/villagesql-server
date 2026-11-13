@@ -1,0 +1,95 @@
+show variables like '%buffer_pool_size%';
+Variable_name	Value
+innodb_buffer_pool_size	25165824
+describe INFORMATION_SCHEMA.INNODB_BUFFER_PAGE;
+Field	Type	Null	Key	Default	Extra
+POOL_ID	bigint unsigned	NO			
+BLOCK_ID	bigint unsigned	NO			
+SPACE	bigint unsigned	NO			
+PAGE_NUMBER	bigint unsigned	NO			
+PAGE_TYPE	varchar(64)	YES			
+FLUSH_TYPE	bigint unsigned	NO			
+FIX_COUNT	bigint unsigned	NO			
+IS_HASHED	varchar(3)	YES			
+NEWEST_MODIFICATION	bigint unsigned	NO			
+OLDEST_MODIFICATION	bigint unsigned	NO			
+ACCESS_TIME	bigint unsigned	NO			
+TABLE_NAME	varchar(1024)	YES			
+INDEX_NAME	varchar(1024)	YES			
+NUMBER_RECORDS	bigint unsigned	NO			
+DATA_SIZE	bigint unsigned	NO			
+COMPRESSED_SIZE	bigint unsigned	NO			
+PAGE_STATE	varchar(64)	YES			
+IO_FIX	varchar(64)	YES			
+IS_OLD	varchar(3)	YES			
+FREE_PAGE_CLOCK	bigint unsigned	NO			
+IS_STALE	varchar(3)	YES			
+SELECT * FROM INFORMATION_SCHEMA.INNODB_BUFFER_POOL_STATS;
+SELECT count(*) FROM INFORMATION_SCHEMA.INNODB_BUFFER_POOL_STATS;
+SELECT * FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE;
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE;
+CREATE TABLE infoschema_buffer_test (col1 INT) ENGINE = INNODB;
+INSERT INTO infoschema_buffer_test VALUES(9);
+SELECT TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE, PAGE_STATE, PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE TABLE_NAME like "%infoschema_buffer_test%"
+    and PAGE_STATE="file_page" and PAGE_TYPE="index";
+TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE	PAGE_STATE	PAGE_TYPE
+`test`.`infoschema_buffer_test`	GEN_CLUST_INDEX	1	29	FILE_PAGE	INDEX
+INSERT INTO infoschema_buffer_test VALUES(19);
+SELECT TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE, PAGE_STATE, PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE TABLE_NAME like "%infoschema_buffer_test%"
+    and PAGE_STATE="file_page" and PAGE_TYPE="index";
+TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE	PAGE_STATE	PAGE_TYPE
+`test`.`infoschema_buffer_test`	GEN_CLUST_INDEX	2	58	FILE_PAGE	INDEX
+CREATE INDEX idx ON infoschema_buffer_test(col1);
+SELECT * FROM infoschema_buffer_test;
+col1
+9
+19
+SELECT * FROM infoschema_buffer_test WHERE col1 = 19;
+col1
+19
+SELECT TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE, PAGE_STATE, PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE TABLE_NAME like "%infoschema_buffer_test%"
+    and PAGE_STATE="file_page" and INDEX_NAME = "idx" and PAGE_TYPE="index";
+TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE	PAGE_STATE	PAGE_TYPE
+`test`.`infoschema_buffer_test`	idx	2	32	FILE_PAGE	INDEX
+`test`.`infoschema_buffer_test`	idx	2	32	FILE_PAGE	INDEX
+SELECT space, is_stale FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE space = {space_id} GROUP BY space, is_stale;;
+space	is_stale
+{space_id}	NO
+DROP TABLE infoschema_buffer_test;
+SELECT TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE, PAGE_STATE, PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE TABLE_NAME like "%infoschema_buffer_test%";
+TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE	PAGE_STATE	PAGE_TYPE
+SELECT count(*) FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE space = {space_id} AND is_stale = 'NO';
+count(*)
+0
+# Emptying InnoDB buffer pool: begin
+# Buffer pool size: 25165824 bytes
+# Creating and dropping a table with size: 50331648 bytes
+# Emptying InnoDB buffer pool: end
+SELECT space, is_stale FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE space = {space_id} GROUP BY space, is_stale;;
+space	is_stale
+CREATE TABLE infoschema_parent (id INT NOT NULL, PRIMARY KEY (id))
+ENGINE=INNODB;
+CREATE TABLE infoschema_child (id INT, parent_id INT, INDEX par_ind (parent_id),
+FOREIGN KEY (parent_id)
+REFERENCES infoschema_parent(id)
+ON DELETE CASCADE)
+ENGINE=INNODB;
+SELECT count(*)
+FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE TABLE_NAME like "%infoschema_child%" and PAGE_STATE="file_page"
+    and PAGE_TYPE="index";
+count(*)
+2
+DROP TABLE infoschema_child;
+DROP TABLE infoschema_parent;

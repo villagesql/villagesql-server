@@ -1,0 +1,61 @@
+# SYS_VARS.set() carries the caller's type through to the server.
+#
+# An INT variable is set through the long long overload, which reaches the
+# integer update service directly. The string overload serves STRING, BOOL,
+# DOUBLE and ENUM; naming an INT variable there fails rather than coercing
+# the text to a number, so a value that is not a number can no longer be
+# silently stored as 0.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_config_vars_test;
+
+--echo # Baseline: max_items holds its default
+SELECT @@global.vsql_config_vars_test.max_items;
+
+--echo # SET GLOBAL refuses a non-numeric value for an INT variable
+--error ER_WRONG_TYPE_FOR_VAR
+SET GLOBAL vsql_config_vars_test.max_items = 'abc';
+
+--echo # The string overload refuses an INT variable, whatever the value.
+--echo # Each returns 1 (error) and leaves max_items untouched.
+SELECT vsql_config_vars_test.write_var_str('max_items', 'abc') AS err;
+SELECT vsql_config_vars_test.write_var_str('max_items', '42') AS err;
+SELECT @@global.vsql_config_vars_test.max_items;
+
+--echo # The typed path sets it, with no text form in between
+SELECT vsql_config_vars_test.write_max_items(42) AS err;
+SELECT @@global.vsql_config_vars_test.max_items;
+
+--echo # The server still applies the declared range (0..1000000)
+SELECT vsql_config_vars_test.write_max_items(9999999) AS err;
+SELECT @@global.vsql_config_vars_test.max_items;
+
+--echo # A STRING variable goes through the string overload
+SELECT vsql_config_vars_test.write_var_str('label', 'abc') AS err;
+SELECT @@global.vsql_config_vars_test.label;
+
+--echo # An ENUM is set by name
+SELECT vsql_config_vars_test.write_var_str('mode', 'sync') AS err;
+SELECT @@global.vsql_config_vars_test.mode;
+
+--echo # A name outside the enum is refused
+--error ER_WRONG_VALUE_FOR_VAR
+SELECT vsql_config_vars_test.write_var_str('mode', 'nonesuch') AS err;
+SELECT @@global.vsql_config_vars_test.mode;
+
+--echo # A variable the extension never registered is refused on both paths
+SELECT vsql_config_vars_test.write_var_str('no_such_var', '1') AS err;
+
+--echo # Reading a STRING variable through get() still works
+SELECT vsql_config_vars_test.read_label() AS label;
+
+UNINSTALL EXTENSION vsql_config_vars_test;
+
+# Uninstalling this extension runs its on_deinit hook, which appends to a
+# marker file (read by config_vars_on_init). Remove it so the test leaves no
+# files behind.
+--remove_file $MYSQL_TMP_DIR/vsql_config_vars_test.marker
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

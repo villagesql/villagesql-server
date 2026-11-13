@@ -1,0 +1,69 @@
+# Test SELECT ... WHERE with index on COMPLEX column
+# Tests Field::key_cmp() for index-based operations
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val COMPLEX,
+  INDEX idx_val (val)
+);
+
+INSERT INTO t1 VALUES
+  (1, '(0.0,0.0)'),           # Zero
+  (2, '(1.0,2.0)'),           # Regular positive
+  (3, '(3.0,4.0)'),           # Medium positive
+  (4, '(5.0,6.0)'),           # Medium positive
+  (5, '(-1.0,-2.0)'),         # Negative both
+  (6, '(-5.0,3.0)'),          # Negative real, positive imaginary
+  (7, '(2.0,-7.0)'),          # Positive real, negative imaginary
+  (8, '(3.0,1.0)'),           # Same real as id=3, different imaginary
+  (9, '(1.5e100,2.3e100)'),   # Very large positive
+  (10, '(-1.5e100,-2.3e100)'), # Very large negative
+  (11, '(4.22e-10,3.14e-15)'), # Very small positive
+  (12, '(-1.17e-9,-8.88e-12)'); # Small negative with neg exponent
+
+# Verify index is used for lookups - we will still FORCE below
+EXPLAIN SELECT id FROM t1 WHERE val = '(3.0,4.0)';
+
+# Index equality lookups with FORCE INDEX to ensure index usage
+# Try with spacing
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val = '( 3.0, 4.0 )';
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val = '(0.0,0.0)';
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val = '(-1.0,-2.0)';
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val = '(-1.0,0.0)';
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val = '(1.5e100,2.3e100)';
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val = '(4.22e-10,3.14e-15)';
+
+# Index range scans - greater than (FORCE INDEX to ensure index usage)
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val > '(2.0,3.0)' ORDER BY id;
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val > '(0.0,0.0)' ORDER BY id;
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val > '(-1.0,0.0)' ORDER BY id;
+
+# Index range scans - less than
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val < '(3.0,4.0)' ORDER BY id;
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val < '(0.0,0.0)' ORDER BY id;
+
+# Index range scans - greater than or equal
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val >= '(3.0,4.0)' ORDER BY id;
+
+# Index range scans - less than or equal
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val <= '(1.0,2.0)' ORDER BY id;
+
+# Index BETWEEN
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val BETWEEN '(0.0,0.0)' AND '(3.0,5.0)' ORDER BY id;
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val BETWEEN '(-5.0,0.0)' AND '(5.0,0.0)' ORDER BY id;
+
+# Index with same real part, different imaginary (tests secondary comparison)
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val > '(3.0,0.0)' ORDER BY id;
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val < '(3.0,5.0)' ORDER BY id;
+SELECT id FROM t1 FORCE INDEX(idx_val) WHERE val BETWEEN '(3.0,0.0)' AND '(3.0,5.0)' ORDER BY id;
+
+# Index with NULL
+INSERT INTO t1 VALUES (13, NULL);
+SELECT id FROM t1 WHERE val IS NULL;
+SELECT id FROM t1 WHERE val IS NOT NULL ORDER BY id LIMIT 5;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

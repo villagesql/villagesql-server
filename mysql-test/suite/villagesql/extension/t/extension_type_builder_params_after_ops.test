@@ -1,0 +1,8 @@
+# Test that a TypeBuilder extension fails to compile when .params<P>() is
+# called after operations have already been registered. The static_assert in
+# .params<>() fires because HasFromString is already true.
+
+--let $extension_name = type_builder_params_after_ops
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_builder_params_after_ops.cc
+--let $build_failure_grep = params<P>() must be called before
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc

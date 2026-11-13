@@ -1,0 +1,17 @@
+CREATE TABLE tc (id INT PRIMARY KEY, c INT);
+INSERT INTO tc VALUES (1, 1);
+PREPARE s FROM 'SELECT complex_real(COMPLEX::from_string(?)) AS r FROM tc WHERE c = 1';
+SET @v = '(1.0,0.0)';
+EXECUTE s USING @v;
+r
+1
+SET @v = NULL;
+ALTER TABLE tc DROP COLUMN c;
+EXECUTE s USING @v;
+ERROR 42S22: Unknown column 'c' in 'where clause'
+ALTER TABLE tc ADD COLUMN c INT DEFAULT 1;
+SET @v = '(2.0,3.0)';
+# After the failed EXECUTE with NULL, '(2.0,3.0)' gives: 2
+DEALLOCATE PREPARE s;
+SET @v = NULL;
+DROP TABLE tc;

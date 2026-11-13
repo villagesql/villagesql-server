@@ -1,0 +1,1766 @@
+/* Copyright (c) 2026 VillageSQL Contributors
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ */
+
+#include "villagesql/sql/metadata_modifier.h"
+
+#include <limits>
+#include <map>
+#include <unordered_set>
+#include <utility>
+
+#include "sql/create_field.h"
+#include "sql/field.h"
+#include "sql/field_common_properties.h"
+#include "sql/handler.h"
+#include "sql/key_spec.h"
+#include "sql/mdl.h"
+#include "sql/sp_head.h"
+#include "sql/sp_pcontext.h"
+#include "sql/sql_alter.h"
+#include "sql/sql_base.h"
+#include "sql/sql_class.h"
+#include "sql/sql_lex.h"
+#include "sql/sql_list.h"
+#include "sql/sql_udf.h"
+#include "sql/table.h"
+#include "villagesql/include/error.h"
+#include "villagesql/schema/descriptor/type_context.h"
+#include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
+#include "villagesql/schema/schema_manager.h"
+#include "villagesql/schema/systable/custom_sp_params.h"
+#include "villagesql/schema/systable/extensions.h"
+#include "villagesql/schema/util.h"
+#include "villagesql/schema/victionary_client.h"
+#include "villagesql/sql/custom_vdf.h"
+#include "villagesql/sql/func_lookup.h"
+#include "villagesql/types/util.h"
+
+namespace villagesql {
+
+Metadata_modifier::AlterGuard::~AlterGuard() {
+  ClearAlterCustomContext(thd_);
+  if (armed_) rollback(thd_);
+}
+
+static constexpr const char *error_uninitialized_name =
+    "Uninitialized DB name or Table Name found while verifying custom columns";
+static constexpr const char *error_uninitialized_victionary =
+    "Victionary Client not initialized";
+static constexpr const char *error_uninitialized_session =
+    "Uninitialized Session: NULL THD";
+
+bool Metadata_modifier::add_columns(THD *thd [[maybe_unused]],
+                                    Table_name db_table,
+                                    const List<Create_field> &create_fields) {
+  if (should_assert_if_null(db_table.first) ||
+      should_assert_if_null(db_table.second)) {
+    villagesql_error(error_uninitialized_name, MYF(0));
+    return true;
+  }
+
+  const char *db_name = db_table.first;
+  const char *table_name = db_table.second;
+
+  // Skip special databases
+  if (is_system_schema(db_name)) {
+    return false;
+  }
+
+  // We must already have locked the table to make sure that that the
+  // table columns are not altered.
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, db_name,
+                                                      table_name, MDL_SHARED));
+
+  // Iterate through all columns in the create list.
+  for (const Create_field &create_field : create_fields) {
+    if (!create_field.custom_type_context) {
+      continue;  // Not a custom type column.
+    }
+    // Skip duplicate column entries. Refer to prepare_create_field()
+    // For CREATE ... SELECT statement, field redefinition is possible.
+    bool duplicate = false;
+    for (const ColumnEntry &entry : to_add_) {
+      if (column_names_equal(create_field.field_name, entry.column_name()) &&
+          database_names_equal(db_name, entry.db_name()) &&
+          table_names_equal(table_name, entry.table_name())) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (duplicate) {
+      // Skip duplicate column entries.
+      continue;
+    }
+
+    // This column uses a custom type - create entry.
+    const TypeContext *type_context = create_field.custom_type_context;
+    to_add_.emplace_back(
+        ColumnKey(db_name, table_name, create_field.field_name),
+        type_context->extension_name(), type_context->extension_version(),
+        type_context->type_name(), type_context->parameters().to_json());
+  }
+
+  return false;
+}
+
+// Resolves a name to exactly one registered descriptor via prefix lookup.
+// Returns nullptr and sets a villagesql_error on 0 or >1 matches.
+// REQUIRES: Caller must hold vclient read lock.
+template <typename EntryType, typename Map, typename Prefix>
+static const EntryType *resolve_unique_descriptor(const Map &map,
+                                                  const Prefix &prefix,
+                                                  const char *entity_type,
+                                                  const char *name,
+                                                  const char *qualify_hint) {
+  auto matches = map.get_prefix_committed(prefix);
+  if (matches.empty()) {
+    villagesql_error("Unknown %s '%s'", MYF(0), entity_type, name);
+    return nullptr;
+  }
+  if (matches.size() > 1) {
+    villagesql_error("%s '%s' is ambiguous; qualify as %s", MYF(0), entity_type,
+                     name, qualify_hint);
+    return nullptr;
+  }
+  return matches[0];
+}
+
+// Finds the default profile registered for (col_type, index_type) pair and
+// sets out_* on success. Returns true and sets a villagesql_error if the column
+// type cannot be determined or no default profile is registered for the pair.
+// REQUIRES: Caller must hold vclient read lock.
+// TODO(villagesql): string parameters here (and canonical_type_name /
+// canonical_extension_name) should use std::string_view; requires updating the
+// downstream helpers consistently.
+static bool find_default_profile(VictionaryClient &vclient,
+                                 const Alter_info *alter_info, const char *db,
+                                 const char *table_name, const char *field_name,
+                                 const std::string &index_type_name,
+                                 const std::string &index_type_ext_name,
+                                 std::string &out_profile_name,
+                                 std::string &out_prof_ext_name,
+                                 std::string &out_prof_ext_version) {
+  std::string col_type_name;
+  std::string col_ext_name;
+  // Common case: column already exists in the table.
+  const ColumnEntry *ce =
+      vclient.columns().get_committed(ColumnKey(db, table_name, field_name));
+  if (ce) {
+    // Guard against DROP + re-ADD of the same column in one ALTER TABLE; the
+    // existing entry is stale in that case so fall through to create_list.
+    bool being_dropped = false;
+    for (const Alter_drop *drop : alter_info->drop_list) {
+      if (drop->type == Alter_drop::COLUMN &&
+          column_names_equal(drop->name, field_name)) {
+        being_dropped = true;
+        break;
+      }
+    }
+    if (!being_dropped) {
+      col_type_name = ce->type_name;
+      col_ext_name = ce->extension_name;
+      assert(!col_ext_name.empty());
+    }
+  }
+  // Column is new (ADD COLUMN in this statement).
+  if (col_type_name.empty()) {
+    // TODO(villagesql-indexing): Built-in types have no custom_type_context;
+    // support custom indexes on built-in types by also matching fields without
+    // a custom_type_context using the field's SQL type name.
+    for (const Create_field &field : alter_info->create_list) {
+      if (field.custom_type_context &&
+          column_names_equal(field.field_name, field_name)) {
+        col_type_name = field.custom_type_context->type_name();
+        col_ext_name = field.custom_type_context->extension_name();
+        assert(!col_ext_name.empty());
+        break;
+      }
+    }
+  }
+  if (col_type_name.empty()) {
+    villagesql_error(
+        "No default index profile found: column '%s' is not a custom type",
+        MYF(0), field_name);
+    return true;
+  }
+
+  // TODO(villagesql-performance): This is a linear scan over all registered
+  // profiles. A secondary map in VictionaryClient keyed by (type_name,
+  // index_type_name) would make it faster. Currently justified by small profile
+  // counts and DDL-only call site.
+  const std::string norm_col = canonical_type_name(col_type_name);
+  const std::string norm_col_ext = canonical_extension_name(col_ext_name);
+  const std::string norm_idx = canonical_type_name(index_type_name);
+  const std::string norm_index_type_ext =
+      canonical_extension_name(index_type_ext_name);
+  for (const IndexProfileDescriptor *pd :
+       vclient.index_profile_descriptors().get_all_committed()) {
+    if (!pd->default_for_type()) continue;
+    if (canonical_type_name(pd->type_name()) != norm_col) continue;
+    assert(!pd->type_ref().extension_name().empty());
+    if (canonical_extension_name(pd->type_ref().extension_name()) !=
+        norm_col_ext)
+      continue;
+    if (canonical_type_name(pd->index_type_name()) != norm_idx) continue;
+    assert(!norm_index_type_ext.empty());
+    assert(!pd->index_type_ref().extension_name().empty());
+    if (canonical_extension_name(pd->index_type_ref().extension_name()) !=
+        norm_index_type_ext)
+      continue;
+    out_profile_name = pd->profile_name();
+    out_prof_ext_name = pd->extension_name();
+    out_prof_ext_version = pd->extension_version();
+    return false;
+  }
+  villagesql_error(
+      "No default index profile found for type '%s' (extension '%s') with"
+      " index type '%s' (extension '%s')",
+      MYF(0), col_type_name.c_str(), col_ext_name.c_str(),
+      index_type_name.c_str(), index_type_ext_name.c_str());
+  return true;
+}
+
+bool Metadata_modifier::add_indexes(THD *thd [[maybe_unused]], const char *db,
+                                    const char *table_name,
+                                    const Alter_info *alter_info) {
+  if (is_system_schema(db)) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+
+  for (const Key_spec *key : alter_info->key_list) {
+    if (!key->key_create_info.custom_index_type.str) continue;
+
+    const KEY_CREATE_INFO &kci = key->key_create_info;
+
+    std::string ext_name = kci.custom_index_extension.str
+                               ? std::string(kci.custom_index_extension.str,
+                                             kci.custom_index_extension.length)
+                               : "";
+    const std::string type_name(kci.custom_index_type.str,
+                                kci.custom_index_type.length);
+    const std::string index_name(key->name.str, key->name.length);
+    const std::string params_json =
+        (kci.custom_index_params && !kci.custom_index_params->empty())
+            ? params_to_json(*kci.custom_index_params)
+            : "{}";
+    std::string ext_version;
+
+    {
+      auto guard = vclient.get_read_lock();
+
+      const auto *desc = resolve_unique_descriptor<IndexTypeDescriptor>(
+          vclient.index_type_descriptors(),
+          IndexTypeDescriptorKeyPrefix(type_name, ext_name),
+          "custom index type", type_name.c_str(), "'extension.type_name'");
+      if (!desc) return true;
+      ext_name = desc->extension_name();
+      ext_version = desc->extension_version();
+
+      const uint64_t index_id = vclient.allocate_index_id();
+      to_add_indexes_.emplace_back(IndexKey(db, table_name, index_name),
+                                   index_id, ext_name, ext_version, type_name,
+                                   params_json);
+
+      uint32_t key_pos = 0;
+      for (const Key_part_spec *kp : key->columns) {
+        // Custom index not supported on expression.
+        assert(kp->get_field_name());
+
+        std::string profile_name, prof_ext_name, prof_ext_version;
+        if (kp->has_index_profile()) {
+          LEX_CSTRING prof = kp->get_index_profile();
+          profile_name = std::string(prof.str, prof.length);
+          const std::string prof_extension =
+              kp->has_index_profile_extension()
+                  ? std::string(kp->get_index_profile_extension().str,
+                                kp->get_index_profile_extension().length)
+                  : "";
+          const auto *prof_desc =
+              resolve_unique_descriptor<IndexProfileDescriptor>(
+                  vclient.index_profile_descriptors(),
+                  IndexProfileDescriptorKeyPrefix(profile_name, prof_extension),
+                  "index profile", profile_name.c_str(),
+                  "'extension.profile_name'");
+          if (!prof_desc) return true;
+
+          // Validate that the column's type matches the profile's expected
+          // type.
+          std::string col_type_name;
+          std::string col_ext_name;
+          const char *field_name = kp->get_field_name();
+          const ColumnEntry *ce = vclient.columns().get_committed(
+              ColumnKey(db, table_name, field_name));
+          if (ce) {
+            bool being_dropped = false;
+            for (const Alter_drop *drop : alter_info->drop_list) {
+              if (drop->type == Alter_drop::COLUMN &&
+                  column_names_equal(drop->name, field_name)) {
+                being_dropped = true;
+                break;
+              }
+            }
+            if (!being_dropped) {
+              col_type_name = ce->type_name;
+              col_ext_name = ce->extension_name;
+            }
+          }
+          if (col_type_name.empty()) {
+            for (const Create_field &field : alter_info->create_list) {
+              if (field.custom_type_context &&
+                  column_names_equal(field.field_name, field_name)) {
+                col_type_name = field.custom_type_context->type_name();
+                col_ext_name = field.custom_type_context->extension_name();
+                break;
+              }
+            }
+          }
+          if (col_type_name.empty() ||
+              canonical_type_name(col_type_name) !=
+                  canonical_type_name(prof_desc->type_name()) ||
+              canonical_extension_name(col_ext_name) !=
+                  canonical_extension_name(
+                      prof_desc->type_ref().extension_name())) {
+            villagesql_error(
+                "Column '%s' is not of type '%s' (extension '%s') required"
+                " by index profile '%s'",
+                MYF(0), field_name, prof_desc->type_name().c_str(),
+                prof_desc->type_ref().extension_name().c_str(),
+                profile_name.c_str());
+            return true;
+          }
+          // TODO(villagesql-indexing): Validate that the requested sort
+          // direction (kp->is_ascending()) is supported by
+          // prof_desc->ordering(). Return an error if the profile's ordering
+          // bitmask does not include the requested direction (e.g., an
+          // unordered profile with ordering == VEF_INDEX_ORDERING_NONE used
+          // with ASC/DESC).
+          prof_ext_name = prof_desc->extension_name();
+          prof_ext_version = prof_desc->extension_version();
+
+        } else {
+          if (find_default_profile(vclient, alter_info, db, table_name,
+                                   kp->get_field_name(), type_name, ext_name,
+                                   profile_name, prof_ext_name,
+                                   prof_ext_version))
+            return true;
+        }
+
+        to_add_index_columns_.emplace_back(IndexColumnKey(index_id, key_pos),
+                                           std::string(kp->get_field_name()),
+                                           prof_ext_name, prof_ext_version,
+                                           profile_name);
+        ++key_pos;
+      }
+    }
+  }
+  return false;
+}
+
+bool Metadata_modifier::remove_columns(THD *thd [[maybe_unused]],
+                                       Table_name db_table) {
+  if (should_assert_if_null(db_table.first) ||
+      should_assert_if_null(db_table.second)) {
+    villagesql_error(error_uninitialized_name, MYF(0));
+    return true;
+  }
+
+  const char *db_name = db_table.first;
+  const char *table_name = db_table.second;
+
+  // Skip special databases
+  if (is_system_schema(db_name)) {
+    return false;
+  }
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) {
+    return false;
+  }
+  // We must already have locked the table to make sure that that the
+  // table columns are not altered.
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, db_name,
+                                                      table_name, MDL_SHARED));
+
+  // Get all custom columns for this table.
+  std::vector<const ColumnEntry *> custom_columns;
+  {
+    auto guard = vclient.get_read_lock();
+    custom_columns = vclient.GetCustomColumnsForTable(db_name, table_name);
+  }
+
+  if (custom_columns.empty()) {
+    return false;  // No custom columns to delete.
+  }
+
+  for (const ColumnEntry *entry : custom_columns) {
+    if (!entry) continue;
+
+    to_remove_.emplace_back(entry->key());
+  }
+
+  return false;
+}
+
+bool Metadata_modifier::rename_columns_table(
+    THD *thd [[maybe_unused]], Table_name old_name, Table_name new_name,
+    const std::unordered_set<std::string> *skip_columns) {
+  if (should_assert_if_null(old_name.first) ||
+      should_assert_if_null(old_name.second) ||
+      should_assert_if_null(new_name.first) ||
+      should_assert_if_null(new_name.second)) {
+    villagesql_error(error_uninitialized_name, MYF(0));
+    return true;
+  }
+
+  const char *old_db = old_name.first;
+  const char *old_table = old_name.second;
+  const char *new_db = new_name.first;
+  const char *new_table = new_name.second;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) {
+    return false;
+  }
+  // We must already have locked the table to make sure that that the
+  // table columns are not altered.
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, old_db,
+                                                      old_table, MDL_SHARED));
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, new_db,
+                                                      new_table, MDL_SHARED));
+
+  auto guard = vclient.get_read_lock();
+
+  // The table's columns as the renames already staged here leave them, so
+  // that a RENAME TABLE pair can rename a table an earlier pair of the same
+  // statement produced. A column an earlier rename produced also records the
+  // position of that rename in to_rename_.
+  constexpr size_t not_staged = std::numeric_limits<size_t>::max();
+  const std::string old_prefix = ColumnKeyPrefix(old_db, old_table).str();
+  std::map<std::string, std::pair<const ColumnEntry *, size_t>> custom_columns;
+  for (const ColumnEntry *col :
+       vclient.GetCustomColumnsForTable(old_db, old_table)) {
+    if (col) custom_columns[col->key().str()] = {col, not_staged};
+  }
+  // Each staged rename runs from a committed key to the column's current key,
+  // and they all apply at once. So drop every old key before adding any
+  // current one, since one rename's current key may be another's old key.
+  for (const auto &[_, staged_old_key] : to_rename_)
+    custom_columns.erase(staged_old_key.str());
+  for (size_t i = 0; i < to_rename_.size(); ++i) {
+    const ColumnEntry &staged_entry = to_rename_[i].first;
+    const std::string staged_key = staged_entry.key().str();
+    if (staged_key.starts_with(old_prefix))
+      custom_columns[staged_key] = {&staged_entry, i};
+  }
+
+  if (custom_columns.empty()) {
+    return false;  // No custom columns to rename.
+  }
+
+  // Built apart from to_rename_, which custom_columns may point into.
+  // Each rename comes with the position of the staged rename it continues.
+  std::vector<std::pair<ColumnEntry, size_t>> continued;
+  std::vector<std::pair<ColumnEntry, ColumnKey>> renames;
+  renames.reserve(custom_columns.size());
+  for (const auto &[_, staged] : custom_columns) {
+    const auto [old_col, staged_pos] = staged;
+    // The caller stages its own operation for these, keyed by new_name
+    // already. Renaming them here too would race that operation for the row.
+    if (skip_columns != nullptr &&
+        skip_columns->count(canonical_column_name(old_col->column_name())) > 0)
+      continue;
+
+    ColumnEntry new_entry(ColumnKey(new_db, new_table, old_col->column_name()),
+                          old_col->extension_name, old_col->extension_version,
+                          old_col->type_name, old_col->type_parameters);
+
+    if (staged_pos == not_staged)
+      renames.emplace_back(std::move(new_entry), old_col->key());
+    else
+      continued.emplace_back(std::move(new_entry), staged_pos);
+  }
+  // A rename of a column an earlier rename produced replaces that rename's
+  // target, so the row is deleted under the name it has in the table.
+  for (auto &[entry, pos] : continued) to_rename_[pos].first = std::move(entry);
+  for (auto &rename : renames) to_rename_.push_back(std::move(rename));
+
+  return false;
+}
+
+bool Metadata_modifier::rename_indexes_table(
+    THD *thd [[maybe_unused]], Table_name old_name, Table_name new_name,
+    const std::unordered_set<std::string> *skip_indexes,
+    const std::map<std::string, std::string> *index_renames) {
+  if (should_assert_if_null(old_name.first) ||
+      should_assert_if_null(old_name.second) ||
+      should_assert_if_null(new_name.first) ||
+      should_assert_if_null(new_name.second)) {
+    villagesql_error(error_uninitialized_name, MYF(0));
+    return true;
+  }
+
+  const char *old_db = old_name.first;
+  const char *old_table = old_name.second;
+  const char *new_db = new_name.first;
+  const char *new_table = new_name.second;
+
+  if (is_system_schema(old_db)) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+  // We must already have locked the table to make sure that the
+  // table indexes are not altered.
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, old_db,
+                                                      old_table, MDL_SHARED));
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, new_db,
+                                                      new_table, MDL_SHARED));
+
+  auto guard = vclient.get_read_lock();
+
+  // The table's indexes as the renames already staged here leave them, as in
+  // rename_columns_table(). An index an earlier rename produced also records
+  // the position of that rename in to_rename_indexes_.
+  constexpr size_t not_staged = std::numeric_limits<size_t>::max();
+  const std::string old_prefix = IndexKeyPrefix(old_db, old_table).str();
+  std::map<std::string, std::pair<const IndexEntry *, size_t>> custom_indexes;
+  for (const IndexEntry *entry :
+       vclient.GetCustomIndexesForTable(old_db, old_table)) {
+    if (entry) custom_indexes[entry->key().str()] = {entry, not_staged};
+  }
+  // Each staged rename runs from a committed key to the index's current key,
+  // and they all apply at once. So drop every old key before adding any
+  // current one, since one rename's current key may be another's old key.
+  for (const auto &[_, staged_old_key] : to_rename_indexes_)
+    custom_indexes.erase(staged_old_key.str());
+  for (size_t i = 0; i < to_rename_indexes_.size(); ++i) {
+    const IndexEntry &staged_entry = to_rename_indexes_[i].first;
+    const std::string staged_key = staged_entry.key().str();
+    if (staged_key.starts_with(old_prefix))
+      custom_indexes[staged_key] = {&staged_entry, i};
+  }
+
+  // Built apart from to_rename_indexes_, which custom_indexes may point into.
+  // Each rename comes with the position of the staged rename it continues.
+  std::vector<std::pair<IndexEntry, size_t>> continued;
+  std::vector<std::pair<IndexEntry, IndexKey>> renames;
+  renames.reserve(custom_indexes.size());
+  for (const auto &[_, staged] : custom_indexes) {
+    const auto [old_index, staged_pos] = staged;
+    const std::string old_index_name =
+        canonical_index_name(old_index->index_name());
+    if (skip_indexes != nullptr && skip_indexes->count(old_index_name) > 0)
+      continue;
+
+    std::string new_index_name = old_index->index_name();
+    if (index_renames != nullptr) {
+      auto it = index_renames->find(old_index_name);
+      if (it != index_renames->end()) new_index_name = it->second;
+    }
+    IndexKey new_key(new_db, new_table, new_index_name);
+    // A rename that only changes the case of the index name keeps the key, but
+    // the stored name has to follow it to match the data dictionary.
+    if (new_key.str() == old_index->key().str() &&
+        new_index_name == old_index->index_name())
+      continue;
+
+    // index_id stays, so the index's custom_index_columns rows still apply.
+    IndexEntry new_entry(
+        std::move(new_key), old_index->index_id, old_index->extension_name,
+        old_index->extension_version, old_index->index_type_name,
+        old_index->index_type_parameters);
+    if (staged_pos == not_staged)
+      renames.emplace_back(std::move(new_entry), old_index->key());
+    else
+      continued.emplace_back(std::move(new_entry), staged_pos);
+  }
+  // A rename of an index an earlier rename produced replaces that rename's
+  // target, so the row is deleted under the name it has in the table.
+  for (auto &[entry, pos] : continued)
+    to_rename_indexes_[pos].first = std::move(entry);
+  for (auto &rename : renames) to_rename_indexes_.push_back(std::move(rename));
+
+  return false;
+}
+
+bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
+                                      Table_ref *table_ref,
+                                      const Alter_info *alter_info) {
+  if (!alter_info) {
+    return false;  // No alter info, nothing to do
+  }
+
+  TABLE *table = table_ref->table;
+  Table_name db_table = {table_ref->db, table_ref->table_name};
+  if (should_assert_if_null(db_table.first) ||
+      should_assert_if_null(db_table.second)) {
+    villagesql_error(error_uninitialized_name, MYF(0));
+    return true;
+  }
+  const char *db_name = db_table.first;
+  const char *table_name = db_table.second;
+
+  // Skip special databases
+  if (is_system_schema(db_name)) {
+    return false;
+  }
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) {
+    return false;
+  }
+
+  // The names the table carries once this ALTER completes. Every entry
+  // describing the post-ALTER state is keyed by these, so that an ALTER which
+  // renames the table and changes its columns in one statement files the
+  // changed columns under the name the table ends up with. Deletions are the
+  // exception: they keep the stored entry's key, since the row on disk still
+  // holds the old name when the delete probes for it.
+  const bool renaming_table = (alter_info->flags & Alter_info::ALTER_RENAME) &&
+                              alter_info->new_table_name.str != nullptr;
+  const char *new_db_name = (renaming_table && alter_info->new_db_name.str)
+                                ? alter_info->new_db_name.str
+                                : db_name;
+  const char *new_table_name =
+      renaming_table ? alter_info->new_table_name.str : table_name;
+
+  // Columns this statement names explicitly. Each gets its own operation
+  // below, already keyed by the new table name, so the bulk rename in step 0
+  // has to leave them alone. Removals are applied before renames, so a bulk
+  // rename of a row that a drop or a change has already claimed would find
+  // nothing to update.
+  std::unordered_set<std::string> columns_with_own_op;
+  for (const Alter_drop *drop : alter_info->drop_list) {
+    if (drop->type == Alter_drop::COLUMN)
+      columns_with_own_op.insert(canonical_column_name(drop->name));
+  }
+  for (const Alter_column *alter : alter_info->alter_list) {
+    if (alter->change_type() == Alter_column::Type::RENAME_COLUMN)
+      columns_with_own_op.insert(canonical_column_name(alter->name));
+  }
+  for (const Create_field &field : alter_info->create_list) {
+    if (field.change)
+      columns_with_own_op.insert(canonical_column_name(field.change));
+  }
+
+  // 0. Handle ALTER TABLE RENAME - move the custom columns that this
+  // statement does not otherwise touch to the new table name
+  // This must be done before acquiring the read lock since
+  // rename_columns_table() acquires its own lock
+  if (renaming_table) {
+    Table_name new_name = {new_db_name, new_table_name};
+
+    if (rename_columns_table(thd, db_table, new_name, &columns_with_own_op)) {
+      return true;
+    }
+  }
+
+  // We must already have locked the table to make sure that that the
+  // table columns are not altered.
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, db_name,
+                                                      table_name, MDL_SHARED));
+  auto guard = vclient.get_read_lock();
+
+  // Get all current custom columns for this table
+  auto custom_columns = vclient.GetCustomColumnsForTable(db_name, table_name);
+
+  // Build a set of custom column names for fast lookup
+  std::unordered_set<std::string> custom_column_names;
+  for (const ColumnEntry *col : custom_columns) {
+    custom_column_names.insert(canonical_column_name(col->column_name()));
+  }
+  existing_custom_count_ = custom_column_names.size();
+
+  // Deletions must carry the stored entry's key: the disk probe uses its
+  // as-entered components, and the statement may spell the name with
+  // different case.
+  auto find_custom_column = [&custom_columns](const char *name) {
+    for (const ColumnEntry *col : custom_columns) {
+      if (column_names_equal(col->column_name(), name)) return col;
+    }
+    return static_cast<const ColumnEntry *>(nullptr);
+  };
+
+  // 1. Handle DROP COLUMN - delete from custom_columns if custom type
+  for (const Alter_drop *drop : alter_info->drop_list) {
+    if (drop->type == Alter_drop::COLUMN) {
+      const ColumnEntry *entry = find_custom_column(drop->name);
+      if (entry) {
+        to_remove_.emplace_back(entry->key());
+      }
+    }
+  }
+
+  // 2. Handle RENAME COLUMN - update custom_columns entry
+  for (const Alter_column *alter : alter_info->alter_list) {
+    if (alter->change_type() == Alter_column::Type::RENAME_COLUMN) {
+      if (custom_column_names.count(canonical_column_name(alter->name))) {
+        // Find the existing entry to get full metadata
+        const ColumnEntry *old_entry_ptr = nullptr;
+        for (const ColumnEntry *col : custom_columns) {
+          if (canonical_column_name(col->column_name()) ==
+              canonical_column_name(alter->name)) {
+            old_entry_ptr = col;
+            break;
+          }
+        }
+
+        if (old_entry_ptr) {
+          // Create new entry with renamed column
+          ColumnEntry new_entry(
+              ColumnKey(new_db_name, new_table_name, alter->m_new_name),
+              old_entry_ptr->extension_name, old_entry_ptr->extension_version,
+              old_entry_ptr->type_name, old_entry_ptr->type_parameters);
+
+          to_rename_.emplace_back(new_entry, old_entry_ptr->key());
+        }
+      }
+    }
+  }
+
+  // 3. Validate type conversion compatibility for MODIFY/CHANGE COLUMN.
+  if (table) {
+    for (const Create_field &field : alter_info->create_list) {
+      if (!field.change) continue;
+      bool is_custom_type = (field.custom_type_context != nullptr);
+      bool was_custom_type =
+          custom_column_names.count(canonical_column_name(field.change));
+
+      if (!was_custom_type && is_custom_type) {
+        // Non-custom → custom: not allowed. Use explicit conversion functions.
+        villagesql_error("Cannot convert column '%s' to custom type '%s'",
+                         MYF(0), field.change,
+                         field.custom_type_context->type_name().c_str());
+        return true;
+      } else if (was_custom_type && !is_custom_type) {
+        // Custom → non-custom: only string destination types allowed.
+        if (!is_string_type(field.sql_type)) {
+          villagesql_error(
+              "Cannot convert custom type column '%s' to non-string type",
+              MYF(0), field.change);
+          return true;
+        }
+      } else if (was_custom_type && is_custom_type) {
+        // Custom → custom: types must be compatible.
+        Field *old_field = find_field_in_table_sef(table, field.change);
+        assert(old_field);
+        if (!old_field->get_type_context()->is_compatible_with(
+                *field.custom_type_context)) {
+          villagesql_error(
+              "Cannot convert between incompatible custom types '%s' and '%s'",
+              MYF(0), old_field->get_type_context()->qualified_name().c_str(),
+              field.custom_type_context->qualified_name().c_str());
+          return true;
+        }
+      }
+    }
+  }
+
+  // 4. Handle ADD/MODIFY/CHANGE COLUMN from create_list
+  for (const Create_field &field : alter_info->create_list) {
+    bool is_custom_type = (field.custom_type_context != nullptr);
+    bool was_custom_type =
+        field.change &&
+        custom_column_names.count(canonical_column_name(field.change));
+
+    if (field.change) {
+      // This is MODIFY COLUMN or CHANGE COLUMN
+      if (was_custom_type && !is_custom_type) {
+        // Changing FROM custom TO non-custom - delete entry
+        to_remove_.emplace_back(find_custom_column(field.change)->key());
+      } else if (!was_custom_type && is_custom_type) {
+        // Changing FROM non-custom TO custom - insert entry
+        to_add_.emplace_back(
+            ColumnKey(new_db_name, new_table_name, field.field_name),
+            field.custom_type_context->extension_name(),
+            field.custom_type_context->extension_version(),
+            field.custom_type_context->type_name(),
+            field.custom_type_context->parameters().to_json());
+      } else if (was_custom_type && is_custom_type) {
+        // Changing FROM custom TO custom - use delete-then-insert pattern
+        // Note: Apply removals before additions
+        // See Metadata_modifier::mark_victionary_modifications()
+        to_remove_.emplace_back(find_custom_column(field.change)->key());
+
+        to_add_.emplace_back(
+            ColumnKey(new_db_name, new_table_name, field.field_name),
+            field.custom_type_context->extension_name(),
+            field.custom_type_context->extension_version(),
+            field.custom_type_context->type_name(),
+            field.custom_type_context->parameters().to_json());
+      }
+    } else if (is_custom_type) {
+      // This is ADD COLUMN with custom type - insert entry
+      to_add_.emplace_back(
+          ColumnKey(new_db_name, new_table_name, field.field_name),
+          field.custom_type_context->extension_name(),
+          field.custom_type_context->extension_version(),
+          field.custom_type_context->type_name(),
+          field.custom_type_context->parameters().to_json());
+    }
+  }
+  return false;
+}
+
+bool Metadata_modifier::remove_indexes(THD *thd [[maybe_unused]],
+                                       const char *db, const char *table_name,
+                                       const Alter_info *alter_info) {
+  if (is_system_schema(db)) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+
+  // Collect normalized names of keys being dropped. MySQL passes the
+  // user-typed name verbatim in Alter_drop::name.
+  std::unordered_set<std::string> dropping;
+  for (const Alter_drop *drop : alter_info->drop_list) {
+    if (drop->type == Alter_drop::KEY)
+      dropping.insert(canonical_index_name(drop->name));
+  }
+  if (dropping.empty()) return false;
+
+  auto guard = vclient.get_read_lock();
+  for (const IndexEntry *entry :
+       vclient.GetCustomIndexesForTable(db, table_name)) {
+    if (!entry || !dropping.count(canonical_index_name(entry->index_name())))
+      continue;
+
+    // Queue child column rows for deletion before the parent index row.
+    for (const IndexColumnEntry *col :
+         vclient.GetColumnsForIndex(entry->index_id)) {
+      if (!col) continue;
+      assert(!col->profile_extension_name.empty());
+      to_remove_index_columns_.emplace_back(
+          col->key(), col->column_name, col->profile_extension_name,
+          col->profile_extension_version, col->profile_name);
+    }
+    assert(!entry->extension_name.empty());
+    to_remove_indexes_.emplace_back(
+        entry->key(), entry->index_id, entry->extension_name,
+        entry->extension_version, entry->index_type_name,
+        entry->index_type_parameters);
+  }
+  return false;
+}
+
+bool Metadata_modifier::remove_all_indexes(THD *thd [[maybe_unused]],
+                                           const char *db,
+                                           const char *table_name) {
+  if (is_system_schema(db)) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+
+  auto guard = vclient.get_read_lock();
+  for (const IndexEntry *entry :
+       vclient.GetCustomIndexesForTable(db, table_name)) {
+    if (!entry) continue;
+
+    for (const IndexColumnEntry *col :
+         vclient.GetColumnsForIndex(entry->index_id)) {
+      if (!col) continue;
+      assert(!col->profile_extension_name.empty());
+      to_remove_index_columns_.emplace_back(
+          col->key(), col->column_name, col->profile_extension_name,
+          col->profile_extension_version, col->profile_name);
+    }
+    assert(!entry->extension_name.empty());
+    to_remove_indexes_.emplace_back(
+        entry->key(), entry->index_id, entry->extension_name,
+        entry->extension_version, entry->index_type_name,
+        entry->index_type_parameters);
+  }
+  return false;
+}
+
+bool Metadata_modifier::lock_extensions_shared(THD *thd) {
+  if (should_assert_if_null(thd)) {
+    villagesql_error(error_uninitialized_session, MYF(0));
+    return true;
+  }
+
+  MDL_request_list mdl_requests;
+  std::unordered_set<std::string> seen_extensions;
+
+  // Lambda to add MDL request for an extension (if not already added)
+  auto add_mdl_request = [&](const std::string &ext_name) -> bool {
+    if (ext_name.empty() ||
+        seen_extensions.count(canonical_extension_name(ext_name))) {
+      return false;  // Already processed or empty
+    }
+
+    ExtensionKey ext_key(ext_name);
+    const std::string &normalized_name = ext_key.str();
+
+    MDL_request *new_request = new (thd->mem_root) MDL_request;
+    if (should_assert_if_null(new_request)) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(MDL_request));
+      return true;
+    }
+
+    MDL_REQUEST_INIT(new_request, MDL_key::EXTENSION, "",
+                     normalized_name.c_str(), MDL_SHARED, MDL_STATEMENT);
+    mdl_requests.push_front(new_request);
+    seen_extensions.insert(canonical_extension_name(ext_name));
+    return false;
+  };
+
+  for (const ColumnEntry &entry : to_add_) {
+    if (add_mdl_request(entry.extension_name)) {
+      return true;
+    }
+  }
+
+  for (const ColumnEntry &entry : to_remove_) {
+    if (add_mdl_request(entry.extension_name)) {
+      return true;
+    }
+  }
+
+  for (const auto &[new_entry, old_key] : to_rename_) {
+    if (add_mdl_request(new_entry.extension_name)) {
+      return true;
+    }
+  }
+
+  for (const Croutine_entry &routine : to_call_) {
+    if (add_mdl_request(routine.extension_name)) {
+      return true;
+    }
+  }
+
+  for (const IndexEntry &entry : to_add_indexes_) {
+    assert(!entry.extension_name.empty());
+    if (add_mdl_request(entry.extension_name)) {
+      return true;
+    }
+  }
+
+  for (const IndexColumnEntry &entry : to_add_index_columns_) {
+    assert(!entry.profile_extension_name.empty());
+    if (add_mdl_request(entry.profile_extension_name)) {
+      return true;
+    }
+  }
+
+  for (const IndexEntry &entry : to_remove_indexes_) {
+    assert(!entry.extension_name.empty());
+    if (add_mdl_request(entry.extension_name)) {
+      return true;
+    }
+  }
+
+  for (const IndexColumnEntry &entry : to_remove_index_columns_) {
+    assert(!entry.profile_extension_name.empty());
+    if (add_mdl_request(entry.profile_extension_name)) {
+      return true;
+    }
+  }
+
+  for (const auto &[new_entry, old_key] : to_rename_indexes_) {
+    assert(!new_entry.extension_name.empty());
+    if (add_mdl_request(new_entry.extension_name)) {
+      return true;
+    }
+  }
+
+  if (mdl_requests.is_empty()) {
+    return false;
+  }
+
+  if (thd->mdl_context.acquire_locks(&mdl_requests,
+                                     thd->variables.lock_wait_timeout)) {
+    return true;
+  }
+  return false;
+}
+
+bool Metadata_modifier::validate_entries() {
+  auto &vclient = VictionaryClient::instance();
+  if (should_assert_if_false(vclient.is_initialized())) {
+    villagesql_error(error_uninitialized_victionary, MYF(0));
+    return true;
+  }
+
+  auto guard = vclient.get_read_lock();
+
+  // Validate a single entry
+  auto validate_entry = [&](const ColumnEntry &entry) -> bool {
+    if (entry.extension_name.empty() || entry.type_name.empty()) {
+      return false;  // Nothing to validate
+    }
+
+    // Construct TypeDescriptorKey and look up the type descriptor
+    // Types are now registered directly from extensions as TypeDescriptors
+    TypeDescriptorKey type_descriptor_key(entry.type_name, entry.extension_name,
+                                          entry.extension_version);
+    const TypeDescriptor *type_descriptor =
+        vclient.type_descriptors().get_committed(type_descriptor_key);
+
+    if (!type_descriptor) {
+      // Type not found
+      villagesql_error(
+          "Custom type '%s' from extension '%s' version '%s' not found", MYF(0),
+          entry.type_name.c_str(), entry.extension_name.c_str(),
+          entry.extension_version.c_str());
+      return true;
+    }
+
+    // Verify extension name and version match
+    if (type_descriptor->extension_name() != entry.extension_name ||
+        type_descriptor->extension_version() != entry.extension_version) {
+      villagesql_error(
+          "Extension Name: %s Version: %s is not found for custom type '%s'",
+          MYF(0), entry.extension_name.c_str(), entry.extension_version.c_str(),
+          entry.type_name.c_str());
+      return true;
+    }
+    return false;
+  };
+
+  // Validate column entries to be added.
+  for (const ColumnEntry &entry : to_add_) {
+    if (validate_entry(entry)) {
+      return true;
+    }
+  }
+
+  // Validate column entries to be removed.
+  for (const ColumnEntry &entry : to_remove_) {
+    if (validate_entry(entry)) {
+      return true;
+    }
+  }
+
+  // Validate column entries to rename to.
+  for (const auto &[new_entry, old_key] : to_rename_) {
+    if (validate_entry(new_entry)) {
+      return true;
+    }
+  }
+
+  // Validate custom function extensions in to_call_.
+  for (const Croutine_entry &routine : to_call_) {
+    assert(!routine.extension_name.empty());
+
+    // Check if extension exists in victionary
+    ExtensionKey ext_key(routine.extension_name);
+    const ExtensionEntry *ext_entry =
+        vclient.extensions().get_committed(ext_key);
+
+    if (!ext_entry) {
+      villagesql_error("Extension '%s' not found for custom function '%s'",
+                       MYF(0), routine.extension_name.c_str(),
+                       routine.function_name.c_str());
+      return true;
+    }
+
+    // Verify that the function exists in VictionaryClient. Use the _locked
+    // variant: validate_entries already holds the read lock.
+    if (!func_exists_locked(routine.extension_name, routine.function_name)) {
+      villagesql_error("Custom function '%s' not found in extension '%s'",
+                       MYF(0), routine.function_name.c_str(),
+                       routine.extension_name.c_str());
+      return true;
+    }
+  }
+
+  for (const IndexEntry &entry : to_add_indexes_) {
+    assert(!entry.extension_name.empty());
+    IndexTypeDescriptorKeyPrefix pfx(entry.index_type_name,
+                                     entry.extension_name);
+    if (!vclient.index_type_descriptors().has_prefix_committed(pfx)) {
+      villagesql_error("Custom index type '%s' from extension '%s' not found",
+                       MYF(0), entry.index_type_name.c_str(),
+                       entry.extension_name.c_str());
+      return true;
+    }
+  }
+
+  for (const IndexColumnEntry &entry : to_add_index_columns_) {
+    assert(!entry.profile_name.empty());
+    assert(!entry.profile_extension_name.empty());
+    IndexProfileDescriptorKeyPrefix ppfx(entry.profile_name,
+                                         entry.profile_extension_name);
+    if (!vclient.index_profile_descriptors().has_prefix_committed(ppfx)) {
+      villagesql_error("Index profile '%s' from extension '%s' not found",
+                       MYF(0), entry.profile_name.c_str(),
+                       entry.profile_extension_name.c_str());
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool Metadata_modifier::mark_victionary_modifications(THD *thd,
+                                                      bool &marked_column,
+                                                      bool &marked_index) {
+  auto &vclient = VictionaryClient::instance();
+  if (should_assert_if_false(vclient.is_initialized())) {
+    villagesql_error(error_uninitialized_victionary, MYF(0));
+    return true;
+  }
+
+  if (should_assert_if_null(thd)) {
+    villagesql_error(error_uninitialized_session, MYF(0));
+    return true;
+  }
+
+  marked_column = false;
+  marked_index = false;
+  auto guard = vclient.get_write_lock();
+
+  // 1. Process removals.
+  for (const ColumnEntry &entry : to_remove_) {
+    if (vclient.columns().MarkForDeletion(*thd, entry.key())) {
+      return true;  // Error marking for deletion
+    }
+    marked_column = true;
+  }
+  to_remove_.clear();
+
+  // 2. Process renames. Each deletes the row under the old name and inserts it
+  // under the new one. All deletes come first, so renames that swap or chain
+  // names in one statement never insert a name another row still holds.
+  for (const auto &[new_entry, old_key] : to_rename_) {
+    if (vclient.columns().MarkForDeletion(*thd, old_key)) {
+      return true;
+    }
+  }
+  for (auto &[new_entry, old_key] : to_rename_) {
+    if (vclient.columns().MarkForInsertion(*thd, std::move(new_entry))) {
+      return true;
+    }
+    marked_column = true;
+  }
+  to_rename_.clear();
+
+  // 3. Process additions.
+  for (ColumnEntry &entry : to_add_) {
+    if (vclient.columns().MarkForInsertion(*thd, std::move(entry))) {
+      return true;  // Error marking for insertion
+    }
+    marked_column = true;
+  }
+  to_add_.clear();
+
+  // 4. Process custom index column removals (child before parent).
+  for (const IndexColumnEntry &entry : to_remove_index_columns_) {
+    if (vclient.custom_index_columns().MarkForDeletion(*thd, entry.key())) {
+      return true;
+    }
+    marked_index = true;
+  }
+  to_remove_index_columns_.clear();
+
+  // 5. Process custom index removals.
+  for (const IndexEntry &entry : to_remove_indexes_) {
+    if (vclient.custom_indexes().MarkForDeletion(*thd, entry.key())) {
+      return true;
+    }
+    marked_index = true;
+  }
+  to_remove_indexes_.clear();
+
+  // 5b. Process custom index renames. Each deletes the row under the old name
+  // and inserts it under the new one with the same index_id. All deletes come
+  // first, so renames that swap or chain names in one statement never insert
+  // a name another row still holds.
+  for (const auto &[new_entry, old_key] : to_rename_indexes_) {
+    if (vclient.custom_indexes().MarkForDeletion(*thd, old_key)) {
+      return true;
+    }
+  }
+  for (auto &[new_entry, old_key] : to_rename_indexes_) {
+    if (vclient.custom_indexes().MarkForInsertion(*thd, std::move(new_entry))) {
+      return true;
+    }
+    marked_index = true;
+  }
+  to_rename_indexes_.clear();
+
+  // 6. Process custom index additions. custom_indexes must be staged before
+  // custom_index_columns so the parent row exists when child rows reference it.
+  for (IndexEntry &entry : to_add_indexes_) {
+    if (vclient.custom_indexes().MarkForInsertion(*thd, std::move(entry))) {
+      return true;
+    }
+    marked_index = true;
+  }
+  to_add_indexes_.clear();
+
+  // 7. Process custom index column additions.
+  for (IndexColumnEntry &entry : to_add_index_columns_) {
+    if (vclient.custom_index_columns().MarkForInsertion(*thd,
+                                                        std::move(entry))) {
+      return true;
+    }
+    marked_index = true;
+  }
+  to_add_index_columns_.clear();
+
+  return false;
+}
+
+// Append a villagesql system table to thd->lex->query_tables and return the
+// new Table_ref. The table is only staged here: Metadata_modifier::store()
+// finds it again by walking query_tables, and locks every staged table in the
+// single lock_tables() call a statement is allowed.
+static Table_ref *stage_system_table(THD *thd, const char *table_name) {
+  Table_ref *tref =
+      new (thd->mem_root) Table_ref(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                                    table_name, TL_WRITE, MDL_SHARED_WRITE);
+  if (!tref) return nullptr;  // MEM_ROOT already set ER_OUT_OF_RESOURCES
+  thd->lex->add_to_query_tables(tref);
+  return tref;
+}
+
+// Open the chain of staged system tables starting at `first` without locking
+// them. On success *opened receives the number of tables opened.
+static bool open_staged_system_tables(THD *thd, Table_ref *first, uint flags,
+                                      uint *opened) {
+  DML_prelocking_strategy strategy;
+  uint counter = 0;
+  if (open_tables(thd, &first, &counter, flags, &strategy)) {
+    villagesql_error("Cannot open VillageSQL system tables", MYF(0));
+    return true;
+  }
+  *opened = counter;
+  return false;
+}
+
+bool Metadata_modifier::add_system_tables(THD *thd, bool marked_column,
+                                          bool marked_index) {
+  if (should_assert_if_null(thd)) {
+    villagesql_error(error_uninitialized_session, MYF(0));
+    return true;
+  }
+
+  // Open only the system tables needed for the staged modifications. All
+  // tables are added to the query list and opened in one call so they
+  // participate in the same lock scope. If the calling DDL does not lock
+  // query tables, these tables are locked explicitly before writing in
+  // Metadata_modifier::store().
+  Table_ref *first = nullptr;
+  if (marked_column) {
+    first = stage_system_table(thd, SchemaManager::COLUMNS_TABLE_NAME);
+    if (!first) return true;
+  }
+  if (marked_index) {
+    Table_ref *idx = stage_system_table(thd, SchemaManager::INDEXES_TABLE_NAME);
+    if (!idx) return true;
+    if (!first) first = idx;
+    if (!stage_system_table(thd, SchemaManager::INDEX_COLUMNS_TABLE_NAME))
+      return true;
+  }
+
+  if (!first) return false;
+
+  return open_staged_system_tables(thd, first, MYF(0), &system_tables_opened_);
+}
+
+bool Metadata_modifier::lock_and_apply(THD *thd) {
+  // Early return if no modifications are pending.
+  if (!has_entries()) {
+    return false;
+  }
+
+  // Custom type operations write to the villagesql system tables, which are not
+  // in the user's locked-tables list. Opening them under LOCK TABLES would fail
+  // deep inside open_tables() with a confusing ER_TABLE_NOT_LOCKED naming the
+  // internal 'custom_columns' table. Reject up front with a clear message.
+  // TODO(villagesql-general): Support custom type table operations under LOCK
+  // TABLES by opening the villagesql system tables the way the data dictionary
+  // opens its own tables during DDL (via an attachable transaction, which
+  // detaches locked_tables_mode), instead of requiring the user to lock them.
+  if (thd->locked_tables_mode == LTM_LOCK_TABLES) {
+    villagesql_error(
+        "Custom type table operations are not supported under LOCK TABLES.",
+        MYF(0));
+    return true;
+  }
+
+  // DEBUG_SYNC point for testing MDL synchronization with UNINSTALL EXTENSION
+  DEBUG_SYNC_C("metadata_before_extension_lock");
+
+  // 1. Acquire MDL_SHARED locks on all referenced extensions.
+  if (lock_extensions_shared(thd)) {
+    return true;
+  }
+
+  // DEBUG_SYNC point after acquiring extension locks
+  DEBUG_SYNC_C("metadata_after_extension_lock");
+
+  // 2. Validate that all referenced types exist with matching extension info.
+  if (validate_entries()) {
+    return true;
+  }
+
+  // 3. Mark all modifications in Victionary Client.
+  bool marked_column = false;
+  bool marked_index = false;
+  if (mark_victionary_modifications(thd, marked_column, marked_index)) {
+    return true;
+  }
+
+  // 4. Add VillageSQL system tables to THD's query list.
+  if (add_system_tables(thd, marked_column, marked_index)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool Metadata_modifier::process_create(THD *thd,
+                                       const HA_CREATE_INFO *create_info,
+                                       const Alter_info *alter_info,
+                                       const char *db, const char *table_name) {
+  // Tmp tables are handled separately.
+  if (!create_info || !alter_info ||
+      (create_info->options & HA_LEX_CREATE_TMP_TABLE)) {
+    return false;
+  }
+
+  Metadata_modifier custom_modifier;
+  Table_name db_table = {db, table_name};
+
+  if (custom_modifier.add_columns(thd, db_table, alter_info->create_list)) {
+    return true;
+  }
+
+  if (custom_modifier.add_indexes(thd, db, table_name, alter_info)) {
+    return true;
+  }
+
+  // Check storage engine if custom columns or indexes were added.
+  if (custom_modifier.has_entries() &&
+      EnsureEngineIsInnodb(create_info->db_type, "create table")) {
+    return true;
+  }
+
+  if (custom_modifier.lock_and_apply(thd)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool Metadata_modifier::process_alter(THD *thd,
+                                      const HA_CREATE_INFO *create_info,
+                                      Table_ref *table_list,
+                                      const Alter_info *alter_info,
+                                      uint *tables_opened) {
+  // Tmp tables are handles separately.
+  if (!table_list || !table_list->table ||
+      table_list->table->s->tmp_table != NO_TMP_TABLE) {
+    return false;
+  }
+
+#ifndef NDEBUG
+  const uint tables_before = count_global_tables(table_list);
+#endif
+
+  Metadata_modifier custom_modifier;
+
+  if (custom_modifier.alter_columns(thd, table_list, alter_info)) {
+    return true;
+  }
+
+  const char *db = table_list->db;
+  const char *table_name = table_list->table_name;
+
+  // The names the table carries once this ALTER completes. Indexes it adds are
+  // filed under them and the ones it keeps move to them; the ones it drops are
+  // deleted under the old names, as in alter_columns().
+  const bool renaming_table = (alter_info->flags & Alter_info::ALTER_RENAME) &&
+                              alter_info->new_table_name.str != nullptr;
+  const char *new_db = (renaming_table && alter_info->new_db_name.str)
+                           ? alter_info->new_db_name.str
+                           : db;
+  const char *new_table_name =
+      renaming_table ? alter_info->new_table_name.str : table_name;
+
+  if (custom_modifier.add_indexes(thd, new_db, new_table_name, alter_info)) {
+    return true;
+  }
+
+  if (custom_modifier.remove_indexes(thd, db, table_name, alter_info)) {
+    return true;
+  }
+
+  std::map<std::string, std::string> index_renames;
+  for (const Alter_rename_key *rename_key : alter_info->alter_rename_key_list)
+    index_renames[canonical_index_name(rename_key->old_name)] =
+        rename_key->new_name;
+
+  if (renaming_table || !index_renames.empty()) {
+    std::unordered_set<std::string> dropped_indexes;
+    for (const IndexEntry &entry : custom_modifier.to_remove_indexes_)
+      dropped_indexes.insert(canonical_index_name(entry.index_name()));
+    if (custom_modifier.rename_indexes_table(
+            thd, {db, table_name}, {new_db, new_table_name}, &dropped_indexes,
+            &index_renames)) {
+      return true;
+    }
+  }
+
+  // Reject any ALTER that combines custom column changes with an engine change.
+  // Non-atomic DDL (when either engine is non-InnoDB) causes an internal commit
+  // that clears uncommitted victionary entries before they can be written.
+  // The user must perform the engine change and custom column changes
+  // separately.
+  // TODO(villagesql): Support combining engine change with custom column
+  // add/drop in a single ALTER TABLE statement.
+  const bool current_has_custom = custom_modifier.existing_custom_count_ > 0;
+  const bool adding_custom = !custom_modifier.to_add_.empty();
+  const bool removing_custom = !custom_modifier.to_remove_.empty();
+  const bool adding_custom_index = !custom_modifier.to_add_indexes_.empty();
+  const bool removing_custom_index =
+      !custom_modifier.to_remove_indexes_.empty();
+  const handlerton *current_engine = table_list->table->s->db_type();
+  const handlerton *target_engine = create_info->db_type;
+  const bool engine_changing =
+      (target_engine->db_type != current_engine->db_type);
+  if (engine_changing && (removing_custom || adding_custom ||
+                          adding_custom_index || removing_custom_index)) {
+    villagesql_error(
+        "Cannot combine storage engine change with custom type columns.",
+        MYF(0));
+    return true;
+  }
+  // The target engine must be InnoDB when custom columns are involved.
+  if ((current_has_custom || adding_custom) &&
+      EnsureEngineIsInnodb(target_engine, "alter table")) {
+    return true;
+  }
+
+  if (custom_modifier.lock_and_apply(thd)) {
+    return true;
+  }
+
+  // Keep the caller's tables_opened count in sync with the system tables
+  // add_system_tables() appended to the query-tables list. The debug assertion
+  // verifies this internal count matches the actual growth of the next_global
+  // chain that lock_tables() will walk.
+  if (tables_opened != nullptr)
+    *tables_opened += custom_modifier.system_tables_opened_;
+  assert(count_global_tables(table_list) - tables_before ==
+         custom_modifier.system_tables_opened_);
+
+  return false;
+}
+
+bool Metadata_modifier::process_rename(THD *thd, Table_ref *table_list) {
+  if (!table_list) {
+    return false;
+  }
+
+  Metadata_modifier custom_modifier;
+  Table_ref *old_ref, *new_ref;
+
+  for (old_ref = table_list; old_ref; old_ref = new_ref->next_local) {
+    if (!(new_ref = old_ref->next_local)) {
+      assert(false);  // Missing new table.
+      break;
+    }
+
+    Table_name old_table = {old_ref->db, old_ref->table_name};
+    Table_name new_table = {new_ref->db, new_ref->table_name};
+
+    if (custom_modifier.rename_columns_table(thd, old_table, new_table)) {
+      return true;
+    }
+
+    if (custom_modifier.rename_indexes_table(thd, old_table, new_table)) {
+      return true;
+    }
+  }
+
+  if (custom_modifier.lock_and_apply(thd)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool Metadata_modifier::store(THD *thd) {
+  // We may not have victionary initialized yet during bootstrap.
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) {
+    return false;
+  }
+  if (should_assert_if_null(thd)) {
+    villagesql_error(error_uninitialized_session, MYF(0));
+    return true;
+  }
+  // Check if anything is marked for write across all VillageSQL system tables.
+  bool has_columns = false;
+  bool has_custom_indexes = false;
+  bool has_sp_params = false;
+  {
+    auto guard = vclient.get_read_lock();
+    has_columns = vclient.columns().has_uncommitted(thd);
+    has_custom_indexes = vclient.custom_indexes().has_uncommitted(thd);
+    has_sp_params = vclient.sp_params().has_uncommitted(thd);
+    if (!has_columns && !has_custom_indexes && !has_sp_params) {
+      assert(!vclient.custom_index_columns().has_uncommitted(thd));
+      return false;
+    }
+  }
+  if (!thd->lex->is_query_tables_locked()) {
+    // The tables were already opened via add_system_table(). Find each one in
+    // query_tables and lock them together.
+    auto find_table = [&](const char *tname) -> Table_ref * {
+      for (Table_ref *tl = thd->lex->query_tables; tl; tl = tl->next_global) {
+        if (is_villagesql_system_table(tl->db, tl->table_name, tname))
+          return tl;
+      }
+      return nullptr;
+    };
+
+    Table_ref *lock_first = nullptr;
+    Table_ref **lock_next = &lock_first;
+    uint lock_count = 0;
+
+    auto chain = [&](const char *tname) -> bool {
+      Table_ref *tl = find_table(tname);
+      if (!tl || should_assert_if_null(tl->table)) {
+        villagesql_error("VillageSQL system table '%s' not found or not opened",
+                         MYF(0), tname);
+        return true;
+      }
+      tl->next_local = nullptr;
+      *lock_next = tl;
+      lock_next = &tl->next_local;
+      ++lock_count;
+      return false;
+    };
+
+    if (has_columns && chain(SchemaManager::COLUMNS_TABLE_NAME)) return true;
+    if (has_custom_indexes) {
+      if (chain(SchemaManager::INDEXES_TABLE_NAME)) return true;
+      if (chain(SchemaManager::INDEX_COLUMNS_TABLE_NAME)) return true;
+    }
+    if (has_sp_params && chain(SchemaManager::SP_PARAMS_TABLE_NAME))
+      return true;
+    assert(lock_count == count_global_tables(lock_first));
+
+    if (lock_tables(thd, lock_first, lock_count, MYSQL_LOCK_IGNORE_TIMEOUT)) {
+      villagesql_error("Cannot lock VillageSQL system tables", MYF(0));
+      return true;
+    }
+  }
+  if (vclient.write_all_uncommitted_entries(thd)) {
+    villagesql_error("Cannot write to VillageSQL system tables", MYF(0));
+    return true;
+  }
+  return false;
+}
+
+bool Metadata_modifier::commit(THD *thd) {
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) {
+    return false;
+  }
+  vclient.commit_all_tables(thd);
+  return false;
+}
+
+void Metadata_modifier::rollback(THD *thd) {
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) {
+    return;
+  }
+  vclient.rollback_all_tables(thd);
+}
+
+bool Metadata_modifier::lock_extension_exclusive(
+    THD *thd, const std::string &extension_name, enum_mdl_duration duration) {
+  ExtensionKey ext_key(extension_name);
+  const std::string &normalized_name = ext_key.str();
+
+  MDL_request mdl_request;
+  MDL_REQUEST_INIT(&mdl_request, MDL_key::EXTENSION, "",
+                   normalized_name.c_str(), MDL_EXCLUSIVE, duration);
+
+  if (thd->mdl_context.acquire_lock(&mdl_request,
+                                    thd->variables.lock_wait_timeout)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool Metadata_modifier::add_functions(
+    SQL_I_List<Croutine_hash_entry> &croutines_list) {
+  // Iterate through the custom routines list and add to to_call_
+  Croutine_hash_entry *routine = croutines_list.first;
+  while (routine) {
+    assert(routine->m_extension_name.length > 0);
+    assert(routine->m_function_name.length > 0);
+
+    to_call_.emplace_back(std::string(routine->m_extension_name.str,
+                                      routine->m_extension_name.length),
+                          std::string(routine->m_function_name.str,
+                                      routine->m_function_name.length));
+    routine = routine->next;
+  }
+  return false;
+}
+
+bool Metadata_modifier::process_calls(
+    THD *thd, SQL_I_List<Croutine_hash_entry> &croutines_list) {
+  Metadata_modifier modifier;
+  if (modifier.add_functions(croutines_list) || modifier.lock_and_apply(thd)) {
+    return true;
+  }
+  return false;
+}
+
+bool PersistCustomSpParams(THD *thd, sp_head *sp) {
+  sp_pcontext *root_ctx = sp->get_root_parsing_context();
+  if (!root_ctx) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+
+  List<Create_field> field_def_lst;
+  root_ctx->retrieve_field_definitions(&field_def_lst);
+
+  bool any_custom = false;
+  {
+    auto guard = vclient.get_write_lock();
+
+    // Persist custom-typed params and DECLARE vars.
+    List_iterator_fast<Create_field> it(field_def_lst);
+    Create_field *cdef;
+    while ((cdef = it++)) {
+      const TypeContext *tc = cdef->custom_type_context;
+      if (!tc) continue;
+      SpParamEntry entry(
+          SpParamKey(sp->m_db.str, sp->m_name.str, cdef->field_name),
+          tc->extension_name(), tc->extension_version(), tc->type_name(),
+          tc->parameters().to_json());
+      if (vclient.sp_params().MarkForInsertion(*thd, std::move(entry)))
+        return true;
+      any_custom = true;
+    }
+
+    // Persist the function return type using the sentinel name.
+    if (sp->m_type == enum_sp_type::FUNCTION && sp->m_return_type_context_ref) {
+      const TypeContext &tc = *sp->m_return_type_context_ref;
+      SpParamEntry entry(
+          SpParamKey(sp->m_db.str, sp->m_name.str, SP_RETURNS_SENTINEL),
+          tc.extension_name(), tc.extension_version(), tc.type_name(),
+          tc.parameters().to_json());
+      if (vclient.sp_params().MarkForInsertion(*thd, std::move(entry)))
+        return true;
+      any_custom = true;
+    }
+
+    // Verify that only sp_params has uncommitted entries for this THD. This
+    // matters because write_all_uncommitted_entries() only opens
+    // custom_sp_params — if another table had pending entries it would fail.
+    assert(!vclient.columns().has_uncommitted(thd));
+    assert(!vclient.properties().has_uncommitted(thd));
+    assert(!vclient.extensions().has_uncommitted(thd));
+    assert(!vclient.custom_indexes().has_uncommitted(thd));
+    assert(!vclient.custom_index_columns().has_uncommitted(thd));
+  }
+  if (!any_custom) return false;
+
+  // Only open custom_sp_params. write_all_uncommitted_entries() checks each
+  // table's uncommitted map for this THD before touching any open TABLE*, so
+  // other system tables (columns, properties, extensions) are skipped safely
+  // because no entries were marked for them on this code path.
+  // TODO(villagesql-general) Evaluate change the API in the future to allow
+  // committing only from a subset of tables and asserting the others have
+  // nothing pending.
+  Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                            SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
+                            MDL_SHARED_WRITE);
+  if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
+    return true;
+  return vclient.write_all_uncommitted_entries(thd);
+}
+
+// Delete every custom_sp_params row matching prefix.
+//
+// With lock_and_flush the rows are written before returning. Without it they
+// are only staged, and the caller must reach Metadata_modifier::store(), which
+// locks custom_sp_params together with every other VillageSQL system table the
+// statement staged. DROP DATABASE needs the staged form, because a statement
+// gets only one lock_tables() call and mysql_rm_table_no_locks() has already
+// left custom_columns open and waiting for it.
+static bool DeleteCustomSpParamsByPrefix(THD *thd,
+                                         const SpParamKeyPrefix &prefix,
+                                         bool lock_and_flush) {
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+
+  std::vector<SpParamKey> keys_to_delete;
+  {
+    auto guard = vclient.get_read_lock();
+    auto entries = vclient.sp_params().get_prefix_committed(prefix);
+    for (const SpParamEntry *entry : entries) {
+      if (entry) keys_to_delete.push_back(entry->key());
+    }
+  }
+  if (keys_to_delete.empty()) return false;
+
+  {
+    auto guard = vclient.get_write_lock();
+    for (const SpParamKey &key : keys_to_delete) {
+      if (vclient.sp_params().MarkForDeletion(*thd, key)) return true;
+    }
+  }
+
+  if (lock_and_flush) {
+    Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                              SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
+                              MDL_SHARED_WRITE);
+    if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
+      return true;
+    return vclient.write_all_uncommitted_entries(thd);
+  }
+
+  Table_ref *sp_params_tbl =
+      stage_system_table(thd, SchemaManager::SP_PARAMS_TABLE_NAME);
+  if (!sp_params_tbl) return true;  // MEM_ROOT already set ER_OUT_OF_RESOURCES
+
+  uint opened = 0;
+  return open_staged_system_tables(thd, sp_params_tbl,
+                                   MYSQL_LOCK_IGNORE_TIMEOUT, &opened);
+}
+
+bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
+  // DROP PROCEDURE / FUNCTION stages nothing else, so custom_sp_params is the
+  // only table write_all_uncommitted_entries() can touch.
+  return DeleteCustomSpParamsByPrefix(
+      thd, SpParamKeyPrefix(name->m_db.str, name->m_name.str),
+      /*lock_and_flush=*/true);
+}
+
+bool DeleteCustomSpParamsForDatabase(THD *thd, const char *db_name) {
+  // Staged, not flushed: mysql_rm_db()'s Metadata_modifier::store() call locks
+  // and writes this together with custom_columns.
+  return DeleteCustomSpParamsByPrefix(thd, SpParamKeyPrefix(db_name),
+                                      /*lock_and_flush=*/false);
+}
+
+}  // namespace villagesql

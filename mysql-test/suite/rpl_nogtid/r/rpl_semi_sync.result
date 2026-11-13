@@ -1,0 +1,500 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+include/rpl/sync_to_replica.inc
+#
+# Uninstall semi-sync plugins on source and replica
+#
+include/rpl/stop_replica.inc
+UNINSTALL PLUGIN rpl_semi_sync_replica;
+UNINSTALL PLUGIN rpl_semi_sync_source;
+UNINSTALL PLUGIN rpl_semi_sync_replica;
+UNINSTALL PLUGIN rpl_semi_sync_source;
+include/rpl/reset.inc
+#
+# Main test of semi-sync replication starts here
+#
+[connection master]
+[ default state of semi-sync on source should be OFF ]
+show variables like 'rpl_semi_sync_source_enabled';
+Variable_name	Value
+rpl_semi_sync_source_enabled	OFF
+[ enable semi-sync on source ]
+set global rpl_semi_sync_source_enabled = 1;
+show variables like 'rpl_semi_sync_source_enabled';
+Variable_name	Value
+rpl_semi_sync_source_enabled	ON
+[ status of semi-sync on source should be ON even without any semi-sync slaves ]
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	0
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	0
+#
+# BUG#45672 Semisync repl: ActiveTranx:insert_tranx_node: transaction node allocation failed
+# BUG#45673 Semisync reports correct operation even if no slave is connected
+#
+[ status of semi-sync on source should be OFF ]
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	0
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	OFF
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	0
+include/rpl/reset.inc
+#
+# INSTALL PLUGIN semi-sync on replica
+#
+[connection slave]
+[ default state of semi-sync on replica should be OFF ]
+show variables like 'rpl_semi_sync_replica_enabled';
+Variable_name	Value
+rpl_semi_sync_replica_enabled	OFF
+[ enable semi-sync on replica ]
+set global rpl_semi_sync_replica_enabled = 1;
+show variables like 'rpl_semi_sync_replica_enabled';
+Variable_name	Value
+rpl_semi_sync_replica_enabled	ON
+include/rpl/start_replica.inc
+[connection master]
+[ initial source state after the semi-sync replica connected ]
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	1
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	0
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	0
+create table t1(a int) engine = ENGINE_TYPE;
+[ source state after CREATE TABLE statement ]
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	0
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	1
+select CONNECTIONS_NORMAL_SLAVE - CONNECTIONS_NORMAL_SLAVE as 'Should be 0';
+Should be 0
+0
+[ insert records to table ]
+[ source status after inserts ]
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	0
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	11
+include/rpl/sync_to_replica.inc
+[ on replica ]
+[ replica status after replicated inserts ]
+show status like 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	ON
+select count(distinct a) from t1;
+count(distinct a)
+10
+select min(a) from t1;
+min(a)
+1
+select max(a) from t1;
+max(a)
+10
+
+# BUG#50157
+# semi-sync replication crashes when replicating a transaction which
+# include 'CREATE TEMPORARY TABLE `MyISAM_t` SELECT * FROM `Innodb_t` ;
+[connection master]
+SET SESSION AUTOCOMMIT= 0;
+CREATE TABLE t2(c1 INT) ENGINE=innodb;
+include/rpl/sync_to_replica.inc
+BEGIN;
+
+# Even though it is in a transaction, this statement is binlogged into binlog
+# file immediately.
+CREATE TEMPORARY TABLE t3 SELECT c1 FROM t2 where 1=1;
+
+# These statements will not be binlogged until the transaction is committed
+INSERT INTO t2 VALUES(11);
+INSERT INTO t2 VALUES(22);
+COMMIT;
+DROP TABLE t2, t3;
+SET SESSION AUTOCOMMIT= 1;
+FLUSH STATUS;
+include/rpl/sync_to_replica.inc
+#
+# Test semi-sync source will switch OFF after one transaction
+# timeout waiting for replica reply.
+#
+include/rpl/stop_replica.inc
+[connection master]
+include/rpl/stop_dump_threads.inc
+[ source status should be ON ]
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	0
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	1
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	0
+[ semi-sync replication of these transactions will fail ]
+insert into t1 values (500);
+[ source status should be OFF ]
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	OFF
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	1
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	1
+insert into t1 values (100);
+[ source status should be OFF ]
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	OFF
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	12
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	1
+#
+# Test semi-sync status on source will be ON again when replica catches up
+#
+[connection slave]
+[ replica status should be OFF ]
+show status like 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	OFF
+include/rpl/start_replica.inc
+[ replica status should be ON ]
+show status like 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	ON
+select count(distinct a) from t1;
+count(distinct a)
+2
+select min(a) from t1;
+min(a)
+100
+select max(a) from t1;
+max(a)
+500
+[connection master]
+[ source status should be ON again after replica catches up ]
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	12
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	1
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	1
+#
+# Test disable/enable source semi-sync on the fly.
+#
+drop table t1;
+include/rpl/sync_to_replica.inc
+[ on replica ]
+include/rpl/stop_replica.inc
+#
+# Flush status
+#
+[ Semi-sync source status variables before FLUSH STATUS ]
+SHOW STATUS LIKE 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	12
+SHOW STATUS LIKE 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	2
+FLUSH NO_WRITE_TO_BINLOG STATUS;
+[ Semi-sync source status variables after FLUSH STATUS ]
+SHOW STATUS LIKE 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	0
+SHOW STATUS LIKE 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	0
+[connection master]
+show binary logs;
+Log_name	master-bin.000001
+File_size	#
+Encrypted	#
+show variables like 'rpl_semi_sync_source_enabled';
+Variable_name	Value
+rpl_semi_sync_source_enabled	ON
+[ disable semi-sync on the fly ]
+set global rpl_semi_sync_source_enabled=0;
+show variables like 'rpl_semi_sync_source_enabled';
+Variable_name	Value
+rpl_semi_sync_source_enabled	OFF
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	OFF
+[ enable semi-sync on the fly ]
+set global rpl_semi_sync_source_enabled=1;
+show variables like 'rpl_semi_sync_source_enabled';
+Variable_name	Value
+rpl_semi_sync_source_enabled	ON
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+#
+# Test RESET BINARY LOGS AND GTIDS/REPLICA
+#
+[connection slave]
+include/rpl/start_replica.inc
+[connection master]
+create table t1 (a int) engine = ENGINE_TYPE;
+drop table t1;
+include/rpl/sync_to_replica.inc
+show status like 'Rpl_relay%';
+Variable_name	Value
+[ test reset binary logs and gtids ]
+[connection master]
+reset binary logs and gtids;
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	0
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	0
+[connection slave]
+include/rpl/stop_replica.inc
+reset replica;
+reset binary logs and gtids;
+[connection master]
+include/rpl/stop_dump_threads.inc
+include/rpl/start_replica.inc
+[connection master]
+create table t1 (a int) engine = ENGINE_TYPE;
+insert into t1 values (1);
+insert into t1 values (2), (3);
+include/rpl/sync_to_replica.inc
+[ on replica ]
+select * from t1;
+a
+1
+2
+3
+[connection master]
+[ source semi-sync status should be ON ]
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	0
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	3
+#
+# Start semi-sync replication without SUPER privilege
+#
+include/rpl/reset.inc
+[connection master]
+include/rpl/stop_dump_threads.inc
+set sql_log_bin=0;
+create user rpl@127.0.0.1 identified by 'rpl';
+grant replication slave on *.* to rpl@127.0.0.1;
+flush privileges;
+set sql_log_bin=1;
+[connection slave]
+create user rpl@127.0.0.1 identified by 'rpl';
+grant replication slave on *.* to rpl@127.0.0.1;
+flush privileges;
+CHANGE REPLICATION SOURCE to SOURCE_USER='rpl',SOURCE_PASSWORD='rpl', GET_SOURCE_PUBLIC_KEY=1;
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+include/rpl/start_replica.inc
+show status like 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	ON
+[connection master]
+[connection slave]
+include/rpl/stop_replica.inc
+[connection master]
+Insert into t1 values (4);
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	OFF
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	0
+[connection slave]
+include/rpl/start_replica.inc
+show status like 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	ON
+[connection master]
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+[ source semi-sync should be ON ]
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	1
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	1
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	0
+insert into t1 values (5);
+insert into t1 values (6);
+[ source semi-sync should be ON ]
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	1
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+show status like 'Rpl_semi_sync_source_no_tx';
+Variable_name	Value
+Rpl_semi_sync_source_no_tx	1
+show status like 'Rpl_semi_sync_source_yes_tx';
+Variable_name	Value
+Rpl_semi_sync_source_yes_tx	2
+select subsystem, error_code
+from performance_schema.error_log
+where error_code="MY-011170" limit 1;
+subsystem	error_code
+Repl	MY-011170
+#
+# Test semi-sync replica connect to non-semi-sync source
+#
+include/rpl/sync_to_replica.inc
+[ on replica ]
+include/rpl/stop_replica.inc
+SHOW STATUS LIKE 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	OFF
+[connection master]
+include/rpl/stop_dump_threads.inc
+[ Semi-sync status on source should be ON ]
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	0
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	ON
+set global rpl_semi_sync_source_enabled= 0;
+[connection slave]
+SHOW VARIABLES LIKE 'rpl_semi_sync_replica_enabled';
+Variable_name	Value
+rpl_semi_sync_replica_enabled	ON
+include/rpl/start_replica.inc
+[connection master]
+insert into t1 values (8);
+[ source semi-sync clients should be 1, status should be OFF ]
+show status like 'Rpl_semi_sync_source_clients';
+Variable_name	Value
+Rpl_semi_sync_source_clients	1
+show status like 'Rpl_semi_sync_source_status';
+Variable_name	Value
+Rpl_semi_sync_source_status	OFF
+include/rpl/sync_to_replica.inc
+[ on replica ]
+show status like 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	ON
+include/rpl/stop_replica.inc
+[ on source ]
+include/rpl/stop_dump_threads.inc
+UNINSTALL PLUGIN rpl_semi_sync_source;
+SHOW VARIABLES LIKE 'rpl_semi_sync_source_enabled';
+Variable_name	Value
+[connection slave]
+SHOW VARIABLES LIKE 'rpl_semi_sync_replica_enabled';
+Variable_name	Value
+rpl_semi_sync_replica_enabled	ON
+include/rpl/start_replica.inc
+[connection master]
+insert into t1 values (10);
+include/rpl/sync_to_replica.inc
+[ on replica ]
+SHOW STATUS LIKE 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	OFF
+#
+# Test non-semi-sync replica connect to semi-sync source
+#
+INSTALL PLUGIN rpl_semi_sync_source SONAME 'SEMISYNC_SOURCE_PLUGIN';
+set global rpl_semi_sync_source_timeout= 60000;
+/* 60s */
+set global rpl_semi_sync_source_enabled= 1;
+[connection slave]
+include/rpl/stop_replica.inc
+SHOW STATUS LIKE 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	OFF
+[ uninstall semi-sync replica plugin ]
+UNINSTALL PLUGIN rpl_semi_sync_replica;
+SHOW VARIABLES LIKE 'rpl_semi_sync_replica_enabled';
+Variable_name	Value
+include/rpl/start_replica.inc
+SHOW STATUS LIKE 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+include/rpl/stop_replica.inc
+[ reinstall semi-sync replica plugin and disable semi-sync ]
+INSTALL PLUGIN rpl_semi_sync_replica SONAME 'SEMISYNC_REPLICA_PLUGIN';
+set global rpl_semi_sync_replica_enabled= 0;
+SHOW VARIABLES LIKE 'rpl_semi_sync_replica_enabled';
+Variable_name	Value
+rpl_semi_sync_replica_enabled	OFF
+SHOW STATUS LIKE 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	OFF
+include/rpl/start_replica.inc
+SHOW STATUS LIKE 'Rpl_semi_sync_replica_status';
+Variable_name	Value
+Rpl_semi_sync_replica_status	OFF
+#
+# Clean up
+#
+include/rpl/uninstall_semisync.inc
+include/rpl/stop_replica.inc
+CHANGE REPLICATION SOURCE to SOURCE_USER='root',SOURCE_PASSWORD='', GET_SOURCE_PUBLIC_KEY=0;
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+include/rpl/start_replica.inc
+drop table t1;
+include/rpl/sync_to_replica.inc
+drop user rpl@127.0.0.1;
+flush privileges;
+include/rpl/deinit.inc

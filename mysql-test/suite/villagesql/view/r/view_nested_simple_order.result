@@ -1,0 +1,17 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, name VARCHAR(50));
+INSERT INTO t1 VALUES
+(1, '(10,0)', 'ten'),
+(2, '(2,0)', 'two'),
+(3, '(-1,0)', 'minus_one');
+CREATE VIEW v1 AS
+SELECT id, val, name FROM t1;
+CREATE VIEW v2 AS
+SELECT id, val, name FROM v1;
+SELECT * FROM v2 ORDER BY val;
+id	val	name
+3	(-1,0)	minus_one
+2	(2,0)	two
+1	(10,0)	ten
+DROP VIEW v2;
+DROP VIEW v1;
+DROP TABLE t1;

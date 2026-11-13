@@ -1,0 +1,10 @@
+--echo #
+--echo # Test crash recovery with uncommitted transactions on indexed COMPLEX columns
+--echo # with PARTITIONED table
+--echo #
+
+# Enable partitioning for this test
+let $partition = 1;
+
+# Run the base recovery test with partitioning enabled
+--source suite/villagesql/startup/t/recovery_complex_index.test

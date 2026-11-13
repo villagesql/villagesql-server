@@ -1,0 +1,89 @@
+#
+# CREATE TABLE must reject COLUMN_FORMAT COMPRESSED on a custom-typed column
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, value COMPLEX COLUMN_FORMAT COMPRESSED);
+ERROR HY000: Can not define column 'value' in compressed format
+# ... and with an explicit compression dictionary. The dictionary is
+# created for real, so this asserts the column-type rejection rather than
+# relying on ER_COMPRESSION_DICTIONARY_DOES_NOT_EXIST firing first.
+CREATE COMPRESSION_DICTIONARY d1('blah');
+CREATE TABLE t1 (id INT PRIMARY KEY,
+value COMPLEX COLUMN_FORMAT COMPRESSED WITH COMPRESSION_DICTIONARY d1);
+ERROR HY000: Can not define column 'value' in compressed format
+#
+# The same column without COMPRESSED is still accepted, and a compressed
+# VARCHAR alongside it still works -- the restriction is scoped to custom
+# types, not to the table.
+#
+CREATE TABLE t1 (id INT PRIMARY KEY,
+value COMPLEX,
+c VARCHAR(200) COLUMN_FORMAT COMPRESSED);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  `c` varchar(200) /*!50633 COLUMN_FORMAT COMPRESSED */ DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', REPEAT('abc', 40));
+SELECT id, value, LENGTH(c) FROM t1 ORDER BY id;
+id	value	LENGTH(c)
+1	(1,2)	120
+#
+# ALTER TABLE ADD COLUMN must reject it too
+#
+ALTER TABLE t1 ADD COLUMN v2 COMPLEX COLUMN_FORMAT COMPRESSED;
+ERROR HY000: Can not define column 'v2' in compressed format
+#
+# ALTER TABLE MODIFY must not be able to add COMPRESSED to an existing
+# custom-typed column
+#
+ALTER TABLE t1 MODIFY value COMPLEX COLUMN_FORMAT COMPRESSED;
+ERROR HY000: Can not define column 'value' in compressed format
+#
+# The reverse direction -- converting an already-COMPRESSED column into a
+# custom type -- is already blocked, by a stricter pre-existing VillageSQL
+# rule that forbids converting any existing column to a custom type
+# (villagesql/sql/metadata_modifier.cc). So it never reaches the
+# compression check. Asserted here to pin that down: if that rule is ever
+# relaxed, this case must start returning
+# ER_UNSUPPORTED_COMPRESSED_COLUMN_TYPE instead of silently succeeding.
+#
+ALTER TABLE t1 MODIFY c COMPLEX;
+ERROR HY000: Cannot convert column 'c' to custom type 'COMPLEX'
+# The pre-existing compressed VARCHAR is unaffected by the failed ALTERs
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  `c` varchar(200) /*!50633 COLUMN_FORMAT COMPRESSED */ DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+UPDATE t1 SET c = REPEAT('xyz', 50) WHERE id = 1;
+SELECT id, value, LENGTH(c) FROM t1 ORDER BY id;
+id	value	LENGTH(c)
+1	(1,2)	150
+#
+# A VARIABLE-length custom type is the decisive case. COMPLEX is
+# fixed-length (persisted_length), so it may fall outside Percona's
+# compressible type list on its own. TARRAY is variable-length, so it is
+# the case that actually exercises the custom-type guard rather than the
+# type list.
+#
+INSTALL EXTENSION vsql_tarray_test;
+CREATE TABLE t2 (id INT PRIMARY KEY,
+a vsql_tarray_test.TARRAY(4) COLUMN_FORMAT COMPRESSED);
+ERROR HY000: Can not define column 'a' in compressed format
+# Accepted without COMPRESSED
+CREATE TABLE t2 (id INT PRIMARY KEY, a vsql_tarray_test.TARRAY(4));
+ALTER TABLE t2 ADD COLUMN b vsql_tarray_test.TARRAY(4) COLUMN_FORMAT COMPRESSED;
+ERROR HY000: Can not define column 'b' in compressed format
+ALTER TABLE t2 MODIFY a vsql_tarray_test.TARRAY(4) COLUMN_FORMAT COMPRESSED;
+ERROR HY000: Can not define column 'a' in compressed format
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_tarray_test;
+# Cleanup
+DROP TABLE t1;
+DROP COMPRESSION_DICTIONARY d1;

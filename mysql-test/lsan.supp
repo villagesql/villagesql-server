@@ -1,0 +1,123 @@
+# Copyright (c) 2018, 2026, Oracle and/or its affiliates.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+# LSAN suppressions for gcc/clang
+leak:Perl_safesyscalloc
+leak:Perl_safesysmalloc
+leak:Perl_safesysrealloc
+leak:Perl_savesharedpv
+leak:Perl_Slab_Alloc
+leak:Perl_newUNOP_AUX
+leak:Perl_newSTATEOP
+leak:Perl_pmruntime
+leak:/usr/bin/perl
+leak:/usr/bin/sort
+leak:/usr/bin/tail
+leak:/lib64/libperl.so.*
+leak:/bin/bash
+leak:/usr/bin/sed
+leak:/usr/bin/awk
+leak:/usr/bin/python2.7
+leak:/usr/bin/zip
+leak:/usr/bin/python3.8
+leak:/usr/bin/python3.9
+leak:/usr/bin/python3.10
+leak:/usr/bin/python3.11
+leak:/usr/bin/python3.12
+leak:/usr/bin/python3.13
+leak:/usr/bin/python3.14
+leak:/usr/bin/dd
+leak:/usr/bin/grep
+leak:/usr/bin/ps
+leak:/usr/bin/*g++-*
+leak:/usr/*/cc1plus
+leak:/lib/*libbfd-*-system.so
+leak:/usr/bin/*ld.bfd
+leak:/usr/lib/*collect2
+
+# Ubuntu 25.10 and newer ship the Rust (uutils) reimplementation of
+# coreutils, installed under /usr/lib/cargo/bin/coreutils/ rather than
+# /usr/bin/. Every one of these binaries leaks a small allocation at
+# startup, which LSAN reports whenever a test shells out to them.
+leak:/usr/lib/cargo/bin/coreutils/*
+
+# OpenLDAP bug 9081
+# Fixed in 2.4.49, we build with 2.4.48
+leak:ldap_initialize
+
+# sasl_client_init will load all available plugins with _sasl_load_plugins().
+# It seems some of the SASL plugin have leaks.
+# Both LSAN and Valgrind report leaks.
+leak:sasl_client_add_plugin
+
+# The GSS API plugin for SASL has leaks.
+leak:gss_acquire_cred_from
+
+# Memory leak due to JDK's assumption on object lifetime
+leak:java.lang.ProcessImpl*init
+
+# ndb_sign_keys leaks in some error-exit situations
+leak:ndb_sign_keys
+
+# Internal leak in libprotobuf-lite
+# google::protobuf::internal::InitSCCImpl()
+leak:libprotobuf-lite.so
+
+# Bug#36170703 ndb api tools leak with TLS required on data nodes 
+# Suppress leak detection for them until leak is found.
+leak:ndb_blob_tool
+leak:ndb_config
+leak:ndb_delete_all
+leak:ndb_desc
+leak:ndb_drop_index
+leak:ndb_drop_table
+leak:ndb_import
+leak:ndb_index_stat
+leak:ndb_move_data
+leak:ndb_restore
+leak:ndb_select_all
+leak:ndb_select_count
+leak:ndb_show_tables
+leak:ndb_sign_keys
+
+# VillageSQL: benign one-time leaks in third-party helper binaries that the
+# extension MTR suites spawn under --sanitize. safe_process LD_PRELOADs libasan
+# into every child, so uninstrumented helpers get leak-checked at exit; these
+# are not server or extension code. Suppress by helper-binary path only (never
+# by libcurl/libcrypto, which the server and http/ai extensions also use).
+# python3: vsql-http echo_server.py — CPython module init (e.g. PyInit__datetime)
+leak:/usr/bin/python3
+# curl: vsql-rest tests pipe curl output — libcurl/OpenSSL one-time init
+leak:/usr/bin/curl
+# tr/grep: vsql-rest tests pipe curl through these; whichever is last in the
+# pipeline sets its exit status, so a benign one-time leak surfaces as exit 42
+leak:/usr/bin/tr
+leak:/usr/bin/grep
+# uutils coreutils (Rust) replaces GNU coreutils on newer Ubuntu, and does not
+# free process-lifetime allocations at exit. LSan reports the resolved
+# multi-call binary, so the /usr/bin/* paths above do not match it.
+leak:/usr/lib/cargo/bin/coreutils/
+
+# The following line is needed to suppress memory leaks coming from standard /usr/bin/grep
+# utility on Ubuntu 22.04 Jammy
+leak:re_compile_internal

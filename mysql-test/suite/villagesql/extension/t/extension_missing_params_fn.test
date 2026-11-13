@@ -1,0 +1,11 @@
+# Test that a TypeBuilder extension fails to compile when a parameterized
+# operation function is used without a preceding .params<P>() call.
+#
+# Before the ParamsType type-state change this compiled successfully and
+# produced a runtime error on INSTALL EXTENSION. The static_assert now
+# catches it at build time so the extension never reaches the server.
+
+--let $extension_name = missing_params_fn
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/missing_params_fn.cc
+--let $build_failure_grep = TypeBuilder::from_string
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc

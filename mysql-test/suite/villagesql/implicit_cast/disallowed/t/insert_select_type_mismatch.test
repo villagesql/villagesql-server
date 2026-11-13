@@ -1,0 +1,15 @@
+# Test INSERT...SELECT with type mismatch
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+CREATE TABLE temp_mixed (id INT, val VARCHAR(100));
+
+INSERT INTO temp_mixed VALUES (1, 'string_value');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t_complex SELECT * FROM temp_mixed;
+
+DROP TABLE t_complex;
+DROP TABLE temp_mixed;
+
+--source include/villagesql/uninstall_complex_extension.inc

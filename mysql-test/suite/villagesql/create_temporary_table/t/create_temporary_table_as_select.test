@@ -1,0 +1,34 @@
+# Test CREATE TEMPORARY TABLE AS SELECT with COMPLEX type
+# Grammar: CREATE TEMPORARY TABLE table_name AS SELECT ...
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE source_signals (
+    id INT PRIMARY KEY,
+    waveform COMPLEX,
+    frequency DOUBLE
+);
+
+SHOW COLUMNS FROM source_signals;
+
+INSERT INTO source_signals VALUES (1, '(27.0,28.0)', 440.0);
+INSERT INTO source_signals VALUES (2, '(29.0,30.0)', 880.0);
+
+# Create temporary table using AS SELECT
+CREATE TEMPORARY TABLE temp_analysis AS
+SELECT id, waveform, frequency
+FROM source_signals
+WHERE frequency > 400.0;
+
+SHOW COLUMNS FROM temp_analysis;
+
+INSERT INTO temp_analysis VALUES (3, '(31.0,32.0)', 1760.0);
+
+SELECT * FROM temp_analysis;
+
+DROP TABLE temp_analysis;
+DROP TABLE source_signals;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

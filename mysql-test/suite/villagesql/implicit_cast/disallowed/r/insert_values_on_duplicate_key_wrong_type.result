@@ -1,0 +1,11 @@
+CREATE TABLE t_complex (
+id INT PRIMARY KEY,
+complex_val COMPLEX NOT NULL,
+string_val VARCHAR(100) NOT NULL
+);
+INSERT INTO t_complex VALUES (1, '(1.0,1.0)', '(2.0,2.0)');
+INSERT INTO t_complex VALUES (1, '(1.0,1.0)', '(2.0,2.0)') ON DUPLICATE KEY UPDATE complex_val = VALUES(id);
+ERROR HY000: Cannot implicitly cast from int to vsql_complex.COMPLEX for column 'complex_val' at row 1
+INSERT INTO t_complex VALUES (1, '(1.0,1.0)', '(2.0,2.0)') ON DUPLICATE KEY UPDATE complex_val = VALUES(string_val);
+ERROR HY000: Cannot implicitly cast from varchar(100) to vsql_complex.COMPLEX for column 'complex_val' at row 1
+DROP TABLE t_complex;

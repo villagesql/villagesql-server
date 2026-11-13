@@ -1,0 +1,37 @@
+# Test invisible generated primary keys with custom type
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+SELECT @@sql_generate_invisible_primary_key;
+SET sql_generate_invisible_primary_key=ON;
+SELECT @@sql_generate_invisible_primary_key;
+
+CREATE TABLE t1 (
+    num INT,
+    value COMPLEX
+);
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 VALUES (2, '(1.0,2.0)');
+INSERT INTO t1 VALUES (3, '(3.5,-1.2)');
+
+SELECT * FROM t1;
+
+ALTER TABLE t1 ALTER COLUMN my_row_id SET VISIBLE;
+
+SELECT * FROM t1;
+
+--source include/villagesql/query_custom_columns.inc
+
+SET sql_generate_invisible_primary_key=OFF;
+SELECT @@sql_generate_invisible_primary_key;
+
+DROP TABLE t1;
+
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+
+--source include/villagesql/uninstall_complex_extension.inc

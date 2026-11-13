@@ -1,0 +1,23 @@
+# Test IF, IFNULL, NULLIF with COMPLEX type
+# These functions do not support implicit conversion with custom types
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), (NULL);
+
+# IF with implicit type conversion - not supported
+--error ER_WRONG_USAGE
+SELECT IF(val IS NOT NULL, val, '(0.0,0.0)') FROM t1;
+
+# IFNULL with implicit type conversion - not supported
+--error ER_WRONG_USAGE
+SELECT IFNULL(val, '(0.0,0.0)') FROM t1;
+
+# NULLIF - not supported
+--error ER_WRONG_USAGE
+SELECT NULLIF(val, '(1.0,2.0)') FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,42 @@
+# Test basic VillageSQL upgrade functionality
+
+--source include/villagesql/internal_schema_test.inc
+
+--echo # Test Basic VillageSQL Upgrade Functionality
+--echo # This test verifies that VillageSQL version management works correctly
+
+--echo # Test 1: Verify initial installation
+SELECT 'Initial Installation Check' AS test_case;
+
+SET @villagesql_schema_id = (SELECT id FROM mysql.schemata WHERE name = 'villagesql');
+
+SELECT COUNT(*) AS properties_table_exists
+FROM mysql.tables
+WHERE schema_id = @villagesql_schema_id
+  AND name = 'properties';
+
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+
+--echo # Test 2: Version update simulation
+SELECT 'Version Update Test' AS test_case;
+
+--echo # Save original version
+SET @original_version = (SELECT value FROM villagesql.properties WHERE name = 'version');
+
+--echo # Simulate upgrade by setting version to older value
+UPDATE villagesql.properties SET value = '0' WHERE name = 'version';
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+
+--echo # Restore to current version (simulates upgrade completion)
+UPDATE villagesql.properties SET value = @original_version WHERE name = 'version';
+SELECT name, value FROM villagesql.properties WHERE name = 'version';
+
+--echo # Test 3: Properties completeness
+SELECT 'Properties Completeness' AS test_case;
+
+SELECT COUNT(*) AS all_properties_present
+FROM villagesql.properties
+WHERE name IN ('version', 'created', 'mysql_version_at_creation');
+
+--echo # Test completed successfully
+SELECT 'All Tests Passed' AS final_result;

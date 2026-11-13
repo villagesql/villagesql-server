@@ -1,0 +1,73 @@
+--source include/have_ndb.inc
+
+# set up circular replication
+--let $rpl_topology= 1->2->1
+--source include/rpl/init.inc
+
+--let $rpl_connection_name= master
+--let $rpl_server_number= 1
+--source include/rpl/connect.inc
+
+--let $rpl_connection_name= slave
+--let $rpl_server_number= 2
+--source include/rpl/connect.inc
+
+
+--echo # create the table on the "slave"
+--connection slave
+CREATE TABLE t1 (a int key, b int) ENGINE=ndb;
+sync_slave_with_master master;
+--echo # now we should have a table on the master as well
+SHOW TABLES;
+
+# insert some values on the slave and master
+--connection master
+INSERT INTO t1 VALUES (1,2);
+# Give time to propagate + close epoch, to ensure deterministic Binlog contents
+--sleep 1
+--connection slave
+INSERT INTO t1 VALUES (2,3);
+
+# ensure data has propagated both ways
+--connection slave
+sync_slave_with_master master;
+--sync_slave_with_master
+
+# connect to slave and ensure data it there.
+--connection slave
+SELECT * FROM t1 ORDER BY a;
+
+# Check slave has no errors and are running
+--source include/rpl/assert_replica_no_error.inc
+--source include/rpl/assert_replica_running.inc
+
+--echo Slave Binlog contains all ops as log_replica_updates is on
+show variables like 'server_id';
+show variables like 'log_bin';
+show variables like 'log_replica_updates';
+--source include/rpl/deprecated/show_binlog_events.inc
+
+source include/rpl/assert_replica_running.inc;
+# connect to master and ensure data it there.
+--connection master
+SELECT * FROM t1 ORDER BY a;
+source include/rpl/assert_replica_running.inc;
+
+--echo Master Binlog contains only Master ops as log_replica_updates is off
+show variables like 'server_id';
+show variables like 'log_bin';
+show variables like 'log_replica_updates';
+--source include/rpl/deprecated/show_binlog_events.inc
+
+# stop replication on "master" as not to replicate
+# shutdown circularly, eg drop table
+--connection master
+STOP REPLICA;
+
+# cleanup
+--connection master
+DROP TABLE t1;
+-- sync_slave_with_master
+
+--let $rpl_only_running_threads= 1
+--source include/rpl/deinit.inc

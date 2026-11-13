@@ -1,0 +1,49 @@
+# Regression test for sizing the result buffer of SQL-callable decode VDFs
+# (T::to_string) by the input column's max_decode_buffer_length.
+#
+# Before the fix, vdf_handler::fix_fields allocated a 256-byte default result
+# buffer for any STRING-returning VDF that did not declare a static
+# buffer_size.  TypeDecodeVdfWrapper (used by .to_string<>()) sets
+# buffer_size = 0, so a SQL call like SVECTOR::to_string(col) on a value
+# whose decoded form exceeded 256 bytes failed with ER_UDF_ERROR even though
+# the implicit decode path (TypeDecoder, used when displaying a row) worked
+# fine because it sizes the buffer from TypeContext::max_decode_buffer_length.
+#
+# This test uses LARGE_DECODE_TYPE(N) from vsql_test_only, whose decoded
+# representation is N copies of 'X'.  At N=1024 the output is well past the
+# old 256-byte default; at N=8 it stays within it.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # === Large parameter: decoded string exceeds the old 256-byte buffer ===
+CREATE TABLE t_large (
+  id INT PRIMARY KEY,
+  val LARGE_DECODE_TYPE(1024) NOT NULL
+);
+
+INSERT INTO t_large VALUES (1, ''), (2, '');
+
+--echo # SQL-callable decode VDF — this is the path the fix repairs.
+SELECT id, LENGTH(LARGE_DECODE_TYPE::to_string(val)) AS dlen
+FROM t_large ORDER BY id;
+
+--echo # Cross-check that the decoded payload looks the way the extension
+--echo # produced it: 1024 'X' characters in each row.
+SELECT id, LARGE_DECODE_TYPE::to_string(val) = REPEAT('X', 1024) AS matches
+FROM t_large ORDER BY id;
+
+DROP TABLE t_large;
+
+--echo # === Small parameter: ensure no regression on the short path ===
+CREATE TABLE t_small (
+  id INT PRIMARY KEY,
+  val LARGE_DECODE_TYPE(8) NOT NULL
+);
+
+INSERT INTO t_small VALUES (1, '');
+
+SELECT id, LARGE_DECODE_TYPE::to_string(val) AS dval FROM t_small;
+
+DROP TABLE t_small;
+
+UNINSTALL EXTENSION vsql_test_only;
