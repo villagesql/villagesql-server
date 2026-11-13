@@ -5,7 +5,6 @@
 
 INSTALL EXTENSION vsql_simple;
 INSTALL EXTENSION vsql_complex;
-SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 --echo # create table with complex column
 CREATE TABLE t (id INT, c COMPLEX);
