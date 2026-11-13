@@ -540,64 +540,89 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
   }
 }
 
-// A v2 type registration using valid VDF names succeeds end-to-end.
-TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
-  vef_type_desc_t td = {};
-  td.protocol = VEF_PROTOCOL_3;
-  td.name = "MYTYPE";
-  td.persisted_length = 16;
-  td.max_decode_buffer_length = 256;
-  td.encode_vdf_name = "MYTYPE::from_string";
-  td.decode_vdf_name = "MYTYPE::to_string";
-  td.compare_vdf_name = "MYTYPE::compare";
+// Method prefixes follow type-name rules: case folds, accents remain distinct.
+TEST_F(ValidateExtensionRegistrationTest,
+       TypeMethodNamesUseTypeIdentifierRules) {
+  struct TestCase {
+    const char *type_name;
+    const char *prefix;
+    bool valid;
+  };
+  const TestCase cases[] = {
+      {"MYTYPE", "mytype", true}, {"MYTYPE", "", false},
+      {"CAFÉ", "café", true},     {"CAFÉ", "cafe", false},
+      {"CAFÉ", "thé", false},
+  };
+  for (const auto protocol : {VEF_PROTOCOL_3, VEF_PROTOCOL_4}) {
+    for (const auto &tc : cases) {
+      SCOPED_TRACE(protocol);
+      SCOPED_TRACE(tc.prefix);
+      const std::string encode_name = std::string(tc.prefix) + "::from_string";
+      const std::string decode_name = std::string(tc.prefix) + "::to_string";
+      const std::string compare_name = std::string(tc.prefix) + "::compare";
+      vef_type_desc_t td = {};
+      td.protocol = protocol;
+      td.name = tc.type_name;
+      td.persisted_length = 16;
+      td.max_decode_buffer_length = 256;
+      td.encode_vdf_name = encode_name.c_str();
+      td.decode_vdf_name = decode_name.c_str();
+      td.compare_vdf_name = compare_name.c_str();
 
-  vef_type_t str_type = {VEF_TYPE_STRING, nullptr};
-  vef_type_t int_type = {VEF_TYPE_INT, nullptr};
-  vef_type_t custom_mytype = {VEF_TYPE_CUSTOM, "MYTYPE"};
+      vef_type_t str_type = {VEF_TYPE_STRING, nullptr};
+      vef_type_t int_type = {VEF_TYPE_INT, nullptr};
+      vef_type_t custom_mytype = {VEF_TYPE_CUSTOM, tc.type_name};
 
-  vef_type_t encode_params[] = {str_type};
-  vef_signature_t encode_sig = {1, encode_params, custom_mytype};
-  vef_func_desc_t encode_fd = {};
-  encode_fd.protocol = VEF_PROTOCOL_3;
-  encode_fd.name = "MYTYPE::from_string";
-  encode_fd.signature = &encode_sig;
-  encode_fd.vdf = stub_vdf;
+      vef_type_t encode_params[] = {str_type};
+      vef_signature_t encode_sig = {1, encode_params, custom_mytype};
+      vef_func_desc_t encode_fd = {};
+      encode_fd.protocol = protocol;
+      encode_fd.name = encode_name.c_str();
+      encode_fd.signature = &encode_sig;
+      encode_fd.vdf = stub_vdf;
 
-  vef_type_t decode_params[] = {custom_mytype};
-  vef_signature_t decode_sig = {1, decode_params, str_type};
-  vef_func_desc_t decode_fd = {};
-  decode_fd.protocol = VEF_PROTOCOL_3;
-  decode_fd.name = "MYTYPE::to_string";
-  decode_fd.signature = &decode_sig;
-  decode_fd.vdf = stub_vdf;
+      vef_type_t decode_params[] = {custom_mytype};
+      vef_signature_t decode_sig = {1, decode_params, str_type};
+      vef_func_desc_t decode_fd = {};
+      decode_fd.protocol = protocol;
+      decode_fd.name = decode_name.c_str();
+      decode_fd.signature = &decode_sig;
+      decode_fd.vdf = stub_vdf;
 
-  vef_type_t compare_params[] = {custom_mytype, custom_mytype};
-  vef_signature_t compare_sig = {2, compare_params, int_type};
-  vef_func_desc_t compare_fd = {};
-  compare_fd.protocol = VEF_PROTOCOL_3;
-  compare_fd.name = "MYTYPE::compare";
-  compare_fd.signature = &compare_sig;
-  compare_fd.vdf = stub_vdf;
+      vef_type_t compare_params[] = {custom_mytype, custom_mytype};
+      vef_signature_t compare_sig = {2, compare_params, int_type};
+      vef_func_desc_t compare_fd = {};
+      compare_fd.protocol = protocol;
+      compare_fd.name = compare_name.c_str();
+      compare_fd.signature = &compare_sig;
+      compare_fd.vdf = stub_vdf;
 
-  vef_type_desc_t *types[] = {&td};
-  vef_func_desc_t *funcs[] = {&encode_fd, &decode_fd, &compare_fd};
+      vef_type_desc_t *types[] = {&td};
+      vef_func_desc_t *funcs[] = {&encode_fd, &decode_fd, &compare_fd};
 
-  vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_3;
-  reg.deprecated_extension_name = "my_ext";
-  reg.type_count = 1;
-  reg.types = types;
-  reg.func_count = 3;
-  reg.funcs = funcs;
+      vef_registration_t reg = {};
+      reg.protocol = protocol;
+      reg.deprecated_extension_name = "my_ext";
+      reg.type_count = 1;
+      reg.types = types;
+      reg.func_count = 3;
+      reg.funcs = funcs;
 
-  std::string error;
-  auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+      std::string error;
+      auto result = villagesql::veb::parse_extension_registration(
+          make_ext_reg(&reg, protocol), "my_ext", "1.0.0", error);
 
-  ASSERT_TRUE(result.has_value());
-  EXPECT_TRUE(error.empty());
-  ASSERT_EQ(result->types.size(), 1u);
-  EXPECT_EQ(result->types[0].type_name(), "MYTYPE");
+      if (!tc.valid) {
+        EXPECT_FALSE(result.has_value());
+        continue;
+      }
+      EXPECT_TRUE(result.has_value()) << error;
+      if (!result.has_value()) continue;
+      EXPECT_TRUE(error.empty());
+      ASSERT_EQ(result->types.size(), 1u);
+      EXPECT_EQ(result->types[0].type_name(), tc.type_name);
+    }
+  }
 }
 
 // Stub column storage function pointers — never called during validation.

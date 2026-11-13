@@ -50,3 +50,13 @@ SELECT COMPLEX::to_string(val) AS decoded FROM t2 ORDER BY id;
 DROP TABLE t2;
 
 --source include/villagesql/uninstall_complex_extension.inc
+
+# Unicode case variants in a type's registered method prefix are accepted.
+INSTALL EXTENSION vsql_test_only;
+SET NAMES utf8mb4;
+CREATE TABLE cafe_values (v `CAFÉ`);
+INSERT INTO cafe_values VALUES ('OK one'), ('OK two');
+SELECT v FROM cafe_values ORDER BY v;
+SELECT vsql_test_only.`café`::to_string(v) AS value FROM cafe_values ORDER BY v;
+DROP TABLE cafe_values;
+UNINSTALL EXTENSION vsql_test_only;
