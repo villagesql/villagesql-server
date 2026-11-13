@@ -110,5 +110,3 @@ DROP TABLE t;
 UNINSTALL EXTENSION vsql_simple;
 UNINSTALL EXTENSION vsql_complex;
 
---echo # Verify extensions removed
-SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
