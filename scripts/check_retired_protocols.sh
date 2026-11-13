@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (c) 2026 VillageSQL Contributors
 #
-# Fails if C/C++ code references a retired VEF protocol version.
+# Fails if code, tests or CMake files reference a retired VEF protocol version.
 #
 # Even protocol versions are unstable. When one is promoted to the next odd
 # (stable) version, the server rejects it and every check on it is retargeted
@@ -11,7 +11,8 @@
 #
 # The retired versions are every even version below VEF_PROTOCOL_CURRENT, so a
 # roll extends this script without editing it. The enum definition and the
-# frozen stable_sdk/ snapshots may name retired versions.
+# frozen stable_sdk/ snapshots may name retired versions. So may Markdown, which
+# is not checked: the docs name retired versions as history.
 #
 # Usage:
 #   check_retired_protocols.sh [<commit>]
@@ -22,14 +23,18 @@
 #     VEF_PROTOCOL_CURRENT in <commit>. PR validation passes the PR's merge
 #     base, its head and its merge commit, so a PR fails only for references it
 #     adds, judged by the protocol version of the main it merges into.
+#
+# Tests: scripts/regtest_check_retired_protocols.sh. CI runs them on any PR
+# that changes this script or the tests.
 
 # A git failure inside a pipeline must fail the check, not leave it with
 # nothing to check.
 set -o pipefail
 
 types_h="villagesql/sdk/include/villagesql/abi/types.h"
-pathspecs=('*.c' '*.cc' '*.cpp' '*.h' '*.hpp' '*.h.in'
-  ':!villagesql/stable_sdk/')
+# C/C++ sources, MTR tests and includes, and CMake files.
+pathspecs=('*.c' '*.cc' '*.cpp' '*.h' '*.hpp' '*.h.in' '*.test' '*.inc'
+  '*.cmake' '*CMakeLists.txt' ':!villagesql/stable_sdk/')
 
 if [ "$1" = "--added" ]; then
   if [ $# -ne 4 ]; then
@@ -84,13 +89,19 @@ retired_list="${retired_list// /, }"
 # A zero-context diff has no unchanged lines, so the hunk headers give the
 # line number of each added line.
 added_lines() {
-  git diff --unified=0 --no-color "$base" "$head" -- "${pathspecs[@]}" |
+  git -c core.quotePath=false diff --unified=0 --no-color "$base" "$head" \
+    -- "${pathspecs[@]}" |
     awk '
       # "diff --git" starts a file. Its header lines are not content.
       /^diff --git / { in_header = 1; next }
 
-      # "+++ b/<path>" names the file.
-      in_header && /^\+\+\+ / { path = substr($0, 7); next }
+      # "+++ b/<path>" names the file. Git ends the line with a tab when the
+      # path contains a space.
+      in_header && /^\+\+\+ / {
+        path = substr($0, 7)
+        sub(/\t$/, "", path)
+        next
+      }
 
       # "@@ -a,b +c,d @@": the hunk adds lines starting at line c.
       /^@@ / {
@@ -109,21 +120,28 @@ added_lines() {
 tree_lines() {
   if [ -n "$rev" ]; then
     # Given a commit, git grep prefixes each match with "<commit>:".
-    git grep -n -w -E "$retired_pattern" "$rev" -- "${pathspecs[@]}" |
-      sed "s|^$rev:||"
+    git -c core.quotePath=false grep -n -w -E "$retired_pattern" "$rev" \
+      -- "${pathspecs[@]}" | sed "s|^$rev:||"
   else
-    git grep -n -w -E "$retired_pattern" -- "${pathspecs[@]}"
+    git -c core.quotePath=false grep -n -w -E "$retired_pattern" \
+      -- "${pathspecs[@]}"
   fi
 }
 
 if [ -n "$head" ]; then
   candidates=$(added_lines) || exit 1
 else
-  candidates=$(tree_lines)
-  # git grep exits 1 when nothing matches, and above 1 on an error.
-  if [ $? -gt 1 ]; then
+  # git grep exits 1 when nothing matches, and above 1 on most errors. A file
+  # it cannot read is reported only on stderr, so treat any stderr as an error.
+  errors=$(mktemp) || exit 1
+  candidates=$(tree_lines 2>"$errors")
+  status=$?
+  if [ $status -gt 1 ] || [ -s "$errors" ]; then
+    cat "$errors" >&2
+    rm -f "$errors"
     exit 1
   fi
+  rm -f "$errors"
 fi
 
 # Keep the lines that name a retired version, except the enum definition in

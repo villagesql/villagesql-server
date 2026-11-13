@@ -132,9 +132,11 @@ diff as the reference for the full set of edit sites.
      `veb_register_type_v{M}.cc` registration, renamed to match).
    An `M` check still works after the roll, because the server rejects `M`, but
    leave none behind. `scripts/check_retired_protocols.sh` lists any that remain
-   outside the enum and `stable_sdk/`. CI runs it on the lines each PR adds and
-   on the whole tree after each push to main, so it also catches references
-   from a branch opened before the roll.
+   in code, tests and CMake files outside the enum and `stable_sdk/`. CI runs it
+   on the lines each PR adds and on the whole tree after each push to main, so
+   it also catches references from a branch opened before the roll. It does not
+   check Markdown, so search the docs by hand. Their version history keeps the
+   retired versions.
 
 **4. Update the build** — `villagesql/CMakeLists.txt` (`STABLE_SDK_DIR`) and
    `villagesql/cmake/VsqlExtension.cmake` to point the stable include path at
