@@ -36,7 +36,8 @@ namespace veb {
 
 std::optional<TypeDescriptor> build_type_descriptor_v1(
     const vef_type_desc_t *td, const std::string &type_name,
-    const std::string &extension_name, const std::string &extension_version) {
+    const std::string &extension_name, const std::string &extension_version,
+    vef_protocol_t extension_protocol) {
   // 0. A protocol-1 type is always a fixed footprint: v1 has no resolve_params
   // to discover a length at DDL time (-1) and no variable_length flag, so
   // persisted_length must be positive. The v3 and v4 builders enforce this for
@@ -77,10 +78,10 @@ std::optional<TypeDescriptor> build_type_descriptor_v1(
   // v1 types — constant-string inference is a v2-only capability).
   TypeDescriptor descriptor(
       TypeDescriptorKey(type_name, extension_name, extension_version),
-      VEF_PROTOCOL_1, MYSQL_TYPE_VARCHAR, td->persisted_length,
-      td->max_decode_buffer_length, /*max_persisted_length=*/0,
-      LengthKind::Fixed, std::move(encode_fn), std::move(decode_fn),
-      std::move(compare_fn), std::move(hash_fn));
+      VEF_PROTOCOL_1, extension_protocol, MYSQL_TYPE_VARCHAR,
+      td->persisted_length, td->max_decode_buffer_length,
+      /*max_persisted_length=*/0, LengthKind::Fixed, std::move(encode_fn),
+      std::move(decode_fn), std::move(compare_fn), std::move(hash_fn));
 
   // 5. No intrinsic default for protocol-1; encode("") is the fallback.
 

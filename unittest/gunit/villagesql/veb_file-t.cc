@@ -451,6 +451,30 @@ TEST_F(CheckVefRegistrationTest, FuncDescriptorAboveRegistrationProtocol) {
   EXPECT_TRUE(error.empty());
 }
 
+// A descriptor declaring VEF_PROTOCOL_1 under a VEF_PROTOCOL_4 registration
+// cannot use BINARY: it would be called with the protocol-1 argument layout,
+// which has no binary value.
+TEST_F(CheckVefRegistrationTest,
+       BinaryParamInProtocol1DescriptorUnderProtocol4RegistrationIsError) {
+  const vef_type_t params[] = {{VEF_TYPE_BINARY, nullptr}};
+  vef_signature_t sig = {1, params, {VEF_TYPE_INT, nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.protocol = VEF_PROTOCOL_1;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+  reg.protocol = VEF_PROTOCOL_4;
+
+  std::string error;
+#ifdef NDEBUG
+  EXPECT_TRUE(check_vef_registration(&reg, error));
+  EXPECT_NE(error.find("below the registration's"), std::string::npos) << error;
+#else
+  EXPECT_DEATH_IF_SUPPORTED(check_vef_registration(&reg, error),
+                            "registration->protocol");
+#endif
+}
+
 // ---------------------------------------------------------------------------
 // Type descriptor contents
 // ---------------------------------------------------------------------------

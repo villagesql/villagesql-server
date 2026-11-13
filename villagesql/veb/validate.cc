@@ -113,11 +113,14 @@ std::optional<ValidatedRegistration> parse_extension_registration(
                               ext_reg.negotiated_protocol >= VEF_PROTOCOL_3);
       std::optional<TypeDescriptor> maybe_descriptor =
           is_v4 ? build_type_descriptor_v4(td, *reg, type_name, extension_name,
-                                           extension_version)
+                                           extension_version,
+                                           ext_reg.negotiated_protocol)
           : is_v3 ? build_type_descriptor_v3(td, *reg, type_name,
-                                             extension_name, extension_version)
+                                             extension_name, extension_version,
+                                             ext_reg.negotiated_protocol)
                   : build_type_descriptor_v1(td, type_name, extension_name,
-                                             extension_version);
+                                             extension_version,
+                                             ext_reg.negotiated_protocol);
       if (!maybe_descriptor.has_value()) {
         error_out = "type '" + type_name + "' failed validation";
         return std::nullopt;

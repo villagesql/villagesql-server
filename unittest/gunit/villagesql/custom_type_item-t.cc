@@ -49,9 +49,10 @@ TEST_F(CustomTypeItemTest, CustomTypeEncodingUpdatesLiteralRepertoire) {
                      size_t) -> int { return 0; };
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("BINARY_PAIR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_1, 1, 2, 16, /*max_persisted_length=*/0,
-      villagesql::LengthKind::Fixed, villagesql::EncodeFunction(encode),
-      villagesql::DecodeFunction(decode), villagesql::CompareFunction(compare));
+      VEF_PROTOCOL_1, /*extension_protocol=*/VEF_PROTOCOL_1, 1, 2, 16,
+      /*max_persisted_length=*/0, villagesql::LengthKind::Fixed,
+      villagesql::EncodeFunction(encode), villagesql::DecodeFunction(decode),
+      villagesql::CompareFunction(compare));
   auto ctx = villagesql::TableTraits<villagesql::TypeContext>::create(
       villagesql::TypeContextKey("BINARY_PAIR", "test_ext", "1.0.0"), &desc);
   ASSERT_NE(ctx, nullptr);

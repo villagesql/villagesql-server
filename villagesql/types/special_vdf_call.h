@@ -137,6 +137,31 @@ struct CustomArg {
   }
 };
 
+struct BinaryArg {
+  using cpp_t = BinarySlice;
+  using init_t = NoInitData;
+  template <typename T>
+  static void init(T &v, NoInitData) {
+    v.type = VEF_TYPE_BINARY;
+    v.is_null = false;
+  }
+  template <typename T>
+  static void fill(T &v, BinarySlice b) {
+    if constexpr (std::is_same_v<T, vef_invalue_t>) {
+      v.binary_len = b.len;
+      v.binary_value = b.data;
+    } else {
+      // Unreachable: check_vef_registration (veb_file.cc) accepts a BINARY
+      // param or result only when the registration's protocol is
+      // VEF_PROTOCOL_4 or later, and rejects a function whose descriptor
+      // declares a lower protocol than the registration. So a function using
+      // BINARY always has VEF_PROTOCOL_4 or later, and never the protocol-1
+      // layout.
+      assert(false);
+    }
+  }
+};
+
 // Result type tags for SpecialVdfCall. Each tag defines:
 //   init_t — the type passed to init() for one-time setup of the result
 // The tag also determines which invoke() overload is available:
