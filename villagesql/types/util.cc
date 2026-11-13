@@ -1020,14 +1020,15 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
   // Set the type context
   item->set_type_context(const_cast<TypeContext *>(&tc));
 
-  // The rest of the function is for strings only, since we may need to
-  // re-encode it to the custom type's representation.
-  if (item->type() != Item::STRING_ITEM) return false;
+  // The rest of the function is for string, hex and bit literals only, since
+  // we may need to re-encode them to the custom type's representation.
+  if (item->type() != Item::STRING_ITEM && item->type() != Item::HEX_BIN_ITEM)
+    return false;
 
-  // Encode the string value
-  Item_string *str_item = down_cast<Item_string *>(item);
+  // Encode the literal's value
+  auto *literal = down_cast<Item_basic_constant *>(item);
   String tmp_buf;
-  String *str_val = str_item->val_str(&tmp_buf);
+  String *str_val = literal->val_str(&tmp_buf);
   if (str_val == nullptr) {
     return false;  // NULL value, nothing to encode
   }
@@ -1044,9 +1045,28 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
     return true;
   }
 
-  // Replace the string value with the encoded value
-  str_item->set_str_value(encoded);
+  // Replace the literal's value with the encoded value
+  literal->set_str_value(encoded);
   return false;
+}
+
+void PrintEncodedLiteral(const TypeContext &tc, const String &encoded,
+                         enum_query_type query_type, String *out) {
+  out->append('\'');
+  String decoded;
+  if (DecodeStringUncached(tc, encoded, &decoded)) {
+    //  TODO(villagesql-general): Make this error observable.
+    out->append("<error decoding value>");
+  } else if (query_type & QT_TO_SYSTEM_CHARSET) {
+    // Escaped and converted as Item_string::print does for a literal without
+    // an introducer.
+    convert_and_print(&decoded, out, system_charset_info);
+  } else if (query_type & QT_TO_ARGUMENT_CHARSET) {
+    convert_and_print(&decoded, out, out->charset());
+  } else {
+    decoded.print(out);
+  }
+  out->append('\'');
 }
 
 int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
@@ -1227,6 +1247,9 @@ bool CanStoreInCustomField(const Item *item, const Field *field) {
   // function validate the actual format
   switch (item->type()) {
     case Item::STRING_ITEM:
+    // A hex or bit literal is a binary string;
+    // Item_hex_string::save_in_field_inner encodes it.
+    case Item::HEX_BIN_ITEM:
     case Item::NULL_ITEM:
     case Item::DEFAULT_VALUE_ITEM:
       return true;
@@ -1482,16 +1505,21 @@ static const String ParamValueInItsCharset(const Item_param *param,
   return String(str_value.ptr(), str_value.length(), cs);
 }
 
-type_conversion_status ParamEncodeAndStoreCustomField(const Item_param *param,
-                                                      const String &str_value,
-                                                      Field *field) {
-  const String value = ParamValueInItsCharset(param, str_value);
+type_conversion_status EncodeAndStoreStringToCustomField(const String &value,
+                                                         Field *field) {
   EncodeStatus status = EncodeStatus::kBadValue;
   String *encoded = EncodeStringForField(field, value, status);
   if (encoded == nullptr) {
     return HandleFailedEncode(field, status, false);
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
+}
+
+type_conversion_status ParamEncodeAndStoreCustomField(const Item_param *param,
+                                                      const String &str_value,
+                                                      Field *field) {
+  return EncodeAndStoreStringToCustomField(
+      ParamValueInItsCharset(param, str_value), field);
 }
 
 String *EncodeStringForCustomParam(Item_param *param, const String &str_value,
@@ -1627,8 +1655,9 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
 bool CanImplicitlyCastToCustom(const Item *item) {
   if (item->has_type_context()) return false;
 
-  // Allow string and null literals
-  if (item->type() == Item::STRING_ITEM || item->type() == Item::NULL_ITEM) {
+  // Allow string, hex or bit, and null literals
+  if (item->type() == Item::STRING_ITEM || item->type() == Item::HEX_BIN_ITEM ||
+      item->type() == Item::NULL_ITEM) {
     return true;
   }
 
@@ -2195,15 +2224,16 @@ static bool ConvertVDFArguments(
       continue;
     }
 
-    // Case 3: Arg is a constant string, or a prepared-statement parameter —
-    // implicit conversion.
+    // Case 3: Arg is a constant string, hex or bit literal, or a
+    // prepared-statement parameter — implicit conversion.
     //
     // A parameter has no value here, so only its type context is set:
-    // InjectAndEncodeCustomType encodes a constant string in place and leaves
+    // InjectAndEncodeCustomType encodes a constant literal in place and leaves
     // any other Item alone, and Item_param::val_str encodes whatever value
     // each EXECUTE supplies.
     if (args[i]->type() == Item::PARAM_ITEM ||
-        (args[i]->type() == Item::STRING_ITEM &&
+        ((args[i]->type() == Item::STRING_ITEM ||
+          args[i]->type() == Item::HEX_BIN_ITEM) &&
          args[i]->const_for_execution())) {
       // Take the params from whichever source is in play -- the hook's answer
       // for this argument, or the answer shared across arguments of its type

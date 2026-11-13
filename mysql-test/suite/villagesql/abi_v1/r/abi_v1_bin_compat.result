@@ -80,6 +80,7 @@ NEGOTIATED_PROTOCOL
 1
 CREATE TABLE t (id INT PRIMARY KEY, data abi_v1_test.BYTEARRAY);
 INSERT INTO t VALUES (1, _binary 'literal'), (2, _binary 0xFF41);
+INSERT INTO t VALUES (6, 0x686578), (7, b'01100010');
 CREATE TABLE t_bin (id INT PRIMARY KEY, b VARBINARY(8));
 INSERT INTO t_bin VALUES (3, 'column'), (4, 0xC3A9);
 INSERT INTO t SELECT id, b FROM t_bin;
@@ -94,6 +95,11 @@ id	data
 3	636F6C756D6E2020
 4	C3A9202020202020
 5	706172616D202020
+6	6865782020202020
+7	6220202020202020
+SELECT id FROM t WHERE data = 0x686578;
+id
+6
 SELECT HEX(abi_v1_test.to_string(abi_v1_test.mask(_binary 'argument', 0)))
 AS masked;
 masked
@@ -119,6 +125,10 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
   `data` abi_v1_test.bytearray DEFAULT NULL,
   PRIMARY KEY (`id`)
 )
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (test.t)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Xid	#	#	COMMIT /* XID */
 #	#	Query	#	#	BEGIN
 #	#	Table_map	#	#	table_id: # (test.t)
 #	#	Write_rows	#	#	table_id: # flags: STMT_END_F
