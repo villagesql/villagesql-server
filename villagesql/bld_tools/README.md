@@ -26,7 +26,12 @@ concerns helps avoid ambiguity and confusion.
   `test_extension_vebs.sh` runs the MTR suite that each extension repo carries.
 - **Test.** `test_ci.sh` runs the VillageSQL unit tests and the MTR
   integration suites.
-- **Package.** `package_dev_server.sh` produces the dev-server tarball.
+- **Package.** `stage_dev_server.sh` assembles the dev-server tree (binaries,
+  example and bundled VEBs, the stripped test framework, the `villagesql`
+  control script, and docs) in a directory. `package_dev_server.sh` runs it and
+  tars the result into the dev-server tarball; `build_dev_server.sh` runs the
+  whole build -> extensions -> stage chain and installs the tree where a flag
+  says, which is how the install script builds from source.
 - **Baseline.** `codebase_build_and_test.sh` builds a tag of a source tree
   and runs the full MTR suite against it.  `prepare_codebase_failures.sh`
   runs it on a vendor clone of Oracle MySQL and records the tests that already
@@ -40,6 +45,7 @@ concerns helps avoid ambiguity and confusion.
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `build_bundled_extensions.sh`    | Build each cloned extension into a `.veb` file.                                                                    |
 | `build_ci.sh`                    | Configure with CMake and build the server and unit tests.                                                          |
+| `build_dev_server.sh`            | Build the server (and optionally the bundled extensions) and install the dev-server tree into `--dest`.           |
 | `build_info.sh`                  | Version and platform helpers. Sourced, not executed.                                                               |
 | `build_server.sh`                | Run `build_ci.sh` with server platform options.                                                                    |
 | `checkout_bundled_extensions.sh` | Clone the bundled extension repos.  |
@@ -56,6 +62,7 @@ concerns helps avoid ambiguity and confusion.
 | `setup_build_env.sh`             | Install the build host's toolchain by dispatching to the matching per-OS script.                     |
 | `setup_linux_build_env.sh`       | Install the required apt packages on Debian/Ubuntu.                                                                |
 | `setup_macos_build_env.sh`       | Install the required Homebrew packages on macOS.                                                                   |
+| `stage_dev_server.sh`            | Assemble the dev-server tree from a completed build into a directory. Used by the two scripts above it.          |
 | `test_ci.sh`                     | Run the unit tests and MTR integration suites. Takes flags to select and skip suites; `--help` lists them.         |
 | `test_extension_vebs.sh`         | Run each extension repo's MTR suite against a build.                                                               |
 | `workflow_skip_paths.txt`        | The authoritative list of paths exempt from that gate.                                                             |
@@ -115,3 +122,18 @@ BUILD_BUNDLED_EXTENSIONS=1 "$TOOLS/package_dev_server.sh"
 Extensions have their own build dependencies, installed by
 `scripts/setup_linux_ext_deps.sh` or `scripts/setup_macos_ext_deps.sh`.
 
+*Build and install a dev server into a directory, no tarball.*
+`build_dev_server.sh` runs the same chain and leaves the tree where `--dest`
+points, laid out as the tarball unpacks, with the extension SDK alongside.
+Add `--bundled-extensions` to clone and build the bundled extensions into
+`lib/veb` (their build dependencies must be installed first). The build
+directory is reused, so a second run is an incremental rebuild; `--clean`
+replaces an existing destination.
+
+```bash
+"$TOOLS/build_dev_server.sh" --dest ~/.villagesql/prebuilt \
+    --build-dir ~/.villagesql/build --bundled-extensions --clean
+```
+
+`--help` lists the other options (`--build-type`, `--jobs`, `--cmake-flags`,
+`--skip-build`, `--release-build`).
