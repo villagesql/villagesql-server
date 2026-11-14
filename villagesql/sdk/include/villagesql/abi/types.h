@@ -183,7 +183,17 @@ typedef enum : unsigned int {
                    //   vef_register() returns.
                    //   (vef_required_capability_t, required_capabilities,
                    //   required_capability_count in vef_registration_t)
-  VEF_PROTOCOL_4,  // Under development, not stable. Adds:
+  VEF_PROTOCOL_4,  // Deprecated. Was the unstable development version before
+                   // being promoted to VEF_PROTOCOL_5. The server rejects
+                   // extensions that declare this version.
+  VEF_PROTOCOL_5,  // Stable as of v0.0.8. Adds:
+                   // + variable_length on vef_type_desc_t: a type whose
+                   //   persisted size is decided per value, bounded by
+                   //   max_persisted_length.
+                   // + bind_and_check_types on vef_func_desc_t: an optional
+                   //   hook that resolves a call's type parameters at
+                   //   analysis time, in place of the built-in rules.
+                   // + vef_postrun_result_t: postrun can report an error.
                    // + max_result_length on vef_func_desc_t: an extension may
                    //   declare the maximum length of a STRING or BINARY result
                    //   so the result column is sized to hold the full value
@@ -206,13 +216,14 @@ typedef enum : unsigned int {
                    //   declare an encode from its binary form.
                    // + to_binary_vdf_name on vef_type_desc_t: a type may
                    //   declare a decode to its binary form.
+  VEF_PROTOCOL_6,  // Under development, not stable.
 } vef_protocol_t;
 
 // This is the protocol version of these headers: the version the server
 // advertises and the SDK registers. A new protocol bumps only this value.
 // Never use it as a feature check. Features should use the specific enum
 // value of the version that added it.
-#define VEF_PROTOCOL_CURRENT VEF_PROTOCOL_4
+#define VEF_PROTOCOL_CURRENT VEF_PROTOCOL_6
 
 // =============================================================================
 // PRACTICAL LIMITS
@@ -309,7 +320,7 @@ typedef enum : int {
   VEF_TYPE_REAL = 1,
   VEF_TYPE_INT = 2,
   VEF_TYPE_CUSTOM = 3,
-  // protocol >= VEF_PROTOCOL_4
+  // protocol >= VEF_PROTOCOL_5
   // Raw bytes, never converted.
   VEF_TYPE_BINARY = 4
 
@@ -402,7 +413,7 @@ typedef struct {
       vef_type_params_t type_params;
     };
 
-    // protocol >= VEF_PROTOCOL_4
+    // protocol >= VEF_PROTOCOL_5
     // For TYPE_BINARY: raw bytes, exactly as the caller supplied them
     struct {
       size_t binary_len;
@@ -496,7 +507,7 @@ typedef struct {
       vef_type_params_t type_params;
     };
 
-    // protocol >= VEF_PROTOCOL_4
+    // protocol >= VEF_PROTOCOL_5
     // For BINARY type: caller-provided buffer for raw bytes
     struct {
       // Buffer where the result bytes should be written
@@ -624,7 +635,7 @@ typedef struct {
   char **deprecated_const_values;
   size_t *deprecated_const_lengths;
 
-  // protocol >= VEF_PROTOCOL_4
+  // protocol >= VEF_PROTOCOL_5
   // For each argument: its value if it is a constant, NULL otherwise. A
   // constant is an argument the server can evaluate before the first row,
   // such as a literal, an expression over literals or a prepared-statement
@@ -666,7 +677,7 @@ typedef struct {
 } vef_postrun_args_t;
 
 typedef struct {
-  // protocol >= VEF_PROTOCOL_4
+  // protocol >= VEF_PROTOCOL_5
 
   // Result type: IS_VALUE on success, IS_ERROR on failure
   vef_return_value_type_t type;
@@ -681,7 +692,7 @@ typedef void (*vef_postrun_func_t)(vef_context_t *ctx, vef_postrun_args_t *args,
 // Bind-and-check-types Function (vef_bind_types_func_t)
 // =============================================================================
 //
-// protocol >= VEF_PROTOCOL_4
+// protocol >= VEF_PROTOCOL_5
 //
 // Optional hook called once at analysis time (fix_fields), before prerun, when
 // the function is resolved. It lets the extension take full control of type
@@ -865,7 +876,7 @@ typedef struct {
   vef_vdf_clear_func_t clear;
   vef_vdf_accumulate_func_t accumulate;
 
-  // protocol >= VEF_PROTOCOL_4
+  // protocol >= VEF_PROTOCOL_5
   // Declared maximum length of this function's STRING or BINARY result: in
   // characters for STRING (the result is utf8mb4; for ASCII/JSON output one
   // character is one byte), in bytes for BINARY.
@@ -880,7 +891,7 @@ typedef struct {
   // (it grows on demand); this bounds the column the result is stored into.
   size_t max_result_length;
 
-  // protocol >= VEF_PROTOCOL_4
+  // protocol >= VEF_PROTOCOL_5
   // OPTIONAL: author-supplied type binding/checking hook. When non-nullptr, the
   // server calls it at fix_fields time to validate argument type parameters
   // and compute the return type's parameters, bypassing the built-in
@@ -1032,7 +1043,7 @@ typedef struct {
   //   sizeof(vef_storage_ref_t) + 3072 * sizeof(float).
   int64_t max_persisted_length;
 
-  // protocol >= VEF_PROTOCOL_4
+  // protocol >= VEF_PROTOCOL_5
 
   // Marks the type as variable-length: its persisted size is decided per value
   // (e.g. a a typed array) rather than being a single fixed
@@ -1041,7 +1052,7 @@ typedef struct {
   // backing field. When true, persisted_length is not a fixed footprint (it is
   // either left unset or resolved per-instantiation by resolve_params).
   //
-  // Read only when protocol >= VEF_PROTOCOL_4.
+  // Read only when protocol >= VEF_PROTOCOL_5.
   bool variable_length;
 
   // OPTIONAL: Name of a VDF (from this extension's funcs[]) that encodes the
@@ -1050,10 +1061,10 @@ typedef struct {
   // callable SQL function. The server encodes a value in the binary charset
   // with it rather than with the encode from text. NULL means the type has no
   // binary form, and a value in the binary charset is an error. A type of an
-  // extension built against a protocol before VEF_PROTOCOL_4 gives such a
+  // extension built against a protocol before VEF_PROTOCOL_5 gives such a
   // value to its encode from text, as its bytes.
   //
-  // Read only when protocol >= VEF_PROTOCOL_4.
+  // Read only when protocol >= VEF_PROTOCOL_5.
   const char *from_binary_vdf_name;
 
   // OPTIONAL: Name of a VDF (from this extension's funcs[]) that decodes the
@@ -1064,7 +1075,7 @@ typedef struct {
   // binary form is the same on every platform: the type defines the byte
   // order of its multi-byte numbers, such as little-endian.
   //
-  // Read only when protocol >= VEF_PROTOCOL_4.
+  // Read only when protocol >= VEF_PROTOCOL_5.
   const char *to_binary_vdf_name;
 } vef_type_desc_t;
 
@@ -1146,7 +1157,7 @@ typedef struct vef_registration_t {
   unsigned int required_capability_count;
   const vef_required_capability_t *required_capabilities;
 
-  // protocol >= VEF_PROTOCOL_4
+  // protocol >= VEF_PROTOCOL_5
 
   // Extension-side load / unload hooks, set from the builder's on_init() and
   // on_deinit(). The server calls on_init after every required capability has
@@ -1156,7 +1167,7 @@ typedef struct vef_registration_t {
   // extension declares no hook. The two are a pair: the server rejects a
   // registration that sets one without the other.
   //
-  // Read only when protocol >= VEF_PROTOCOL_4.
+  // Read only when protocol >= VEF_PROTOCOL_5.
   vef_extension_init_func_t on_init;
   vef_extension_deinit_func_t on_deinit;
 } vef_registration_t;

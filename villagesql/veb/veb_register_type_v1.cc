@@ -40,7 +40,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v1(
     vef_protocol_t extension_protocol) {
   // 0. A protocol-1 type is always a fixed footprint: v1 has no resolve_params
   // to discover a length at DDL time (-1) and no variable_length flag, so
-  // persisted_length must be positive. The v3 and v4 builders enforce this for
+  // persisted_length must be positive. The v3 and v5 builders enforce this for
   // their own descriptors.
   if (td->persisted_length <= 0) {
     LogVSQL(ERROR_LEVEL,

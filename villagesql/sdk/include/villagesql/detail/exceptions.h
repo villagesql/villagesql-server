@@ -30,7 +30,7 @@
 #define VDF_EXCEPTIONS_CATCH(result__)                      \
   }                                                         \
   catch (const std::exception &ex) {                        \
-    if (VEF_PROTOCOL_4 <= ctx->protocol) {                  \
+    if (VEF_PROTOCOL_5 <= ctx->protocol) {                  \
       (result__)->type = VEF_RESULT_ERROR;                  \
       if (nullptr != (result__)->error_msg) {               \
         snprintf((result__)->error_msg, VEF_MAX_ERROR_LEN,  \
@@ -39,7 +39,7 @@
     }                                                       \
   }                                                         \
   catch (...) {                                             \
-    if (VEF_PROTOCOL_4 <= ctx->protocol) {                  \
+    if (VEF_PROTOCOL_5 <= ctx->protocol) {                  \
       (result__)->type = VEF_RESULT_ERROR;                  \
       if (nullptr != (result__)->error_msg) {               \
         snprintf((result__)->error_msg, VEF_MAX_ERROR_LEN,  \

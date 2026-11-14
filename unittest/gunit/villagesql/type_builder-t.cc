@@ -224,8 +224,8 @@ TEST_F(TypeBuilderTest, ParameterizedOperationsAnyOrder) {
 // variable-length tests
 // =============================================================================
 //
-// variable-length is a VEF_PROTOCOL_4 feature. variable_length_type() raises
-// the type's required protocol to VEF_PROTOCOL_4 via require_atleast_min(),
+// variable-length is a VEF_PROTOCOL_5 feature. variable_length_type() raises
+// the type's required protocol to VEF_PROTOCOL_5 via require_atleast_min(),
 // so later v3-level setters (from_string/to_string/compare, etc.)
 // can never lower it back down. These tests pin that contract.
 
@@ -244,7 +244,7 @@ TEST_F(TypeBuilderTest, PlainTypeNegotiatesV3AndIsNotVariableLength) {
   EXPECT_FALSE(obj.descriptor.vef_desc.variable_length);
 }
 
-// variable_length_type() flags the type and raises the protocol to V4.
+// variable_length_type() flags the type and raises the protocol to V5.
 TEST_F(TypeBuilderTest, VariableLengthSetsFlagAndRaisesProtocolToV4) {
   constexpr auto obj = vsql::make_type<kPlainName>()
                            .max_persisted_length(64)
@@ -255,13 +255,13 @@ TEST_F(TypeBuilderTest, VariableLengthSetsFlagAndRaisesProtocolToV4) {
                            .build();
 
   EXPECT_TRUE(obj.descriptor.vef_desc.variable_length);
-  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_4);
+  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_5);
   EXPECT_EQ(obj.descriptor.vef_desc.max_persisted_length, 64);
 }
 
 // The headline contract: v3-level setters invoked AFTER variable_length_type()
 // must not lower the negotiated protocol back to V3. require_atleast_min() is
-// monotonic, so the result stays at V4.
+// monotonic, so the result stays at V5.
 TEST_F(TypeBuilderTest, V3SettersAfterVariableLengthDoNotLowerProtocol) {
   constexpr auto obj = vsql::make_type<kPlainName>()
                            .max_persisted_length(64)
@@ -274,11 +274,11 @@ TEST_F(TypeBuilderTest, V3SettersAfterVariableLengthDoNotLowerProtocol) {
                            .build();
 
   EXPECT_TRUE(obj.descriptor.vef_desc.variable_length);
-  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_4);
+  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_5);
 }
 
 // Order independence: calling variable_length_type() last (after the v3-level
-// operations have already raised the floor to V3) still ends at V4 with the
+// operations have already raised the floor to V3) still ends at V5 with the
 // flag set. Pairs with the test above to show the bump is order-independent.
 TEST_F(TypeBuilderTest, VariableLengthLastStillNegotiatesV4) {
   constexpr auto obj = vsql::make_type<kPlainName>()
@@ -290,7 +290,7 @@ TEST_F(TypeBuilderTest, VariableLengthLastStillNegotiatesV4) {
                            .build();
 
   EXPECT_TRUE(obj.descriptor.vef_desc.variable_length);
-  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_4);
+  EXPECT_EQ(obj.descriptor.vef_desc.protocol, VEF_PROTOCOL_5);
 }
 
 // =============================================================================

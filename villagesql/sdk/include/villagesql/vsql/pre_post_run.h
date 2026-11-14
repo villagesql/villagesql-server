@@ -100,7 +100,7 @@ class PrerunArgs {
   // first row, such as a literal, CAST(NULL AS SIGNED) or a prepared-statement
   // parameter. A subquery never is.
   bool is_const(size_t i) const {
-    return protocol_ >= VEF_PROTOCOL_4 && a_->const_args != nullptr &&
+    return protocol_ >= VEF_PROTOCOL_5 && a_->const_args != nullptr &&
            a_->const_args[i] != nullptr;
   }
 

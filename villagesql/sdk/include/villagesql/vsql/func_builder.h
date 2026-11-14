@@ -89,7 +89,7 @@ namespace func_builder {
 constexpr const char *STRING = "STRING";
 constexpr const char *INT = "INT";
 constexpr const char *REAL = "REAL";
-// Requires VEF_PROTOCOL_4.
+// Requires VEF_PROTOCOL_5.
 constexpr const char *BINARY = "BINARY";
 
 namespace detail {
@@ -287,7 +287,7 @@ class FuncBuilder {
   // value when materialized. A STRING- or BINARY-returning VDF that does not
   // declare this falls back to the argument width (a large result then
   // truncates when materialized). Values above VEF_MAX_RESULT_LENGTH are capped
-  // by the server. Bumps the required protocol to VEF_PROTOCOL_4.
+  // by the server. Bumps the required protocol to VEF_PROTOCOL_5.
   //
   // Only valid for a STRING or BINARY return type. Call .returns(...) before
   // this so the return type is known here: any other return (or an undeclared
@@ -551,7 +551,7 @@ class AggFuncBuilder {
   // value when materialized. An aggregate returning STRING or BINARY that does
   // not declare this falls back to the argument width (a large result then
   // truncates when materialized). Values above VEF_MAX_RESULT_LENGTH are capped
-  // by the server. Bumps the required protocol to VEF_PROTOCOL_4.
+  // by the server. Bumps the required protocol to VEF_PROTOCOL_5.
   //
   // Only valid for a STRING or BINARY return type. Call .returns(...) before
   // this so the return type is known here: any other return (or an undeclared

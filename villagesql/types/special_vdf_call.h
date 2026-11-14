@@ -153,9 +153,9 @@ struct BinaryArg {
     } else {
       // Unreachable: check_vef_registration (veb_file.cc) accepts a BINARY
       // param or result only when the registration's protocol is
-      // VEF_PROTOCOL_4 or later, and rejects a function whose descriptor
+      // VEF_PROTOCOL_5 or later, and rejects a function whose descriptor
       // declares a lower protocol than the registration. So a function using
-      // BINARY always has VEF_PROTOCOL_4 or later, and never the protocol-1
+      // BINARY always has VEF_PROTOCOL_5 or later, and never the protocol-1
       // layout.
       assert(false);
     }
