@@ -1,0 +1,146 @@
+SET @saved_general_log = @@global.general_log;
+SET @saved_slow_query_log = @@global.slow_query_log;
+SET GLOBAL general_log = OFF;
+SET GLOBAL slow_query_log = OFF;
+#
+# No log open: the statement runs with its prepared text
+#
+PREPARE s FROM 'SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND ? = ''marker''';
+SET @p = 'marker';
+EXECUTE s USING @p;
+INFO
+SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND ? = 'marker'
+EXECUTE s USING @p;
+INFO
+SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND ? = 'marker'
+DEALLOCATE PREPARE s;
+#
+# No log open, binary parameter: the statement runs with its prepared text
+#
+PREPARE s FROM 'SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND LENGTH(?) = 4';
+SET @p = _binary X'0000803F';
+EXECUTE s USING @p;
+INFO
+SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND LENGTH(?) = 4
+DEALLOCATE PREPARE s;
+#
+# No log open, statement with RAND(): the parameter still takes the
+# value bound to it
+#
+PREPARE s FROM 'SELECT ?, RAND() IS NOT NULL';
+SET @p = 'ab';
+EXECUTE s USING @p;
+?	RAND() IS NOT NULL
+ab	1
+SET @p = 42;
+EXECUTE s USING @p;
+?	RAND() IS NOT NULL
+42	1
+DEALLOCATE PREPARE s;
+#
+# General log open: the statement runs with the expanded text
+#
+SET GLOBAL general_log = ON;
+PREPARE s FROM 'SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND ? = ''marker''';
+SET @p = 'marker';
+EXECUTE s USING @p;
+INFO
+SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND 'marker' = 'marker'
+DEALLOCATE PREPARE s;
+SET GLOBAL general_log = OFF;
+#
+# Slow log open: the statement runs with the expanded text
+#
+SET GLOBAL slow_query_log = ON;
+PREPARE s FROM 'SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND ? = ''marker''';
+SET @p = 'marker';
+EXECUTE s USING @p;
+INFO
+SELECT INFO FROM performance_schema.processlist WHERE ID = CONNECTION_ID() AND 'marker' = 'marker'
+DEALLOCATE PREPARE s;
+SET GLOBAL slow_query_log = OFF;
+#
+# General log opened after PREPARE: EXECUTE writes the expanded text
+#
+SET @saved_log_output = @@global.log_output;
+SET GLOBAL log_output = 'TABLE';
+TRUNCATE TABLE mysql.general_log;
+PREPARE s FROM 'SELECT ? AS v';
+SET GLOBAL general_log = ON;
+SET @p = 'marker';
+EXECUTE s USING @p;
+v
+marker
+SET GLOBAL general_log = OFF;
+SELECT argument FROM mysql.general_log WHERE command_type = 'Execute';
+argument
+SELECT 'marker' AS v
+DEALLOCATE PREPARE s;
+TRUNCATE TABLE mysql.general_log;
+SET GLOBAL log_output = @saved_log_output;
+#
+# Statement-based binary log chosen after PREPARE: EXECUTE writes the
+# expanded text
+#
+CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(10));
+SET @saved_binlog_format = @@session.binlog_format;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+SET SESSION binlog_format = 'ROW';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+PREPARE s FROM 'INSERT INTO t VALUES (?, ?)';
+SET SESSION binlog_format = 'STATEMENT';
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+include/rpl/save_binlog_file_position.inc
+SET @id = 1, @p = 'marker';
+EXECUTE s USING @id, @p;
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+binlog.000001	#	Query	#	#	BEGIN
+binlog.000001	#	Query	#	#	use `test`; INSERT INTO t VALUES (1, 'marker')
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
+DEALLOCATE PREPARE s;
+SET SESSION binlog_format = @saved_binlog_format;
+Warnings:
+Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
+DROP TABLE t;
+#
+# performance_schema: an EXECUTE has the same statement text and digest
+# whether or not the expanded text is built
+#
+PREPARE s FROM 'SELECT ? AS v';
+SET @p = 'marker';
+TRUNCATE TABLE performance_schema.events_statements_history;
+EXECUTE s USING @p;
+v
+marker
+SET GLOBAL general_log = ON;
+EXECUTE s USING @p;
+v
+marker
+SET GLOBAL general_log = OFF;
+SELECT EVENT_NAME, SQL_TEXT, DIGEST_TEXT
+FROM performance_schema.events_statements_history
+WHERE THREAD_ID = PS_CURRENT_THREAD_ID()
+AND EVENT_NAME = 'statement/sql/execute_sql'
+  ORDER BY EVENT_ID;
+EVENT_NAME	SQL_TEXT	DIGEST_TEXT
+statement/sql/execute_sql	EXECUTE s USING @p	EXECUTE `s` USING @?
+statement/sql/execute_sql	EXECUTE s USING @p	EXECUTE `s` USING @?
+SELECT COUNT(*) AS executes, COUNT(DISTINCT DIGEST) AS digests
+FROM performance_schema.events_statements_history
+WHERE THREAD_ID = PS_CURRENT_THREAD_ID()
+AND EVENT_NAME = 'statement/sql/execute_sql';
+executes	digests
+2	1
+SELECT SQL_TEXT, COUNT_EXECUTE
+FROM performance_schema.prepared_statements_instances
+WHERE STATEMENT_NAME = 's' AND OWNER_THREAD_ID = PS_CURRENT_THREAD_ID();
+SQL_TEXT	COUNT_EXECUTE
+SELECT ? AS v	2
+DEALLOCATE PREPARE s;
+SET @id = NULL, @p = NULL;
+SET GLOBAL general_log = @saved_general_log;
+SET GLOBAL slow_query_log = @saved_slow_query_log;

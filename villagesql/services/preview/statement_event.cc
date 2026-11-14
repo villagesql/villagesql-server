@@ -88,6 +88,10 @@ bool statement_event_wants_status_snapshot() {
   return g_hook_count.load(std::memory_order_acquire) != 0;
 }
 
+bool statement_event_has_hooks() {
+  return g_hook_count.load(std::memory_order_acquire) != 0;
+}
+
 bool on_populate_statement_event(const PopulateContext &ctx,
                                  std::string &error_message) {
   if (ctx.capability_config == nullptr) return false;

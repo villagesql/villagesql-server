@@ -1,0 +1,32 @@
+SET @saved_general_log = @@global.general_log;
+SET @saved_slow_query_log = @@global.slow_query_log;
+SET GLOBAL general_log = OFF;
+SET GLOBAL slow_query_log = OFF;
+SET PERSIST vsql_allow_preview_extensions = ON;
+PREPARE s1 FROM 'SELECT ? AS v';
+INSTALL EXTENSION vsql_slow_query_log;
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+SET GLOBAL vsql_slow_query_log.log_file = 'MYSQLTEST_VARDIR/tmp/vsql_slow_prepared.log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+PREPARE s2 FROM 'SELECT ? AS v';
+SET @p = CONCAT('marker', '_after');
+EXECUTE s2 USING @p;
+v
+marker_after
+SET @p = CONCAT('marker', '_before');
+EXECUTE s1 USING @p;
+v
+marker_before
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+# Prepared after the hook was installed: the expanded text.
+logged
+# Prepared before the hook was installed: the expanded text too.
+logged
+DEALLOCATE PREPARE s1;
+DEALLOCATE PREPARE s2;
+SET @p = NULL;
+SET GLOBAL general_log = @saved_general_log;
+SET GLOBAL slow_query_log = @saved_slow_query_log;
+UNINSTALL EXTENSION vsql_slow_query_log;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
