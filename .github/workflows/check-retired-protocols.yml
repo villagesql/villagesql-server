@@ -1,0 +1,46 @@
+name: Check Retired Protocols
+
+# PR validation checks only the lines a PR adds, against the main it was last
+# validated with. A PR whose checks passed before a protocol roll can still
+# merge a reference to the version that roll retired, so check main's whole
+# tree after every push.
+#
+# A PR that changes the check or its test runs the test instead.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    paths:
+    - scripts/check_retired_protocols.sh
+    - scripts/regtest_check_retired_protocols.sh
+    - .github/workflows/check-retired-protocols.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check for retired protocol versions
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+    - name: Check for retired protocol versions
+      run: ./scripts/check_retired_protocols.sh
+
+  regtest:
+    name: Test check_retired_protocols.sh
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+    - name: Test check_retired_protocols.sh
+      run: ./scripts/regtest_check_retired_protocols.sh

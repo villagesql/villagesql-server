@@ -31,6 +31,7 @@ jobs:
         fetch-depth: 200
 
     - name: Checkout PR head
+      id: pr_head
       run: |
         # NB: this deserves an explanation. Caveat: this is just what dbentley
         # understands, and maybe I'm missing something.
@@ -67,6 +68,19 @@ jobs:
         SINGLE_COMMIT_TITLE: ${{ env.SINGLE_COMMIT_TITLE }}
       run: ./scripts/validate-pr-title.sh "$PR_TITLE"
 
+    # The checks below run even when an earlier one failed, so one run reports
+    # every problem. Each needs the PR head checked out.
+    - name: Check for retired protocol versions
+      # Checks only the lines this PR adds, so a reference another PR left on
+      # main fails that PR, not this one. The protocol version comes from the
+      # merge commit, so a PR opened before a protocol roll is checked against
+      # the roll it will merge into. The push check on main
+      # (check-retired-protocols.yml) catches what slips past.
+      if: ${{ !cancelled() && steps.pr_head.outcome == 'success' }}
+      run: |
+        ./scripts/check_retired_protocols.sh --added \
+          "$VILLINT_COMMIT" HEAD "${{ github.sha }}"
+
     - name: Install clang-format
       # Pinned via PyPI to the release villint reports
       # `villint.sh --clang-format-version`) so CI uses a deterministic
@@ -83,9 +97,11 @@ jobs:
       # We normally pin two components so devs needn't update on every patch,
       # and pin the full three only when a patch release changes formatting
       # output and we must force everyone onto the same build.
+      if: ${{ !cancelled() && steps.pr_head.outcome == 'success' }}
       run: pip install "clang-format==$(./scripts/villint.sh --clang-format-version).*"
 
     - name: Run villint linter
+      if: ${{ !cancelled() && steps.pr_head.outcome == 'success' }}
       run: |
         ./scripts/villint.sh --commit "$VILLINT_COMMIT"
         if ! git diff --quiet; then
