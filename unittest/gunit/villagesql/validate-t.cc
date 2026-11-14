@@ -1055,7 +1055,7 @@ TEST_F(ValidatePreviewCapabilitiesTest, NullRegistrationReturnsEmpty) {
   EXPECT_TRUE(result->index_profiles.empty());
 }
 
-// A protocol older than VEF_PROTOCOL_2 skips parsing entirely.
+// A protocol older than VEF_PROTOCOL_3 skips parsing entirely.
 TEST_F(ValidatePreviewCapabilitiesTest, OldProtocolReturnsEmpty) {
   vef_type_index_intf_t intf = make_index_intf();
   vef_index_type_reg_t entry = {};
