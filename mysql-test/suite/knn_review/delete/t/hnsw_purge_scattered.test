@@ -3,7 +3,7 @@
 # 10th row is deleted. Purge is stopped (debug build) for the first check and
 # runs before the second.
 
---let $knn_issue = KNN-27 With HNSW, after purge of scattered deletes a KNN query on collinear rows returns wrong rows
+--let $knn_issue = KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows
 --source suite/knn_review/include/known_issue.inc
 
 --source include/have_debug.inc
