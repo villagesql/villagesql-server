@@ -4,9 +4,6 @@
 # are deleted. Purge is stopped (debug build) so it can't remove the deleted
 # entries first; once it runs, the query is checked again.
 
---let $knn_issue = KNN-26 With HNSW and most rows deleted, a KNN query returns too few rows
---source suite/knn_review/include/known_issue.inc
-
 --source include/have_debug.inc
 
 INSTALL EXTENSION vsql_vector;
