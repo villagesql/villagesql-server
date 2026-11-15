@@ -37,9 +37,9 @@ mark the issue fixed here.
 | KNN-23 | EXPLAIN of a KNN-ordered DELETE or UPDATE shows a plain index scan | open, #1382 | select_plan/dml_explain |
 | KNN-24 | With an HNSW index, entries a READ COMMITTED locking KNN read rejects use up the LIMIT (too few rows) | open, #1398 | locking/hnsw_current_entry_after_change, locking/hnsw_lock_wait_then_delete, locking/hnsw_lock_wait_then_vector_update |
 | KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | fixed in /42 | rollback/hnsw_crash_recovery |
-| KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | open | delete/hnsw_many_deleted |
-| KNN-27 | With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows | known purge behaviour, tuning planned | delete/hnsw_purge_scattered |
-| KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | open, Deb checking (startup sequencing) | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
+| KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | fixed in vsql-vector /34 | delete/hnsw_many_deleted |
+| KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress |
+| KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | fixed in /43 | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
 | KNN-29 | After a restart, purge leaves the HNSW entries of committed deletes and vector updates | open | delete/hnsw_purge_restart |
 
 ## Not implemented yet
@@ -614,6 +614,8 @@ still not implemented on /40.
 
 ## KNN-26: With an HNSW index and most rows deleted, a KNN query returns too few rows
 
+- Fixed in vsql-vector deb/hnsw_index/34: 279b873 "HNSW Index: Fix MVCC
+  termination". delete/hnsw_many_deleted passes.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/40 25df4f5) with
   vsql-vector deb/hnsw_index/33 (ce25b42).
 - Repro: HNSW index on 100 rows, row i at `[i,0,0,0]`. Purge stopped
@@ -631,10 +633,10 @@ still not implemented on /40.
 - Expected: the query returns LIMIT rows when the table has them.
 - Wrong results (too few rows), silently.
 
-## KNN-27: With an HNSW index, after purge of scattered deletes a KNN query on collinear rows returns wrong rows
+## KNN-27: With an HNSW index, after purge a KNN query can return wrong rows or too few rows
 
 - Status: known purge behaviour in vsql-vector; Deb plans to tune it. The
-  test stays as a regression check and skips until then.
+  tests stay as regression checks and skip until then.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
   vsql-vector deb/hnsw_index/33 (ce25b42).
 - Repro: HNSW index on 100 rows, row i at `[i,0,0,0]`. Purge stopped
@@ -650,10 +652,21 @@ still not implemented on /40.
   after purge.
 - Expected: the query returns the nearest rows, as with IGNORE INDEX.
 - Wrong results, silently.
+- Second case, 8 rows, not collinear (delete/hnsw_purge_locking_stress, the
+  same steps as delete/hnsw_purge_locking repeated 50 times): the standard 8
+  rows, purge stopped, `DELETE FROM t WHERE id IN (4, 8)`, `UPDATE t SET v =
+  '[9,9,9,9]' WHERE id = 1`, `INSERT INTO t VALUES (9, 1, 'i',
+  '[1,0,0,0.1]')`, then purge runs. In about one round in 20 to 60, a plain
+  `SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7`
+  returns `2 3`; expected `9 2 5 3 6 7 1`. The locking reads return the same
+  two rows. Seen with vsql-vector deb/hnsw_index/33 (ce25b42) and
+  deb/hnsw_index/35 (cc56eee) on deb/custom-index/43 (851f84b), debug build.
+  delete/hnsw_purge_locking failed this way once in a full suite run.
 
 ## KNN-28: Rollback at recovery of a prepared transaction that changed an HNSW index fails
 
-- Status: open; Deb is checking it as a server startup sequencing issue.
+- Fixed in deb/custom-index/43: 851f84b "Custom Index: Fix binlog recovery".
+  rollback/hnsw_recovery_prepared_rollback{,_insert,_delete} pass.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
   vsql-vector deb/hnsw_index/33 (ce25b42), debug build, binary log on.
 - Repro: table `t (id INT PRIMARY KEY, v SVECTOR(4))` with an HNSW index and

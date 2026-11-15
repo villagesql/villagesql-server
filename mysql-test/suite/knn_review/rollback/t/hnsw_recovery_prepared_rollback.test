@@ -3,9 +3,6 @@
 # (crash_after_flush_engine_log). Recovery rolls it back; KNN reads afterwards
 # return the table as it was.
 
---let $knn_issue = KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails
---source suite/knn_review/include/known_issue.inc
-
 --source include/have_debug.inc
 --source include/have_log_bin.inc
 

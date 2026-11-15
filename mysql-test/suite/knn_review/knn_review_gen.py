@@ -34,12 +34,10 @@ KNOWN_ISSUES = {
     "locking/hnsw_current_entry_after_change": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_delete": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_vector_update": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
-    "delete/hnsw_many_deleted": "KNN-26 With HNSW and most rows deleted, a KNN query returns too few rows",
-    "rollback/hnsw_recovery_prepared_rollback": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
-    "rollback/hnsw_recovery_prepared_rollback_insert": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
-    "rollback/hnsw_recovery_prepared_rollback_delete": "KNN-28 Rollback at recovery of a prepared transaction that changed an HNSW index fails",
     "delete/hnsw_purge_restart": "KNN-29 After a restart, purge leaves the HNSW entries of committed deletes and vector updates",
-    "delete/hnsw_purge_scattered": "KNN-27 With HNSW, after purge of scattered deletes a KNN query on collinear rows returns wrong rows",
+    "delete/hnsw_purge_scattered": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
+    "delete/hnsw_purge_locking": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
+    "delete/hnsw_purge_locking_stress": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
 }
 LOCK_NOWAIT = ("ER_LOCK_NOWAIT", "ERROR HY000: Statement aborted because "
                "lock(s) could not be acquired immediately and NOWAIT is set.")
@@ -2658,6 +2656,41 @@ hknn(t, len(m), extra=" FOR UPDATE", rows=near(m, len(m)))
 t.sql("COMMIT")
 t.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
 hnsw_uninstall(t)
+tests.append(t)
+
+ROUNDS = 50
+t = T("delete", "hnsw_purge_locking_stress", f"""
+delete/hnsw_purge_locking {ROUNDS} times on one server, each round with a new
+table and index, and with a plain KNN read next to the locking reads. HNSW node
+levels are random, so the rounds build different graphs.""")
+t.raw(["--source include/have_debug.inc", ""])
+t.sql("INSTALL EXTENSION vsql_vector")
+setup = T("delete", "", "")
+setup.t = []
+hnsw_install(setup)
+setup.sql("SET GLOBAL innodb_purge_stop_now = ON")
+setup.sql("DELETE FROM t WHERE id IN (4, 8)")
+setup.sql("UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
+setup.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
+setup.sql("SET GLOBAL innodb_purge_run_now = ON")
+reads = T("delete", "", "")
+reads.t, reads.r = [], []
+hknn(reads, len(m), rows=near(m, len(m)))
+reads.sql("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+reads.sql("START TRANSACTION")
+hknn(reads, extra=" FOR UPDATE", rows=near(m))
+hknn(reads, len(m), extra=" FOR UPDATE", rows=near(m, len(m)))
+reads.sql("COMMIT")
+reads.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+t.raw(["--let $i = 1", f"while ($i <= {ROUNDS})", "{", "--echo # Round $i",
+       "--disable_query_log"]
+      + [l for l in setup.t if not l.startswith("INSTALL")]
+      + ["--source include/wait_innodb_all_purged.inc", "--enable_query_log"]
+      + reads.t
+      + ["--disable_query_log", "DROP TABLE t;", "--enable_query_log",
+         "--inc $i", "}"],
+      [l for i in range(1, ROUNDS + 1) for l in [f"# Round {i}"] + reads.r])
+t.sql("UNINSTALL EXTENSION vsql_vector")
 tests.append(t)
 
 t = T("delete", "hnsw_purge_restart", """

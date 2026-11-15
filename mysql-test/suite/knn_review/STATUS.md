@@ -1,8 +1,8 @@
 # knn_review: status (2026-11-11)
 
-Review suite for the custom-index work on deb/custom-index/42 (b9315d6).
+Review suite for the custom-index work on deb/custom-index/43 (851f84b).
 
-- Branch: `tomas/knn-review-stack-40`. It holds /42, the test extension
+- Branch: `tomas/knn-review-stack-40`. It holds /43, the test extension
   (`villagesql/test-extensions/vsql-knn-index-test`), this suite, temporary
   table support and helper_fn_name.
 - Issues: `ISSUES.md` (KNN-n, NYI-n). It also explains how a test is skipped
@@ -16,7 +16,7 @@ Review suite for the custom-index work on deb/custom-index/42 (b9315d6).
   Its KNOWN_ISSUES dict decides which tests skip for which issue.
 - Coverage: `COVERAGE.md`, one row per test (what it checks, index, debug,
   restart, known issue). The generator writes it with the tests.
-- The tests named `hnsw_*` need vsql-vector deb/hnsw_index/33 (ce25b42): build
+- The tests named `hnsw_*` need vsql-vector deb/hnsw_index/35 (cc56eee): build
   it and put `vsql_vector.veb` in the server's veb directory. All the others
   need only the in-tree test extension.
 - Run all suites (debug build):
@@ -33,19 +33,19 @@ Review suite for the custom-index work on deb/custom-index/42 (b9315d6).
   - KNN-23 → #1382
 - Open, not filed:
   - KNN-4, 5, 7, 8, 10, 20, 22
-  - KNN-26: with HNSW and most rows deleted (entries not purged yet), a plain
-    KNN query returns too few rows, mostly 1
-  - KNN-28: rollback at recovery of a prepared transaction (binary log on)
-    that changed an HNSW index fails: UPDATE and DELETE assert, a rolled-back
-    INSERT stays in KNN results. Deb is checking (startup sequencing).
   - KNN-29: after a restart, purge leaves the HNSW entries of committed
     deletes and vector updates; locking reads then return too few rows
-- Known behaviour, tuning planned: KNN-27 (with HNSW, after purge of
-  scattered deletes, a KNN query on rows on a line returns wrong rows).
+- Known behaviour, tuning planned: KNN-27 (with HNSW, after purge a KNN query
+  can return wrong rows or too few rows; also with 8 rows, about one round in
+  20 to 60 of delete/hnsw_purge_locking_stress). delete/hnsw_purge_locking
+  skips with it, so KNN-29 has no control test without a restart until then.
 - Fixed in /42: KNN-25 (crash recovery asserted on a PK mapping B-tree redo
   record). rollback/hnsw_crash_recovery passes.
-- KNN-12 also happens on main: #1541. Fixed by #1544, which is stacked on
-  #1543; #1546 is stacked on #1544.
+- Fixed in /43: KNN-28 (rollback at recovery of a prepared transaction that
+  changed an HNSW index). Its three tests pass.
+- Fixed in vsql-vector /34: KNN-26 (too few rows with most rows deleted and
+  not purged). delete/hnsw_many_deleted passes.
+- KNN-12 is fixed on main by #1544 (merged); #1546 follows it.
 
 ## Not covered yet
 
