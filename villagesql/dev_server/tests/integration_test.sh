@@ -18,6 +18,21 @@ if [[ ! -f "$VSQL" ]]; then
     exit 1
 fi
 
+# Look for an open port to run the test.
+if [[ -z "${MYSQL_PORT:-}" ]]; then
+    for candidate in $(seq 23300 23399); do
+        if ! (exec 3<>"/dev/tcp/127.0.0.1/$candidate") 2>/dev/null; then
+            MYSQL_PORT="$candidate"
+            break
+        fi
+    done
+    if [[ -z "${MYSQL_PORT:-}" ]]; then
+        echo "Error: no free port in 23300-23399"
+        exit 1
+    fi
+    export MYSQL_PORT
+fi
+
 INSTANCE_DIR="$(mktemp -d)"
 SOCKET_INSTANCE_DIR=""  # set once second instance with custom socket is created below
 SOCKET_DIR=""           # set once custom socket dir is created below
@@ -25,8 +40,10 @@ PASS=0
 FAIL=0
 
 cleanup() {
-    "$VSQL" --dir "$INSTANCE_DIR" stop 2>/dev/null || true
-    [[ -n "$SOCKET_INSTANCE_DIR" ]] && "$VSQL" --dir "$SOCKET_INSTANCE_DIR" --socket "$SOCKET_DIR/mysql.sock" stop 2>/dev/null || true
+    # The tests normally stop both servers themselves, so these are no-ops
+    # that would only complain; silence them entirely.
+    "$VSQL" --dir "$INSTANCE_DIR" stop >/dev/null 2>&1 || true
+    [[ -n "$SOCKET_INSTANCE_DIR" ]] && "$VSQL" --dir "$SOCKET_INSTANCE_DIR" --socket "$SOCKET_DIR/mysql.sock" stop >/dev/null 2>&1 || true
     rm -rf "$INSTANCE_DIR" "$SOCKET_INSTANCE_DIR" "$SOCKET_DIR"
 }
 trap cleanup EXIT
@@ -80,6 +97,7 @@ run_test_output() {
 echo "Testing VillageSQL dev server"
 echo "  Package directory: $PACKAGE_DIR"
 echo "  Instance directory: $INSTANCE_DIR"
+echo "  Port: $MYSQL_PORT"
 echo ""
 
 # Help and error handling
