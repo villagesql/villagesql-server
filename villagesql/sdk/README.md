@@ -81,7 +81,8 @@ Any changes to the ABI/API must be done in the Unstable/Development version of
 the headers (`villagesql/sdk/include`), never in a frozen `stable_sdk/` snapshot.
 New fields go at the **end** of the relevant descriptor struct, guarded by a
 comment marking the minimum protocol required (e.g.,
-`// protocol >= VEF_PROTOCOL_6`). See [API_ABI.md](API_ABI.md) for the full rules.
+`// protocol >= VEF_PROTOCOL_6`). See [API_ABI.md](API_ABI.md) for the full
+rules.
 
 ### Rolling the protocol version (stabilizing)
 
@@ -153,8 +154,8 @@ diff as the reference for the full set of edit sites.
    - Rename `unittest/gunit/villagesql/abi_dev_layout.inc` to
      `abi_v{M+1}_layout.inc`, add an `abi_v{M+1}_check-t.cc` that checks it
      and the earlier stable lists against the new snapshot (copy
-     `abi_v5_check-t.cc`), include it from
-     `abi_dev_check-t.cc` with the other stable lists, and start a new
+     `abi_v{M-1}_check-t.cc`), include it from `abi_dev_check-t.cc` with the
+     other stable lists, and start a new
      `abi_dev_layout.inc` holding only the current struct sizes.
    - Update expectations in the `extension` / `extension_registration` suites and
      `std_data/min_protocol_extension.cc`, plus the affected gunit tests

@@ -14,10 +14,11 @@ INSTALL EXTENSION abi_v5_test;
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
 WHERE extension_name = 'abi_v5_test';
 
---echo # FAULT_BLOB type: encode/decode round-trip via type-method VDFs (v3 feature)
+--echo # FAULT_BLOB type: encode/decode round-trip via type-method VDFs (v3)
 
---echo # Round-trip via type-method syntax (v3: :: syntax works for named VDF types)
-SELECT abi_v5_test.FAULT_BLOB::to_string(abi_v5_test.FAULT_BLOB::from_string('OK hello')) AS roundtrip;
+--echo # Round-trip via type-method syntax (v3: :: works for named VDF types)
+SELECT abi_v5_test.FAULT_BLOB::to_string(
+  abi_v5_test.FAULT_BLOB::from_string('OK hello')) AS roundtrip;
 
 --echo # test_result_kind VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
 
@@ -28,7 +29,7 @@ SELECT abi_v5_test.test_result_kind('anything') AS result;
 SELECT abi_v5_test.test_result_kind('WARN something went sideways') AS result;
 
 --echo # ERROR result
---error 3200
+--error ER_UDF_ERROR
 SELECT abi_v5_test.test_result_kind('ERROR fatal problem') AS result;
 
 --echo # NULL input -> NULL output (IntResult::set_null)
@@ -79,9 +80,10 @@ INSERT INTO t1 VALUES (1, '[1,2,3]'), (2, '[4,5,6]'), (3, '[-1,0,1]');
 SELECT id, v FROM t1 ORDER BY id;
 
 --echo # Aggregate: per-group sum of squared elements
-SELECT id, abi_v5_test.pvec_norm_sq(v) AS norm_sq FROM t1 GROUP BY id ORDER BY id;
+SELECT id, abi_v5_test.pvec_norm_sq(v) AS norm_sq FROM t1
+GROUP BY id ORDER BY id;
 
---echo # Aggregate: whole-table (1^2+2^2+3^2) + (4^2+5^2+6^2) + ((-1)^2+0^2+1^2) = 93
+--echo # Aggregate: whole table, (1+4+9) + (16+25+36) + (1+0+1) = 93
 SELECT abi_v5_test.pvec_norm_sq(v) AS total_norm_sq FROM t1;
 
 --echo # Aggregate with HAVING: exclude groups with norm_sq <= 10
@@ -97,7 +99,7 @@ FROM t1
 GROUP BY id
 ORDER BY abi_v5_test.pvec_norm_sq(v) DESC;
 
---echo # NULL handling: NULL rows are skipped by accumulate; only [3,4] contributes 25
+--echo # NULL handling: accumulate skips NULL rows, so only [3,4] adds 25
 CREATE TABLE t_nulls (
   id INT,
   v PVEC(2)
@@ -133,7 +135,7 @@ SELECT abi_v5_test.str_no_const('literal');
 DROP TABLE t_str;
 
 --echo # A VDF that throws returns an error to the statement
---error 3200
+--error ER_UDF_ERROR
 SELECT abi_v5_test.throws();
 
 --echo # from_binary and to_binary
@@ -141,8 +143,12 @@ CREATE TABLE t_bytes (id INT PRIMARY KEY, v BYTES8);
 INSERT INTO t_bytes VALUES (1, 'text'), (2, 0x41FF), (3, _binary 'bin');
 SELECT id, HEX(abi_v5_test.BYTES8::to_binary(v)) AS bytes FROM t_bytes
 ORDER BY id;
-SELECT HEX(abi_v5_test.BYTES8::to_binary(abi_v5_test.BYTES8::from_binary(0x0102)))
-  AS roundtrip;
+SELECT HEX(abi_v5_test.BYTES8::to_binary(
+  abi_v5_test.BYTES8::from_binary(0x0102))) AS roundtrip;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_bytes VALUES (4, 'too long!');
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_bytes VALUES (5, 0x010203040506070809);
 DROP TABLE t_bytes;
 
 --echo # A type without from_binary rejects a value in the binary charset
@@ -155,6 +161,8 @@ DROP TABLE t_blob;
 CREATE TABLE t_var (id INT PRIMARY KEY, v VARTEXT);
 INSERT INTO t_var VALUES (1, 'a'), (2, 'abcdefghij'), (3, 'abc');
 SELECT id, v, abi_v5_test.vartext_len(v) AS len FROM t_var ORDER BY id;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_var VALUES (4, 'abcdefghijklmnopqrstuvwxyz0123456');
 DROP TABLE t_var;
 
 --echo # Uninstall extension

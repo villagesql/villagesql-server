@@ -6,7 +6,8 @@
 #
 #   vsql_source_dir.txt      - VillageSQL source root (for cmake config lookup)
 #   vsql_stable_sdk.txt      - stable_sdk/v5/ path (for binary compat builds)
-#   vsql_dev_sdk_include.txt - current dev SDK include-dev/ (for src compat builds)
+#   vsql_dev_sdk_include.txt - current dev SDK include-dev/ (for src compat
+#                              builds)
 #
 # Caller must --exec mkdir -p $MYSQLTEST_VARDIR/tmp before sourcing this file.
 
@@ -47,7 +48,8 @@ while (<$fh>) {
 }
 close $fh;
 
-for my $key (qw(VILLAGESQL_SOURCE_DIR VILLAGESQL_STABLE_SDK VILLAGESQL_DEV_SDK_INCLUDE)) {
+for my $key (qw(VILLAGESQL_SOURCE_DIR VILLAGESQL_STABLE_SDK
+                 VILLAGESQL_DEV_SDK_INCLUDE)) {
     unless (defined $sdk{$key} && -e $sdk{$key}) {
         print "$key not found: " . ($sdk{$key} // "(not set)") . "\n";
         exit(1);

@@ -613,7 +613,10 @@ constexpr size_t kBytes8Len = 8;
 static void bytes8_store(const unsigned char *data, size_t len,
                          vsql::CustomResult out) {
   auto buf = out.buffer();
-  if (len > kBytes8Len || buf.size() < kBytes8Len) return;
+  if (len > kBytes8Len || buf.size() < kBytes8Len) {
+    out.error("BYTES8: value longer than 8 bytes");
+    return;
+  }
   memset(buf.data(), 0, kBytes8Len);
   memcpy(buf.data(), data, len);
   out.set_length(kBytes8Len);
@@ -655,8 +658,10 @@ constexpr int64_t kVarTextMax = 32;
 static void vartext_from_string(std::string_view from, vsql::CustomResult out) {
   auto buf = out.buffer();
   if (from.size() > static_cast<size_t>(kVarTextMax) ||
-      buf.size() < from.size())
+      buf.size() < from.size()) {
+    out.error("VARTEXT: value longer than 32 bytes");
     return;
+  }
   memcpy(buf.data(), from.data(), from.size());
   out.set_length(from.size());
 }

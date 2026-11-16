@@ -47,7 +47,8 @@ while (<$fh>) {
 }
 close $fh;
 
-for my $key (qw(VILLAGESQL_SOURCE_DIR VILLAGESQL_STABLE_SDK_V3 VILLAGESQL_DEV_SDK_INCLUDE)) {
+for my $key (qw(VILLAGESQL_SOURCE_DIR VILLAGESQL_STABLE_SDK_V3
+                 VILLAGESQL_DEV_SDK_INCLUDE)) {
     unless (defined $sdk{$key} && -e $sdk{$key}) {
         print "$key not found: " . ($sdk{$key} // "(not set)") . "\n";
         exit(1);
