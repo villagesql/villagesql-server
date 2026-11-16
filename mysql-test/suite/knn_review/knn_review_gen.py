@@ -37,6 +37,7 @@ KNOWN_ISSUES = {
     "delete/hnsw_purge_restart": "KNN-29 After a restart, purge leaves the HNSW entries of committed deletes and vector updates",
     "delete/hnsw_purge_scattered": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
     "delete/hnsw_purge_locking": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
+    "delete/hnsw_purge_then_restart": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
     "delete/hnsw_purge_locking_stress": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
 }
 LOCK_NOWAIT = ("ER_LOCK_NOWAIT", "ERROR HY000: Statement aborted because "
@@ -2741,6 +2742,28 @@ m2 = dict(m)
 m2.pop(9)
 m2[10] = (1, "j", (1, 0, 0, 0.05))
 hknn(t, len(m2), rows=near(m2, len(m2)))
+hnsw_uninstall(t)
+tests.append(t)
+
+t = T("delete", "hnsw_purge_then_restart", """
+delete/hnsw_purge_restart with purge before the restart instead of after it.
+Deletes and a vector update on a table with an HNSW index (vsql-vector) are
+committed while purge is stopped (debug build), purge runs, and READ COMMITTED
+locking KNN reads return full results. After a restart the same reads return
+full results too, so a restart alone does not make locking reads short.""")
+t.raw(["--source include/have_debug.inc", ""])
+hnsw_install(t)
+t.sql("SET GLOBAL innodb_purge_stop_now = ON")
+t.sql("DELETE FROM t WHERE id IN (4, 8)")
+t.sql("UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
+t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
+t.sql("SET GLOBAL innodb_purge_run_now = ON")
+t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.echo("Purged")
+purge_restart_reads(t, True)
+t.raw(*KILL_RESTART)
+t.echo("After the restart")
+purge_restart_reads(t, True)
 hnsw_uninstall(t)
 tests.append(t)
 

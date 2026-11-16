@@ -16,7 +16,7 @@ mark the issue fixed here.
 | KNN-2 | UPDATE of the primary key crashes: old index entry built with a new column reference | fixed in /40 | update/pk_update |
 | KNN-3 | A KNN scan that stops early never ends its extension cursor | fixed in /40 | select_correctness/cursor_leak |
 | KNN-4 | A KNN scan skips NULL vectors the plain query fails on (result depends on the plan) | open | select_correctness/null_vectors_knn_scan |
-| KNN-5 | A KNN scan ranks by the profile's first ORDER function, not the query's | open | select_correctness/order_function |
+| KNN-5 | A profile can bind more than one ORDER function; a KNN scan then ranks by the first, not the query's | open | select_correctness/order_function |
 | KNN-6 | A RANGE_SCAN custom index rejects an equality read with ER 3219 (end range) | fixed in /40 | select_correctness/range_read |
 | KNN-7 | A window function under a KNN ORDER BY ... LIMIT sees only LIMIT rows (wrong result) | open | select_correctness/window_under_knn_limit |
 | KNN-8 | A HAVING clause stops the KNN scan (plan only, rows correct) | open | select_plan/having |
@@ -38,7 +38,7 @@ mark the issue fixed here.
 | KNN-24 | With an HNSW index, entries a READ COMMITTED locking KNN read rejects use up the LIMIT (too few rows) | open, #1398 | locking/hnsw_current_entry_after_change, locking/hnsw_lock_wait_then_delete, locking/hnsw_lock_wait_then_vector_update |
 | KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | fixed in /42 | rollback/hnsw_crash_recovery |
 | KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | fixed in vsql-vector /34 | delete/hnsw_many_deleted |
-| KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress |
+| KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress, hnsw_purge_then_restart |
 | KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | fixed in /43 | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
 | KNN-29 | After a restart, purge leaves the HNSW entries of committed deletes and vector updates | open | delete/hnsw_purge_restart |
 
@@ -130,7 +130,7 @@ still not implemented on /40.
   fail there.
 - Not a crash or wrong rows among non-NULL vectors; a semantics decision.
 
-## KNN-5: A KNN scan ranks by the profile's first ORDER function, not the query's
+## KNN-5: A profile can bind more than one ORDER function; a KNN scan then ranks by the first, not the query's
 
 - Still seen on deb/custom-index/40 (25df4f5): same result.
 - Seen on: deb/custom-index/26 (0094de4), with 528c6ad.
@@ -144,8 +144,19 @@ still not implemented on /40.
   (find_profile_function), but `Custom_index::fill_profile()` sends the fn_id
   of the profile's first ORDER binding whatever the query used. No sort
   follows the KNN scan, so the wrong order is returned.
-- Expected: the scan ranks by the function the query orders by.
+- Expected: an index ranks by one metric, so a profile binds at most one
+  ORDER function (any number of RESTRICT functions). The SDK builder rejects a
+  second `with_function<...>(..., FunctionKind::Order)` at compile time, and
+  the server rejects a profile with two ORDER bindings when the extension
+  registers it (an extension can use the C ABI without the builder). A query
+  ordered by another metric uses an index whose profile binds that metric
+  (select_plan/two_indexes, select_correctness/two_indexes), or a table scan
+  and sort if there is none. With this, the server needs no fn_id from the
+  query: the one ORDER binding is the one that matched.
 - Wrong results, silently.
+- Tests to change with the fix: the test extension's kvec_profile_multi goes,
+  and select_correctness/order_function and select_plan/order_function check
+  that such a profile is refused.
 
 ## KNN-6: A RANGE_SCAN custom index rejects an equality read with ER 3219 (end range)
 
@@ -711,6 +722,12 @@ still not implemented on /40.
   return the right rows. Nothing about purge in the server log.
 - The same steps without the restart (delete/hnsw_purge_locking) return the
   full results.
+- Still seen on tomas/knn-review-stack-40 (deb/custom-index/43 851f84b) with
+  vsql-vector deb/hnsw_index/35 (cc56eee), debug build, so it is not KNN-26.
+- delete/hnsw_purge_then_restart runs purge before the restart instead of
+  after it, and passes: locking reads after the restart return full results.
+  So the restart alone does not make locking reads short; purge that runs
+  after a restart leaves something a normal purge removes.
 - Three rows are missing, one for each old entry (rows 4 and 8, the old
   vector of row 1), as in KNN-24.
 - Expected: purge after the restart removes the old entries, as it does
