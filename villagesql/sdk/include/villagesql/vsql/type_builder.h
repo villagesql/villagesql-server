@@ -154,7 +154,7 @@ class TypeBuilder {
   // Variable-length types must declare max_persisted_length() as the upper
   // bound on the backing field. variable-length is a VEF_PROTOCOL_5 feature, so
   // this raises the type's required protocol to VEF_PROTOCOL_5 (the server only
-  // reads the variable_length flag at protocol >= 4). require_atleast_min()
+  // reads the variable_length flag at protocol >= 5). require_atleast_min()
   // keeps the bump monotonic, so later v3-level setters cannot lower it back.
   constexpr auto variable_length_type() const {
     detail::TypeBuilderState s = state_;

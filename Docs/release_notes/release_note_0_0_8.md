@@ -54,6 +54,7 @@ Custom index DDL is refused by default, with `Extended Index feature not yet imp
 
 ### Build & Compatibility
 
+- **Rebuild extensions built with the development SDK** — An extension built with the development SDK (`VSQL_USE_DEV_ABI`) of 0.0.4 through 0.0.7 can declare protocol 4, which this release rejects. Rebuild it with this release's SDK. Extensions built with the stable SDK load unchanged. (#1566)
 - **macOS** — Configure finds Homebrew's `openssl@3` when no OpenSSL is named, and stops with `brew install openssl@3` when it is missing. The server builds with Xcode 27. (`5efd730e986`, #1416; `57dd227fcd8`, #1400)
 - **Server log** — `LogVSQL` messages no longer carry extra single quotes. (`a0d05d781ad`, #1282)
 

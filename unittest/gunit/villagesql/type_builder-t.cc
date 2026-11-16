@@ -245,7 +245,7 @@ TEST_F(TypeBuilderTest, PlainTypeNegotiatesV3AndIsNotVariableLength) {
 }
 
 // variable_length_type() flags the type and raises the protocol to V5.
-TEST_F(TypeBuilderTest, VariableLengthSetsFlagAndRaisesProtocolToV4) {
+TEST_F(TypeBuilderTest, VariableLengthSetsFlagAndRaisesProtocolToV5) {
   constexpr auto obj = vsql::make_type<kPlainName>()
                            .max_persisted_length(64)
                            .variable_length_type()
@@ -280,7 +280,7 @@ TEST_F(TypeBuilderTest, V3SettersAfterVariableLengthDoNotLowerProtocol) {
 // Order independence: calling variable_length_type() last (after the v3-level
 // operations have already raised the floor to V3) still ends at V5 with the
 // flag set. Pairs with the test above to show the bump is order-independent.
-TEST_F(TypeBuilderTest, VariableLengthLastStillNegotiatesV4) {
+TEST_F(TypeBuilderTest, VariableLengthLastStillNegotiatesV5) {
   constexpr auto obj = vsql::make_type<kPlainName>()
                            .max_persisted_length(64)
                            .from_string<&plain_encode>()
