@@ -1,6 +1,6 @@
 # VillageSQL 0.0.8
 
-Draft release notes through commit `be1cdc29`: vef: promote protocol 4 to stable 5, freeze 5, open 6 (#1566)
+Draft release notes through commit `6c463e12`: Update proposed release notes for 0.0.8 (#1575)
 
 The GitHub release assets are available at https://github.com/villagesql/villagesql-server/releases.
 The Docker Hub release artifacts are available at https://hub.docker.com/r/villagesql/server.
