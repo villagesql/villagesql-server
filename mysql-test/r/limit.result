@@ -619,8 +619,8 @@ CREATE TABLE t1 ( pk INTEGER );
 INSERT INTO t1 VALUES (1), (2);
 EXPLAIN FORMAT=tree SELECT JSON_OBJECTAGG(NULL, '') FROM t1, t1 AS t2 GROUP BY t1.pk LIMIT 2 OFFSET 5;
 EXPLAIN
--> Limit/Offset: 2/5 row(s)  (cost=1.75 rows=0)
-    -> Group aggregate: json_objectagg(NULL,'')  (cost=1.75 rows=2)
+-> Limit/Offset: 2/5 row(s)  (cost=2.27 rows=0)
+    -> Group aggregate: json_objectagg(NULL,'')  (cost=2.27 rows=2)
         -> Nested loop inner join  (cost=1.35 rows=4)
             -> Sort: t1.pk  (cost=0.45 rows=2)
                 -> Table scan on t1  (cost=0.45 rows=2)
@@ -773,3 +773,33 @@ id	c1	c2	c3
 6	1	2	888
 DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
+#
+# Bug#37293822: Wrong result with OFFSET in table-less subquery
+#
+SELECT (SELECT 1 LIMIT 10 OFFSET 1) AS res;
+res
+NULL
+SELECT (SELECT 1 LIMIT 0) AS res;
+res
+NULL
+SELECT (SELECT 1 LIMIT 10 OFFSET 0) AS res;
+res
+1
+SELECT (SELECT 1 LIMIT 1) AS res;
+res
+1
+PREPARE ps FROM 'SELECT (SELECT 1 LIMIT ? OFFSET ?) AS res';
+SET @zero = 0, @one = 1;
+EXECUTE ps USING @zero, @zero;
+res
+NULL
+EXECUTE ps USING @zero, @one;
+res
+NULL
+EXECUTE ps USING @one, @zero;
+res
+1
+EXECUTE ps USING @one, @one;
+res
+NULL
+DEALLOCATE PREPARE ps;

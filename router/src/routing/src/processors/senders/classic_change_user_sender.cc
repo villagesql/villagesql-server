@@ -31,6 +31,7 @@
 #include "classic_auth_caching_sha2.h"
 #include "classic_auth_cleartext.h"
 #include "classic_auth_native.h"
+#include "classic_auth_openid_connect.h"
 #include "classic_auth_sha256_password.h"
 #include "classic_connection_base.h"
 #include "classic_frame.h"
@@ -202,6 +203,8 @@ static std::optional<std::string> scramble_them_all(
     return AuthSha256Password::scramble(nonce, pwd);
   } else if (auth_method == AuthCleartextPassword::kName) {
     return AuthCleartextPassword::scramble(nonce, pwd);
+  } else if (auth_method == AuthOpenidConnect::kName) {
+    return AuthOpenidConnect::scramble(nonce, pwd);
   } else {
     return std::nullopt;
   }
@@ -224,26 +227,33 @@ static classic_protocol::message::client::ChangeUser change_user_for_reuse(
   // fail too.
   auto attrs = append_attrs_res.value_or(src_protocol.attributes());
 
-  if (src_protocol.password().has_value()) {
+  if (auto creds =
+          src_protocol.credentials().get(src_protocol.auth_method_name())) {
     // scramble with the server's auth-data to trigger a fast-auth.
 
-    auto pwd = *(src_protocol.password());
+    auto pwd = *creds;
 
     // if the password set and not empty, rehash it.
     if (auto scramble_res = scramble_them_all(
             src_protocol.auth_method_name(),
             strip_trailing_null(dst_protocol.auth_method_data()), pwd)) {
-      return {
-          src_protocol.username(),                      // username
-          *scramble_res,                                // auth_method_data
-          src_protocol.schema(),                        // schema
-          src_protocol.client_greeting()->collation(),  // collation
-          src_protocol.auth_method_name(),              // auth_method_name
-          attrs,                                        // attributes
-      };
+      if (scramble_res->size() <= 255) {
+        // the auth-method-data must be < 256 byte as the length byte is only a
+        // single byte.
+        return {
+            src_protocol.username(),                      // username
+            *scramble_res,                                // auth_method_data
+            src_protocol.schema(),                        // schema
+            src_protocol.client_greeting()->collation(),  // collation
+            src_protocol.auth_method_name(),              // auth_method_name
+            attrs,                                        // attributes
+        };
+      }
     }
   }
 
+  // use an unknown auth-method to force a switch-auth-method.
+  //
   return {
       src_protocol.username(),                      // username
       "",                                           // auth_method_data

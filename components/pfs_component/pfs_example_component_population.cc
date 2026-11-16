@@ -75,7 +75,7 @@ unsigned int share_list_count = 2;
 int continent_prepare_insert_row() {
   int result = 0;
   Continent_Table_Handle handle;
-  int array_size = sizeof(continent_array) / sizeof(continent_array[0]);
+  int const array_size = sizeof(continent_array) / sizeof(continent_array[0]);
 
   for (int i = 0; i < array_size; i++) {
     /* Prepare a sample row to be inserted from here */
@@ -96,7 +96,7 @@ int continent_prepare_insert_row() {
 int country_prepare_insert_row() {
   int result = 0;
   Country_Table_Handle handle;
-  int array_size = sizeof(country_array) / sizeof(country_array[0]);
+  int const array_size = sizeof(country_array) / sizeof(country_array[0]);
 
   for (int i = 0; i < array_size; i++) {
     /* Prepare a sample row to be inserted from here */

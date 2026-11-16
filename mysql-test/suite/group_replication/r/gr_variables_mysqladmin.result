@@ -9,8 +9,6 @@ Warning	1681	'group_replication_ip_allowlist' is deprecated and will be removed 
 include/start_and_bootstrap_group_replication.inc
 =====mysqladmin -u root -P MASTER_MYPORT --protocol=TCP check all the GR variable outputs=====
 
-group_replication_allow_local_lower_version_join
-OFF
 group_replication_auto_increment_increment
 7
 group_replication_bootstrap_group

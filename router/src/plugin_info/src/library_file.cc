@@ -108,7 +108,7 @@ Library_file::Library_file(const std::string &file_name,
 }
 
 uint32_t Library_file::get_abi_version() const {
-  Plugin_abi *plugin = get_plugin_struct<Plugin_abi>(plugin_name_);
+  auto *plugin = get_plugin_struct<Plugin_abi>(plugin_name_);
 
   return plugin->abi_version;
 }

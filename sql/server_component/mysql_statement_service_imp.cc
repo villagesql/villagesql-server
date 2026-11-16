@@ -89,7 +89,8 @@ DEFINE_BOOL_METHOD(mysql_stmt_metadata_imp::param_count,
   return MYSQL_SUCCESS;
 }
 
-auto enum_field_type_to_int(enum_field_types field_type) -> uint64_t {
+auto enum_field_type_to_int(enum_field_types field_type, uint flags)
+    -> uint64_t {
   switch (field_type) {
     case MYSQL_TYPE_DECIMAL:
       return MYSQL_SP_ARG_TYPE_DECIMAL;
@@ -156,9 +157,16 @@ auto enum_field_type_to_int(enum_field_types field_type) -> uint64_t {
     case MYSQL_TYPE_VAR_STRING:
       return MYSQL_SP_ARG_TYPE_VAR_STRING;
     case MYSQL_TYPE_STRING:
-      return MYSQL_SP_ARG_TYPE_STRING;
+      if (flags & SET_FLAG)
+        return MYSQL_SP_ARG_TYPE_SET;
+      else if (flags & ENUM_FLAG)
+        return MYSQL_SP_ARG_TYPE_ENUM;
+      else
+        return MYSQL_SP_ARG_TYPE_STRING;
     case MYSQL_TYPE_GEOMETRY:
       return MYSQL_SP_ARG_TYPE_GEOMETRY;
+    case MYSQL_TYPE_VECTOR:
+      return MYSQL_SP_ARG_TYPE_VECTOR;
     default:
       return MYSQL_SP_ARG_TYPE_INVALID;
   }
@@ -180,13 +188,19 @@ DEFINE_BOOL_METHOD(mysql_stmt_metadata_imp::param_metadata,
     *static_cast<bool *>(data) = param->null_value;
     return MYSQL_SUCCESS;
   } else if (strcmp(metadata, "type") == 0) {
-    *static_cast<uint64_t *>(data) = enum_field_type_to_int(param->data_type());
+    *static_cast<uint64_t *>(data) =
+        enum_field_type_to_int(param->data_type(), 0);
     return MYSQL_SUCCESS;
   } else if (strcmp(metadata, "is_unsigned") == 0) {
     *static_cast<bool *>(data) = param->unsigned_flag;
     return MYSQL_SUCCESS;
+  } else if (strcmp(metadata, "charset") == 0) {
+    *static_cast<const char **>(data) = param->collation.collation->csname;
+    return MYSQL_SUCCESS;
+  } else if (strcmp(metadata, "max_byte_length") == 0) {
+    *static_cast<size_t *>(data) = param->max_length;
+    return MYSQL_SUCCESS;
   }
-
   return MYSQL_FAILURE;
 }
 
@@ -608,6 +622,8 @@ DEFINE_BOOL_METHOD(mysql_stmt_resultset_metadata_imp::field_info,
         get_collation_name(column->charsetnr);
   } else if (strcmp(name, "flags") == 0) {
     *reinterpret_cast<uint *>(value) = column->flags;
+  } else if (strcmp(name, "length") == 0) {
+    *reinterpret_cast<ulong *>(value) = column->length;
   } else if (strcmp(name, "decimals") == 0) {
     *reinterpret_cast<uint *>(value) = column->decimals;
   } else if (strcmp(name, "is_unsigned") == 0) {
@@ -617,11 +633,10 @@ DEFINE_BOOL_METHOD(mysql_stmt_resultset_metadata_imp::field_info,
   } else if (strcmp(name, "col_name") == 0) {
     *reinterpret_cast<char const **>(value) = column->column_name;
   } else if (strcmp(name, "type") == 0) {
-    auto enum_type = enum_field_type_to_int(column->type);
+    auto enum_type = enum_field_type_to_int(column->type, column->flags);
     if (enum_type == MYSQL_SP_ARG_TYPE_INVALID) return MYSQL_FAILURE;
     *reinterpret_cast<uint64_t *>(value) = enum_type;
   } else {
-    assert(false);
     return MYSQL_FAILURE;
   }
   return MYSQL_SUCCESS;
@@ -645,9 +660,8 @@ DEFINE_BOOL_METHOD(mysql_stmt_diagnostics_imp::error,
       reinterpret_cast<Service_statement *>(resource_handle)->stmt;
   if (statement == nullptr) return MYSQL_FAILURE;
   if (!statement->is_error()) return MYSQL_FAILURE;
-
-  *error_message = {statement->get_last_error(),
-                    strlen(statement->get_last_error())};
+  auto last_error = statement->get_last_error();
+  *error_message = {last_error.str, last_error.length};
   return MYSQL_SUCCESS;
 }
 
@@ -658,9 +672,8 @@ DEFINE_BOOL_METHOD(mysql_stmt_diagnostics_imp::sqlstate,
       reinterpret_cast<Service_statement *>(resource_handle)->stmt;
   if (statement == nullptr) return MYSQL_FAILURE;
   if (!statement->is_error()) return MYSQL_FAILURE;
-
-  *sqlstate_error_message = {statement->get_mysql_state(),
-                             strlen(statement->get_mysql_state())};
+  auto state = statement->get_mysql_state();
+  *sqlstate_error_message = {state.str, state.length};
   return MYSQL_SUCCESS;
 }
 
@@ -739,7 +752,7 @@ DEFINE_BOOL_METHOD(mysql_stmt_diagnostics_imp::warning_message,
   auto *warn = reinterpret_cast<Warning *>(warning);
   if (warn == nullptr) return MYSQL_FAILURE;
 
-  *error_message = {warn->m_message, strlen(warn->m_message)};
+  *error_message = {warn->m_message.str, warn->m_message.length};
   return MYSQL_SUCCESS;
 }
 
@@ -851,10 +864,19 @@ DEFINE_BOOL_METHOD(mysql_stmt_get_string_imp::get,
   if (row == nullptr) return MYSQL_FAILURE;
   auto *column = row->get_column(column_index);
   if (column == nullptr) return MYSQL_FAILURE;
-
-  auto *value = std::get_if<char *>(column);
-  if (value != nullptr) {
-    *data = {*value, strlen(*value)};
+  if (std::holds_alternative<LEX_CSTRING>(*column)) {
+    auto &value = std::get<LEX_CSTRING>(*column);
+    *data = {value.str, value.length};
+    *is_null = false;
+  } else if (std::holds_alternative<decimal *>(*column)) {
+    auto value = std::get<decimal *>(*column);
+    THD *thd = current_thd;
+    char *buf = static_cast<char *>(thd->alloc(DECIMAL_MAX_STR_LENGTH));
+    String *str = new (thd->mem_root)
+        String(buf, DECIMAL_MAX_STR_LENGTH, &my_charset_numeric);
+    auto rc = my_decimal2string(E_DEC_FATAL_ERROR, &value->decimal, str);
+    if (rc) return MYSQL_FAILURE;
+    *data = {str->ptr(), str->length()};
     *is_null = false;
   } else {
     *is_null = true;

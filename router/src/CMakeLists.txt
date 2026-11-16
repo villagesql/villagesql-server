@@ -21,6 +21,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+ADD_SUBDIRECTORY(bootstrap)
 ADD_SUBDIRECTORY(connection_pool)
 ADD_SUBDIRECTORY(destination_status)
 ADD_SUBDIRECTORY(harness)
@@ -30,6 +31,7 @@ ADD_SUBDIRECTORY(json_schema_embedder)
 ADD_SUBDIRECTORY(keepalive)
 ADD_SUBDIRECTORY(metadata_cache)
 ADD_SUBDIRECTORY(mock_server)
+ADD_SUBDIRECTORY(mock_host_resolver)
 ADD_SUBDIRECTORY(mysql_protocol)
 ADD_SUBDIRECTORY(mysqlxmessages)
 ADD_SUBDIRECTORY(openssl)
@@ -38,10 +40,19 @@ ADD_SUBDIRECTORY(protobuf)
 ADD_SUBDIRECTORY(rest_api)
 ADD_SUBDIRECTORY(rest_connection_pool)
 ADD_SUBDIRECTORY(rest_metadata_cache)
+ADD_SUBDIRECTORY(rest_host_cache)
+ADD_SUBDIRECTORY(host_cache)
+IF(MRS_JIT_EXECUTOR_LIB)
+  ADD_SUBDIRECTORY(jit_executor)
+  ADD_DEFINITIONS(-DHAVE_JIT_EXECUTOR_PLUGIN)
+ENDIF()
+ADD_SUBDIRECTORY(mysql_rest_service)
 ADD_SUBDIRECTORY(rest_router)
 ADD_SUBDIRECTORY(rest_routing)
 ADD_SUBDIRECTORY(router)
 ADD_SUBDIRECTORY(routing)
+ADD_SUBDIRECTORY(routing_guidelines)
+
 
 # Directory layout after 'make install' is different.
 # Create symlinks to ssl libraries for both: build and install layouts

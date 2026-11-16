@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 drop table if exists t1,t2,t3,t4,t5;
 drop database if exists mysqltest;
@@ -34,10 +35,7 @@ Note	1051	Unknown table 'test.t2'
 create table t1 (b char(0) not null, index(b));
 ERROR 42000: The used storage engine can't index column 'b'
 create table t1 (a int not null,b text) engine=heap;
-ERROR 42000: The used table type doesn't support BLOB/TEXT columns
 drop table if exists t1;
-Warnings:
-Note	1051	Unknown table 'test.t1'
 create table t1 (ordid int(8) not null auto_increment, ord  varchar(50) not null, primary key (ord,ordid)) engine=heap;
 ERROR 42000: Incorrect table definition; there can be only one auto column and it must be defined as a key
 create table not_existing_database.test (a int);
@@ -1163,7 +1161,10 @@ t1	CREATE TABLE `t1` (
   `COMMAND` varchar(16) NOT NULL DEFAULT '',
   `TIME` int NOT NULL DEFAULT '0',
   `STATE` varchar(64) DEFAULT NULL,
-  `INFO` longtext
+  `INFO` longtext,
+  `TIME_MS` bigint NOT NULL DEFAULT '0',
+  `ROWS_SENT` bigint unsigned NOT NULL DEFAULT '0',
+  `ROWS_EXAMINED` bigint unsigned NOT NULL DEFAULT '0'
 ) ENGINE=TMP_TABLE_ENGINE DEFAULT CHARSET=utf8mb3
 drop table t1;
 create temporary table t1 like information_schema.processlist;
@@ -1177,7 +1178,10 @@ t1	CREATE TEMPORARY TABLE `t1` (
   `COMMAND` varchar(16) NOT NULL DEFAULT '',
   `TIME` int NOT NULL DEFAULT '0',
   `STATE` varchar(64) DEFAULT NULL,
-  `INFO` longtext
+  `INFO` longtext,
+  `TIME_MS` bigint NOT NULL DEFAULT '0',
+  `ROWS_SENT` bigint unsigned NOT NULL DEFAULT '0',
+  `ROWS_EXAMINED` bigint unsigned NOT NULL DEFAULT '0'
 ) ENGINE=TMP_TABLE_ENGINE DEFAULT CHARSET=utf8mb3
 drop table t1;
 create table t1 as select * from information_schema.character_sets;
@@ -2187,9 +2191,10 @@ t4	CREATE TABLE `t4` (
 # Drop and add PK in same ALTER statement should be ok
 CREATE TABLE t5(i INT PRIMARY KEY, j INT);
 ALTER TABLE t5 DROP PRIMARY KEY, ADD CONSTRAINT PRIMARY KEY (j);
-# Restriction also applies to temporary tables
 CREATE TEMPORARY TABLE t6(i INT);
-ERROR HY000: Unable to create or change a table without a primary key, when the system variable 'sql_require_primary_key' is set. Add a primary key to the table or unset this variable to avoid this message. Note that tables without a primary key can cause performance problems in row-based replication, so please consult your DBA before changing this setting.
+CREATE TEMPORARY TABLE t2 LIKE t1;
+DROP TABLE t2;
+DROP TABLE t6;
 # Cleanup
 DROP TABLE t5;
 DROP TABLE t4;
@@ -3171,3 +3176,27 @@ SELECT COUNT(*) FROM t3;
 COUNT(*)
 9
 DROP TABLE t1, t2, t3;
+include/rpl/set_gtid_mode_on.inc
+#
+# Bug#31402520: SQL_REQUIRE_PRIMARY_KEY should also accept PKEs
+#
+SET sql_require_primary_key=ON;
+# Table with a PK is allowed, of course.
+CREATE TABLE pk   (a INT PRIMARY KEY);
+# We can't DROP INDEX if that would leave the table without a PK.
+DROP INDEX `PRIMARY` ON pk;
+ERROR HY000: Unable to create or change a table without a primary key, when the system variable 'sql_require_primary_key' is set. Add a primary key to the table or unset this variable to avoid this message. Note that tables without a primary key can cause performance problems in row-based replication, so please consult your DBA before changing this setting.
+# Table with a PKE is (newly) also allowed.
+CREATE TABLE uknn (a INT UNIQUE KEY NOT NULL);
+# We can't DROP INDEX if that would leave the table without a PKE.
+DROP INDEX `a` ON uknn;
+ERROR HY000: Unable to create or change a table without a primary key, when the system variable 'sql_require_primary_key' is set. Add a primary key to the table or unset this variable to avoid this message. Note that tables without a primary key can cause performance problems in row-based replication, so please consult your DBA before changing this setting.
+# Table without a PKE (here: UNIQUE, but NULLable) is (still) not allowed.
+CREATE TABLE ukn  (a INT UNIQUE KEY);
+ERROR HY000: Unable to create or change a table without a primary key, when the system variable 'sql_require_primary_key' is set. Add a primary key to the table or unset this variable to avoid this message. Note that tables without a primary key can cause performance problems in row-based replication, so please consult your DBA before changing this setting.
+# Table with no keys is not allowed.
+CREATE TABLE nk   (a INT NOT NULL);
+ERROR HY000: Unable to create or change a table without a primary key, when the system variable 'sql_require_primary_key' is set. Add a primary key to the table or unset this variable to avoid this message. Note that tables without a primary key can cause performance problems in row-based replication, so please consult your DBA before changing this setting.
+DROP TABLE IF EXISTS pk;
+DROP TABLE IF EXISTS uknn;
+SET SESSION sql_require_primary_key=DEFAULT;

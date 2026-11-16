@@ -1,5 +1,8 @@
 -- source include/have_log_bin.inc
 
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
+
 call mtr.add_suppression('Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.');
 
 SET @old_log_output=@@global.log_output;
@@ -2603,9 +2606,7 @@ delimiter ;|
 select func_1(), func_1(), func_1() from dual;
 --error ER_SP_DOES_NOT_EXIST
 drop function func_1;
---error ER_UNSUPPORTED_PS
 prepare abc from "create event xyz on schedule at now() do select 123";
---error ER_UNKNOWN_STMT_HANDLER
 deallocate prepare abc;
 
 
@@ -2627,9 +2628,7 @@ delimiter |;
 --error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
 create function func_1() returns int begin alter event xyz comment 'xyz'; return 1; end|
 delimiter ;|
---error ER_UNSUPPORTED_PS
 prepare abc from "alter event xyz comment 'xyz'";
---error ER_UNKNOWN_STMT_HANDLER
 deallocate prepare abc;
 
 
@@ -2648,9 +2647,7 @@ delimiter |;
 --error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
 create function func_1() returns int begin drop event xyz; return 1; end|
 delimiter ;|
---error ER_UNSUPPORTED_PS
 prepare abc from "drop event xyz";
---error ER_UNKNOWN_STMT_HANDLER
 deallocate prepare abc;
 
 
@@ -3399,7 +3396,7 @@ INSERT INTO bug19894382 SELECT * FROM client_test_db.bug19894382;
 --echo # Replay binlog events
 let $MYSQLD_DATADIR= `select @@datadir`;
 --exec $MYSQL_BINLOG --force-if-open -d client_test_db $MYSQLD_DATADIR/binlog.000001 > $MYSQLTEST_VARDIR/tmp/mysqlbinlog_bug19894382.binlog
---exec $MYSQL -e "source $MYSQLTEST_VARDIR/tmp/mysqlbinlog_bug19894382.binlog"
+--exec $MYSQL --commands -e "source $MYSQLTEST_VARDIR/tmp/mysqlbinlog_bug19894382.binlog"
 
 --echo # Insert tuples from the client_test_db.bug19894382 to the test.bug19894382.
 --echo # Tuples in the client_test_db.bug19894382 are inserted from the binlog.
@@ -3443,7 +3440,7 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (d date DEFAULT NULL);
 INSERT INTO t1 VALUES ('2018-11-11');
-SET @var1 = 5;
+SET @var1 = 32;
 PREPARE s FROM "DELETE FROM t1 WHERE d = ?";
 --error ER_TRUNCATED_WRONG_VALUE
 EXECUTE s USING @var1;
@@ -3562,36 +3559,36 @@ SET @fltvalx = '  1e38  ';
 INSERT INTO ints VALUES ('');
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO deci VALUES ('');
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO dbls VALUES ('');
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO flts VALUES ('');
 
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO ints VALUES ('   ');
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO deci VALUES ('   ');
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO dbls VALUES ('   ');
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO flts VALUES ('   ');
 
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO ints VALUES (@empty);
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO deci VALUES (@empty);
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO dbls VALUES (@empty);
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO flts VALUES (@empty);
 
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO ints VALUES (@spaces);
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO deci VALUES (@spaces);
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO dbls VALUES (@spaces);
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO flts VALUES (@spaces);
 
 INSERT INTO ints VALUES ('666');
@@ -3623,18 +3620,18 @@ PREPARE ps4 FROM 'INSERT INTO flts VALUES (?)';
 EXECUTE ps1 USING @empty;
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 EXECUTE ps2 USING @empty;
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 EXECUTE ps3 USING @empty;
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 EXECUTE ps4 USING @empty;
 
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 EXECUTE ps1 USING @spaces;
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 EXECUTE ps2 USING @spaces;
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 EXECUTE ps3 USING @spaces;
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 EXECUTE ps4 USING @spaces;
 
 EXECUTE ps1 USING @intval;
@@ -3723,3 +3720,58 @@ PREPARE ps2 FROM 'UPDATE t0 SET v1 = NULL WHERE v2 <> 999;';
 EXECUTE ps2;
 
 DROP TABLE t0;
+
+--echo #
+--echo # Bug#38600714: The SQL reprepare bug results in 100% CPU load
+--echo #
+
+SET @val = 0;
+
+--error ER_NON_DML_DYNAMIC_PARAMETERS
+PREPARE ps FROM "KILL QUERY ?";
+
+--error ER_NON_DML_DYNAMIC_PARAMETERS
+PREPARE ps FROM "PURGE BINARY LOGS BEFORE ?";
+
+--error ER_DEFAULT_VAL_GENERATED_FUNCTION_IS_NOT_ALLOWED
+PREPARE ps FROM "CREATE TABLE t(a INTEGER DEFAULT (?))";
+
+--error ER_GENERATED_COLUMN_FUNCTION_IS_NOT_ALLOWED
+PREPARE ps FROM "CREATE TABLE t(a INTEGER, b INTEGER AS (a + ?))";
+
+CREATE TABLE t(a INTEGER);
+
+--error ER_NON_DML_DYNAMIC_PARAMETERS
+PREPARE ps FROM "ALTER TABLE t ALTER a SET DEFAULT (?)";
+
+--error ER_GENERATED_COLUMN_FUNCTION_IS_NOT_ALLOWED
+PREPARE ps FROM "ALTER TABLE t ADD COLUMN b INTEGER AS (a + ?)";
+
+--error ER_NON_DML_DYNAMIC_PARAMETERS
+PREPARE ps FROM "ALTER TABLE t ADD CHECK (a > ?)";
+
+--error ER_NON_DML_DYNAMIC_PARAMETERS
+PREPARE ps FROM "ALTER TABLE t ADD INDEX ix ((a + ?))";
+
+--error ER_NON_DML_DYNAMIC_PARAMETERS
+PREPARE ps FROM "CREATE INDEX ix ON t((a + ?))";
+
+DROP TABLE t;
+
+--echo # SET statement allows dynamic variables, but is not DML by inheritance.
+
+PREPARE ps FROM "SET @var = ?";
+SET @param = 'Parameter for SET statement';
+EXECUTE ps USING @param;
+SELECT @var;
+
+PREPARE ps FROM "
+CREATE TABLE t(c VARCHAR(100)) AS SELECT ? AS c";
+SET @param = 'Parameter for CREATE TABLE statement';
+EXECUTE ps USING @param;
+SELECT * FROM t;
+
+DROP TABLE t;
+
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

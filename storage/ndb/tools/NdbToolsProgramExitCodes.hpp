@@ -28,6 +28,6 @@
 
 namespace NdbToolsProgramExitCode {
 enum { OK = 0, FAILED = 1, WRONG_ARGS = 2 };
-}
+}  // namespace NdbToolsProgramExitCode
 
 #endif  // NDB_TOOLS_PROGRAM_EXIT_CODES_HPP

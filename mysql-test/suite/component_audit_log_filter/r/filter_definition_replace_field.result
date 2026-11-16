@@ -1,0 +1,621 @@
+SET GLOBAL audit_log_filter.event_mode=FULL;
+SET GLOBAL DEBUG='+d,audit_log_filter_add_record_debug_info';
+SET GLOBAL DEBUG='+d,audit_log_filter_rotate_after_audit_rules_flush';
+CREATE TABLE t1 (id INT);
+CREATE TABLE t2 (id INT);
+#
+# Field replacement for all events of "query" class
+SELECT audit_log_filter_set_filter('replace_query', '{
+"filter": {
+"class": {
+"name": "query",
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_query', '{
+"filter": {
+"class": {
+"name": "query",
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}')
+OK
+SELECT audit_log_filter_set_user('%', 'replace_query');
+audit_log_filter_set_user('%', 'replace_query')
+OK
+INSERT INTO t1 VALUES (1);
+Tag <EVENT_CLASS_NAME>query</EVENT_CLASS_NAME>.*<SQLTEXT>(?:SELECT `audit_log_filter_set_user` \(\.\.\.\)|INSERT INTO `t1` VALUES \(\?\))</SQLTEXT> Ok
+#
+# Field replacement for "general/status" events
+SELECT audit_log_filter_set_filter('replace_general_status_query', '{
+"filter": {
+"class": {
+"name": "general",
+"event": {
+"name": "status",
+"log": {
+"field": {
+"name": "general_command.str",
+"value": "Query"
+          }
+},
+"print": {
+"field": {
+"name": "general_query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_general_status_query', '{
+"filter": {
+"class": {
+"name": "general",
+"event": {
+"name": "status",
+"log": {
+"field": {
+"name": "general_command.str",
+"value": "Query"
+          }
+},
+"print": {
+"field": {
+"name": "general
+OK
+SELECT audit_log_filter_set_user('%', 'replace_general_status_query');
+audit_log_filter_set_user('%', 'replace_general_status_query')
+OK
+INSERT INTO t1 VALUES (2);
+Tag <EVENT_CLASS_NAME>general</EVENT_CLASS_NAME>.*<EVENT_SUBCLASS_NAME>status</EVENT_SUBCLASS_NAME>.*<SQLTEXT>INSERT INTO `t1` VALUES \(\?\)</SQLTEXT> Ok
+#
+# Field replacement for all events of "parse" class
+SELECT audit_log_filter_set_filter('replace_parse_query', '{
+"filter": {
+"class": {
+"name": "parse",
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_parse_query', '{
+"filter": {
+"class": {
+"name": "parse",
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}')
+OK
+SELECT audit_log_filter_set_user('%', 'replace_parse_query');
+audit_log_filter_set_user('%', 'replace_parse_query')
+OK
+INSERT INTO t2 VALUES (1);
+UPDATE t2 SET id = 2 WHERE id = 1;
+SELECT * FROM t2;
+id
+2
+DELETE FROM t2 WHERE id = 2;
+Tag <EVENT_CLASS_NAME>parse</EVENT_CLASS_NAME> Ok
+Tag <SQLTEXT>(?:INSERT INTO `t2` VALUES \(\?\)|UPDATE `t2` SET `id` = \? WHERE `id` = \?|SELECT \* FROM `t2`|DELETE FROM `t2` WHERE `id` = \?|\.\.\.)</SQLTEXT> Ok
+#
+# Field replacement for specific event subclass
+SELECT audit_log_filter_set_filter('replace_query_start_end', '{
+"filter": {
+"class": {
+"name": "query",
+"event": {
+"name": ["start", "status_end"],
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_query_start_end', '{
+"filter": {
+"class": {
+"name": "query",
+"event": {
+"name": ["start", "status_end"],
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+
+OK
+SELECT audit_log_filter_set_user('%', 'replace_query_start_end');
+audit_log_filter_set_user('%', 'replace_query_start_end')
+OK
+INSERT INTO t2 VALUES (1);
+UPDATE t2 SET id = 2 WHERE id = 1;
+SELECT * FROM t2;
+id
+2
+DELETE FROM t2 WHERE id = 2;
+Tag <EVENT_SUBCLASS_NAME>(?:start|status_end)</EVENT_SUBCLASS_NAME> Ok
+Tag <SQLTEXT>(?:SELECT `audit_log_filter_set_user` \(\.\.\.\)|INSERT INTO `t2` VALUES \(\?\)|UPDATE `t2` SET `id` = \? WHERE `id` = \?|SELECT \* FROM `t2`|DELETE FROM `t2` WHERE `id` = \?)</SQLTEXT> Ok
+#
+# Replace for queries not matching provided digest
+SELECT audit_log_filter_set_filter('replace_not_matching_digest', '{
+"filter": {
+"class": {
+"name": "query",
+"event": {
+"name": ["start", "status_end"],
+"print": {
+"field": {
+"name": "query.str",
+"print": {
+"function": {
+"name": "query_digest",
+"args": [{"string": {"string": "INSERT INTO `t2` VALUES (?)"}}]
+}
+},
+"replace": {
+"function": {
+"name": "query_digest"
+              }
+}
+}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_not_matching_digest', '{
+"filter": {
+"class": {
+"name": "query",
+"event": {
+"name": ["start", "status_end"],
+"print": {
+"field": {
+"name": "query.str",
+"print": {
+"function": {
+"name": "query_digest",
+"args": [{"string
+OK
+SELECT audit_log_filter_set_user('%', 'replace_not_matching_digest');
+audit_log_filter_set_user('%', 'replace_not_matching_digest')
+OK
+INSERT INTO t2 VALUES (1);
+UPDATE t2 SET id = 2 WHERE id = 1;
+SELECT * FROM t2;
+id
+2
+DELETE FROM t2 WHERE id = 2;
+Tag <EVENT_SUBCLASS_NAME>(?:start|status_end)</EVENT_SUBCLASS_NAME> Ok
+Tag <SQLTEXT>(?:SELECT `audit_log_filter_set_user` \(\.\.\.\)|INSERT INTO t2 VALUES \(1\)|UPDATE `t2` SET `id` = \? WHERE `id` = \?|SELECT \* FROM `t2`|DELETE FROM `t2` WHERE `id` = \?)</SQLTEXT> Ok
+#
+# Replace general/status queries with query_digest string shorthand
+SELECT audit_log_filter_set_filter('replace_general_status_shorthand', '{
+"filter": {
+"class": {
+"name": "general",
+"event": {
+"name": "status",
+"log": {
+"field": {
+"name": "general_command.str",
+"value": "Query"
+          }
+},
+"print": {
+"field": {
+"name": "general_query.str",
+"print": {
+"function": {
+"name": "query_digest",
+"args": "SELECT ?"
+              }
+},
+"replace": {
+"function": {
+"name": "query_digest"
+              }
+}
+}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_general_status_shorthand', '{
+"filter": {
+"class": {
+"name": "general",
+"event": {
+"name": "status",
+"log": {
+"field": {
+"name": "general_command.str",
+"value": "Query"
+          }
+},
+"print": {
+"field": {
+"name": "gen
+OK
+SELECT audit_log_filter_set_user('%', 'replace_general_status_shorthand');
+audit_log_filter_set_user('%', 'replace_general_status_shorthand')
+OK
+SELECT 1;
+1
+1
+Tag <EVENT_CLASS_NAME>general</EVENT_CLASS_NAME>.*<EVENT_SUBCLASS_NAME>status</EVENT_SUBCLASS_NAME> Ok
+Tag <SQLTEXT>SELECT 1</SQLTEXT> Ok
+INSERT INTO t1 VALUES (3);
+Tag <EVENT_CLASS_NAME>general</EVENT_CLASS_NAME>.*<EVENT_SUBCLASS_NAME>status</EVENT_SUBCLASS_NAME> Ok
+Tag <SQLTEXT>INSERT INTO `t1` VALUES \(\?\)</SQLTEXT> Ok
+#
+# Replace for queries matching provided digest
+SELECT audit_log_filter_set_filter('replace_matching_digest', '{
+"filter": {
+"class": {
+"name": "query",
+"event": {
+"name": ["start"],
+"print": {
+"field": {
+"name": "query.str",
+"print": {
+"not": {
+"function": {
+"name": "query_digest",
+"args": [{"string": {"string": "INSERT INTO `t2` VALUES (?)"}}]
+}
+}
+},
+"replace": {
+"function": {
+"name": "query_digest"
+              }
+}
+}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_matching_digest', '{
+"filter": {
+"class": {
+"name": "query",
+"event": {
+"name": ["start"],
+"print": {
+"field": {
+"name": "query.str",
+"print": {
+"not": {
+"function": {
+"name": "query_digest",
+"args": [{"string": {"stri
+OK
+SELECT audit_log_filter_set_user('%', 'replace_matching_digest');
+audit_log_filter_set_user('%', 'replace_matching_digest')
+OK
+INSERT INTO t2 VALUES (1);
+UPDATE t2 SET id = 2 WHERE id = 1;
+SELECT * FROM t2;
+id
+2
+DELETE FROM t2 WHERE id = 2;
+Tag <EVENT_SUBCLASS_NAME>start</EVENT_SUBCLASS_NAME> Ok
+Tag <SQLTEXT>(?:INSERT INTO `t2` VALUES \(\?\)|UPDATE t2 SET id = 2 WHERE id = 1|SELECT \* FROM t2|DELETE FROM t2 WHERE id = 2)</SQLTEXT> Ok
+#
+# Replace only for events matching specific fields
+SELECT audit_log_filter_set_filter('replace_for_tables', '{
+"filter": {
+"class": {
+"name": "query",
+"event": {
+"name": ["start", "status_end"],
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {
+"function": {
+"name": "query_digest"
+              }
+}
+}
+},
+"log": {
+"or": [
+{
+"field": {
+"name": "sql_command_id",
+"value": "select"
+              }
+},
+{
+"field": {
+"name": "sql_command_id",
+"value": "insert"
+              }
+}
+]
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_for_tables', '{
+"filter": {
+"class": {
+"name": "query",
+"event": {
+"name": ["start", "status_end"],
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {
+"function": {
+"name": "query_digest"
+         
+OK
+SELECT audit_log_filter_set_user('%', 'replace_for_tables');
+audit_log_filter_set_user('%', 'replace_for_tables')
+OK
+INSERT INTO t1 VALUES (1);
+INSERT INTO t2 VALUES (1);
+DELETE FROM t1;
+DELETE FROM t2;
+Tag <EVENT_SUBCLASS_NAME>(?:start|status_end)</EVENT_SUBCLASS_NAME> Ok
+Tag <SQLTEXT>(?:SELECT `audit_log_filter_set_user` \(\.\.\.\)|INSERT INTO `t1` VALUES \(\?\)|INSERT INTO `t2` VALUES \(\?\))</SQLTEXT> Ok
+#
+# Field replacement for table_access events
+SELECT audit_log_filter_set_filter('replace_table_access_query', '{
+"filter": {
+"class": {
+"name": "table_access",
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('replace_table_access_query', '{
+"filter": {
+"class": {
+"name": "table_access",
+"print": {
+"field": {
+"name": "query.str",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}')
+OK
+SELECT audit_log_filter_set_user('%', 'replace_table_access_query');
+audit_log_filter_set_user('%', 'replace_table_access_query')
+OK
+INSERT INTO t1 VALUES (1);
+UPDATE t1 SET id = 2 WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+Tag <EVENT_CLASS_NAME>table_access</EVENT_CLASS_NAME>.*<EVENT_SUBCLASS_NAME>(?:insert|update|delete)</EVENT_SUBCLASS_NAME> Ok
+Tag <SQLTEXT>(?:INSERT INTO `t1` VALUES \(\?\)|UPDATE `t1` SET `id` = \? WHERE `id` = \?|DELETE FROM `t1` WHERE `id` = \?)</SQLTEXT> Ok
+#
+# Check incorrect replacement rule definitions
+SELECT audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"class": {
+"name": "query",
+"print": {
+"field": {
+"name": "status",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"class": {
+"name": "query",
+"print": {
+"field": {
+"name": "status",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}')
+ERROR: Incorrect rule definition: event field 'status' cannot be replaced
+SELECT audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"class": {
+"name": "parse",
+"print": {
+"field": {
+"name": "connection_id",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}');
+audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"class": {
+"name": "parse",
+"print": {
+"field": {
+"name": "connection_id",
+"print": false,
+"replace": {"function": {"name": "query_digest"}}
+}
+}
+}
+}
+}')
+ERROR: Incorrect rule definition: event field 'connection_id' cannot be replaced
+SELECT audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"log": false,
+"class": {
+"log": true,
+"name": "general",
+"event": {
+"name": "status",
+"print": "true"
+      }
+}
+}
+}');
+audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"log": false,
+"class": {
+"log": true,
+"name": "general",
+"event": {
+"name": "status",
+"print": "true"
+      }
+}
+}
+}')
+ERROR: Incorrect rule definition: failed to parse 'print' replacement rule
+SELECT audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"class": [
+{
+"name": "general",
+"print": {
+"field": {
+"name": "general_query.str",
+"print": [],
+"replace": {
+"function": {
+"name": "query_digest"
+              }
+}
+}
+}
+}
+]
+}
+}');
+audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"class": [
+{
+"name": "general",
+"print": {
+"field": {
+"name": "general_query.str",
+"print": [],
+"replace": {
+"function": {
+"name": "query_digest"
+              }
+}
+}
+}
+}
+]
+}
+}')
+ERROR: Incorrect rule definition: the 'log' field must be of bool or object type
+SELECT audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"class": [
+{
+"name": ["query", "parse"],
+"print": {
+"field": {
+"name": "query.str",
+"print": {
+"field": {
+"name": "query_charset",
+"value": "utf8mb4"
+              }
+},
+"replace": {
+"function": {
+"name": "query_digest"
+              }
+}
+}
+}
+}
+]
+}
+}');
+audit_log_filter_set_filter('incorrect_rule', '{
+"filter": {
+"class": [
+{
+"name": ["query", "parse"],
+"print": {
+"field": {
+"name": "query.str",
+"print": {
+"field": {
+"name": "query_charset",
+"value": "utf8mb4"
+              }
+},
+"replace": {
+"function": 
+ERROR: Incorrect rule definition: field name 'query_charset' is not valid for event class 'parse'
+#
+# Cleanup
+SET GLOBAL DEBUG='-d,audit_log_filter_add_record_debug_info';
+SET GLOBAL DEBUG='-d,audit_log_filter_rotate_after_audit_rules_flush';
+DROP TABLE t1, t2;

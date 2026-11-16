@@ -33,6 +33,7 @@
 #include <ratio>
 #include <sstream>
 
+#include "classic_auth_caching_sha2.h"
 #include "classic_connection_base.h"
 #include "classic_frame.h"
 #include "mysql/harness/logging/logging.h"
@@ -327,8 +328,7 @@ stdx::expected<Processor::Result, std::error_code> LazyConnector::from_stash() {
           trace_event_from_stash = trace_span(ev, "mysql/from_stash");
         }
 
-        if (auto pop_res =
-                pool->unstash_mine(mysqlrouter::to_string(*ep), connection())) {
+        if (auto pop_res = pool->unstash_mine(ep->str(), connection())) {
           connection()->server_conn() = std::move(*pop_res);
 
           // reset the seq-id of the server side as this is a new command.
@@ -462,7 +462,8 @@ stdx::expected<Processor::Result, std::error_code> LazyConnector::connected() {
         connection(), in_handshake_,
         [this](const classic_protocol::message::server::Error &err) {
           if (connect_error_is_transient(err) &&
-              (connection()->client_protocol().password().has_value() ||
+              (connection()->client_protocol().credentials().get(
+                   AuthCachingSha2Password::kName) ||
                !connection()
                     ->server_protocol()
                     .server_greeting()

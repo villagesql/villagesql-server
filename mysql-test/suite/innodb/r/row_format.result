@@ -301,7 +301,7 @@ DROP TABLE t_compressed;
 #
 # Bug#35869747: Cannot drop index from upgraded instance
 #
-# Upgrade from 8.0.38 having tables with redundant row format and
+# Upgrade from 8.4.1 having tables with redundant row format and
 # index longer than supported 767 bytes.
 # Stop the running the server.
 # Unzip the datadir.

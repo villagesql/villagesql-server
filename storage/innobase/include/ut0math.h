@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0seq_lock.h"
 
 namespace ut {
+
 /** Computes the result of division rounded towards positive infinity.
 @param[in] numerator     The number you want to be divided
 @param[in] denominator   The number you want to divide by

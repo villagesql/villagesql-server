@@ -1110,6 +1110,11 @@ class Arch_Group {
   @return true if there is at least 1 client that requires durable archiving*/
   bool is_durable() const { return (m_dur_ref_count > 0); }
 
+  /** Make group durable, regardless of whether it has any clients requiring
+  durable archiving. One use is protecting page-tracking information files from
+  being deleted if group recovery fails. */
+  void set_durable() { ++m_dur_ref_count; }
+
   /** Purge archived files until the specified purge LSN.
   @param[in]    purge_lsn       LSN until which archived files needs to be
   purged
@@ -1304,6 +1309,8 @@ using Arch_Grp_List_Iter = Arch_Grp_List::iterator;
 
 class Arch_log_consumer : public Log_consumer {
  public:
+  Log_consumer::consumer_type get_consumer_type() const override;
+
   const std::string &get_name() const override;
 
   lsn_t get_consumed_lsn() const override;

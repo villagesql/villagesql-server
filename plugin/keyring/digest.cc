@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/keyring/digest.h"
-#include <assert.h>
+#include <cassert>
 #include <cstring>
 
 namespace keyring {
@@ -63,10 +63,11 @@ bool Digest::operator==(const Digest &digest) const {
 }
 
 Digest &Digest::operator=(const Digest &digest) {
-  this->length = digest.length;
-  this->is_empty = digest.is_empty;
-  if (digest.is_empty == false)
-    memcpy(this->value, digest.value, digest.length);
+  if (this != &digest) {
+    this->length = digest.length;
+    this->is_empty = digest.is_empty;
+    if (!digest.is_empty) memcpy(this->value, digest.value, digest.length);
+  }
   return *this;
 }
 

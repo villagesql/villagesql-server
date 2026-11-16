@@ -3,6 +3,46 @@
 #
 SET optimizer_trace='enabled=on';
 #
+# WL#17265: hypergraph optimizer is settable when available
+#
+SET SESSION optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@session.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=on', @@session.optimizer_switch) > 0
+1
+SET SESSION optimizer_switch='hypergraph_optimizer=off';
+SELECT LOCATE('hypergraph_optimizer=off', @@session.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=off', @@session.optimizer_switch) > 0
+1
+SET SESSION optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@session.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=on', @@session.optimizer_switch) > 0
+1
+SET GLOBAL optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0
+1
+SET GLOBAL optimizer_switch='hypergraph_optimizer=off';
+SELECT LOCATE('hypergraph_optimizer=off', @@global.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=off', @@global.optimizer_switch) > 0
+1
+SET GLOBAL optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0
+1
+SET PERSIST optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0
+1
+SET PERSIST optimizer_switch='hypergraph_optimizer=off';
+SELECT LOCATE('hypergraph_optimizer=off', @@global.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=off', @@global.optimizer_switch) > 0
+1
+SET PERSIST optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0;
+LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0
+1
+RESET PERSIST optimizer_switch;
+#
 # Bug #33296454: Use the hypergraph optimizer for SET statements
 #
 CREATE TABLE t(x INT);
@@ -80,6 +120,7 @@ COUNT(*)
 SET optimizer_switch = 'hypergraph_optimizer=off';
 PREPARE ps_set FROM 'SET @x = (SELECT COUNT(*) FROM t)';
 PREPARE ps_select FROM 'SELECT COUNT(*) FROM t';
+SET optimizer_switch = 'hypergraph_optimizer=on';
 EXECUTE ps_set;
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE
 WHERE TRACE LIKE '%Constructed hypergraph%';
@@ -117,6 +158,7 @@ SELECT @x;
 3
 # Clean up for Bug #33296454
 DROP TABLE t;
+SET optimizer_switch = 'hypergraph_optimizer=on';
 # Bug #33296454 done
 #
 # Bug #33296504: Use the hypergraph optimizer for subqueries in INSERT statements
@@ -171,6 +213,7 @@ COUNT(*)
 0
 # Clean up for Bug #33296504
 DROP TABLE t1, t2, t3;
+SET optimizer_switch = 'hypergraph_optimizer=on';
 # Bug #33296504 done
 #
 # WL#14673: Enable the hypergraph optimizer for DELETE

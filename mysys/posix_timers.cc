@@ -30,10 +30,11 @@
   @file mysys/posix_timers.cc
 */
 
-#include <errno.h>
-#include <signal.h>
-#include <string.h> /* memset */
-#include <sys/time.h>
+#include <time.h>
+
+// IWYU pragma: no_include <bits/types/sigevent_t.h>
+#include <csignal>
+#include <cstring> /* memset */
 
 #include "my_timer.h" /* my_timer_t */
 
@@ -44,7 +45,7 @@
 */
 
 static void timer_notify_thread_func(sigval arg) {
-  my_timer_t *timer = static_cast<my_timer_t *>(arg.sival_ptr);
+  auto *timer = static_cast<my_timer_t *>(arg.sival_ptr);
   timer->notify_function(timer);
 }
 

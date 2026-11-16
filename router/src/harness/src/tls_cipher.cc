@@ -25,6 +25,7 @@
 
 #include "mysql/harness/tls_cipher.h"
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <system_error>

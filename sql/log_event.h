@@ -40,10 +40,11 @@
 #include <functional>
 #include <list>
 #include <map>
-#include <set>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 
+#include "my_aes.h"
 #include "m_string.h"     // native_strncasecmp
 #include "my_bitmap.h"    // MY_BITMAP
 #include "my_checksum.h"  // ha_checksum
@@ -427,6 +428,7 @@ struct PRINT_EVENT_INFO {
   my_thread_id thread_id;
   bool thread_id_printed;
   uint8_t default_table_encryption;
+  uint8_t enable_cascade_triggers;
 
   PRINT_EVENT_INFO();
 
@@ -908,8 +910,13 @@ class Log_event {
 
            todo: to mts-support Old master Load-data related events
   */
-  bool is_mts_sequential_exec() {
-    switch (get_type_code()) {
+  bool is_mts_sequential_exec() const {
+    return is_mts_sequential_exec(get_type_code());
+  }
+
+  static bool is_mts_sequential_exec(
+      mysql::binlog::event::Log_event_type type_code) {
+    switch (type_code) {
       case mysql::binlog::event::STOP_EVENT:
       case mysql::binlog::event::ROTATE_EVENT:
       case mysql::binlog::event::SLAVE_EVENT:
@@ -921,7 +928,6 @@ class Log_event {
     }
   }
 
- private:
   /*
     possible decisions by get_mts_execution_mode().
     The execution mode can be PARALLEL or not (thereby sequential
@@ -947,22 +953,9 @@ class Log_event {
     EVENT_EXEC_CAN_NOT
   };
 
-  /**
-     MTS Coordinator finds out a way how to execute the current event.
-
-     Besides the parallelizable case, some events have to be applied by
-     Coordinator concurrently with Workers and some to require synchronization
-     with Workers (@c see wait_for_workers_to_finish) before to apply them.
-
-     @param mts_in_group      the being group parsing status, true
-                              means inside the group
-
-     @retval EVENT_EXEC_PARALLEL  if event is executed by a Worker
-     @retval EVENT_EXEC_ASYNC     if event is executed by Coordinator
-     @retval EVENT_EXEC_SYNC      if event is executed by Coordinator
-                                  with synchronization against the Workers
-  */
-  enum enum_mts_event_exec_mode get_mts_execution_mode(bool mts_in_group) {
+  static enum enum_mts_event_exec_mode get_mts_execution_mode(
+      bool mts_in_group, mysql::binlog::event::Log_event_type type_code,
+      uint32 server_id, uint32 log_pos) {
     /*
       Slave workers are unable to handle Format_description_log_event,
       Rotate_log_event and Previous_gtids_log_event correctly.
@@ -991,9 +984,8 @@ class Log_event {
           events that are not in the middle of a transaction will be
           executed in ASYNC mode in that case.
         */
-        (get_type_code() == mysql::binlog::event::FORMAT_DESCRIPTION_EVENT &&
-         ((server_id == (uint32)::server_id) ||
-          (common_header->log_pos == 0))) ||
+        (type_code == mysql::binlog::event::FORMAT_DESCRIPTION_EVENT &&
+         ((server_id == (uint32)::server_id) || (log_pos == 0))) ||
         /*
           All Previous_gtids_log_events in the relay log are generated
           by the slave. They don't have any meaning to the applier, so
@@ -1002,21 +994,42 @@ class Log_event {
           to not feed them to workers because that confuses
           get_slave_worker.
         */
-        (get_type_code() == mysql::binlog::event::PREVIOUS_GTIDS_LOG_EVENT) ||
+        (type_code == mysql::binlog::event::PREVIOUS_GTIDS_LOG_EVENT) ||
         /*
           Rotate_log_event can occur in the middle of a transaction.
           When this happens, either it is a Rotate event generated on
           the slave which has the slave's server_id, or it is a Rotate
           event that originates from a master but has end_log_pos==0.
         */
-        (get_type_code() == mysql::binlog::event::ROTATE_EVENT &&
+        (type_code == mysql::binlog::event::ROTATE_EVENT &&
          ((server_id == (uint32)::server_id) ||
-          (common_header->log_pos == 0 && mts_in_group))))
+          (log_pos == 0 && mts_in_group))))
       return EVENT_EXEC_ASYNC;
-    else if (is_mts_sequential_exec())
+    else if (is_mts_sequential_exec(type_code))
       return EVENT_EXEC_SYNC;
     else
       return EVENT_EXEC_PARALLEL;
+  }
+
+ private:
+  /**
+     MTS Coordinator finds out a way how to execute the current event.
+
+     Besides the parallelizable case, some events have to be applied by
+     Coordinator concurrently with Workers and some to require synchronization
+     with Workers (@c see wait_for_workers_to_finish) before to apply them.
+
+     @param mts_in_group      the being group parsing status, true
+                              means inside the group
+
+     @retval EVENT_EXEC_PARALLEL  if event is executed by a Worker
+     @retval EVENT_EXEC_ASYNC     if event is executed by Coordinator
+     @retval EVENT_EXEC_SYNC      if event is executed by Coordinator
+                                  with synchronization against the Workers
+  */
+  enum enum_mts_event_exec_mode get_mts_execution_mode(bool mts_in_group) {
+    return get_mts_execution_mode(mts_in_group, get_type_code(), server_id,
+                                  common_header->log_pos);
   }
 
   /**
@@ -1061,11 +1074,6 @@ class Log_event {
 
     return arg->num = mts_number_dbs();
   }
-
-  /**
-     @return true  if events carries partitioning data (database names).
-  */
-  bool contains_partition_info(bool);
 
   /*
     @return  the number of updated by the event databases.
@@ -1495,6 +1503,10 @@ class Query_log_event : public virtual mysql::binlog::event::Query_event,
   /** Whether or not the statement represented by this event requires
       `Q_DEFAULT_TABLE_ENCRYPTION` to be logged along aside. */
   bool needs_default_table_encryption{false};
+
+  /** Whether or not the statement represented by this event requires
+      `Q_ENABLE_CASCADE_TRIGGERS` to be logged along aside. */
+  bool need_enable_cascade_triggers{false};
 };
 
 /**
@@ -2382,6 +2394,8 @@ class Unknown_log_event : public mysql::binlog::event::Unknown_event,
   Unknown_log_event(const Unknown_log_event &) = delete;
   Unknown_log_event &operator=(const Unknown_log_event &) = delete;
 
+  enum class kind { UNKNOWN, ENCRYPTED } what;
+
   /**
     Even if this is an unknown event, we still pass description_event to
     Log_event's ctor, this way we can extract maximum information from the
@@ -2492,8 +2506,17 @@ class Table_map_log_event : public mysql::binlog::event::Table_map_event,
 #ifndef MYSQL_SERVER
   table_def *create_table_def() {
     assert(m_colcnt > 0);
+    uint vector_column_count =
+        table_def::vector_column_count(m_coltype, m_colcnt);
+    std::vector<unsigned int> vector_dimensionality;
+    if (vector_column_count > 0) {
+      const Optional_metadata_fields fields(m_optional_metadata,
+                                            m_optional_metadata_len);
+      vector_dimensionality = fields.m_vector_dimensionality;
+    }
     return new table_def(m_coltype, m_colcnt, m_field_metadata,
-                         m_field_metadata_size, m_null_bits, m_flags);
+                         m_field_metadata_size, m_null_bits, m_flags,
+                         vector_dimensionality);
   }
   static bool rewrite_db_in_buffer(
       char **buf, ulong *event_len,
@@ -2633,6 +2656,7 @@ class Table_map_log_event : public mysql::binlog::event::Table_map_event,
   bool init_geometry_type_field();
   bool init_primary_key_field();
   bool init_column_visibility_field();
+  bool init_vector_dimensionality_field();
 #endif
 
 #ifndef MYSQL_SERVER
@@ -2945,30 +2969,51 @@ class Rows_log_event : public virtual mysql::binlog::event::Rows_event,
   uchar *m_key;                /* Buffer to keep key value during searches */
   uint m_key_index;
   KEY *m_key_info; /* Points to description of index #m_key_index */
-  class Key_compare {
+  class Key_equal {
    public:
     /**
        @param  ki  Where to find KEY description
        @note m_distinct_keys is instantiated when Rows_log_event is constructed;
-       it stores a Key_compare object internally. However at that moment, the
+       it stores a Key_equal object internally. However at that moment, the
        index (KEY*) to use for comparisons, is not yet known. So, at
-       instantiation, we indicate the Key_compare the place where it can
+       instantiation, we indicate the Key_equal the place where it can
        find the KEY* when needed (this place is Rows_log_event::m_key_info),
-       Key_compare remembers the place in member m_key_info.
+       Key_equal remembers the place in member m_key_info.
        Before we need to do comparisons - i.e. before we need to insert
        elements, we update Rows_log_event::m_key_info once for all.
     */
-    Key_compare(KEY **ki = nullptr) : m_key_info(ki) {}
+    Key_equal(KEY **ki = nullptr) : m_key_info(ki) {}
     bool operator()(uchar *k1, uchar *k2) const {
       return key_cmp2((*m_key_info)->key_part, k1, (*m_key_info)->key_length,
-                      k2, (*m_key_info)->key_length) < 0;
+                      k2, (*m_key_info)->key_length) == 0;
     }
 
    private:
     KEY **m_key_info;
   };
-  std::set<uchar *, Key_compare> m_distinct_keys;
-  std::set<uchar *, Key_compare>::iterator m_itr;
+  class Key_hash {
+   public:
+    Key_hash(KEY **ki = nullptr) : m_key_info(ki) {}
+    size_t operator()(uchar *ptr) const {
+      size_t hash = 0;
+      if (ptr) {
+        std::string_view sv{reinterpret_cast<const char *>(ptr),
+                            (*m_key_info)->key_length};
+        return std::hash<std::string_view>{}(sv);
+      }
+      return hash;
+    }
+
+   private:
+    KEY **m_key_info;
+  };
+  std::unordered_set<uchar *, Key_hash, Key_equal> m_distinct_keys;
+
+  /**
+    A linear list to store the distinct keys preserving the insert order
+  */
+  std::vector<uchar *> m_distinct_keys_original_order;
+  std::size_t m_distinct_key_idx = 0;
   /**
     A spare buffer which will be used when saving the distinct keys
     for doing an index scan with HASH_SCAN search algorithm.
@@ -2981,6 +3026,8 @@ class Rows_log_event : public virtual mysql::binlog::event::Rows_event,
     @param rli The applier context.
 
     @param cols The bitmap of columns included in the update.
+
+    @param local_cols The bitmap of local columns included in the update.
 
     @param is_after_image Should be true if this is an after-image,
     false if it is a before-image.
@@ -2997,7 +3044,8 @@ class Rows_log_event : public virtual mysql::binlog::event::Rows_event,
     and maybe others).
   */
   int unpack_current_row(const Relay_log_info *const rli, MY_BITMAP const *cols,
-                         bool is_after_image, bool only_seek = false);
+                         MY_BITMAP const *local_cols, bool is_after_image,
+                         bool only_seek = false);
   /**
     Updates the generated columns of the `TABLE` object referenced by
     `m_table`, that have an active bit in the parameter bitset
@@ -3015,9 +3063,8 @@ class Rows_log_event : public virtual mysql::binlog::event::Rows_event,
     This this functions sets the m_rows_lookup_algorithm and also the
     m_key_index with the key index to be used if the algorithm is dependent on
     an index.
-    TODO(Bug#31173056): Remove SUPPRESS_UBSAN_CLANG10
    */
-  void decide_row_lookup_algorithm_and_key() SUPPRESS_UBSAN_CLANG10;
+  void decide_row_lookup_algorithm_and_key();
 
   /*
     Encapsulates the  operations to be done before applying
@@ -3762,11 +3809,24 @@ class Rows_query_log_event : public Ignorable_log_event,
       : Ignorable_log_event(thd_arg) {
     DBUG_TRACE;
     common_header->type_code = mysql::binlog::event::ROWS_QUERY_LOG_EVENT;
+    m_rows_query_length = query_len;
     if (!(m_rows_query =
               (char *)my_malloc(key_memory_Rows_query_log_event_rows_query,
-                                query_len + 1, MYF(MY_WME))))
+                                m_rows_query_length, MYF(MY_WME))))
       return;
-    snprintf(m_rows_query, query_len + 1, "%s", query);
+    memcpy(m_rows_query, query, m_rows_query_length);
+    DBUG_EXECUTE_IF(
+        "rows_query_alter", size_t i = 0; while (i < m_rows_query_length) {
+          if (m_rows_query[i] == '\\') {
+            m_rows_query[i] = '\0';
+            i++;
+            for (auto j = i; j < m_rows_query_length - 1; j++) {
+              m_rows_query[j] = m_rows_query[j + 1];
+            }
+            m_rows_query_length -= 1;
+          } else
+            i++;
+        });
     DBUG_PRINT("enter", ("%s", m_rows_query));
     return;
   }
@@ -3793,7 +3853,7 @@ class Rows_query_log_event : public Ignorable_log_event,
 #endif
   size_t get_data_size() override {
     return mysql::binlog::event::Binary_log_event::IGNORABLE_HEADER_LEN + 1 +
-           strlen(m_rows_query);
+           m_rows_query_length;
   }
 };
 
@@ -3849,18 +3909,6 @@ class Transaction_payload_log_event
  public:
 #ifdef MYSQL_SERVER
 
-  class Applier_context {
-   private:
-    // context for the applier (to remove if we remove the DATABASE scheduler)
-    Mts_db_names m_mts_db_names;
-
-   public:
-    Applier_context() = default;
-    virtual ~Applier_context() { reset(); }
-    void reset() { m_mts_db_names.reset_and_dispose(); }
-    Mts_db_names &get_mts_db_names() { return m_mts_db_names; }
-  };
-
   Transaction_payload_log_event(THD *thd_arg, const char *payload,
                                 uint64_t payload_size,
                                 uint16_t compression_type,
@@ -3897,8 +3945,6 @@ class Transaction_payload_log_event
   size_t get_data_size() override;
 
 #if defined(MYSQL_SERVER)
- private:
-  Applier_context m_applier_ctx;
 
  public:
   int do_apply_event(Relay_log_info const *rli) override;
@@ -3907,9 +3953,6 @@ class Transaction_payload_log_event
   int pack_info(Protocol *protocol) override;
   bool ends_group() const override;
   bool write(Basic_ostream *ostream) override;
-  uint8 get_mts_dbs(Mts_db_names *arg, Rpl_filter *rpl_filter) override;
-  void set_mts_dbs(Mts_db_names &arg);
-  uint8 mts_number_dbs() override;
 #endif
 };
 
@@ -4078,6 +4121,7 @@ class Gtid_log_event : public mysql::binlog::event::Gtid_event,
     Log_event so it should not be modified.
   */
   const Tsid &get_tsid() const { return tsid; }
+#ifdef MYSQL_SERVER
   /**
     Return the SIDNO relative to the global tsid_map for this GTID.
 
@@ -4094,7 +4138,7 @@ class Gtid_log_event : public mysql::binlog::event::Gtid_event,
     @retval negative if adding TSID to global_tsid_map causes an error.
   */
   rpl_sidno get_sidno(bool need_lock);
-
+#endif
   /**
     Return the SIDNO relative to the given Tsid_map for this GTID.
 
@@ -4108,6 +4152,9 @@ class Gtid_log_event : public mysql::binlog::event::Gtid_event,
   rpl_sidno get_sidno(Tsid_map *tsid_map) { return tsid_map->add_tsid(tsid); }
   /// Return the GNO for this GTID.
   rpl_gno get_gno() const override { return spec.gtid.gno; }
+
+  /// @returns The GTID event specification
+  Gtid_specification get_gtid_spec();
 
   /// string holding the text "SET @@GLOBAL.GTID_NEXT = '"
   static const char *SET_STRING_PREFIX;
@@ -4391,6 +4438,7 @@ class Transaction_context_log_event
    */
   std::list<const char *> *get_read_set() { return &read_set; }
 
+#ifdef MYSQL_SERVER
   /**
     Read snapshot version from encoded buffers.
     Cannot be executed during data read from file (event constructor),
@@ -4398,6 +4446,7 @@ class Transaction_context_log_event
     initialization procedure.
    */
   bool read_snapshot_version();
+#endif
 
   /**
     Return the transaction snapshot timestamp.

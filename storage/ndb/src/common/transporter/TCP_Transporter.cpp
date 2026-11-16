@@ -239,8 +239,7 @@ void TCP_Transporter::setSocketOptions(ndb_socket_t socket) {
 }
 
 bool TCP_Transporter::setSocketNonBlocking(ndb_socket_t socket) {
-  if (ndb_socket_nonblock(socket, true) == 0) return true;
-  return false;
+  return ndb_socket_nonblock(socket, true) == 0;
 }
 
 bool TCP_Transporter::send_is_possible(int timeout_millisec) const {
@@ -327,7 +326,8 @@ bool TCP_Transporter::doSend(bool need_wakeup [[maybe_unused]]) {
       assert(sum >= sum_sent);
       remain = sum - sum_sent;
       break;
-    } else if (nBytesSent > 0)  // Sent some, more pending
+    }
+    if (nBytesSent > 0)  // Sent some, more pending
     {
       sum_sent += nBytesSent;
       require(remain >= (Uint32)nBytesSent);
@@ -473,7 +473,7 @@ int TCP_Transporter::doReceive(TransporterReceiveHandle &recvdata) {
         }
       }
       return nBytesRead;
-    } while (1);
+    } while (true);
   } else {
     return 0;
   }

@@ -551,7 +551,10 @@ class Explain_format {
     @retval true        Format is Iterator-based.
     @retval false       Format is not Iterator-based.
   */
-  virtual bool is_iterator_based() const { return false; }
+  virtual bool is_iterator_based(THD *explain_thd [[maybe_unused]],
+                                 const THD *query_thd [[maybe_unused]]) const {
+    return false;
+  }
 
   /**
    * Whether the output of an EXPLAIN statement should be stored in a user
@@ -641,7 +644,7 @@ class Explain_format {
   */
   virtual std::string ExplainJsonToString(Json_object *json [[maybe_unused]]) {
     assert(false);
-    return "";
+    return {};
   }
 };
 

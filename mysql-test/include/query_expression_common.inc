@@ -108,6 +108,7 @@ EXPLAIN FORMAT = tree
 --echo #
 --echo # Bug#33905918 Server crashes after using explain of a query with except/intersect.
 --echo #
+SET explain_json_format_version = 1;
 EXPLAIN SELECT * FROM r UNION ALL SELECT * FROM s;
 EXPLAIN SELECT * FROM r EXCEPT ALL SELECT * FROM s;
 EXPLAIN SELECT * FROM r INTERSECT ALL SELECT * FROM s;
@@ -157,6 +158,7 @@ EXPLAIN FORMAT = json
    (SELECT * FROM r EXCEPT DISTINCT SELECT * FROM s) UNION DISTINCT
    (SELECT * FROM t INTERSECT DISTINCT SELECT * FROM t);
 
+SET explain_json_format_version = DEFAULT;
 DROP TABLE r, s, t;
 
 --echo #
@@ -831,4 +833,21 @@ ORDER BY t1.d;
   FROM t1 INNER JOIN t2 USING (id) ) LIMIT 1)
 ORDER BY t1.d;
 
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Follow-up to Bug#36739383 Assertion 'false'
+--echo # materialize_iterator::SpillState::read_next_row_secondary_over.
+--echo # This is a case of too large a row for default hash table
+--echo # space, which next also overflows the normal tmp table (error
+--echo # 135 HA_ERR_RECORD_FILE_FULL) and must go to InnoDB tmp table.
+--echo #
+CREATE TABLE t1 (a MEDIUMTEXT);
+INSERT INTO t1 VALUES ('a');
+CREATE TABLE t2 AS
+    SELECT REPEAT(a,20000000) AS a FROM t1
+    INTERSECT
+    SELECT REPEAT(a,20000000) AS a FROM t1;
+
+SELECT LENGTH(a), SUBSTRING(a FROM 20000000-4 FOR 4) FROM t2;
 DROP TABLE t1, t2;

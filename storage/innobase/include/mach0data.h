@@ -120,7 +120,7 @@ static inline uint32_t mach_get_compressed_size(ulint n);
 @param[in,out]  b       pointer to memory where to read;
 advanced by the number of bytes consumed
 @return unsigned value */
-static inline uint32_t mach_read_next_compressed(const byte **b);
+[[nodiscard]] static inline uint32_t mach_read_next_compressed(const byte **b);
 
 /** The following function is used to store data in 6 consecutive
 bytes. We store the most significant byte to the lowest address.
@@ -168,7 +168,8 @@ static inline ulint mach_u64_write_compressed(byte *b, uint64_t n);
 @param[in,out]  b       pointer to memory where to read;
 advanced by the number of bytes consumed
 @return unsigned value */
-static inline uint64_t mach_u64_read_next_compressed(const byte **b);
+[[nodiscard]] static inline uint64_t mach_u64_read_next_compressed(
+    const byte **b);
 
 /** Writes a 64-bit integer in a compressed form (1..11 bytes).
 @param[in]      b       pointer to memory where to store
@@ -284,6 +285,26 @@ static inline void mach_write_ulonglong(byte *dest, ulonglong src, ulint len,
 @return value read */
 [[nodiscard]] static inline uint32_t mach_read_ulint(const byte *ptr,
                                                      mlog_id_t type);
+
+/** Writes 1, 2 or 4 bytes to a file page.
+@param[in]  ptr   pointer where to write
+@param[in]  val   value to write
+@param[in]  type   MLOG_1BYTE, MLOG_2BYTES, MLOG_4BYTES */
+static inline void mach_write_ulint(byte *ptr, ulint val, mlog_id_t type) {
+  switch (type) {
+    case MLOG_1BYTE:
+      mach_write_to_1(ptr, val);
+      break;
+    case MLOG_2BYTES:
+      mach_write_to_2(ptr, val);
+      break;
+    case MLOG_4BYTES:
+      mach_write_to_4(ptr, val);
+      break;
+    default:
+      ut_error;
+  }
+}
 
 #include "mach0data.ic"
 

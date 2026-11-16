@@ -35,23 +35,23 @@
 #ifdef MY_MSCRT_DEBUG
 #include <crtdbg.h>
 #endif
-#include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
+#ifdef HAVE_GETRUSAGE
+#include <sys/resource.h>  // IWYU pragma: keep
+// IWYU pragma: no_include <bits/types/struct_rusage.h>
+#endif
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
 #include <sys/types.h>
-#include <unordered_map>
 
-#include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
-#include "my_macros.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
 #include "my_thread.h"
-#include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_memory.h"
@@ -60,19 +60,16 @@
 #include "mysql/psi/mysql_stage.h"
 #include "mysql/psi/mysql_thread.h"
 #include "mysql/psi/psi_cond.h"
-#include "mysql/psi/psi_file.h"
-#include "mysql/psi/psi_memory.h"
 #include "mysql/psi/psi_mutex.h"
 #include "mysql/psi/psi_rwlock.h"
-#include "mysql/psi/psi_stage.h"
 #include "mysql/psi/psi_thread.h"
 #include "mysql/strings/m_ctype.h"
 #include "mysys/my_static.h"
 #include "mysys/mysys_priv.h"
 #include "mysys_err.h"
-#include "nulls.h"
+#include "nulls.h"  // IWYU pragma: keep
 #include "str2int.h"
-#include "strxmov.h"
+#include "strxmov.h"  // IWYU pragma: keep
 #include "template_utils.h"
 
 #ifdef HAVE_SYS_RESOURCE_H
@@ -96,6 +93,8 @@ extern void my_main_thread_end();
 
 bool my_init_done = false;
 ulong my_thread_stack_size = 65536;
+MYSQL_FILE *mysql_stdin = NULL;
+static MYSQL_FILE instrumented_stdin;
 
 static ulong atoi_octal(const char *str) {
   long int tmp;
@@ -153,6 +152,10 @@ bool my_init() {
   /* Default creation of new dir's */
   if ((str = getenv("UMASK_DIR")) != nullptr)
     my_umask_dir = (int)(atoi_octal(str) | 0700);
+
+  instrumented_stdin.m_file = stdin;
+  instrumented_stdin.m_psi = NULL; /* not yet instrumented */
+  mysql_stdin = &instrumented_stdin;
 
   if (my_thread_global_init()) return true;
 
@@ -462,15 +465,16 @@ PSI_stage_info stage_waiting_for_table_level_lock = {
 PSI_stage_info stage_waiting_for_disk_space = {0, "Waiting for disk space", 0,
                                                PSI_DOCUMENT_ME};
 
-PSI_mutex_key key_IO_CACHE_append_buffer_lock, key_IO_CACHE_SHARE_mutex,
-    key_KEY_CACHE_cache_lock, key_THR_LOCK_heap, key_THR_LOCK_lock,
-    key_THR_LOCK_malloc, key_THR_LOCK_mutex, key_THR_LOCK_myisam,
-    key_THR_LOCK_net, key_THR_LOCK_open, key_THR_LOCK_threads, key_TMPDIR_mutex,
-    key_THR_LOCK_myisam_mmap;
+PSI_mutex_key key_BITMAP_mutex, key_IO_CACHE_append_buffer_lock,
+    key_IO_CACHE_SHARE_mutex, key_KEY_CACHE_cache_lock, key_THR_LOCK_heap,
+    key_THR_LOCK_lock, key_THR_LOCK_malloc, key_THR_LOCK_mutex,
+    key_THR_LOCK_myisam, key_THR_LOCK_net, key_THR_LOCK_open,
+    key_THR_LOCK_threads, key_TMPDIR_mutex, key_THR_LOCK_myisam_mmap;
 
 #ifdef HAVE_PSI_MUTEX_INTERFACE
 
 static PSI_mutex_info all_mysys_mutexes[] = {
+    {&key_BITMAP_mutex, "BITMAP::mutex", 0, 0, PSI_DOCUMENT_ME},
     {&key_IO_CACHE_append_buffer_lock, "IO_CACHE::append_buffer_lock", 0, 0,
      PSI_DOCUMENT_ME},
     {&key_IO_CACHE_SHARE_mutex, "IO_CACHE::SHARE_mutex", 0, 0, PSI_DOCUMENT_ME},

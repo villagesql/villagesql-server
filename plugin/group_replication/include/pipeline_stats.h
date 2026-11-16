@@ -32,13 +32,19 @@
 #include "my_inttypes.h"
 #include "plugin/group_replication/include/gcs_plugin_messages.h"
 #include "plugin/group_replication/include/plugin_psi.h"
+#include "plugin/group_replication/include/plugin_status_variables.h"
 
 /**
   Flow control modes:
-    FCM_DISABLED  flow control disabled
-    FCM_QUOTA introduces a delay only on transactions the exceed a quota
+    FCM_DISABLED        flow control disabled
+
+    FCM_QUOTA           introduces a delay only on transactions the exceed a
+                        quota
+
+    FCM_QUOTA_MAJORITY  introduces a delay only on transactions that exceed the
+                        quota on majority of the nodes
 */
-enum Flow_control_mode { FCM_DISABLED = 0, FCM_QUOTA };
+enum Flow_control_mode { FCM_DISABLED = 0, FCM_QUOTA, FCM_QUOTA_MAJORITY };
 
 /**
   @class Pipeline_stats_member_message
@@ -651,6 +657,11 @@ class Flow_control_module {
   Pipeline_member_stats *get_pipeline_stats(const std::string &member_id);
 
   /**
+    Gets stats related to Flow Control
+  */
+  void get_flow_control_stats(group_replication_fc_stats &stats);
+
+  /**
     Compute and wait the amount of time in microseconds that must
     be elapsed before a new message is sent.
     If there is no need to wait, the method returns immediately.
@@ -682,6 +693,11 @@ class Flow_control_module {
   */
   std::atomic<int64> m_quota_used;
   std::atomic<int64> m_quota_size;
+
+  /*
+    Seconds spent in flow control
+  */
+  uint64 m_flow_control_time;
 
   /*
     Counter incremented on every flow control step.

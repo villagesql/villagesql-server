@@ -92,7 +92,6 @@ bool Ignore_error_handler::handle_condition(
     codes are used in any other case in future.
   */
   switch (sql_errno) {
-    case ER_SUBQUERY_NO_1_ROW:
     case ER_ROW_IS_REFERENCED_2:
     case ER_NO_REFERENCED_ROW_2:
     case ER_NO_REFERENCED_ROW:
@@ -208,6 +207,7 @@ bool Strict_error_handler::handle_condition(
     case ER_WARN_NULL_TO_NOTNULL:
     case ER_CUT_VALUE_GROUP_CONCAT:
     case ER_DATETIME_FUNCTION_OVERFLOW:
+    case ER_TEMPORAL_FUNCTION_OVERFLOW:
     case ER_WARN_TOO_FEW_RECORDS:
     case ER_WARN_TOO_MANY_RECORDS:
     case ER_INVALID_ARGUMENT_FOR_LOGARITHM:

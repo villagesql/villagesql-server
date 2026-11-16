@@ -70,7 +70,7 @@ NdbLogEventHandle ndb_mgm_create_logevent_handle_same_socket(NdbMgmHandle mh) {
 extern "C" NdbLogEventHandle ndb_mgm_create_logevent_handle(
     NdbMgmHandle mh, const int filter[]) {
   constexpr bool allow_tls = true;
-  auto h = new (std::nothrow) ndb_logevent_handle(
+  auto *h = new (std::nothrow) ndb_logevent_handle(
       ndb_mgm_listen_event_internal(mh, filter, 1, allow_tls));
 
   if (h && !h->socket.is_valid()) {
@@ -501,7 +501,7 @@ extern "C" int ndb_logevent_get_next(const NdbLogEventHandle h,
      * Undo effect of bug#16723708 fix to maintain
      * backwards compatibility
      */
-    Uint32 category = (Uint32)dst->category;
+    auto category = (Uint32)dst->category;
     switch (category) {
       case (Uint32)NDB_MGM_ILLEGAL_EVENT_CATEGORY:
         category = (Uint32)LogLevel::llInvalid;
@@ -535,7 +535,7 @@ extern "C" int ndb_logevent_get_next2(const NdbLogEventHandle h,
   */
   char buf[1024];
   const NDB_TICKS start = NdbTick_getCurrentTicks();
-  while (1) {
+  while (true) {
     if (in.gets(buf, sizeof(buf)) == nullptr) {
       h->m_error = NDB_LEH_READ_ERROR;
       return -1;
@@ -547,7 +547,7 @@ extern "C" int ndb_logevent_get_next2(const NdbLogEventHandle h,
 
     if (strcmp("log event reply\n", buf) == 0) break;
 
-    if (strcmp("<PING>\n", buf)) g_eventLogger->info("skipped: %s", buf);
+    if (strcmp("<PING>\n", buf) != 0) g_eventLogger->info("skipped: %s", buf);
 
     if (in.timedout()) return 0;
 
@@ -558,7 +558,7 @@ extern "C" int ndb_logevent_get_next2(const NdbLogEventHandle h,
 
   /* Read name-value pairs until empty new line */
   Properties p;
-  while (1) {
+  while (true) {
     if (in.gets(buf, sizeof(buf)) == nullptr) {
       h->m_error = NDB_LEH_READ_ERROR;
       return -1;

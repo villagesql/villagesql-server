@@ -210,7 +210,7 @@ int NdbTimestamp_GetLocalComponents(const std::timespec *t,
 }
 
 static NdbTimestampStringFormat default_format =
-    NdbTimestampStringFormat::LegacyFormat;
+    NdbTimestampStringFormat::Iso8601Utc;
 
 /*
  * unsigned_integer_to_zero_padded_string
@@ -376,7 +376,7 @@ int NdbTimestamp_GetAsString(ndb::span<char> buf,
 int NdbTimestamp_SetDefaultStringFormat(NdbTimestampStringFormat format) {
   switch (format) {
     case NdbTimestampStringFormat::DefaultFormat:
-      default_format = NdbTimestampStringFormat::LegacyFormat;
+      default_format = NdbTimestampStringFormat::Iso8601Utc;
       return 0;
     case NdbTimestampStringFormat::LegacyFormat:
     case NdbTimestampStringFormat::Iso8601Utc:

@@ -32,6 +32,7 @@
 #include <cstdarg>
 
 #include "debugger/EventLogger.hpp"
+#include "my_compiler.h"
 #include "ndb_init.h"
 #include "portlib/NdbDir.hpp"
 #include "portlib/NdbTCP.h"
@@ -92,7 +93,7 @@ void emit(bool p, const char *dir, const char *fmt, std::va_list ap) {
   cstrbuf<100> line;
   require(line.appendf("%s %d %s%s ", p ? "ok" : "not ok", globalTestInfo.run,
                        (dir ? "# " : "-"), (dir ? dir : "")) != -1);
-  require(line.appendf(fmt, ap) != -1);
+  require(line.vappendf(fmt, ap) != -1);
   line.replace_end_if_truncated("...");
   puts(line.c_str());
   if (globalTestInfo.run == opt_last_test) exit(exit_status());
@@ -288,10 +289,16 @@ class Session : public SocketServer::Session {
   NdbSocket m_socket;
 
  public:
+  // GCC 16 emits a false-positive -Wmaybe-uninitialized warning here when
+  // the base SocketServer::Session is initialized with a reference to the
+  // not-yet-initialized m_socket member.
+  MY_COMPILER_DIAGNOSTIC_PUSH()
+  MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wmaybe-uninitialized")
   Session(NdbSocket &&socket, class Service *server)
       : SocketServer::Session(m_socket),
         m_server(server),
         m_socket(std::move(socket)) {}
+  MY_COMPILER_DIAGNOSTIC_POP()
   void runSession() override;
 };
 
@@ -337,7 +344,7 @@ class TestTlsKeyManager : public TlsKeyManager {
       : m_ndb(ndb), m_addr(opt_port + server_node_id) {
     init(server_node_id, m_ndb->nc[server_node_id]);
     if (start && ctx()) {
-      Test::Service *service = new Test::Service(*this);
+      auto *service = new Test::Service(*this);
       require(m_server.setup(service, &m_addr));
       m_server_thd = m_server.startServer();
       printf("TestTlsKeyManager listening on port %d\n", m_addr.get_port());
@@ -382,7 +389,7 @@ class TestTlsKeyManager : public TlsKeyManager {
 };
 
 const NodeCertificate *get_self_signed(int id) {
-  NodeCertificate *nc = new NodeCertificate(Node::Type::Client, id);
+  auto *nc = new NodeCertificate(Node::Type::Client, id);
   nc->create_keys("P-256");
   int r1 = nc->self_sign();
   require(r1 == 0);
@@ -403,7 +410,7 @@ void test_connecting_unrelated(TestTlsKeyManager &t) {
   Test::CertAuthority other_ca("Other");
   other_ca.sign(other_ca);
 
-  NodeCertificate *nc = new NodeCertificate(Node::Type::Client, 14);
+  auto *nc = new NodeCertificate(Node::Type::Client, 14);
   nc->create_keys("P-256");
   nc->finalise(other_ca.cert(), other_ca.key());
   t.add_finalised_cert(14, nc);
@@ -686,13 +693,13 @@ void test_key_replace(Test::CertAuthority &ca) {
     TlsKeyManager km1;
     km1.init(154, ndb.nc[154]);
     bool r = km1.check_replace_date(.85F);
-    ok((r == true), "    Cert 154 should not be replaced");
+    ok(r, "    Cert 154 should not be replaced");
   }
   {
     TlsKeyManager km2;
     km2.init(155, ndb.nc[155]);
     bool r = km2.check_replace_date(.85F);
-    ok((r == false), "    Cert 155 should be replaced");
+    ok(!r, "    Cert 155 should be replaced");
   }
 }
 

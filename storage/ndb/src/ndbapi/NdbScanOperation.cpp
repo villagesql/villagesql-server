@@ -79,7 +79,7 @@ NdbScanOperation::~NdbScanOperation() {
  *
  *****************************************************************************/
 void NdbScanOperation::setErrorCode(int aErrorCode) const {
-  NdbScanOperation *pnonConstThis = const_cast<NdbScanOperation *>(this);
+  auto *pnonConstThis = const_cast<NdbScanOperation *>(this);
 
   NdbTransaction *tmp = theNdbCon;
   pnonConstThis->theNdbCon = m_transConnection;
@@ -88,7 +88,7 @@ void NdbScanOperation::setErrorCode(int aErrorCode) const {
 }
 
 void NdbScanOperation::setErrorCodeAbort(int aErrorCode) const {
-  NdbScanOperation *pnonConstThis = const_cast<NdbScanOperation *>(this);
+  auto *pnonConstThis = const_cast<NdbScanOperation *>(this);
 
   NdbTransaction *tmp = theNdbCon;
   pnonConstThis->theNdbCon = m_transConnection;
@@ -350,13 +350,13 @@ int NdbScanOperation::handleScanOptions(const ScanOptions *options) {
  * It is used by table scan and index scan.
  */
 int NdbScanOperation::generatePackedReadAIs(const NdbRecord *result_record,
-                                            bool &haveBlob,
+                                            bool &usesBlobHandles,
                                             const Uint32 *m_read_mask) {
   Bitmask<MAXNROFATTRIBUTESINWORDS> readMask;
   Uint32 columnCount = 0;
   Uint32 maxAttrId = 0;
 
-  haveBlob = false;
+  usesBlobHandles = false;
 
   for (Uint32 i = 0; i < result_record->noOfColumns; i++) {
     const NdbRecord::Attr *col = &result_record->columns[i];
@@ -371,9 +371,9 @@ int NdbScanOperation::generatePackedReadAIs(const NdbRecord *result_record,
       continue;
 
     /* Blob reads are handled with a getValue() in NdbBlob.cpp. */
-    if (unlikely(col->flags & NdbRecord::IsBlob)) {
+    if (unlikely(col->flags & NdbRecord::UsesBlobHandle)) {
       m_keyInfo = 1;  // Need keyinfo for blob scan
-      haveBlob = true;
+      usesBlobHandles = true;
       continue;
     }
 
@@ -421,10 +421,10 @@ int NdbScanOperation::generatePackedReadAIs(const NdbRecord *result_record,
  */
 inline int NdbScanOperation::scanImpl(
     const NdbScanOperation::ScanOptions *options, const Uint32 *readMask) {
-  bool haveBlob = false;
+  bool usesBlobHandles = false;
 
   /* Add AttrInfos for packed read of cols in result_record */
-  if (generatePackedReadAIs(m_attribute_record, haveBlob, readMask) != 0)
+  if (generatePackedReadAIs(m_attribute_record, usesBlobHandles, readMask) != 0)
     return -1;
 
   theInitialReadSize = theTotalCurrAI_Len - AttrInfo::SectionSizeInfoLength;
@@ -443,7 +443,7 @@ inline int NdbScanOperation::scanImpl(
    * For old Api Scan ops, the Blob handles are already
    * set up by the call to getBlobHandle()
    */
-  if (unlikely(haveBlob) && !m_scanUsingOldApi) {
+  if (unlikely(usesBlobHandles) && !m_scanUsingOldApi) {
     if (getBlobHandlesNdbRecord(m_transConnection, readMask) == -1) return -1;
   }
 
@@ -473,7 +473,7 @@ int NdbScanOperation::handleScanOptionsVersion(const ScanOptions *&optionsPtr,
                (sizeOfOptions != sizeof(ScanOptions)))) {
     /* Different size passed, perhaps it's an old client */
     if (sizeOfOptions == sizeof(ScanOptions_v1)) {
-      const ScanOptions_v1 *oldOptions = (const ScanOptions_v1 *)optionsPtr;
+      const auto *oldOptions = (const ScanOptions_v1 *)optionsPtr;
 
       /* v1 of ScanOptions, copy into current version
        * structure and update options ptr
@@ -581,10 +581,9 @@ int NdbScanOperation::getPartValueFromInfo(const Ndb::PartitionSpec *partInfo,
          */
         *partValue = hashVal;
         return 0;
-      } else {
-        setErrorCodeAbort(ret);
-        return -1;
       }
+      setErrorCodeAbort(ret);
+      return -1;
     }
 
     case Ndb::PartitionSpec::PS_DISTR_KEY_RECORD: {
@@ -599,10 +598,9 @@ int NdbScanOperation::getPartValueFromInfo(const Ndb::PartitionSpec *partInfo,
          */
         *partValue = hashVal;
         return 0;
-      } else {
-        setErrorCodeAbort(ret);
-        return -1;
       }
+      setErrorCodeAbort(ret);
+      return -1;
     }
   }
 
@@ -626,6 +624,7 @@ static int compare_index_row_prefix(const NdbRecord *rec, const char *row1,
 
   for (i = 0; i < prefix_length; i++) {
     const NdbRecord::Attr *col = &rec->columns[rec->key_indexes[i]];
+    require(!(col->flags & NdbRecord::UsesRowSideBuffer));
 
     bool is_null1 = col->is_null(row1);
     bool is_null2 = col->is_null(row2);
@@ -673,7 +672,7 @@ int NdbIndexScanOperation::getDistKeyFromRange(const NdbRecord *key_record,
   Uint32 xfrmbuf[MAX_KEY_SIZE_IN_WORDS * MAX_XFRM_MULTIPLY];
   char shrinkbuf[NDB_MAX_KEY_SIZE];
   char *tmpshrink = shrinkbuf;
-  Uint32 tmplen = (Uint32)sizeof(shrinkbuf);
+  auto tmplen = (Uint32)sizeof(shrinkbuf);
 
   /* This can't work for User Defined partitioning */
   assert(key_record->table->m_fragmentType !=
@@ -684,6 +683,7 @@ int NdbIndexScanOperation::getDistKeyFromRange(const NdbRecord *key_record,
   for (i = 0; i < key_record->distkey_index_length; i++) {
     const NdbRecord::Attr *col =
         &key_record->columns[key_record->distkey_indexes[i]];
+    require(!(col->flags & NdbRecord::UsesRowSideBuffer));
     if (col->flags & NdbRecord::IsMysqldShrinkVarchar) {
       if (tmplen >= 256) {
         Uint32 len;
@@ -714,13 +714,12 @@ int NdbIndexScanOperation::getDistKeyFromRange(const NdbRecord *key_record,
   if (ret == 0) {
     *distKey = hashValue;
     return 0;
-  } else {
-#ifdef VM_TRACE
-    ndbout << "err: " << ret << endl;
-#endif
-    setErrorCodeAbort(ret);
-    return -1;
   }
+#ifdef VM_TRACE
+  ndbout << "err: " << ret << endl;
+#endif
+  setErrorCodeAbort(ret);
+  return -1;
 }
 
 int NdbScanOperation::validatePartInfoPtr(const Ndb::PartitionSpec *&partInfo,
@@ -728,8 +727,7 @@ int NdbScanOperation::validatePartInfoPtr(const Ndb::PartitionSpec *&partInfo,
                                           Ndb::PartitionSpec &tmpSpec) {
   if (unlikely(sizeOfPartInfo != sizeof(Ndb::PartitionSpec))) {
     if (sizeOfPartInfo == sizeof(Ndb::PartitionSpec_v1)) {
-      const Ndb::PartitionSpec_v1 *oldPSpec =
-          (const Ndb::PartitionSpec_v1 *)partInfo;
+      const auto *oldPSpec = (const Ndb::PartitionSpec_v1 *)partInfo;
 
       /* Let's upgrade to the latest variant */
       tmpSpec.type = oldPSpec->type;
@@ -1033,7 +1031,7 @@ int NdbIndexScanOperation::setBound(const NdbRecord *key_record,
       theDistrKeyIndicator_ = (m_pruneState == SPS_ONE_PARTITION);
       theDistributionKey = m_pruningKey;
 
-      ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+      auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
       ScanTabReq::setDistributionKeyFlag(req->requestInfo,
                                          theDistrKeyIndicator_);
       req->distributionKey = theDistributionKey;
@@ -1198,7 +1196,7 @@ int NdbScanOperation::processTableScanDefs(NdbScanOperation::LockMode lm,
 
   theNdbCon->theScanningOp = this;
   // The number of acc-scans are limited therefore use tup-scans instead.
-  bool tupScan = (scan_flags & SF_TupScan) || true;
+  bool tupScan = true;  // (scan_flags & SF_TupScan)
 #if defined(VM_TRACE)
   if (theNdb->theImpl->forceAccTableScans) {
     tupScan = false;
@@ -1255,7 +1253,7 @@ int NdbScanOperation::processTableScanDefs(NdbScanOperation::LockMode lm,
   }  // if
 
   theSCAN_TABREQ->setSignal(GSN_SCAN_TABREQ, refToBlock(theNdbCon->m_tcRef));
-  ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+  auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
   req->apiConnectPtr = theNdbCon->theTCConPtr;
   req->tableId = m_accessTable->m_id;
   req->tableSchemaVersion = m_accessTable->m_version;
@@ -1360,7 +1358,7 @@ void NdbScanOperation::setReadLockMode(LockMode lockMode) {
       return;
   }
   theLockMode = lockMode;
-  ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+  auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
   Uint32 reqInfo = req->requestInfo;
   ScanTabReq::setLockMode(reqInfo, lockExcl);
   ScanTabReq::setHoldLockFlag(reqInfo, lockHoldMode);
@@ -1374,7 +1372,7 @@ int NdbScanOperation::fix_receivers(Uint32 parallel) {
     const Uint32 sz = parallel * (4 * sizeof(char *) + sizeof(Uint32));
 
     /* Allocate as Uint64 to ensure proper alignment for pointers. */
-    Uint64 *tmp = new Uint64[(sz + 7) / 8];
+    auto *tmp = new Uint64[(sz + 7) / 8];
     if (tmp == nullptr) {
       setErrorCodeAbort(4000);
       return -1;
@@ -1515,19 +1513,18 @@ int NdbScanOperation::executeCursor(int nodeId) {
       m_executed = true;  // Mark operation as executed
 
       return 0;
+    }
+    if (!theImpl->get_node_stopping(nodeId) ||
+        (theImpl->getNodeSequence(nodeId) != seq)) {
+      TRACE_DEBUG("The node is hard dead when attempting to start a scan");
+      setErrorCode(4029);
+      tCon->theReleaseOnClose = true;
     } else {
-      if (!(theImpl->get_node_stopping(nodeId) &&
-            (theImpl->getNodeSequence(nodeId) == seq))) {
-        TRACE_DEBUG("The node is hard dead when attempting to start a scan");
-        setErrorCode(4029);
-        tCon->theReleaseOnClose = true;
-      } else {
-        TRACE_DEBUG("The node is stopping when attempting to start a scan");
-        setErrorCode(4030);
-      }  // if
-      tCon->theCommitStatus = NdbTransaction::Aborted;
-      return -1;
+      TRACE_DEBUG("The node is stopping when attempting to start a scan");
+      setErrorCode(4030);
     }  // if
+    tCon->theCommitStatus = NdbTransaction::Aborted;
+    return -1;
   }
 }
 
@@ -1682,7 +1679,8 @@ int NdbScanOperation::nextResultNdbRecord(const char *&out_row,
         int ret_code = poll_guard.wait_scan(3 * timeout, nodeId, forceSend);
         if (ret_code == 0 && seq == theImpl->getNodeSequence(nodeId)) {
           continue;
-        } else if (ret_code == -1) {
+        }
+        if (ret_code == -1) {
           retVal = -1;
         } else {
           idx = last;
@@ -1748,7 +1746,7 @@ int NdbScanOperation::send_next_scan(Uint32 cnt, bool stopScanFlag) {
 
     Uint32 *theData = tSignal.getDataPtrSend();
     theData[0] = theNdbCon->theTCConPtr;
-    theData[1] = stopScanFlag == true ? 1 : 0;
+    theData[1] = stopScanFlag ? 1 : 0;
     Uint64 transId = theNdbCon->theTransactionId;
     theData[2] = (Uint32)transId;
     theData[3] = (Uint32)(transId >> 32);
@@ -1851,7 +1849,7 @@ void NdbScanOperation::close(bool forceSend, bool releaseOp) {
   m_transConnection = nullptr;
 
   if (tTransCon && releaseOp) {
-    NdbIndexScanOperation *tOp = (NdbIndexScanOperation *)this;
+    auto *tOp = (NdbIndexScanOperation *)this;
 
     bool ret [[maybe_unused]];
     if (theStatus != WaitResponse) {
@@ -1962,8 +1960,7 @@ int NdbScanOperation::finaliseScanOldApi() {
    */
   int result = -1;
 
-  const unsigned char *emptyMask =
-      (const unsigned char *)NdbDictionaryImpl::m_emptyMask;
+  const auto *emptyMask = (const unsigned char *)NdbDictionaryImpl::m_emptyMask;
 
   if (theOperationType == OpenScanRequest)
     /* Create table scan operation with an empty
@@ -1973,7 +1970,7 @@ int NdbScanOperation::finaliseScanOldApi() {
                            emptyMask, &options, sizeof(ScanOptions));
   else {
     assert(theOperationType == OpenRangeScanRequest);
-    NdbIndexScanOperation *isop = static_cast<NdbIndexScanOperation *>(this);
+    auto *isop = static_cast<NdbIndexScanOperation *>(this);
 
     if (isop->currentRangeOldApi != nullptr) {
       /* Add current bound to bound list */
@@ -2085,7 +2082,7 @@ int NdbScanOperation::prepareSendScan(Uint32 /*aTC_ConnectPtr*/,
    * ScanTabReq
    *  (Always request keyinfo when using blobs)
    */
-  ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+  auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
   Uint32 reqInfo = req->requestInfo;
   ScanTabReq::setKeyinfoFlag(reqInfo, keyInfo);
   ScanTabReq::setNoDiskFlag(reqInfo, (m_flags & OF_NO_DISK) != 0);
@@ -2137,7 +2134,7 @@ int NdbScanOperation::prepareSendScan(Uint32 /*aTC_ConnectPtr*/,
   assert(theParallelism > 0);
   const Uint32 alloc_size =
       ((full_rowsize + bufsize) * theParallelism) / sizeof(Uint32);
-  Uint32 *buf = new Uint32[alloc_size];
+  auto *buf = new Uint32[alloc_size];
   DBUG_EXECUTE_IF("ndb_scanbuff_oom", {
     g_eventLogger->info("DBUG_EXECUTE_IF(ndb_scanbuff_oom...");
     delete[] buf;
@@ -2155,9 +2152,11 @@ int NdbScanOperation::prepareSendScan(Uint32 /*aTC_ConnectPtr*/,
   ScanTabReq::setScanBatch(req->requestInfo, batch_size);
 
   for (Uint32 i = 0; i < theParallelism; i++) {
-    m_receivers[i]->do_setup_ndbrecord(m_attribute_record,
-                                       reinterpret_cast<char *>(buf),
-                                       m_read_range_no, (key_size > 0));
+    m_receivers[i]->do_setup_ndbrecord(
+        m_attribute_record, reinterpret_cast<char *>(buf),
+        reinterpret_cast<char *>(buf) + m_attribute_record->m_row_size,
+        m_attribute_record->m_row_side_buffer_size, m_read_range_no,
+        (key_size > 0));
     buf += full_rowsize / sizeof(Uint32);
 
     NdbReceiverBuffer *recbuf =
@@ -2261,8 +2260,7 @@ int NdbScanOperation::doSendScan(int aProcessorId) {
     Uint32 attrInfoLen = secs[1].sz;
     Uint32 keyInfoLen = (numSections == 3) ? secs[2].sz : 0;
 
-    ScanTabReq *scanTabReq =
-        CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+    auto *scanTabReq = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
 
     Uint32 connectPtr = scanTabReq->apiConnectPtr;
     Uint32 transId1 = scanTabReq->transId1;
@@ -2280,7 +2278,7 @@ int NdbScanOperation::doSendScan(int aProcessorId) {
     if (keyInfoLen) {
       GSIReader keyInfoReader(secs[2].sectionIter);
       theSCAN_TABREQ->theVerId_signalNumber = GSN_KEYINFO;
-      KeyInfo *keyInfo = (KeyInfo *)theSCAN_TABREQ->getDataPtrSend();
+      auto *keyInfo = (KeyInfo *)theSCAN_TABREQ->getDataPtrSend();
       keyInfo->connectPtr = connectPtr;
       keyInfo->transId[0] = transId1;
       keyInfo->transId[1] = transId2;
@@ -2300,7 +2298,7 @@ int NdbScanOperation::doSendScan(int aProcessorId) {
 
     GSIReader attrInfoReader(secs[1].sectionIter);
     theSCAN_TABREQ->theVerId_signalNumber = GSN_ATTRINFO;
-    AttrInfo *attrInfo = (AttrInfo *)theSCAN_TABREQ->getDataPtrSend();
+    auto *attrInfo = (AttrInfo *)theSCAN_TABREQ->getDataPtrSend();
     attrInfo->connectPtr = connectPtr;
     attrInfo->transId[0] = transId1;
     attrInfo->transId[1] = transId2;
@@ -2394,7 +2392,7 @@ NdbOperation *NdbScanOperation::takeOverScanOp(OperationType opType,
   if (newOp == nullptr) {
     return nullptr;
   }
-  pTrans->theSimpleState = 0;
+  pTrans->theSimpleState = false;
 
   assert(len > 0);
   assert(len < 16384);
@@ -2425,7 +2423,7 @@ NdbOperation *NdbScanOperation::takeOverScanOp(OperationType opType,
   }
 
   // Copy the first 8 words of key info from KEYINF20 into TCKEYREQ
-  TcKeyReq *tcKeyReq = CAST_PTR(TcKeyReq, newOp->theTCREQ->getDataPtrSend());
+  auto *tcKeyReq = CAST_PTR(TcKeyReq, newOp->theTCREQ->getDataPtrSend());
   Uint32 i = MIN(TcKeyReq::MaxKeyInfo, len);
   memcpy(tcKeyReq->keyInfo, src, 4 * i);
   src += i * 4;
@@ -2438,7 +2436,7 @@ NdbOperation *NdbScanOperation::takeOverScanOp(OperationType opType,
     while (tSignal && left > KeyInfo::DataLength) {
       tSignal->setSignal(GSN_KEYINFO, refToBlock(pTrans->m_tcRef));
       tSignal->setLength(KeyInfo::MaxSignalLength);
-      KeyInfo *keyInfo = CAST_PTR(KeyInfo, tSignal->getDataPtrSend());
+      auto *keyInfo = CAST_PTR(KeyInfo, tSignal->getDataPtrSend());
       memcpy(keyInfo->keyData, src, 4 * KeyInfo::DataLength);
       src += 4 * KeyInfo::DataLength;
       left -= KeyInfo::DataLength;
@@ -2452,7 +2450,7 @@ NdbOperation *NdbScanOperation::takeOverScanOp(OperationType opType,
       tSignal->setSignal(GSN_KEYINFO, refToBlock(pTrans->m_tcRef));
       tSignal->setLength(KeyInfo::HeaderLength + left);
       newOp->theLastKEYINFO = tSignal;
-      KeyInfo *keyInfo = CAST_PTR(KeyInfo, tSignal->getDataPtrSend());
+      auto *keyInfo = CAST_PTR(KeyInfo, tSignal->getDataPtrSend());
       memcpy(keyInfo->keyData, src, 4 * left);
     }
   }
@@ -2510,7 +2508,7 @@ NdbOperation *NdbScanOperation::takeOverScanOpNdbRecord(
   NdbOperation *op = pTrans->getNdbOperation(record->table, nullptr);
   if (!op) return nullptr;
 
-  pTrans->theSimpleState = 0;
+  pTrans->theSimpleState = false;
   op->theStatus = NdbOperation::UseNdbRecord;
   op->theOperationType = opType;
   op->m_abortOption = AbortOnError;
@@ -2545,14 +2543,6 @@ NdbOperation *NdbScanOperation::takeOverScanOpNdbRecord(
 
   if (opType == ReadRequest || opType == ReadExclusive) {
     op->theLockMode = theLockMode;
-    /*
-     * Apart from taking over the row lock, we also support reading again,
-     * though typical usage will probably use an empty mask to read nothing.
-     */
-    op->theReceiver.getValues(record, row);
-  } else if (opType == DeleteRequest && row != nullptr) {
-    /* Delete with a 'pre-read' - prepare the Receiver */
-    op->theReceiver.getValues(record, row);
   }
 
   /* Handle any OperationOptions */
@@ -2566,12 +2556,25 @@ NdbOperation *NdbScanOperation::takeOverScanOpNdbRecord(
     }
   }
 
+  if (opType == ReadRequest || opType == ReadExclusive) {
+    /*
+     * Apart from taking over the row lock, we also support reading again,
+     * though typical usage will probably use an empty mask to read nothing.
+     */
+    op->theReceiver.getValues(record, row, op->m_row_side_buffer,
+                              op->m_row_side_buffer_size);
+  } else if (opType == DeleteRequest && row != nullptr) {
+    /* Delete with a 'pre-read' - prepare the Receiver */
+    op->theReceiver.getValues(record, row, op->m_row_side_buffer,
+                              op->m_row_side_buffer_size);
+  }
+
   /* Setup Blob handles... */
   switch (opType) {
     case ReadRequest:
     case ReadExclusive:
     case UpdateRequest:
-      if (unlikely(record->flags & NdbRecord::RecHasBlob)) {
+      if (unlikely(record->flags & NdbRecord::RecUsesBlobHandles)) {
         if (op->getBlobHandlesNdbRecord(pTrans, readMask.rep.data) == -1)
           return nullptr;
       }
@@ -2621,10 +2624,9 @@ NdbBlob *NdbScanOperation::getBlobHandle(const char *anAttrName) {
       m_keyInfo = 1;
 
     return NdbOperation::getBlobHandle(m_transConnection, col);
-  } else {
-    setErrorCode(4004);
-    return nullptr;
   }
+  setErrorCode(4004);
+  return nullptr;
 }
 
 NdbBlob *NdbScanOperation::getBlobHandle(Uint32 anAttrId) {
@@ -2640,10 +2642,9 @@ NdbBlob *NdbScanOperation::getBlobHandle(Uint32 anAttrId) {
       m_keyInfo = 1;
 
     return NdbOperation::getBlobHandle(m_transConnection, col);
-  } else {
-    setErrorCode(4004);
-    return nullptr;
   }
+  setErrorCode(4004);
+  return nullptr;
 }
 
 /**
@@ -2716,8 +2717,7 @@ NdbRecAttr *NdbScanOperation::getValue_impl(const NdbColumnImpl *attrInfo,
                                             char *aValue) {
   if (theStatus == UseNdbRecord)
     return getValue_NdbRecord_scan(attrInfo, aValue);
-  else
-    return getValue_NdbRecAttr_scan(attrInfo, aValue);
+  return getValue_NdbRecAttr_scan(attrInfo, aValue);
 }
 
 NdbIndexScanOperation::NdbIndexScanOperation(Ndb *aNdb)
@@ -2819,6 +2819,7 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
   if (theOperationType == OpenRangeScanRequest && (0 <= type && type <= 4)) {
     const NdbRecord *key_record = m_accessTable->m_ndbrecord;
     const Uint32 maxKeyRecordBytes = key_record->m_row_size;
+    require(key_record->m_row_side_buffer_size == 0);
 
     Uint32 valueLen = 0;
     if (aValue != nullptr)
@@ -2848,10 +2849,11 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
     }
 
     NdbRecord::Attr attr = key_record->columns[columnNum];
+    require(!(attr.flags & NdbRecord::UsesRowSideBuffer));
 
     byteOffset = attr.offset;
 
-    bool inclusive = !((type == BoundLT) || (type == BoundGT));
+    bool inclusive = (type != BoundLT) && (type != BoundGT);
 
     if (currentRangeOldApi == nullptr) {
       /* Current bound is undefined, allocate space for definition */
@@ -2871,8 +2873,7 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
       }
 
       /* Initialise bounds definition info */
-      OldApiScanRangeDefinition *boundsDef =
-          (OldApiScanRangeDefinition *)boundSpace->aRef();
+      auto *boundsDef = (OldApiScanRangeDefinition *)boundSpace->aRef();
 
       boundsDef->oldBound.lowBound.highestKey = 0;
       boundsDef->oldBound.lowBound.highestSoFarIsStrict = false;
@@ -2886,8 +2887,7 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
       currentRangeOldApi = boundSpace;
     }
 
-    OldApiScanRangeDefinition *bounds =
-        (OldApiScanRangeDefinition *)currentRangeOldApi->aRef();
+    auto *bounds = (OldApiScanRangeDefinition *)currentRangeOldApi->aRef();
 
     /* Add to lower bound if required */
     if (type == BoundEQ || type == BoundLE || type == BoundLT) {
@@ -2907,11 +2907,10 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
         return -1;
     }
     return 0;
-  } else {
-    /* Can only call setBound/equal() for an NdbIndexScanOperation */
-    setErrorCodeAbort(4514);
-    return -1;
   }
+  /* Can only call setBound/equal() for an NdbIndexScanOperation */
+  setErrorCodeAbort(4514);
+  return -1;
 }
 
 /* Method called just prior to scan execution to initialise
@@ -2924,8 +2923,7 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
  */
 int NdbIndexScanOperation::buildIndexBoundOldApi(int range_no) {
   IndexBound ib;
-  OldApiScanRangeDefinition *boundDef =
-      (OldApiScanRangeDefinition *)currentRangeOldApi->aRef();
+  auto *boundDef = (OldApiScanRangeDefinition *)currentRangeOldApi->aRef();
 
   int result = 1;
 
@@ -3026,6 +3024,7 @@ int NdbIndexScanOperation::ndbrecord_insert_bound(const NdbRecord *key_record,
                                                   Uint32 *&firstWordOfBound) {
   char buf[NdbRecord::Attr::SHRINK_VARCHAR_BUFFSIZE];
   const NdbRecord::Attr *column = &key_record->columns[column_index];
+  require(!(column->flags & NdbRecord::UsesRowSideBuffer));
 
   bool is_null = column->is_null(row);
   Uint32 len = 0;
@@ -3178,7 +3177,7 @@ int NdbIndexScanOperation::processIndexScanDefs(LockMode lm, Uint32 scan_flags,
      */
     if (order_desc) {
       m_descending = true;
-      ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+      auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
       ScanTabReq::setDescendingFlag(req->requestInfo, true);
     }
     if (order_by) {
@@ -3222,6 +3221,7 @@ int compare_ndbrecord(const NdbReceiver *r1, const NdbReceiver *r2,
   for (i = 0; i < key_record->key_index_length; i++) {
     const NdbRecord::Attr *key_col =
         &key_record->columns[key_record->key_indexes[i]];
+    require(!(key_col->flags & NdbRecord::UsesRowSideBuffer));
     assert(key_col->attrId < result_record->m_attrId_indexes_length);
     int col_idx = result_record->m_attrId_indexes[key_col->attrId];
     assert(col_idx >= 0);
@@ -3233,6 +3233,7 @@ int compare_ndbrecord(const NdbReceiver *r1, const NdbReceiver *r2,
       return 0;  // Column not present -> done
 
     const NdbRecord::Attr *result_col = &result_record->columns[col_idx];
+    require(!(result_col->flags & NdbRecord::UsesRowSideBuffer));
     bool a_is_null = result_col->is_null(a_row);
     bool b_is_null = result_col->is_null(b_row);
     if (a_is_null) {
@@ -3294,8 +3295,7 @@ int NdbIndexScanOperation::next_result_ordered_ndbrecord(const char *&out_row,
     current = m_current_api_receiver;
     for (int i = 0; i < count; i++) {
       const char *nextRow = m_conf_receivers[i]->getNextRow();  // Fetch first
-      assert(nextRow != nullptr);
-      ((void)nextRow);
+      require(nextRow != nullptr);
       ordered_insert_receiver(current--, m_conf_receivers[i]);
     }
     m_current_api_receiver = current;
@@ -3313,10 +3313,9 @@ int NdbIndexScanOperation::next_result_ordered_ndbrecord(const char *&out_row,
   if (current < theParallelism &&
       (out_row = m_api_receivers[current]->getCurrentRow()) != nullptr) {
     return 0;
-  } else {
-    theError.code = Err_scanAlreadyComplete;
-    return 1;  // End-of-file
   }
+  theError.code = Err_scanAlreadyComplete;
+  return 1;  // End-of-file
 }
 
 /* Insert a newly fully-retrieved receiver in the correct sorted place. */
@@ -3417,10 +3416,9 @@ int NdbIndexScanOperation::ordered_send_scan_wait_for_all(bool forceSend) {
     Uint32 new_receivers = m_conf_receivers_count;
     m_conf_receivers_count = 0;
     return new_receivers;
-  } else {
-    setErrorCode(4028);
-    return -1;
   }
+  setErrorCode(4028);
+  return -1;
 }
 
 /*
@@ -3485,8 +3483,7 @@ int NdbScanOperation::close_impl(bool forceSend, PollGuard *poll_guard) {
    * any
    */
   if (theOperationType == OpenRangeScanRequest) {
-    NdbIndexScanOperation *isop =
-        reinterpret_cast<NdbIndexScanOperation *>(this);
+    auto *isop = reinterpret_cast<NdbIndexScanOperation *>(this);
 
     /* Release any Index Bound resources */
     isop->releaseIndexBoundsOldApi();

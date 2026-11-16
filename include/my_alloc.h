@@ -34,6 +34,7 @@
 
 #include <string.h>
 
+#include <cstdint>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -174,6 +175,14 @@ struct MEM_ROOT {
     return AllocSlow(length);
   }
 
+  void *Alloc_aligned(size_t length, size_t alignment) MY_ATTRIBUTE((malloc)) {
+    void *ptr = Alloc(length + alignment);
+    if (!ptr) return nullptr;
+    ptr = reinterpret_cast<void *>(
+        MY_ALIGN(reinterpret_cast<std::uintptr_t>(ptr), alignment));
+    return ptr;
+  }
+
   /**
     Allocate 'num' objects of type T, and initialize them to a default value
     that is created by passing the supplied args to T's constructor. If args
@@ -200,7 +209,7 @@ struct MEM_ROOT {
 
     // Initialize all elements.
     for (size_t i = 0; i < num; ++i) {
-      new (&ret[i]) T(args...);
+      ::new (&ret[i]) T(args...);
     }
 
     return ret;
@@ -396,6 +405,9 @@ struct MEM_ROOT {
     return false;
   }
 
+  bool IsSingleBlock() const {
+    return m_current_block != nullptr && m_current_block->prev == nullptr;
+  }
   /// @}
 
  private:

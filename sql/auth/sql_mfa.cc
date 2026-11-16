@@ -27,6 +27,7 @@
 
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/plugin_auth.h"
+#include "sql/auth/auth_plugin_shutdown.h"
 #include "sql/auth/authentication_policy.h"
 #include "sql/auth/sql_mfa.h"
 #include "sql/derror.h" /* ER_THD */
@@ -643,8 +644,10 @@ bool Multi_factor_auth_info::validate_plugins_in_auth_chain(
       inbuflen = gen_password.length();
       set_generated_password(gen_password.c_str(), gen_password.length());
     }
-    if (auth->generate_authentication_string(outbuf, &buflen, inbuf,
-                                             inbuflen)) {
+    Auth_plugin_operation_guard op_guard;
+    if (!op_guard || auth->generate_authentication_string(outbuf, &buflen,
+                                                          inbuf, inbuflen)) {
+      if (!op_guard) my_error(ER_SERVER_SHUTDOWN, MYF(0));
       plugin_unlock(nullptr, plugin);
       return (true);
     }
@@ -853,20 +856,22 @@ bool Multi_factor_auth_info::init_registration(THD *thd, uint nth_factor) {
   my_h_service h_reg_svc = nullptr;
   SERVICE_TYPE(mysql_authentication_registration) * mysql_auth_reg_service;
 
-  if (!srv_registry->acquire(service_name.c_str(), &h_reg_svc)) {
-    mysql_auth_reg_service =
-        reinterpret_cast<SERVICE_TYPE(mysql_authentication_registration) *>(
-            h_reg_svc);
+  if (srv_registry->acquire(service_name.c_str(), &h_reg_svc)) return true;
 
-    mysql_auth_reg_service->get_challenge_length(&plugin_buf_len);
-    /* buffer allocated by server before passing to component service */
-    plugin_buf = new unsigned char[plugin_buf_len];
-    if (mysql_auth_reg_service->init(&plugin_buf, plugin_buf_len)) {
-      delete[] plugin_buf;
-      srv_registry->release(h_reg_svc);
-      return true;
-    }
+  mysql_auth_reg_service =
+      reinterpret_cast<SERVICE_TYPE(mysql_authentication_registration) *>(
+          h_reg_svc);
+
+  mysql_auth_reg_service->get_challenge_length(&plugin_buf_len);
+  /* buffer allocated by server before passing to component service */
+  plugin_buf = new (std::nothrow) unsigned char[plugin_buf_len];
+  if (plugin_buf == nullptr) return true;
+  if (mysql_auth_reg_service->init(&plugin_buf, plugin_buf_len)) {
+    delete[] plugin_buf;
+    srv_registry->release(h_reg_svc);
+    return true;
   }
+
   srv_registry->release(h_reg_svc);
 
   /* `user name` + '@' + `host name` */
@@ -877,13 +882,17 @@ bool Multi_factor_auth_info::init_registration(THD *thd, uint nth_factor) {
 
   /* append user name to random challenge(32bit salt + RP id). */
   size_t buflen = plugin_buf_len + user_str_len + net_length_size(user_str_len);
-  unsigned char *buf = new unsigned char[buflen];
+  unsigned char *buf = new (std::nothrow) unsigned char[buflen];
+  if (buf == nullptr) {
+    delete[] plugin_buf;
+    return true;
+  }
   unsigned char *pos = buf;
 
   memcpy(pos, plugin_buf, plugin_buf_len);
   pos += plugin_buf_len;
 
-  if (plugin_buf) delete[] plugin_buf;
+  delete[] plugin_buf;
 
   pos = net_store_length(pos, user_str_len);
   memcpy(pos, user_str.c_str(), user_str_len);
@@ -894,8 +903,11 @@ bool Multi_factor_auth_info::init_registration(THD *thd, uint nth_factor) {
   /* convert auth string to base64 to be stored in mysql.user table */
   char outbuf[MAX_FIELD_WIDTH] = {0};
   unsigned int outbuflen = MAX_FIELD_WIDTH;
-  if (auth->generate_authentication_string(
+  Auth_plugin_operation_guard op_guard;
+  if (!op_guard ||
+      auth->generate_authentication_string(
           outbuf, &outbuflen, reinterpret_cast<char *>(buf), buflen)) {
+    if (!op_guard) my_error(ER_SERVER_SHUTDOWN, MYF(0));
     if (buf) delete[] buf;
     plugin_unlock(nullptr, plugin);
     return (true);
@@ -982,9 +994,12 @@ bool Multi_factor_auth_info::finish_registration(THD *thd, LEX_USER *user_name,
   /* convert auth string to base64 to be stored in mysql.user table */
   char outbuf[MAX_FIELD_WIDTH] = {0};
   unsigned int outbuflen = MAX_FIELD_WIDTH;
-  if (auth->generate_authentication_string(
+  Auth_plugin_operation_guard op_guard;
+  if (!op_guard ||
+      auth->generate_authentication_string(
           outbuf, &outbuflen, reinterpret_cast<char *>(challenge_response),
           challenge_response_len)) {
+    if (!op_guard) my_error(ER_SERVER_SHUTDOWN, MYF(0));
     plugin_unlock(nullptr, plugin);
     return (true);
   }

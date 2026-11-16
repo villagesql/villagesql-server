@@ -965,7 +965,7 @@ int mysql_event_tracking_general_notify(
     const char *subclass_name, int error_code, const char *msg,
     size_t msg_len) {
   mysql_event_tracking_general_data event;
-  char user_buff[MAX_USER_HOST_SIZE];
+  char user_buff[MAX_USER_HOST_SIZE + 1];
 
   assert(thd);
 
@@ -1308,6 +1308,10 @@ int mysql_event_tracking_table_access_notify(THD *thd, Table_ref *table) {
   mysql_event_tracking_table_access_subclass_t subclass;
   const char *subclass_name;
   int ret;
+
+  if ((thd->system_thread &
+       (SYSTEM_THREAD_SLAVE_SQL | SYSTEM_THREAD_SLAVE_WORKER)) != 0)
+    return 0;
 
   /* Do not generate events for non query table access. */
   if (!thd->lex->query_tables) return 0;

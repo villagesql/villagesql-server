@@ -22,12 +22,17 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <fcntl.h>
+#include <cstdio>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #include <mysql/components/component_implementation.h>
 #include <mysql/components/service_implementation.h>
+#include <mysql/components/services/bits/system_variables_bits.h>
 #include <mysql/components/services/component_sys_var_service.h>
-#include <mysql/plugin.h>
+#include <mysql/components/services/mysql_system_variable.h>
 
-#include "my_macros.h"
 #include "nulls.h"
 #include "template_utils.h"
 #include "typelib.h"
@@ -47,6 +52,7 @@ const char *filename = "test_component_sys_var_service.log";
 
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
+REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
 
 /**
   This file contains a test (example) component, which tests the services of
@@ -75,6 +81,7 @@ static ulong ulong_variable_value;
 static longlong longlong_variable_value;
 static ulonglong ulonglong_variable_value;
 static bool bool_variable_value;
+static int hidden_int_variable_value;
 
 /**
   Initialization entry method for test component. It executes the tests of
@@ -90,6 +97,7 @@ static mysql_service_status_t test_component_sys_var_service_init() {
   longlong_variable_value = 0;
   ulonglong_variable_value = 0;
   bool_variable_value = false;
+  hidden_int_variable_value = 0;
 
   char *var_value;
   size_t len;
@@ -100,6 +108,22 @@ static mysql_service_status_t test_component_sys_var_service_init() {
   WRITE_LOG("%s\n", "test_component_sys_var init:");
 
   var_value = new char[VARIABLE_BUFFER_SIZE + 1];
+
+  {
+    INTEGRAL_CHECK_ARG(int) hidden_int_arg;
+    hidden_int_arg.def_val = 8;
+    hidden_int_arg.min_val = 0;
+    hidden_int_arg.max_val = 1024;
+    hidden_int_arg.blk_sz = 0;
+    if (mysql_service_component_sys_variable_register->register_variable(
+            "test_component", "hidden_int_sys_var",
+            PLUGIN_VAR_INT | PLUGIN_VAR_READONLY | PLUGIN_VAR_NOSYSVAR,
+            "Registering hidden int system variable", nullptr, nullptr,
+            (void *)&hidden_int_arg, (void *)&hidden_int_variable_value)) {
+      WRITE_LOG("%s\n", "hidden int register_variable failed.");
+    }
+    WRITE_LOG("hidden_int_variable_value=%d\n", hidden_int_variable_value);
+  }
 
   INTEGRAL_CHECK_ARG(int) int_arg;
   int_arg.def_val = 8;
@@ -238,72 +262,81 @@ static mysql_service_status_t test_component_sys_var_service_init() {
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "int_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "int_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "uint_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "uint_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "long_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "long_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "ulong_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "ulong_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "longlong_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "longlong_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "ulonglong_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "ulonglong_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "bool_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "bool_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "enum_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "enum_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
   }
 
   len = VARIABLE_BUFFER_SIZE;
-  if (mysql_service_component_sys_variable_register->get_variable(
-          "test_component", "str_sys_var", (void **)&var_value, &len)) {
+  if (mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", "test_component", "str_sys_var",
+          (void **)&var_value, &len)) {
     WRITE_LOG("%s\n", "get_variable failed.");
   } else {
     WRITE_LOG("variable value : %s\n", var_value);
@@ -323,6 +356,8 @@ static mysql_service_status_t test_component_sys_var_service_deinit() {
   outfile = fopen(filename, "a+");
 
   WRITE_LOG("%s\n", "test_component_sys_var deinit:");
+
+  // no need to call unregister for PLUGIN_VAR_NOSYSVAR variables
 
   if (mysql_service_component_sys_variable_unregister->unregister_variable(
           "test_component", "int_sys_var")) {
@@ -394,7 +429,7 @@ END_COMPONENT_PROVIDES();
 BEGIN_COMPONENT_REQUIRES(test_component_sys_var_service)
 REQUIRES_SERVICE(component_sys_variable_register),
     REQUIRES_SERVICE(component_sys_variable_unregister),
-    END_COMPONENT_REQUIRES();
+    REQUIRES_SERVICE(mysql_system_variable_reader), END_COMPONENT_REQUIRES();
 
 /* A list of metadata to describe the Component. */
 BEGIN_COMPONENT_METADATA(test_component_sys_var_service)

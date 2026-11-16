@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,7 +35,7 @@ bool printTUX_MAINT_REQ(FILE *output, const Uint32 *theData, Uint32 len,
   }
 
   // const bool inOut = rbn & (1 << 15);
-  const TuxMaintReq *const sig = (const TuxMaintReq *)theData;
+  const auto *const sig = (const TuxMaintReq *)theData;
   fprintf(output, " errorCode=%d\n", sig->errorCode);
   fprintf(output, " table: id=%u", sig->tableId);
   fprintf(output, " index: id=%u", sig->indexId);

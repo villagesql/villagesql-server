@@ -27,8 +27,8 @@
 #endif
 #include <ndb_daemon.h>
 #include <portlib/NdbHost.h>
-#include <stdio.h>
 #include <BaseString.hpp>
+#include <cstdio>
 #include "portlib/ndb_compiler.h"
 
 #include "m_string.h"

@@ -269,6 +269,7 @@ FUNCTION(INSTALL_DEBUG_TARGET target)
   IF(LINUX AND
       (UNIX_INSTALL_RPATH_ORIGIN_PRIV_LIBDIR OR
         WITH_MLE OR WITH_KEYRING_AWS OR
+        ADD_INSTALL_RPATH_FOR_ICU OR
         INSTALL_RPATH_FOR_FIDO2))
     IF(${target} STREQUAL "mysqld")
       INSTALL(SCRIPT ${CMAKE_SOURCE_DIR}/cmake/rpath_remove.cmake)
@@ -773,6 +774,7 @@ ENDFUNCTION(COPY_OPENSSL_BINARY)
 # We also update the RUNPATH of libraries to be '$ORIGIN' to ensure that
 # libraries get correct load-time dependencies. This is done using the
 # linux tool patchelf(1)
+# This cmake macro is duplicated in `router/cmake/install_macros.cmake`.
 #
 # Set ${OUTPUT_LIBRARY_NAME} to the new location.
 # Set ${OUTPUT_TARGET_NAME} to the name of a target which will do the copying.
@@ -865,6 +867,8 @@ ENDFUNCTION(COPY_CUSTOM_SHARED_LIBRARY_LINUX)
 # Adds a target which copies the .dll to runtime_output_directory.
 # Adds INSTALL(FILES ....) rule to install the .dll to ${INSTALL_BINDIR}.
 # Looks for matching .pdb file, and installs it if found.
+# This cmake macro is duplicated in `router/cmake/install_macros.cmake`.
+#
 # Sets ${OUTPUT_TARGET_NAME} to the name of a target which will do the copying.
 FUNCTION(COPY_CUSTOM_DLL library_full_filename OUTPUT_TARGET_NAME)
   IF(NOT WIN32)

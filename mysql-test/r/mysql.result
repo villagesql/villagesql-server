@@ -572,14 +572,6 @@ include/assert_grep.inc [look for query_attributes in help]
 #
 # Success criteria: port number present in the error text
 ERROR 2003 (HY000): Can't connect to MySQL server on '127.0.0.1:99999' (XXX)
-#
-# Bug # 36377685: mysqldump blindly trusting SHOW CREATE TABLE leads to
-#   arbitrary code execution.
-#
-# Test "system": Must return an error
-ERROR at line 1: 'system' command received, but the --system-command option is off. Skipping.
-# Test "!": Must return an error
-ERROR at line 1: 'system' command received, but the --system-command option is off. Skipping.
 
 # Test support for dollar quoting
 
@@ -611,5 +603,23 @@ what
 what
 8check if delimiter is restored
 # Cleanup
+#
+# Bug # 36377685: mysqldump blindly trusting SHOW CREATE TABLE leads to
+#   arbitrary code execution.
+#
+# Test "system": Must return an error
+ERROR at line 1: 'system' command received, but the --system-command option is off. Skipping.
+# Test "!": Must return an error
+ERROR at line 1: 'system' command received, but the --system-command option is off. Skipping.
+# Test "system": Must pass
+Hello World
+#
+# Bug#37510263: Contribution: Report third decimal place for milliseconds
+#
+include/assert_grep.inc [Find 3 digits post-decimal]
+#
+# Bug#37765445:  Mysql client confused if an extra semicolon is used with "use database;;" 
+#
+# Test: should not produce an error
 
 End of tests

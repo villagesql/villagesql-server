@@ -46,10 +46,10 @@
 #include "sql/conn_handler/connection_handler_manager.h"
 #include "sql/current_thd.h"  // current_thd
 #include "sql/handler.h"
-#include "sql/mysqld.h"  // key_thread_one_connection
+#include "sql/mysqld.h"              // key_thread_one_connection
+#include "sql/mysqld_thd_manager.h"  // Global_THD_manager
 #include "sql/protocol_classic.h"
 #include "sql/query_options.h"
-#include "sql/resourcegroups/platform/thread_attrs_api.h"  // num_vcpus
 #include "sql/rpl_replica_commit_order_manager.h"  // check_and_report_deadlock
 #include "sql/rpl_rli.h"                           // is_mts_worker
 #include "sql/sql_alter.h"
@@ -86,7 +86,7 @@ using std::min;
   @retval               Scheduler data object on THD
 */
 
-void *thd_get_scheduler_data(THD *thd) { return thd->scheduler.data; }
+void *thd_get_scheduler_data(THD *thd) { return thd->event_scheduler.data; }
 
 /**
   Set reference to Scheduler data object for THD object
@@ -96,7 +96,7 @@ void *thd_get_scheduler_data(THD *thd) { return thd->scheduler.data; }
 */
 
 void thd_set_scheduler_data(THD *thd, void *data) {
-  thd->scheduler.data = data;
+  thd->event_scheduler.data = data;
 }
 
 /**
@@ -279,6 +279,17 @@ my_socket thd_get_fd(THD *thd) {
 }
 
 /**
+  Get MYSQL_SOCKET struct for this connection
+
+  @param thd            THD object
+
+  @retval               MYSQL_SOCKET struct of the connection
+*/
+MYSQL_SOCKET thd_get_mysql_socket(THD *thd) {
+  return thd->get_protocol_classic()->get_vio()->mysql_socket;
+}
+
+/**
   Set thread specific environment required for thd cleanup in thread pool.
 
   @param thd            THD object
@@ -301,6 +312,14 @@ my_thread_attr_t *get_connection_attrib() { return &connection_attrib; }
 */
 
 ulong get_max_connections() { return max_connections; }
+
+longlong get_incoming_connects() {
+  return Connection_handler_manager::get_incoming_connects();
+}
+
+longlong get_aborted_connects() {
+  return Connection_handler_manager::get_instance()->aborted_connects();
+}
 
 //////////////////////////////////////////////////////////
 //
@@ -657,8 +676,11 @@ void *thd_memdup(MYSQL_THD thd, const void *str, size_t size) {
                    to preserve compatibility with exported service api.
 */
 void thd_wait_begin(MYSQL_THD thd, int wait_type) {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
-                 (thd, wait_type));
+  if (!thd) {
+    thd = current_thd;
+    if (!unlikely(thd)) return;
+  }
+  MYSQL_CALLBACK(thd->scheduler, thd_wait_begin, (thd, wait_type));
 }
 
 /**
@@ -675,8 +697,11 @@ void thd_wait_begin(MYSQL_THD thd, int wait_type) {
   @param thd Calling thread context. If nullptr is passed, current_thd is used.
 */
 void thd_wait_end(MYSQL_THD thd) {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,
-                 (thd));
+  if (!thd) {
+    thd = current_thd;
+    if (!unlikely(thd)) return;
+  }
+  MYSQL_CALLBACK(thd->scheduler, thd_wait_end, (thd));
 }
 
 //////////////////////////////////////////////////////////
@@ -708,10 +733,6 @@ void remove_ssl_err_thread_state() {
 #if !defined(HAVE_OPENSSL11)
   ERR_remove_thread_state(nullptr);
 #endif
-}
-
-unsigned int thd_get_num_vcpus() {
-  return resourcegroups::platform::num_vcpus();
 }
 
 bool thd_check_connection_admin_privilege(MYSQL_THD thd) {

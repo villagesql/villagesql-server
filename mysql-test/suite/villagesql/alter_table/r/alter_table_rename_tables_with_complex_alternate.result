@@ -88,15 +88,15 @@ name VARCHAR(50)
 )
 #	#	Query	#	#	BEGIN
 #	#	Table_map	#	#	table_id: # (test.old_table1)
-#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 #	#	Xid	#	#	COMMIT /* XID */
 #	#	Query	#	#	BEGIN
 #	#	Table_map	#	#	table_id: # (test.old_table2)
-#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 #	#	Xid	#	#	COMMIT /* XID */
 #	#	Query	#	#	BEGIN
 #	#	Table_map	#	#	table_id: # (test.old_table3)
-#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 #	#	Xid	#	#	COMMIT /* XID */
 #	#	Query	#	#	use `test`; RENAME TABLE old_table1 TO new_table1,
 old_table2 TO new_table2,

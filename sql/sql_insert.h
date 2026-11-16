@@ -71,7 +71,7 @@ class Query_result_insert : public Query_result_interceptor {
   mem_root_deque<Item *> *fields;
 
  protected:
-  /// ha_start_bulk_insert has been called. Never cleared.
+  /// ha_start_bulk_insert has been called.
   bool bulk_insert_started{false};
 
  public:
@@ -207,6 +207,9 @@ class Query_result_create final : public Query_result_insert {
                       Alter_info *alter_info_arg) {
     create_info = create_info_arg;
     alter_info = alter_info_arg;
+  }
+  [[nodiscard]] Table_ref *get_create_table() const override {
+    return create_table;
   }
 
  private:

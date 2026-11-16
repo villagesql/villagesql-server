@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 set global innodb_monitor_disable = All;
 select name, status from information_schema.innodb_metrics;
 name	status
@@ -40,9 +41,12 @@ buffer_pool_bytes_data	disabled
 buffer_pool_pages_dirty	disabled
 buffer_pool_bytes_dirty	disabled
 buffer_pool_pages_free	disabled
+buffer_pool_pages_flushed	disabled
+buffer_pool_pages_lru_flushed	disabled
 buffer_pages_created	disabled
 buffer_pages_written	disabled
 buffer_pages_read	disabled
+buffer_pages0_read	disabled
 buffer_data_reads	disabled
 buffer_data_written	disabled
 buffer_flush_batch_scanned	disabled
@@ -103,6 +107,8 @@ buffer_LRU_search_scanned_per_call	disabled
 buffer_LRU_unzip_search_scanned	disabled
 buffer_LRU_unzip_search_num_scan	disabled
 buffer_LRU_unzip_search_scanned_per_call	disabled
+buffer_LRU_single_page_flush_count	disabled
+buffer_LRU_flush_await_count	disabled
 buffer_page_read_index_leaf	disabled
 buffer_page_read_index_non_leaf	disabled
 buffer_page_read_index_ibuf_leaf	disabled
@@ -207,6 +213,7 @@ log_writer_waits	disabled
 log_writer_wait_loops	disabled
 log_writer_on_file_space_waits	disabled
 log_writer_on_archiver_waits	disabled
+log_writer_on_tracker_waits	disabled
 log_flusher_no_waits	disabled
 log_flusher_waits	disabled
 log_flusher_wait_loops	disabled
@@ -684,3 +691,4 @@ icp_match	1
 drop table monitor_test;
 set global innodb_monitor_disable = All;
 set global innodb_monitor_reset_all = all;
+include/rpl/set_gtid_mode_on.inc

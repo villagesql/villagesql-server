@@ -1274,11 +1274,16 @@ COLUMNS(PARTITION_ID)
  PARTITION P8 VALUES LESS THAN (8) ENGINE = InnoDB,
  PARTITION P9 VALUES LESS THAN (9) ENGINE = InnoDB);
 
- insert into test12 values('Tom1',20,1,'2017-08-25
-12:12:12',1),('Tom2',21,1,'2017-08-25 12:12:12',1),('Tom3',23,1,'2017-08-25
-12:12:12',1);
+insert into test12 values('Tom1',20,1,'2017-08-25 12:12:12',1),
+('Tom2',21,1,'2017-08-25 12:12:12',1),
+('Tom3',23,1,'2017-08-25 12:12:12',1),
+('Tom4',24,1,'2017-08-25 12:11:12',1),
+('Tom5',25,1,'2017-08-25 11:12:12',1),
+('Tom6',26,1,'2017-08-25 12:12:11',1),
+('Tom7',27,1,'2017-08-25 12:13:11',1);
+ANALYZE TABLE test12;
 
-begin;update test12 set grade=3,date=now()  where age=23 and
+begin;update test12 set grade=3,date=now()  where age>22 and age<24 and
 partition_id=1;
 
 --connection con1
@@ -1360,6 +1365,10 @@ CREATE TABLE `t1` (
 INSERT INTO t1 VALUES (1, '2018-04-25 10:18:00', '1');
 INSERT INTO t1 VALUES (2, '2018-04-25 10:18:01', '2');
 INSERT INTO t1 VALUES (3, '2018-04-25 10:18:02', '3');
+INSERT INTO t1 VALUES (4, '2018-04-25 10:18:03', '1');
+INSERT INTO t1 VALUES (5, '2018-04-25 10:18:04', '1');
+INSERT INTO t1 VALUES (6, '2018-04-25 10:18:05', '1');
+ANALYZE TABLE t1;
 
 SELECT * FROM t1;
 
@@ -1404,23 +1413,19 @@ SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
 FLUSH STATUS;
 --sorted_result
 SELECT * FROM t1 FORCE INDEX (`ab_asc`);
---skip_if_hypergraph  # Index not supported, so different query plan.
 SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
 FLUSH STATUS;
 --sorted_result
 SELECT * FROM t1 FORCE INDEX (`a_asc_b_desc`);
---skip_if_hypergraph  # Index not supported, so different query plan.
 SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
 FLUSH STATUS;
 --sorted_result
 SELECT * FROM t1 FORCE INDEX (`a_desc_b_asc`);
---skip_if_hypergraph  # Index not supported, so different query plan.
 SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
 
 --echo # Test sorted index access
 FLUSH STATUS;
 SELECT * FROM t1 ORDER BY a DESC, b DESC;
---skip_if_hypergraph  # Index not supported, so different query plan.
 SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
 FLUSH STATUS;
 SELECT * FROM t1 ORDER BY a, b;
@@ -1428,12 +1433,12 @@ SELECT * FROM t1 ORDER BY a, b;
 SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
 FLUSH STATUS;
 SELECT * FROM t1 ORDER BY a, b DESC;
---skip_if_hypergraph  # Index not supported, so different query plan.
 SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
 FLUSH STATUS;
 SELECT * FROM t1 ORDER BY a DESC, b;
 --skip_if_hypergraph  # Index not supported, so different query plan.
 SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
+SET explain_json_format_version = 1;
 --replace_regex /"rows_examined_per_scan": [0-9]+/"rows_examined_per_scan": "X"/ /_per_join": [0-9]+/_per_join": "X"/ /_per_join": "[0-9]+K"/_per_join": "X"/  /"filtered": "[0-9.]+"/"filtered": "X"/ /_cost": "[0-9.]+"/_cost": "X"/ /"data_read_per_join": "[0-9.]+"/"data_read_per_join": "X"/
 --skip_if_hypergraph  # Depends on the query plan.
 EXPLAIN FORMAT=JSON SELECT * FROM t1 ORDER BY a DESC, b DESC;
@@ -1450,7 +1455,6 @@ EXPLAIN FORMAT=JSON SELECT * FROM t1 ORDER BY a DESC, b;
 --echo # Test index access in different sort order
 FLUSH STATUS;
 SELECT * FROM t1 FORCE INDEX (`PRIMARY`) ORDER BY a, b;
---skip_if_hypergraph  # Index not supported, so different query plan.
 SHOW STATUS WHERE Variable_name LIKE 'Handler%' AND Value >0;
 FLUSH STATUS;
 SELECT * FROM t1 FORCE INDEX (`PRIMARY`) ORDER BY a DESC, b;
@@ -1473,6 +1477,8 @@ EXPLAIN FORMAT=JSON SELECT * FROM t1 FORCE INDEX (`PRIMARY`) ORDER BY a DESC, b;
 --replace_regex /"rows_examined_per_scan": [0-9]+/"rows_examined_per_scan": "X"/ /_per_join": [0-9]+/_per_join": "X"/ /_per_join": "[0-9]+K"/_per_join": "X"/  /"filtered": "[0-9.]+"/"filtered": "X"/ /_cost": "[0-9.]+"/_cost": "X"/ /"data_read_per_join": "[0-9.]+"/"data_read_per_join": "X"/
 --skip_if_hypergraph  # Depends on the query plan.
 EXPLAIN FORMAT=JSON SELECT * FROM t1 FORCE INDEX (`PRIMARY`) ORDER BY a, b DESC;
+
+SET explain_json_format_version = DEFAULT;
 
 --echo # Test HANDLER statements.
 FLUSH STATUS;

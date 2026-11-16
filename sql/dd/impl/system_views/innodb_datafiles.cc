@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/innodb_datafiles.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Innodb_datafiles &Innodb_datafiles::instance() {
-  static Innodb_datafiles *s_instance = new Innodb_datafiles();
+  static auto *s_instance = new Innodb_datafiles();
   return *s_instance;
 }
 
@@ -50,5 +49,4 @@ Innodb_datafiles::Innodb_datafiles() {
   m_target_def.add_where("AND ts.name<>'innodb_temporary'");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

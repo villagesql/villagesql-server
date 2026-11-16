@@ -685,7 +685,7 @@ SET @old_sql_mode= @@sql_mode;
 SET sql_mode="";
 CREATE TABLE t (a TIMESTAMP AS (0) VIRTUAL) engine=innodb;
 ALTER TABLE t ADD COLUMN b JSON AS (a NOT IN (1,1)) STORED;
-ERROR 22007: Incorrect datetime value: '1' for column 'a' at row 1
+ERROR 22007: Incorrect datetime value: '1'
 DROP TABLE t;
 SET sql_mode= @old_sql_mode;
 #
@@ -758,14 +758,14 @@ t1	CREATE TABLE `t1` (
   `b` blob GENERATED ALWAYS AS (concat(_utf16'\0A\0B\0C',`a`)) VIRTUAL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT
-length( convert( b USING utf8 ) ),
-char_length ( convert( b USING utf8 ) )
+length( convert( b USING utf8mb3 ) ),
+char_length ( convert( b USING utf8mb3 ) )
 FROM t1;
-length( convert( b USING utf8 ) )	char_length ( convert( b USING utf8 ) )
+length( convert( b USING utf8mb3 ) )	char_length ( convert( b USING utf8mb3 ) )
 12	12
 Warnings:
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT
 length( convert( b USING utf16 ) ),
 char_length ( convert( b USING utf16 ) )
@@ -1436,13 +1436,13 @@ KEY (b)
 ) ENGINE=INNODB;
 INSERT IGNORE INTO t(a) VALUES ('{}');
 Warnings:
-Warning	3156	Invalid JSON value for CAST to DATE/TIME/DATETIME/TIMESTAMP from column a at row 1
+Warning	3156	Invalid JSON value for CAST to DATETIME/TIMESTAMP from column a at row 1
 Warning	1264	Out of range value for column 'b' at row 1
 DELETE IGNORE FROM t;
 Warnings:
-Warning	3156	Invalid JSON value for CAST to DATE/TIME/DATETIME/TIMESTAMP from column a at row 1
+Warning	3156	Invalid JSON value for CAST to DATETIME/TIMESTAMP from column a at row 1
 Warning	1292	Incorrect datetime value: '0000-00-00 00:00:00' for column 'b' at row 1
-Warning	3156	Invalid JSON value for CAST to DATE/TIME/DATETIME/TIMESTAMP from column a at row 1
+Warning	3156	Invalid JSON value for CAST to DATETIME/TIMESTAMP from column a at row 1
 Warning	1292	Incorrect datetime value: '0000-00-00 00:00:00' for column 'b' at row 1
 CHECK TABLE t;
 Table	Op	Msg_type	Msg_text
@@ -1477,7 +1477,7 @@ ALTER TABLE t
 ADD COLUMN g1 JSON GENERATED ALWAYS AS (x),
 ADD COLUMN g2 JSON GENERATED ALWAYS AS (JSON_ARRAY(x));
 SELECT * FROM t;
-ERROR 22032: Invalid JSON text: "The document is empty." at position 0 in value for column 't.g1'.
+ERROR 22032: Invalid JSON text: "The document is empty." at position 0 in value for column 't.g1' at row 1.
 DROP TABLE t;
 #
 # Bug#32234773: UPDATE_GENERATED_READ_FIELDS:

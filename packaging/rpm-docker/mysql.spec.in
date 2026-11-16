@@ -43,17 +43,14 @@
 # Pass path to the AWS SDK install
 %{?with_aws_sdk: %global aws_sdk_option -DWITH_KEYRING_AWS=1 -DWITH_AWS_SDK=%{with_aws_sdk}}
 %{?with_aws_sdk: %global aws_sdk 1}
+%{?with_aws_1_11: %global add_component_keyring_aws 1}
 
 # Regression tests may take a long time, override the default to skip them
 %{!?runselftest:%global runselftest 0}
 
-%ifarch aarch64
-%{?el7:%global __strip /opt/rh/devtoolset-10/root/usr/bin/strip}
-%else
 %{?el7:%global __strip /opt/rh/devtoolset-11/root/usr/bin/strip}
-%endif
-%{?el8:%global __strip /opt/rh/gcc-toolset-12/root/usr/bin/strip}
-%{?el9:%global __strip /opt/rh/gcc-toolset-12/root/usr/bin/strip}
+%{?el8:%global __strip /opt/rh/gcc-toolset-14/root/usr/bin/strip}
+%{?el9:%global __strip /opt/rh/gcc-toolset-14/root/usr/bin/strip}
 %global __brp_strip_static_archive %{nil}
 
 %{!?product_suffix:              %global product_suffix community}
@@ -81,7 +78,7 @@ Group:          Applications/Databases
 Version:        @MYSQL_NO_DASH_VERSION@
 Release:        1@MYSQL_VERSION_EXTRA_DOT@%{?commercial:.1}%{?dist}
 License:        Copyright (c) 2000, @MYSQL_COPYRIGHT_YEAR@, %{mysql_vendor}. Under %{?license_type} license as shown in the Description field.
-URL:            http://www.mysql.com/
+URL:            https://www.mysql.com/
 Packager:       MySQL Release Engineering <mysql-build@oss.oracle.com>
 Vendor:         %{mysql_vendor}
 Source0:        https://cdn.mysql.com/Downloads/MySQL-@MYSQL_BASE_VERSION@/%{src_dir}.tar.gz
@@ -92,29 +89,22 @@ BuildRequires:  rpcgen
 %else
 BuildRequires:  cmake3 >= 3.14.6
 %endif
-%ifarch aarch64
-%{?el7:BuildRequires:  devtoolset-10-gcc}
-%{?el7:BuildRequires:  devtoolset-10-gcc-c++}
-%{?el7:BuildRequires:  devtoolset-10-binutils}
-%{?el7:BuildRequires:  devtoolset-10-dwz}
-%else
 %{?el7:BuildRequires:  devtoolset-11-gcc}
 %{?el7:BuildRequires:  devtoolset-11-gcc-c++}
 %{?el7:BuildRequires:  devtoolset-11-binutils}
 %{?el7:BuildRequires:  devtoolset-11-dwz}
-%endif
-%{?el8:BuildRequires:  gcc-toolset-12-annobin-annocheck}
-%{?el8:BuildRequires:  gcc-toolset-12-annobin-plugin-gcc}
-%{?el8:BuildRequires:  gcc-toolset-12-binutils}
-%{?el8:BuildRequires:  gcc-toolset-12-dwz}
-%{?el8:BuildRequires:  gcc-toolset-12-gcc-c++}
-%{?el8:BuildRequires:  gcc-toolset-12-gcc}
-%{?el9:BuildRequires:  gcc-toolset-12-annobin-annocheck}
-%{?el9:BuildRequires:  gcc-toolset-12-annobin-plugin-gcc}
-%{?el9:BuildRequires:  gcc-toolset-12-binutils}
-%{?el9:BuildRequires:  gcc-toolset-12-dwz}
-%{?el9:BuildRequires:  gcc-toolset-12-gcc-c++}
-%{?el9:BuildRequires:  gcc-toolset-12-gcc}
+%{?el8:BuildRequires:  gcc-toolset-14-annobin-annocheck}
+%{?el8:BuildRequires:  gcc-toolset-14-annobin-plugin-gcc}
+%{?el8:BuildRequires:  gcc-toolset-14-binutils}
+%{?el8:BuildRequires:  gcc-toolset-14-dwz}
+%{?el8:BuildRequires:  gcc-toolset-14-gcc-c++}
+%{?el8:BuildRequires:  gcc-toolset-14-gcc}
+%{?el9:BuildRequires:  gcc-toolset-14-annobin-annocheck}
+%{?el9:BuildRequires:  gcc-toolset-14-annobin-plugin-gcc}
+%{?el9:BuildRequires:  gcc-toolset-14-binutils}
+%{?el9:BuildRequires:  gcc-toolset-14-dwz}
+%{?el9:BuildRequires:  gcc-toolset-14-gcc-c++}
+%{?el9:BuildRequires:  gcc-toolset-14-gcc}
 BuildRequires:  bison >= 3.0.4
 BuildRequires:  elfutils
 BuildRequires:  patchelf
@@ -133,7 +123,7 @@ BuildRequires:  zlib-devel
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 # For rpm => 4.9 only: https://fedoraproject.org/wiki/Packaging:AutoProvidesAndRequiresFiltering
-%global _privatelibs libabsl_.*|libprotobuf.*|libfido2.*
+%global _privatelibs libabsl_.*|libicu.*|libprotobuf.*|libfido2.*|libpolyglot.*
 %global _privateperl perl\\((GD|hostnames|lib::mtr|lib::v1|mtr_|My::)
 %global __requires_exclude ^((%{_privatelibs})|(%{_privateperl}))
 %global __provides_exclude_from ^(/usr/share/(mysql|mysql-test)/.*|%{_libdir}/mysql/plugin/.*\\.so|%{_libdir}/mysql/private/.*|%{_libdir}/mysqlrouter/.*)$
@@ -158,7 +148,7 @@ licenses from %{mysql_vendor} if you do not wish to be bound by the terms of
 the GPL. See the chapter "Licensing and Support" in the manual for
 further info.
 
-The MySQL web site (http://www.mysql.com/) provides the latest
+The MySQL web site (https://www.mysql.com/) provides the latest
 news and information about the MySQL software. Also please see the
 documentation and the manual for more information.
 
@@ -185,7 +175,7 @@ licenses from %{mysql_vendor} if you do not wish to be bound by the terms of
 the GPL. See the chapter "Licensing and Support" in the manual for
 further info.
 
-The MySQL web site (http://www.mysql.com/) provides the latest news and
+The MySQL web site (https://www.mysql.com/) provides the latest news and
 information about the MySQL software.  Also please see the documentation
 and the manual for more information.
 
@@ -310,7 +300,7 @@ for f in innochecksum ibd2sdi myisamchk myisam_ftdump myisamlog myisampack \
          mysql_config_editor mysqld_multi mysqld_safe mysqldumpslow mysqlimport \
          mysql_secure_installation mysqlshow mysqlslap mysqltest mysqltest_safe_process mysqlxtest \
          comp_err perror mysql_keyring_encryption_test \
-         mysql_test_event_tracking; do
+         mysql_test_event_tracking mysql_test_jwt_generator ; do
     rm -f %{buildroot}%{_bindir}/$f
 done
 
@@ -345,6 +335,9 @@ for p in \
          component_test_mysql_runtime_error.so \
          component_test_mysql_system_variable_set.so \
          component_test_component_deinit.so \
+         component_test_component_deinit_no_deadlock.so \
+         component_test_component_init_fail.so \
+         component_test_component_init_then_register.so \
          component_test_global_priv_registration.so \
          component_test_mysql_command_services.so \
          component_test_mysql_thd_store_service.so \
@@ -371,7 +364,11 @@ for p in \
          component_test_sys_var_service_same.so \
          component_test_sys_var_service.so \
          component_test_sys_var_service_str.so \
+         component_test_session_var_service.so \
          component_test_table_access.so \
+         component_test_telemetry_resource_provider.so \
+         component_test_telemetry_secret_provider.so \
+         component_test_udf_aggregate.so \
          component_test_udf_registration.so \
          component_test_udf_services.so \
          component_udf_reg_3_func.so \
@@ -404,6 +401,7 @@ for p in \
          component_test_event_tracking_consumer_a.so \
          component_test_event_tracking_consumer_b.so \
          component_test_event_tracking_consumer_c.so \
+         component_test_mysql_file_service.so \
          ; do
     rm -f %{buildroot}%{_libdir}/mysql/plugin/$p
 done
@@ -416,9 +414,7 @@ rm -f %{buildroot}%{_datadir}/mysql-*/{mysql.server,mysqld_multi.server,mysql-lo
 
 # Extra files/dirs removed from Cluster build
 %if 0%{?cluster}
-rm -rf %{buildroot}%{_datadir}/mysql-*/nodejs/
 rm -rf %{buildroot}%{_datadir}/mysql-*/java/
-rm -rf %{buildroot}%{_libdir}/mysql/ndb_engine.so
 rm -rf %{buildroot}%{_libdir}/mysql/libndbclient_static.a
 rm -rf %{buildroot}%{_libdir}/mysql/libndbclient.so
 %endif
@@ -446,6 +442,7 @@ rm -r $(readlink var) var
 
 %post -n mysql%{?cluster:-cluster}-%{product_suffix}-server-minimal
 [ -e /var/log/mysqld.log ] || install /dev/null -m0640 -omysql -gmysql /var/log/mysqld.log || :
+[ -e /var/log/mysqld.log.00.json ] || install /dev/null -m0640 -omysql -gmysql /var/log/mysqld.log.00.json || :
 
 %files -n mysql%{?cluster:-cluster}-%{product_suffix}-server-minimal
 %defattr(-, root, root, -)
@@ -491,13 +488,16 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_bindir}/mysql_tzinfo_to_sql
 %attr(755, root, root) %{_bindir}/my_print_defaults
 %attr(755, root, root) %{_bindir}/mysql_migrate_keyring
+%if 0%{?commercial}
+%attr(755, root, root) %{_bindir}/mysqldm
+%endif # commercial
 
 %dir %{_libdir}/mysql/private
+%attr(755, root, root) %{_libdir}/mysql/private/libicui18n.so.77.1
+%attr(755, root, root) %{_libdir}/mysql/private/libicustubdata.so.77.1
+%attr(755, root, root) %{_libdir}/mysql/private/libicuuc.so.77.1
 %attr(755, root, root) %{_libdir}/mysql/private/libprotobuf-lite.so.24.4.0
 %attr(755, root, root) %{_libdir}/mysql/private/libprotobuf.so.24.4.0
-%attr(755, root, root) %{_libdir}/mysql/private/libabsl_bad_any_cast_impl.so
-%attr(755, root, root) %{_libdir}/mysql/private/libabsl_bad_optional_access.so
-%attr(755, root, root) %{_libdir}/mysql/private/libabsl_bad_variant_access.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_base.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_city.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_civil_time.so
@@ -512,7 +512,9 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_crc_cpu_detect.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_crc_internal.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_debugging_internal.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_decode_rust_punycode.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_demangle_internal.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_demangle_rust.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_die_if_null.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_examine_stack.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_exponential_biased.so
@@ -526,11 +528,11 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_flags_private_handle_accessor.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_flags_program_name.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_flags_reflection.so
-%attr(755, root, root) %{_libdir}/mysql/private/libabsl_flags.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_flags_usage_internal.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_flags_usage.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_graphcycles_internal.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_hash.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_hashtable_profiler.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_hashtablez_sampler.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_int128.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_kernel_timeout_internal.so
@@ -541,21 +543,24 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_initialize.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_check_op.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_conditions.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_fnmatch.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_format.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_globals.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_log_sink_set.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_message.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_nullguard.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_proto.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_internal_structured_proto.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_severity.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_log_sink.so
-%attr(755, root, root) %{_libdir}/mysql/private/libabsl_low_level_hash.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_malloc_internal.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_periodic_sampler.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_poison.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_profile_builder.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_random_distributions.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_random_internal_distribution_test_util.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_random_internal_entropy_pool.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_random_internal_platform.so
-%attr(755, root, root) %{_libdir}/mysql/private/libabsl_random_internal_pool_urbg.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_random_internal_randen_hwaes_impl.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_random_internal_randen_hwaes.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_random_internal_randen_slow.so
@@ -580,9 +585,16 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_throw_delegate.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_time.so
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_time_zone.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_tracing_internal.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_utf8_for_code_point.so
+%attr(755, root, root) %{_libdir}/mysql/private/libabsl_vlog_config_internal.so
 %if 0%{?add_fido_plugins}
 %attr(755, root, root) %{_libdir}/mysql/private/libfido2.*
 %endif # add_fido_plugins
+%if 0%{?commercial}
+%attr(755, root, root) %{_libdir}/mysql/private/libpolyglot.so
+%endif # commercial
+
 %dir %{_libdir}/mysql/plugin
 %attr(755, root, root) %{_libdir}/mysql/plugin/adt_null.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth_socket.so
@@ -591,7 +603,9 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_webauthn_client.so
 %endif # add_fido_plugins
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_kerberos_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_openid_connect_client.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_oci_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/mysql_native_password.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/group_replication.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_log_sink_syseventlog.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_log_sink_json.so
@@ -599,8 +613,11 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_mysqlbackup.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_validate_password.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_audit_api_message_emit.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_classic_hashing.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_query_attributes.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_reference_cache.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_telemetry.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_connection_control.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/connection_control.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/ddl_rewriter.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_udf.so
@@ -614,13 +631,16 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_libdir}/mysql/plugin/mysql_no_login.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/rewrite_example.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/rewriter.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/semisync_master.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/semisync_slave.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_source.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_replica.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/telemetry_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/thread_pool.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/validate_password.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/version_token.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_file.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_replication_applier_metrics.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_group_replication_flow_control_stats.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_group_replication_resource_manager.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_group_replication_elect_prefers_most_updated.so
 %dir %{_datadir}/mysql-*/
 %{_datadir}/mysql-*/charsets/
 %{_datadir}/mysql-*/bulgarian/
@@ -664,29 +684,37 @@ rm -r $(readlink var) var
 %if 0%{?with_meb}
 %attr(755, root, root) %{_bindir}/mysqlbackup
 %endif # with_meb
-%attr(755, root, root) %{_libdir}/mysql/plugin/audit_log.so
 %attr(644, root, root) %{_datadir}/mysql-*/audit_log_filter_linux_install.sql
 %attr(644, root, root) %{_datadir}/mysql-*/audit_log_filter_uninstall.sql
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_audit_log.so
+%attr(644, root, root) %{_datadir}/mysql-*/audit_log_component_filter_install.sql
+%attr(644, root, root) %{_datadir}/mysql-*/audit_log_component_filter_uninstall.sql
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_sasl.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_simple.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_kerberos.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_openid_connect.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_pam.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/telemetry_client.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/data_masking.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_okv.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_hashicorp.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/thread_pool.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/firewall.so
 %if 0%{?add_fido_plugins}
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_webauthn.so
 %endif # add_fido_plugins
+%if 0%{?add_component_keyring_aws}
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_aws.so
+%endif # add_component_keyring_aws
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_encrypted_file.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_hashicorp.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_kmip.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_oci.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_enterprise_encryption.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_masking.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_masking_functions.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_mle.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_scheduler.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_telemetry.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_option_tracker.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_firewall.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_object_policy.so
 %if 0%{?aws_sdk}
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_aws.so
 %endif # aws_sdk
@@ -695,6 +723,14 @@ rm -r $(readlink var) var
 %attr(644, root, root) %{_datadir}/mysql-*/firewall_profile_migration.sql
 %attr(644, root, root) %{_datadir}/mysql-*/masking_functions_install.sql
 %attr(644, root, root) %{_datadir}/mysql-*/masking_functions_uninstall.sql
+%attr(644, root, root) %{_datadir}/mysql-*/option_tracker_install.sql
+%attr(644, root, root) %{_datadir}/mysql-*/option_tracker_uninstall.sql
+%attr(644, root, root) %{_datadir}/mysql-*/install_component_firewall.sql
+%attr(644, root, root) %{_datadir}/mysql-*/uninstall_component_firewall.sql
+%attr(644, root, root) %{_datadir}/mysql-*/firewall_component_to_plugin.sql
+%attr(644, root, root) %{_datadir}/mysql-*/firewall_plugin_to_component.sql
+%attr(644, root, root) %{_datadir}/mysql-*/install_component_object_policy.sql
+%attr(644, root, root) %{_datadir}/mysql-*/uninstall_component_object_policy.sql
 %endif
 
 %dir %attr(750, mysql, mysql) /var/lib/mysql
@@ -703,6 +739,63 @@ rm -r $(readlink var) var
 %dir %attr(750, mysql, mysql) /var/lib/mysql-keyring
 
 %changelog
+* Fri Feb  6 2026 Harin Vadodaria <harin.vadodaria@oracle.com> - 9.7.0
+- Added component_object_policy
+
+* Mon Feb  2 2026 Marc Alff <marc.alff@oracle.com> - 9.7.0
+- Moved component_telemetry to community
+
+* Wed Jan 28 2026 Marc Alff <marc.alff@oracle.com> - 9.7.0
+- Moved telemetry_client to community
+
+* Thu Oct  9 2025 Marek Szymczak <marek.szymczak@oracle.com> - 9.6.0-1
+- Added component_audit_log
+- Added component_test_mysql_file_service
+
+* Fri Aug  1 2025 Marc Alff <marc.alff@oracle.com> - 9.5.0-1
+- Added component_test_telemetry_resource_provider
+- Added component_test_telemetry_secret_provider
+
+* Fri Jun 27 2025 Murthy Sidagam <venkata.sidagam@oracle.com> - 9.5.0-1
+- Added component_keyring_kmip.so component
+
+* Wed Jun 11 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.5.0-1
+- Added component_test_component_init_fail
+
+* Tue May 27 2025 Michal Jankowski <michal.jankowski@oracle.com> - 9.4.0-1
+- Added component_firewall.so
+
+* Wed Apr 30 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.4.0-1
+- Added component_test_component_deinit_no_deadlock
+
+* Wed Apr 30 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.4.0-1
+- Added component_test_component_init_then_register
+
+* Fri Jan 10 2025 Anibal Pinto <anibal.pinto@oracle.com> - 9.3.0-1
+- Added component_group_replication_elect_prefers_most_updated
+
+* Thu Jan 09 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.3.0-1
+- Add component_keyring_hashicorp.so component
+
+* Fri Nov 29 2024 Jaideep Karande <jaideep.karande@oracle.com> - 9.2.0-1
+- Added component_group_replication_resource_manager
+
+* Wed Nov 13 2024 Samar Pratap Singh <samar.pratap.singh@oracle.com> - 9.2.0-1
+- Added component_connection_control
+
+* Wed Jul 10 2024 Samar Pratap Singh <samar.pratap.singh@oracle.com> - 9.1.0-1
+- Added authentication_openid_connect plugin
+
+* Wed May 29 2024 Miroslav Rajcic <miroslav.rajcic@oracle.com> - 9.1.0-1
+- Added component_test_server_telemetry_logs_* test components
+- Added component_keyring_aws
+
+* Mon May 27 2024 Georgi "Joro" Kodinov <georgi.kodinov@oracle.com> - 9.0.0-1
+- Added the option usage tracker component
+
+* Mon May 20 2024 Murthy Sidagam <venkata.sidagam@oracle.com> - 9.0
+- Added component_test_session_var_service.so component
+
 * Mon Feb 12 2024 Samar Pratap Singh <samar.pratap.singh@oracle.com> - 8.4.0-1
 - Removed keyring_file plugin
 
@@ -857,7 +950,7 @@ rm -r $(readlink var) var
 - Provide mysql_no_login.so plugin
 
 * Wed Aug 06 2014 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.5-0.5.m15
-- Provide mysql-compat-server dependencies 
+- Provide mysql-compat-server dependencies
 
 * Wed Jul 09 2014 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.5-0.4.m15
 - Remove perl(GD) and dtrace dependencies
@@ -867,20 +960,20 @@ rm -r $(readlink var) var
 
 * Wed Jun 25 2014 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.5-0.2.m15
 - Add bench package
-- Enable dtrace 
+- Enable dtrace
 
 * Thu Apr 24 2014 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.5-0.1.m15
 - Updated for 5.7.5
 
 * Mon Apr 07 2014 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.4-0.5.m14
-- Fix Cflags for el7 
+- Fix Cflags for el7
 
 * Mon Mar 31 2014 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.4-0.4.m14
 - Support for enterprise packages
 - Upgrade from MySQL-* packages
 
 * Wed Mar 12 2014 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.4-0.3.m14
-- Resolve conflict with mysql-libs-compat 
+- Resolve conflict with mysql-libs-compat
 
 * Thu Mar 06 2014 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.4-0.2.m14
 - Resolve conflict issues during upgrade
@@ -892,7 +985,7 @@ rm -r $(readlink var) var
 - Move mysqltest and test plugins to test subpackage
 
 * Mon Nov 18 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.3-0.3.m13
-- Fixed isa_bits error 
+- Fixed isa_bits error
 
 * Fri Oct 25 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.3-0.1.m13
 - Initial 5.7 port
@@ -902,8 +995,8 @@ rm -r $(readlink var) var
 - Updated to 5.6.15
 
 * Wed Oct 16 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.14-3
-- Fixed mysql_install_db usage 
-- Improved handling of plugin directory 
+- Fixed mysql_install_db usage
+- Improved handling of plugin directory
 
 * Fri Sep 27 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.14-2
 - Refresh mysql-install patch and service renaming
@@ -912,23 +1005,23 @@ rm -r $(readlink var) var
 - Updated to 5.6.14
 
 * Wed Sep 04 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.13-5
-- Support upgrade from 5.5 ULN packages to 5.6 
+- Support upgrade from 5.5 ULN packages to 5.6
 
 * Tue Aug 27 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.13-4
-- Enhanced perl filtering 
-- Added openssl-devel to buildreq 
+- Enhanced perl filtering
+- Added openssl-devel to buildreq
 
 * Wed Aug 21 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.13-3
 - Removed mysql_embedded binary to resolve multilib conflict issue
 
-* Fri Aug 16 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.13-2 
-- Fixed Provides and Obsoletes issues in server, test packages 
+* Fri Aug 16 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.13-2
+- Fixed Provides and Obsoletes issues in server, test packages
 
 * Wed Aug 14 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.13-1
 - Updated to 5.6.13
 
 * Mon Aug 05 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.12-9
-- Added files list to embedded packages 
+- Added files list to embedded packages
 
 * Thu Aug 01 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.12-8
 - Updated libmysqld.a with libmysqld.so in embedded package
@@ -939,10 +1032,10 @@ rm -r $(readlink var) var
 * Wed Jul 24 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.12-6
 - Added libs-compat dependency under libs package to resolve server
   installation conflicts issue.
- 
+
 * Wed Jul 17 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.12-5
 - Removed libmysqlclient.so.16 from libs package
- 
+
 * Fri Jul 05 2013 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.12-4
 - Adjusted to work on OEL6
 

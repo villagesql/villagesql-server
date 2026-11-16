@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +28,7 @@
 
 bool printACC_LOCKREQ(FILE *output, const Uint32 *theData, Uint32 len,
                       Uint16 /*rbn*/) {
-  const AccLockReq *const sig = (const AccLockReq *)theData;
+  const auto *const sig = (const AccLockReq *)theData;
   Uint32 reqtype = sig->requestInfo & 0xFF;
   switch (sig->returnCode) {
     case RNIL:

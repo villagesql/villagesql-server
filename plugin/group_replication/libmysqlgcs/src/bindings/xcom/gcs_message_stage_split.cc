@@ -290,7 +290,7 @@ bool Gcs_message_stage_split_v2::update_members_information(
    */
   std::unordered_set<uint64_t> hash_set;
   for (const auto &node : xcom_nodes.get_nodes()) {
-    Gcs_sender_id sender_id = calculate_sender_id(node);
+    Gcs_sender_id const sender_id = calculate_sender_id(node);
     hash_set.insert(sender_id);
   }
 
@@ -320,7 +320,7 @@ bool Gcs_message_stage_split_v2::update_members_information(
   /*
    Add nodes that are trying to join the group and were not seen before.
    */
-  std::vector<Gcs_sender_id> joined;
+  std::vector<Gcs_sender_id> const joined;
   for (const auto &sender_id : hash_set) {
     MYSQL_GCS_LOG_DEBUG(
         "Member %s is adding node %llu into the split pipeline mapping.",
@@ -380,10 +380,11 @@ Gcs_message_stage_split_v2::apply_transformation(Gcs_packet &&packet) {
   bool constexpr OK = false;
   auto result = std::make_pair(ERROR, std::vector<Gcs_packet>());
   std::vector<Gcs_packet> packets_out;
-  unsigned long long original_payload_length = packet.get_payload_length();
+  unsigned long long const original_payload_length =
+      packet.get_payload_length();
 
   /* Calculate number of fragments we will produce. */
-  unsigned long long max_nr_fragments =
+  unsigned long long const max_nr_fragments =
       (original_payload_length + m_split_threshold - 1) / m_split_threshold;
   assert(max_nr_fragments < std::numeric_limits<unsigned int>::max());
   auto nr_fragments = static_cast<unsigned int>(max_nr_fragments);
@@ -410,7 +411,7 @@ void Gcs_message_stage_split_v2::apply_transformation_single_fragment(
 
    There is a single fragment, which is this one.
    */
-  Gcs_split_header_v2 &stage_header =
+  auto &stage_header =
       static_cast<Gcs_split_header_v2 &>(packet.get_current_stage_header());
   stage_header.set_message_part_id(0);
   stage_header.set_num_messages(1);
@@ -434,7 +435,8 @@ Gcs_message_stage_split_v2::create_fragments(
   bool constexpr OK = false;
   auto result = std::make_pair(ERROR, std::vector<Gcs_packet>());
   unsigned long long last_fragment_payload_length = 0;
-  unsigned long long original_payload_length = packet.get_payload_length();
+  unsigned long long const original_payload_length =
+      packet.get_payload_length();
   std::vector<Gcs_packet> packets_out;
   bool failure = true;
   Gcs_packet fragment;
@@ -446,9 +448,8 @@ Gcs_message_stage_split_v2::create_fragments(
    payload. We do this to avoid the extra allocation and copy.
    */
   Gcs_packet &first_fragment = packet;
-  Gcs_split_header_v2 &first_fragment_header =
-      static_cast<Gcs_split_header_v2 &>(
-          first_fragment.get_current_stage_header());
+  auto &first_fragment_header = static_cast<Gcs_split_header_v2 &>(
+      first_fragment.get_current_stage_header());
   first_fragment_header.set_num_messages(nr_fragments);
   first_fragment_header.set_message_part_id(0);
   first_fragment_header.set_payload_length(m_split_threshold);

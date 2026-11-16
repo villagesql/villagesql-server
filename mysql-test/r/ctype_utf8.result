@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 drop table if exists t1,t2;
 set names utf8mb3;
 Warnings:
@@ -330,7 +331,7 @@ b
 select * from t1 where a = 'b' and a != 'b';
 a
 drop table t1;
-set collation_connection=utf8_general_ci;
+set collation_connection=utf8mb3_general_ci;
 Warnings:
 Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 drop table if exists t1;
@@ -1059,7 +1060,7 @@ hex(soundex(_utf8mb3 0xD091D092D093))
 D091303030
 Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
-SET collation_connection='utf8_general_ci';
+SET collation_connection='utf8mb3_general_ci';
 Warnings:
 Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 create table t1 select repeat('a',4000) a;
@@ -1188,7 +1189,7 @@ Warnings:
 Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
 drop table t1;
 "END ctype_german.inc"
-SET collation_connection='utf8_bin';
+SET collation_connection='utf8mb3_bin';
 Warnings:
 Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 create table t1 select repeat('a',4000) a;
@@ -1669,7 +1670,7 @@ a varchar(16) COLLATE utf8mb3_unicode_ci NOT NULL default '',
 b int,
 f varchar(128) default 'XXX',
 INDEX (a(4))
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_unicode_ci;
 Warnings:
 Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
@@ -1713,7 +1714,7 @@ Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Pl
 CREATE TABLE t1 (
 a CHAR(13) DEFAULT '',
 INDEX(a)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8_general_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
@@ -1767,7 +1768,7 @@ DROP TABLE t1,t2;
 CREATE TABLE t1 (
 a char(255) DEFAULT '', 
 KEY(a(10))
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8_general_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
@@ -1783,7 +1784,7 @@ Käli Käli 2-4
 DROP TABLE t1;
 CREATE TABLE t1 (
 a char(255) DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8_general_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
@@ -1860,7 +1861,7 @@ id	tid	val
 44205	72	VOLN� ADSL
 DROP TABLE t1;
 create table t1(a char(200) COLLATE utf8mb3_unicode_ci NOT NULL default '')
-default charset=utf8mb3 collate=utf8_unicode_ci;
+default charset=utf8mb3 collate=utf8mb3_unicode_ci;
 Warnings:
 Warning	3778	'utf8mb3_unicode_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
@@ -2171,7 +2172,11 @@ Warnings:
 Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 select concat(a, if(b>10, N'æ', N'ß')) from t1;
-ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb3_general_ci,COERCIBLE) for operation 'concat'
+concat(a, if(b>10, N'æ', N'ß'))
+aß
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 drop table t1;
 set names utf8mb3;
 Warnings:
@@ -2185,7 +2190,11 @@ Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 select concat(a, if(b>10, _utf8mb3'æ', _utf8mb3'ß')) from t1;
-ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb3_general_ci,COERCIBLE) for operation 'concat'
+concat(a, if(b>10, _utf8mb3'æ', _utf8mb3'ß'))
+aß
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 drop table t1;
 set names utf8mb3;
 Warnings:
@@ -2199,7 +2208,11 @@ Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 select concat(a, if(b>10, _utf8mb3 0xC3A6, _utf8mb3 0xC3AF)) from t1;
-ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb3_general_ci,COERCIBLE) for operation 'concat'
+concat(a, if(b>10, _utf8mb3 0xC3A6, _utf8mb3 0xC3AF))
+aï
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 drop table t1;
 set names utf8mb3;
 Warnings:
@@ -2210,7 +2223,8 @@ select concat(a, if(b>10, 'x' 'x', 'y' 'y')) from t1;
 concat(a, if(b>10, 'x' 'x', 'y' 'y'))
 ayy
 select concat(a, if(b>10, 'x' 'æ', 'y' 'ß')) from t1;
-ERROR HY000: Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb3_general_ci,COERCIBLE) for operation 'concat'
+concat(a, if(b>10, 'x' 'æ', 'y' 'ß'))
+ayß
 drop table t1;
 CREATE TABLE t1 (
 colA int(11) NOT NULL,
@@ -2413,7 +2427,7 @@ Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT HEX(INSERT(_utf8mb3 0xD18F, 2, 1, 0x20));
 HEX(INSERT(_utf8mb3 0xD18F, 2, 1, 0x20))
-D18F20
+D18F
 Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 SELECT HEX(INSERT(_utf8mb3 0xD18FD18E, 2, 1, 0x20));
@@ -3226,7 +3240,7 @@ create table t1 as select concat(length('a')) as c1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL
+  `c1` varchar(11) CHARACTER SET utf8mb3 DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 select hex(concat(char_length('a')));
@@ -3236,7 +3250,7 @@ create table t1 as select concat(char_length('a')) as c1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL
+  `c1` varchar(11) CHARACTER SET utf8mb3 DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 select hex(concat(bit_length('a')));
@@ -3246,7 +3260,7 @@ create table t1 as select concat(bit_length('a')) as c1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL
+  `c1` varchar(11) CHARACTER SET utf8mb3 DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 select hex(concat(coercibility('a')));
@@ -3276,7 +3290,7 @@ create table t1 as select concat(field('c','a','b','c')) as c1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(3) CHARACTER SET utf8mb3 DEFAULT NULL
+  `c1` varchar(11) CHARACTER SET utf8mb3 DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 select hex(concat(ascii(61)));
@@ -3286,7 +3300,7 @@ create table t1 as select concat(ascii(61)) as c1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(3) CHARACTER SET utf8mb3 DEFAULT NULL
+  `c1` varchar(4) CHARACTER SET utf8mb3 DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 select hex(concat(ord(61)));
@@ -3306,27 +3320,17 @@ create table t1 as select concat(find_in_set('b','a,b,c,d')) as c1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(3) CHARACTER SET utf8mb3 DEFAULT NULL
+  `c1` varchar(11) CHARACTER SET utf8mb3 DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
-select sha('a'), hex(sha('a'));
-sha('a')	hex(sha('a'))
-86f7e437faa5a7fce15d1ddcb9eaeaea377667b8	38366637653433376661613561376663653135643164646362396561656165613337373636376238
-create table t1 as select sha('a') as c1;
+select sha2('a',224), hex(sha2('a',224));
+sha2('a',224)	hex(sha2('a',224))
+abd37534c7d9a2efb9465de931cd7055ffdb8879563ae98078d6d6d5	6162643337353334633764396132656662393436356465393331636437303535666664623838373935363361653938303738643664366435
+create table t1 as select sha2('a',224) as c1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(40) CHARACTER SET utf8mb3 DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-drop table t1;
-select sha1('a'), hex(sha1('a'));
-sha1('a')	hex(sha1('a'))
-86f7e437faa5a7fce15d1ddcb9eaeaea377667b8	38366637653433376661613561376663653135643164646362396561656165613337373636376238
-create table t1 as select sha1('a') as c1;
-show create table t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` varchar(40) CHARACTER SET utf8mb3 DEFAULT NULL
+  `c1` varchar(56) CHARACTER SET utf8mb3 DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 select hex(concat(cast('-1' as signed)));
@@ -3537,7 +3541,7 @@ create table t1 as select concat(uncompressed_length('')) as c1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL
+  `c1` varchar(11) CHARACTER SET utf8mb3 DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 as select concat(connection_id()) as c1;
@@ -5404,14 +5408,6 @@ drop function f1;
 #
 # Bug#54668 User variable assignments get wrong type
 #
-SET @ST_X=sha('a');
-SELECT charset(@ST_X), collation(@ST_X);
-charset(@ST_X)	collation(@ST_X)
-utf8mb3	utf8mb3_general_ci
-SET @ST_X=sha1('a');
-SELECT charset(@ST_X), collation(@ST_X);
-charset(@ST_X)	collation(@ST_X)
-utf8mb3	utf8mb3_general_ci
 SET @ST_X=ST_astext(point(1,2));
 SELECT charset(@ST_X), collation(@ST_X);
 charset(@ST_X)	collation(@ST_X)
@@ -5612,6 +5608,771 @@ a	1024
 Warnings:
 Warning	1260	Row 2 was cut by GROUP_CONCAT()
 #
+# MDEV-7649 wrong result when comparing utf8 column with an invalid literal
+#
+SET NAMES utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+#
+# Start of ctype_utf8_ilseq.inc
+#
+CREATE TABLE t1 ENGINE=InnoDB AS SELECT REPEAT(' ', 60) AS ch LIMIT 0;;
+ALTER TABLE t1
+ADD id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ADD KEY(ch);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `ch` varchar(60) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`),
+  KEY `ch` (`ch`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (ch) VALUES ('admin'),('admin1');
+SELECT ch FROM t1 WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+DELETE FROM t1;
+INSERT INTO t1 (ch) VALUES ('a'), ('a?'), ('a??'), ('a???'), ('a????');
+INSERT INTO t1 (ch) VALUES ('ab'),('a?b'),('a??b'),('a???b'),('a????b');
+INSERT INTO t1 (ch) VALUES ('az'),('a?z'),('a??z'),('a???z'),('a????z');
+INSERT INTO t1 (ch) VALUES ('z');
+INSERT INTO t1 (ch) VALUES (_utf8mb3 0x61D080);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+INSERT INTO t1 (ch) VALUES (_utf8mb3 0x61D680);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='a𝌆' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='a𝌆b' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='a𝌆' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='a𝌆b' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86b' for column 'ch' at row 1
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch<'a𝌆' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch<'a𝌆b' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch<'a𝌆' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch<'a𝌆b' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86b' for column 'ch' at row 1
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch>'a𝌆' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch>'a𝌆b' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch>'a𝌆' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch>'a𝌆b' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86b' for column 'ch' at row 1
+ALTER TABLE t1 DROP KEY ch;
+# 0xD18F would be a good 2-byte character, 0xD1 is an incomplete sequence
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xD1,'''');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xD1,'b''');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D162'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch<''a', 0xD1,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch>''a', 0xD1,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+aր
+z
+# 0xEA9A96 would be a good 3-byte character, 0xEA9A is an incomplete sequence
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xEA9A,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'EA9A'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xEA9A,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'EA9A62'
+EXECUTE stmt;
+ch
+# 0x8F is a bad byte sequence (an mb2tail without mb2head)
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F62'
+EXECUTE stmt;
+ch
+# 0x8F8F is a bad byte sequence (an mb2tail without mb2head, two times)
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F8F,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F8F'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F8F,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F8F62'
+EXECUTE stmt;
+ch
+DROP TABLE t1;
+#
+# End of ctype_utf8_ilseq.inc
+#
+#
+# Start of ctype_utf8_ilseq.inc
+#
+CREATE TABLE t1 ENGINE=MyISAM AS SELECT REPEAT(' ', 60) AS ch LIMIT 0;;
+ALTER TABLE t1
+ADD id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ADD KEY(ch);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `ch` varchar(60) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`),
+  KEY `ch` (`ch`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (ch) VALUES ('admin'),('admin1');
+SELECT ch FROM t1 WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+DELETE FROM t1;
+INSERT INTO t1 (ch) VALUES ('a'), ('a?'), ('a??'), ('a???'), ('a????');
+INSERT INTO t1 (ch) VALUES ('ab'),('a?b'),('a??b'),('a???b'),('a????b');
+INSERT INTO t1 (ch) VALUES ('az'),('a?z'),('a??z'),('a???z'),('a????z');
+INSERT INTO t1 (ch) VALUES ('z');
+INSERT INTO t1 (ch) VALUES (_utf8mb3 0x61D080);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+INSERT INTO t1 (ch) VALUES (_utf8mb3 0x61D680);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='a𝌆' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='a𝌆b' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='a𝌆' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='a𝌆b' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86b' for column 'ch' at row 1
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch<'a𝌆' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch<'a𝌆b' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch<'a𝌆' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch<'a𝌆b' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86b' for column 'ch' at row 1
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch>'a𝌆' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch>'a𝌆b' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch>'a𝌆' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch>'a𝌆b' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86b' for column 'ch' at row 1
+ALTER TABLE t1 DROP KEY ch;
+# 0xD18F would be a good 2-byte character, 0xD1 is an incomplete sequence
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xD1,'''');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xD1,'b''');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D162'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch<''a', 0xD1,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch>''a', 0xD1,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+aր
+z
+# 0xEA9A96 would be a good 3-byte character, 0xEA9A is an incomplete sequence
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xEA9A,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'EA9A'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xEA9A,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'EA9A62'
+EXECUTE stmt;
+ch
+# 0x8F is a bad byte sequence (an mb2tail without mb2head)
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F62'
+EXECUTE stmt;
+ch
+# 0x8F8F is a bad byte sequence (an mb2tail without mb2head, two times)
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F8F,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F8F'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F8F,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F8F62'
+EXECUTE stmt;
+ch
+DROP TABLE t1;
+#
+# End of ctype_utf8_ilseq.inc
+#
+#
+# Start of ctype_utf8_ilseq.inc
+#
+CREATE TABLE t1 ENGINE=HEAP AS SELECT REPEAT(' ', 60) AS ch LIMIT 0;;
+ALTER TABLE t1
+ADD id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ADD KEY(ch);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `ch` varchar(60) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`),
+  KEY `ch` (`ch`)
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 (ch) VALUES ('admin'),('admin1');
+SELECT ch FROM t1 WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='admin𝌆';
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+DELETE FROM t1;
+INSERT INTO t1 (ch) VALUES ('a'), ('a?'), ('a??'), ('a???'), ('a????');
+INSERT INTO t1 (ch) VALUES ('ab'),('a?b'),('a??b'),('a???b'),('a????b');
+INSERT INTO t1 (ch) VALUES ('az'),('a?z'),('a??z'),('a???z'),('a????z');
+INSERT INTO t1 (ch) VALUES ('z');
+INSERT INTO t1 (ch) VALUES (_utf8mb3 0x61D080);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+INSERT INTO t1 (ch) VALUES (_utf8mb3 0x61D680);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='a𝌆' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch='a𝌆b' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='a𝌆' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86' for column 'ch' at row 1
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch='a𝌆b' ORDER BY ch;
+ch
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+Warning	1366	Incorrect string value: '\xF0\x9D\x8C\x86b' for column 'ch' at row 1
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch<'a𝌆' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch<'a𝌆b' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch<'a𝌆' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch<'a𝌆b' ORDER BY ch;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+aր
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch>'a𝌆' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 IGNORE KEY (ch) WHERE ch>'a𝌆b' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch>'a𝌆' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+SELECT ch FROM t1 FORCE KEY (ch) WHERE ch>'a𝌆b' ORDER BY ch;
+ch
+z
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'F09D8C'
+ALTER TABLE t1 DROP KEY ch;
+# 0xD18F would be a good 2-byte character, 0xD1 is an incomplete sequence
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xD1,'''');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xD1,'b''');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D162'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch<''a', 0xD1,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+a
+a?
+a??
+a???
+a????
+a????b
+a????z
+a???b
+a???z
+a??b
+a??z
+a?b
+a?z
+ab
+az
+aЀ
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch>''a', 0xD1,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'D1'
+EXECUTE stmt;
+ch
+aր
+z
+# 0xEA9A96 would be a good 3-byte character, 0xEA9A is an incomplete sequence
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xEA9A,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'EA9A'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0xEA9A,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: 'EA9A62'
+EXECUTE stmt;
+ch
+# 0x8F is a bad byte sequence (an mb2tail without mb2head)
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F62'
+EXECUTE stmt;
+ch
+# 0x8F8F is a bad byte sequence (an mb2tail without mb2head, two times)
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F8F,''' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F8F'
+EXECUTE stmt;
+ch
+SET @query=CONCAT('SELECT ch FROM t1 WHERE ch=''a', 0x8F8F,'b'' ORDER BY ch');
+PREPARE stmt FROM @query;
+Warnings:
+Warning	1300	Invalid utf8mb3 character string: '8F8F62'
+EXECUTE stmt;
+ch
+DROP TABLE t1;
+#
+# End of ctype_utf8_ilseq.inc
+#
+#
 # End of 5.5 tests
 #
 #
@@ -5770,7 +6531,7 @@ hex(weight_string(cast(_latin1 0x808080 as char), 5, 4, 0xC0))
 select hex(weight_string(cast(_latin1 0x808080 as char),25, 4, 0xC0));
 hex(weight_string(cast(_latin1 0x808080 as char),25, 4, 0xC0))
 20AC20AC20AC00200020002000200020002000200020002000
-set @@collation_connection=utf8_bin;
+set @@collation_connection=utf8mb3_bin;
 Warnings:
 Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 select @@collation_connection;
@@ -6025,3 +6786,4 @@ INSERT INTO t2 (c2) VALUES(REPEAT(_utf8mb4 0xE0B295, 128));
 ERROR HY000: Incorrect string value: '\xE0\xB2\x95\xE0\xB2\x95...' for column 'c2' at row 1
 DROP TABLE t1;
 DROP TABLE t2;
+include/rpl/set_gtid_mode_on.inc

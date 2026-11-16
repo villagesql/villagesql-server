@@ -184,7 +184,7 @@ bool sp_drop_db_routines(THD *thd, const dd::Schema &schema);
  */
 bool lock_db_routines(THD *thd, const dd::Schema &schema);
 
-sp_head *sp_find_routine(THD *thd, enum_sp_type type, sp_name *name,
+sp_head *sp_find_routine(THD *thd, enum_sp_type type, const sp_name *name,
                          sp_cache **cp, bool cache_only);
 
 sp_head *sp_setup_routine(THD *thd, enum_sp_type type, sp_name *name,
@@ -197,7 +197,9 @@ enum_sp_return_code sp_cache_routine(THD *thd, enum_sp_type type,
                                      const sp_name *name, bool lookup_only,
                                      sp_head **sp);
 
-bool sp_exist_routines(THD *thd, Table_ref *procs, bool is_proc);
+bool sp_exists_library(THD *thd, sp_name *name);
+
+bool sp_exist_routines(THD *thd, Table_ref *procs, enum_sp_type sp_type);
 
 bool sp_show_create_routine(THD *thd, enum_sp_type type, sp_name *name);
 
@@ -403,6 +405,8 @@ void sp_finish_parsing(THD *thd);
 uint sp_get_flags_for_command(LEX *lex);
 
 bool sp_check_name(LEX_STRING *ident);
+
+bool sp_check_name(LEX_CSTRING ident);
 
 Table_ref *sp_add_to_query_tables(THD *thd, LEX *lex, const char *db,
                                   const char *name);

@@ -911,7 +911,7 @@ struct NdbapiAB::TableScanDeleteOp : NdbapiOp<XMode::bulk> {
   NdbScanOperation *op;
   int nDeleted;
 
-  TableScanDeleteOp(string _name, NdbapiAB &ab, const D::Table *tab)
+  TableScanDeleteOp(const string &_name, NdbapiAB &ab, const D::Table *tab)
       : super(_name, ab), table(tab), op(nullptr), nDeleted(0) {}
 
   void run(const Ids &id) override {

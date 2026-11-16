@@ -120,6 +120,11 @@ class Server {
   @return error code */
   int send_configs(Command_Response rcmd);
 
+  // From Percona Server 9.7.2-2
+  /** Send upgrade related configurations.
+  @return error code */
+  int send_upgrade_configs(Command_Response rcmd);
+
   /** Send the opaque VillageSQL extension payload for recipient validation.
   @return error code */
   int send_extensions();
@@ -132,6 +137,11 @@ class Server {
   /** @return true iff skip sending additional configurations. */
   bool skip_other_configs() const {
     return m_protocol_version < CLONE_PROTOCOL_VERSION_V3;
+  }
+
+  /** @return true iff skip sending upgrade related configurations. */
+  bool skip_upgrade_configs() const {
+    return m_protocol_version < CLONE_PROTOCOL_VERSION_V4;
   }
 
   /** @return true iff the negotiated VillageSQL clone version supports sending

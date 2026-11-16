@@ -35,10 +35,10 @@
 #include <sys/types.h>
 #include <cerrno>
 
-#include "digest.h"
 #include "http_auth_error.h"
 #include "kdf_pbkdf2.h"
 #include "kdf_sha_crypt.h"
+#include "mysqlrouter/digest.h"
 
 std::pair<std::error_code, struct stat> FileMeta::stat(
     const std::string &filename) {

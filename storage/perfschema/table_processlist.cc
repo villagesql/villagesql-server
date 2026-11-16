@@ -66,6 +66,9 @@ Plugin_table table_processlist::m_table_def(
     "  TIME BIGINT,\n"
     "  STATE VARCHAR(64),\n"
     "  INFO LONGTEXT,\n"
+    "  TIME_MS BIGINT unsigned not null,\n"
+    "  ROWS_SENT BIGINT unsigned not null,\n"
+    "  ROWS_EXAMINED BIGINT unsigned not null,\n"
     "  EXECUTION_ENGINE ENUM ('PRIMARY', 'SECONDARY'),\n"
     "  PRIMARY KEY (ID) USING HASH\n",
     /* Options */
@@ -175,8 +178,7 @@ int table_processlist::make_row(PFS_thread *pfs) {
   }
 
   /* Ignore background threads. */
-  if (pfs->m_user_name.length() == 0 || pfs->m_processlist_id == 0)
-    return HA_ERR_RECORD_DELETED;
+  if (pfs->m_processlist_id == 0) return HA_ERR_RECORD_DELETED;
 
   m_row.m_processlist_id = pfs->m_processlist_id;
 
@@ -189,13 +191,12 @@ int table_processlist::make_row(PFS_thread *pfs) {
   uint hostname_len = pfs->m_host_name.length();
   bool user_name_set = false;
 
-  if (pfs->m_class->is_system_thread()) {
+  if (pfs->m_class->is_system_thread() || pfs->m_system_thread) {
     bool is_named = username_len > 0;
 
     // Assign 'system user' if:
     // - user is not named, or
-    // -user is named and thread is not a singleton (e.g. event_scheduler)
-
+    // - user is named and thread is not a singleton (e.g. event_scheduler)
     if (!is_named || (is_named && !(pfs->m_class->is_singleton()))) {
       username = "system user";
       hostname_len = 0;
@@ -311,6 +312,9 @@ int table_processlist::make_row(PFS_thread *pfs) {
     memcpy(m_row.m_hostname, host_ip.c_str(), m_row.m_hostname_length);
   }
 
+  m_row.m_start_time_usec = pfs->m_start_time_usec;
+  m_row.m_rows_sent = pfs->m_rows_sent;
+  m_row.m_rows_examined = pfs->m_rows_examined;
   m_row.m_secondary = pfs->m_secondary;
 
   if (!pfs->m_lock.end_optimistic_lock(&lock)) {
@@ -394,7 +398,25 @@ int table_processlist::read_row_values(TABLE *table, unsigned char *buf,
             f->set_null();
           }
           break;
-        case 8: /* EXECUTION_ENGINE */
+        case 8: /* TIME_MS */
+          if (m_row.m_start_time_usec) {
+            auto now = my_micro_time();
+            auto elapsed =
+                (now > m_row.m_start_time_usec ? now - m_row.m_start_time_usec
+                                               : 0) /
+                1000;
+            set_field_ulonglong(f, elapsed);
+          } else {
+            f->set_null();
+          }
+          break;
+        case 9: /* ROWS_SENT */
+          set_field_ulonglong(f, m_row.m_rows_sent);
+          break;
+        case 10: /* ROWS_EXAMINED */
+          set_field_ulonglong(f, m_row.m_rows_examined);
+          break;
+        case 11: /* EXECUTION_ENGINE */
           set_field_enum(f, m_row.m_secondary ? ENUM_SECONDARY : ENUM_PRIMARY);
           break;
         default:

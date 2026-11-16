@@ -185,6 +185,17 @@ class NdbEventOperation {
   void setFilterAnyvalueMySQLNoReplicaUpdates();
 
   /**
+     Activate data node filtering of rows, by setting the row slice factor this
+     event's slice id.
+
+     @param count The number of row groups, range [1,256]
+     @param id    The slice id of this event op, range [0,255]
+
+     @return      0 on success, -1 for invalid @id and @count
+  */
+  int setFilterRowSlice(Uint16 count, Uint16 id);
+
+  /**
      Whether EventOperation should filter out potentially partial
      data from epochs < the StartEpoch for this operation.
 

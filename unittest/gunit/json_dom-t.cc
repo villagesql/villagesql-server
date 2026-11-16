@@ -327,15 +327,14 @@ TEST_F(JsonDomTest, BasicTest) {
   EXPECT_EQ(std::string("[null, false, true]"), format(a.clone()));
 
   /* DATETIME scalar */
-  MYSQL_TIME dt;
-  std::memset(&dt, 0, sizeof dt);
+  Datetime_val dt;
   MYSQL_TIME_STATUS status;
   EXPECT_FALSE(str_to_datetime(&my_charset_utf8mb4_bin, "19990412", 8, &dt,
                                (my_time_flags_t)0, &status));
   const Json_datetime scalar(dt, MYSQL_TYPE_DATETIME);
   EXPECT_EQ(enum_json_type::J_DATETIME, scalar.json_type());
 
-  const MYSQL_TIME *dt_out = scalar.value();
+  const Datetime_val *dt_out = scalar.value();
 
   EXPECT_FALSE(std::memcmp(&dt, dt_out, sizeof(MYSQL_TIME)));
   EXPECT_EQ(std::string("\"1999-04-12\""), format(scalar));
@@ -931,16 +930,15 @@ TEST_F(JsonDomTest, AttemptBinaryUpdate_AllTypes) {
   my_decimal decimal;
   EXPECT_FALSE(double2my_decimal(0, 3.14, &decimal));
 
-  MYSQL_TIME dt;
-  std::memset(&dt, 0, sizeof(dt));
+  Datetime_val dt;
   MYSQL_TIME_STATUS status;
-  EXPECT_FALSE(str_to_datetime(&my_charset_utf8mb4_bin, "20170223", 8, &dt,
-                               static_cast<my_time_flags_t>(0), &status));
+  EXPECT_FALSE(str_to_datetime(&my_charset_utf8mb4_bin, "2017-02-23 01:02:03",
+                               19, &dt, static_cast<my_time_flags_t>(0),
+                               &status));
 
-  MYSQL_TIME tm;
-  std::memset(&dt, 0, sizeof(tm));
-  EXPECT_FALSE(str_to_time(&my_charset_utf8mb4_bin, "17:28:25", 8, &tm,
-                           static_cast<my_time_flags_t>(0), &status));
+  Time_val time{false, 17, 28, 25, 0};
+
+  Date_val date(2017, 02, 23);
 
   Json_dom *doms[] = {
       new (std::nothrow) Json_null,
@@ -959,9 +957,9 @@ TEST_F(JsonDomTest, AttemptBinaryUpdate_AllTypes) {
       new (std::nothrow) Json_string("xyz"),
       new (std::nothrow) Json_decimal(decimal),
       new (std::nothrow) Json_datetime(dt, MYSQL_TYPE_DATETIME),
-      new (std::nothrow) Json_datetime(dt, MYSQL_TYPE_DATE),
+      new (std::nothrow) Json_date(date),
       new (std::nothrow) Json_datetime(dt, MYSQL_TYPE_TIMESTAMP),
-      new (std::nothrow) Json_datetime(tm, MYSQL_TYPE_TIME),
+      new (std::nothrow) Json_time(time),
       new (std::nothrow) Json_opaque(MYSQL_TYPE_BLOB, 5, 'x'),
       new (std::nothrow) Json_array(),
       parse_json("[1,2,3]").release(),
@@ -1647,9 +1645,9 @@ static void BM_JsonDateArrayToString(size_t num_iterations) {
   initializer.SetUp();
 
   Json_array_ptr array = create_dom_ptr<Json_array>();
-  MysqlTime date(2018, 11, 20, 0, 0, 0, 0, false, MYSQL_TIMESTAMP_DATE);
+  Date_val date(2018, 11, 20);
   for (size_t i = 0; i < 1000; ++i) {
-    array->append_alias(create_dom_ptr<Json_datetime>(date, MYSQL_TYPE_DATE));
+    array->append_alias(create_dom_ptr<Json_date>(date));
   }
   Json_wrapper wrapper(std::move(array));
 
@@ -1690,7 +1688,7 @@ static void BM_JsonWrapperObjectIteratorDOM(size_t num_iterations) {
 
   for (size_t i = 0; i < num_iterations; ++i) {
     for (const auto &it : Json_object_wrapper(wrapper)) {
-      EXPECT_NE(0U, it.first.length);
+      EXPECT_NE(0U, it.first.size());
       EXPECT_EQ(enum_json_type::J_NULL, it.second.type());
     }
   }
@@ -1729,7 +1727,7 @@ static void BM_JsonWrapperObjectIteratorBinary(size_t num_iterations) {
 
   for (size_t i = 0; i < num_iterations; ++i) {
     for (const auto &it : Json_object_wrapper(wrapper)) {
-      EXPECT_NE(0U, it.first.length);
+      EXPECT_NE(0U, it.first.size());
       EXPECT_EQ(enum_json_type::J_NULL, it.second.type());
     }
   }
@@ -1739,5 +1737,108 @@ static void BM_JsonWrapperObjectIteratorBinary(size_t num_iterations) {
   initializer.TearDown();
 }
 BENCHMARK(BM_JsonWrapperObjectIteratorBinary)
+
+/**
+  Microbenchmark that tests Json_dom::parse(text) on an array of 100
+  floating-point numbers, each with 17 significant decimal digits (10 before and
+  7 after the decimal point), to simulate high-precision double scenarios.
+*/
+static void BM_JsonParseHighPrecisionFloatArray(size_t num_iterations) {
+  StopBenchmarkTiming();
+
+  my_testing::Server_initializer initializer;
+  initializer.SetUp();
+
+  // Build JSON array once, outside the timed region.
+  std::string json;
+  json.push_back('[');
+  for (size_t i = 0; i < 100; ++i) {
+    if (i > 0) json += ", ";
+    json += "1234567890.";  // 10 digits before decimal
+    // Always use 7 fractional digits for a total of 17 significant digits.
+    for (size_t j = 0; j < 7; ++j) {
+      int digit = static_cast<int>((i * 7 + j * 3) % 10);
+      json.push_back(static_cast<char>('0' + digit));
+    }
+  }
+  json.push_back(']');
+
+  // One-time parse and sanity check before timing.
+  Json_dom_ptr dom = Json_dom::parse(
+      json.c_str(), json.size(), [](const char *, size_t) {},
+      [] { ASSERT_TRUE(false); });
+  ASSERT_NE(dom, nullptr);
+  EXPECT_EQ(enum_json_type::J_ARRAY, dom->json_type());
+  const Json_array *arr = down_cast<const Json_array *>(dom.get());
+  EXPECT_EQ(100U, arr->size());
+  for (size_t i = 0; i < arr->size(); ++i) {
+    EXPECT_EQ(enum_json_type::J_DOUBLE, (*arr)[i]->json_type());
+  }
+
+  StartBenchmarkTiming();
+
+  for (size_t i = 0; i < num_iterations; ++i) {
+    dom = Json_dom::parse(
+        json.c_str(), json.size(), [](const char *, size_t) {},
+        [] { ASSERT_TRUE(false); });
+  }
+
+  StopBenchmarkTiming();
+
+  initializer.TearDown();
+}
+BENCHMARK(BM_JsonParseHighPrecisionFloatArray)
+
+/**
+  Microbenchmark that tests Json_dom::parse(text) on an array of
+  100 varied low-precision floating-point numbers
+  (3 digits before and 3 digits after the decimal point).
+*/
+static void BM_JsonParseLowPrecisionFloatArray(size_t num_iterations) {
+  StopBenchmarkTiming();
+
+  my_testing::Server_initializer initializer;
+  initializer.SetUp();
+
+  // Build JSON array once, outside the timed region.
+  std::string json;
+  json.push_back('[');
+  for (size_t i = 0; i < 100; ++i) {
+    if (i > 0) json += ", ";
+    // Format: <3 digits>.<3 digits> (e.g., 123.456), 6 digits total
+    unsigned int before_decimal = 100 + ((i * 13) % 900);  // 3 digits: 100..999
+    unsigned int after_decimal = 100 + ((i * 31) % 900);   // 3 digits: 100..999
+
+    json += std::to_string(before_decimal);
+    json += ".";
+    json += std::to_string(after_decimal);
+  }
+  json.push_back(']');
+
+  // One-time parse and sanity check before timing.
+  Json_dom_ptr dom = Json_dom::parse(
+      json.c_str(), json.size(), [](const char *, size_t) {},
+      [] { ASSERT_TRUE(false); });
+  ASSERT_NE(dom, nullptr);
+  EXPECT_EQ(enum_json_type::J_ARRAY, dom->json_type());
+  const Json_array *arr = down_cast<const Json_array *>(dom.get());
+  EXPECT_EQ(100U, arr->size());
+  for (size_t i = 0; i < arr->size(); ++i) {
+    EXPECT_EQ(enum_json_type::J_DOUBLE, (*arr)[i]->json_type());
+  }
+
+  StartBenchmarkTiming();
+
+  for (size_t i = 0; i < num_iterations; ++i) {
+    dom = Json_dom::parse(
+        json.c_str(), json.size(), [](const char *, size_t) {},
+        [] { ASSERT_TRUE(false); });
+  }
+
+  StopBenchmarkTiming();
+
+  initializer.TearDown();
+}
+BENCHMARK(BM_JsonParseLowPrecisionFloatArray)
 
 }  // namespace json_dom_unittest

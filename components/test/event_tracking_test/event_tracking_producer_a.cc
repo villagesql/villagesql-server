@@ -60,7 +60,7 @@ void print_info(const std::string &event) {
 }
 
 void print_result(const std::string &event, bool result) {
-  std::string retval = result ? "Error." : "Success.";
+  std::string const retval = result ? "Error." : "Success.";
   std::cout << "Component: " << event_tracking_producer::component_name
             << ". Event: " << event << ". Consumer returned: " << retval
             << std::endl;
@@ -299,7 +299,7 @@ bool Event_producer::generate_events() {
     startup_data.argc = 1;
     startup_data.argv = nullptr;
 
-    my_service<SERVICE_TYPE(event_tracking_lifecycle)> lifecycle_service(
+    my_service<SERVICE_TYPE(event_tracking_lifecycle)> const lifecycle_service(
         "event_tracking_lifecycle", mysql_service_registry);
 
     mysql_event_tracking_shutdown_data shutdown_data;
@@ -430,12 +430,11 @@ bool Event_producer::generate_events() {
 
 static mysql_service_status_t init() {
   g_event_producer = new (std::nothrow) Event_producer();
-  if (!g_event_producer || g_event_producer->generate_events()) return true;
-  return false;
+  return !g_event_producer || g_event_producer->generate_events();
 }
 
 static mysql_service_status_t deinit() {
-  if (g_event_producer) delete g_event_producer;
+  delete g_event_producer;
   g_event_producer = nullptr;
   return false;
 }

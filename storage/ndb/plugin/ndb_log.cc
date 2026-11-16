@@ -144,7 +144,7 @@ void ndb_log_error(const char *fmt, ...) {
 // the verbose level is controlled by "--ndb_extra_logging"
 extern ulong opt_ndb_extra_logging;
 
-unsigned ndb_log_get_verbose_level(void) { return opt_ndb_extra_logging; }
+unsigned ndb_log_get_verbose_level() { return opt_ndb_extra_logging; }
 
 void ndb_log_verbose(unsigned verbose_level, const char *fmt, ...) {
   // Print message only if verbose level is set high enough

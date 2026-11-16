@@ -33,10 +33,11 @@
 #  WL#6120- Change master without stopping Slave threads.
 #
 
+--source include/have_binlog_format_row.inc
+--source include/not_rpl_gtid_only.inc
 --let $rpl_privilege_checks_user_grant_option = 1
 --source include/rpl/set_privilege_checks_user_as_system_user.inc
 --source include/rpl/init_source_replica.inc
---source include/have_binlog_format_row.inc
 
 --echo
 --echo # Create a replication user to use in CHANGE REPLICATION SOURCE tests.
@@ -80,7 +81,6 @@ eval CHANGE REPLICATION SOURCE TO
   SOURCE_HEARTBEAT_PERIOD= 20,
   IGNORE_SERVER_IDS= (),
   SOURCE_AUTO_POSITION= 0,
-  SOURCE_SSL= 1,
   SOURCE_SSL_CA= '$MYSQL_TEST_DIR/std_data/cacert.pem',
   SOURCE_SSL_CERT= '$MYSQL_TEST_DIR/std_data/client-cert.pem',
   SOURCE_SSL_KEY= '$MYSQL_TEST_DIR/std_data/client-key.pem',
@@ -286,7 +286,6 @@ eval CHANGE REPLICATION SOURCE TO
   SOURCE_USER= 'root',
   SOURCE_DELAY= 0,
   IGNORE_SERVER_IDS= (),
-  SOURCE_SSL= 0,
   SOURCE_SSL_CA= '',
   SOURCE_SSL_CERT= '',
   SOURCE_SSL_KEY= '',

@@ -601,10 +601,6 @@ class Plugin_gcs_message {
     @param[out] type   the type of the payload item
     @param[out] value  the value of the payload item
     @param[out] length the length of the payload item
-
-    @return the operation status
-      @retval false    OK
-      @retval true     Error
   */
   bool decode_payload_item_string(const unsigned char **buffer, uint16 *type,
                                   const unsigned char *end, std::string *value,
@@ -632,10 +628,6 @@ class Plugin_gcs_message {
     @param[out] type   the type of the payload item
     @param[out] value  the value of the payload item
     @param[out] length the length of the payload item
-
-    @return the operation status
-      @retval false    OK
-      @retval true     Error
   */
   bool decode_payload_item_bytes(const unsigned char **buffer, uint16 *type,
                                  const unsigned char *end, unsigned char *value,

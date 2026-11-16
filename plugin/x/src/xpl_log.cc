@@ -26,8 +26,6 @@
 #include "plugin/x/src/xpl_log.h"
 #include <mysqld_error.h>
 
-#include <stddef.h>
-
 namespace xpl {
 
 MYSQL_PLUGIN plugin_handle = nullptr;

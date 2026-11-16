@@ -13,7 +13,7 @@ TEST START
 RUN DROP SCHEMA if EXISTS mysqlxplugin
 
 0 rows affected
-RUN CREATE SCHEMA mysqlxplugin DEFAULT CHARSET='utf8'
+RUN CREATE SCHEMA mysqlxplugin DEFAULT CHARSET='utf8mb3'
 
 1 rows affected
 RUN USE mysqlxplugin
@@ -1460,7 +1460,7 @@ send Mysqlx.Crud.Insert {
   }
 }
 
-Got expected error: Invalid JSON text: "Missing a comma or '}' after an object member." at position 98 in value for column 'main_collection.doc'. (code 3140)
+Got expected error: Invalid JSON text: "Missing a comma or '}' after an object member." at position 98 in value for column 'main_collection.doc' at row 1. (code 3140)
 ================================================================================
 CLEAN UP
 ================================================================================

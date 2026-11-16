@@ -2,6 +2,7 @@
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
 Copyright (c) 2009, Google Inc.
+Copyright (c) 2016, Percona Inc. All Rights Reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -53,6 +54,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /* time, difftime */
 #include <time.h>
+#include "srv0start.h"
 
 /* fprintf */
 #include <cstdio>
@@ -228,12 +230,12 @@ Redo log consists of following data layers:
    formats data in proper way: include headers/footers of log blocks,
    calculates checksums, maintains boundaries of record groups.
 
--# %Log recent written buffer (e.g. 4MB) - tracks recent writes to the
+-# %Log recent written buffer (e.g. 1MB) - tracks recent writes to the
    log buffer. Allows to have concurrent writes to the log buffer and tracks
    up to which lsn all such writes have been already finished.
 
--# %Log recent closed buffer (e.g. 4MB) - tracks for which recent writes,
-   corresponding dirty pages have been already added to the flush lists.
+-# %The Buf_flush_list_added_lsns buffer (e.g. 2MB) - tracks for which recent
+   writes, corresponding dirty pages have been already added to the flush lists.
    Allows to relax order in which dirty pages have to be added to the flush
    lists and tracks up to which lsn, all dirty pages have been added.
    This is required to not make checkpoint at lsn which is larger than
@@ -285,7 +287,7 @@ Redo log consists of following data layers:
 
 -# User threads need to wait if there is no space in the log files.
 
-   @diafile storage/innobase/log/arch_deleting.dia "Reclaiming space in the redo log"
+   @diafile arch_deleting.dia "Reclaiming space in the redo log"
 
 -# Well thought out and tested set of _MONITOR_ counters is maintained and
    documented.
@@ -297,10 +299,6 @@ Redo log consists of following data layers:
 -# All the new buffers could be resized dynamically during runtime. In practice,
    only size of the log buffer is accessible without the _EXPERIMENTAL_ mode.
 
-   @note
-   This is a functional change - the log buffer could be resized dynamically
-   by users (also decreased).
-
 @section sect_redo_log_lsn_values Glossary of lsn values
 
 Different fragments of head of the redo log are tracked by different values:
@@ -309,7 +307,8 @@ Different fragments of head of the redo log are tracked by different values:
   - @ref subsect_redo_log_sn.
 
 Different fragments of the redo log's tail are tracked by different values:
-  - @ref subsect_redo_log_buf_dirty_pages_added_up_to_lsn,
+
+  - @ref subsect_buf_flush_list_smallest_not_added,
   - @ref subsect_redo_log_available_for_checkpoint_lsn,
   - @ref subsect_redo_log_last_checkpoint_lsn.
 
@@ -321,14 +320,15 @@ be overwritten in cyclic manner for lsn values larger by _log.buf_size_.
 
 Value is updated by: [log writer thread](@ref sect_redo_log_writer).
 
-@subsection subsect_redo_log_buf_ready_for_write_lsn log.buf_ready_for_write_lsn
+@subsection subsect_redo_log_buf_ready_for_write_lsn log_buffer_ready_for_write_lsn()
 
+It's internally implemented as log.recent_written.tail().
 Up to this lsn, all concurrent writes to log buffer have been finished.
 We don't need older part of the log recent-written buffer.
 
 It obviously holds:
 
-        log.buf_ready_for_write_lsn >= log.write_lsn
+        log_buffer_ready_for_write_lsn() >= log.write_lsn
 
 Value is updated by: [log writer thread](@ref sect_redo_log_writer).
 
@@ -349,12 +349,11 @@ data bytes).
 
 It obviously holds:
 
-        log.sn >= log_translate_lsn_to_sn(log.buf_ready_for_write_lsn)
+        log.sn >= log_translate_lsn_to_sn(log_buffer_ready_for_write_lsn())
 
 Value is updated by: user threads during reservation of space.
 
-@subsection subsect_redo_log_buf_dirty_pages_added_up_to_lsn
-log.buf_dirty_pages_added_up_to_lsn
+@subsection subsect_buf_flush_list_smallest_not_added buf_flush_list_smallest_not_added()
 
 Up to this lsn user threads have added all dirty pages to flush lists.
 
@@ -363,9 +362,9 @@ That's because there could be a page with _oldest_modification_ smaller than
 the minimum _oldest_modification_ available in flush lists. Note that such page
 is just about to be added to flush list by a user thread, but there is no mutex
 protecting access to the minimum _oldest_modification_, which would be acquired
-by the user thread before writing to redo log. Hence for any lsn greater than
-_buf_dirty_pages_added_up_to_lsn_ we cannot trust that flush lists are complete
-and minimum calculated value (or its approximation) is valid.
+by the user thread before writing to redo log. Hence for any lsn greater or
+equal to _buf_flush_list_smallest_not_added()_ we cannot trust that flush lists
+are complete and minimum calculated value (or its approximation) is valid.
 
 @note
 Note that we do not delete redo log records physically, but we still can delete
@@ -374,10 +373,9 @@ them logically by doing checkpoint at given lsn.
 It holds (unless the log writer thread misses an update of the
 @ref subsect_redo_log_buf_ready_for_write_lsn):
 
-        log.buf_dirty_pages_added_up_to_lsn <= log.buf_ready_for_write_lsn.
+    buf_flush_list_added->smallest_not_added_lsn() <= log_buffer_ready_for_write_lsn().
 
-@subsection subsect_redo_log_available_for_checkpoint_lsn
-log.available_for_checkpoint_lsn
+@subsection subsect_redo_log_available_for_checkpoint_lsn log.available_for_checkpoint_lsn
 
 Up to this lsn all dirty pages have been flushed to disk. However, this value
 is not guaranteed to be the maximum such value. As insertion order to flush
@@ -385,11 +383,11 @@ lists is relaxed, the buf_pool_get_oldest_modification_approx() returns
 modification time of some page that was inserted the earliest, it doesn't
 have to be the oldest modification though. However, the maximum difference
 between the first page in flush list, and one with the oldest modification
-lsn is limited by the number of entries in the log recent closed buffer.
+lsn is limited by the buf_flush_list_added->order_lag().
 
 That's why from result of buf_pool_get_oldest_modification_approx() size of
-the log recent closed buffer is subtracted. The result is used to update the
-lsn available for a next checkpoint.
+the buf_flush_list_added->order_lag() is subtracted. The result is used to
+update the lsn available for a next checkpoint.
 
 This has impact on the redo format, because the checkpoint_lsn can now point
 to the middle of some group of log records (even to the middle of a single
@@ -417,7 +415,7 @@ It holds:
 
         log.last_checkpoint_lsn
         <= log.available_for_checkpoint_lsn
-        <= log.buf_dirty_pages_added_up_to_lsn.
+        <= buf_flush_list_added->smallest_not_added_lsn().
 
 
 Read more about redo log details:
@@ -542,14 +540,6 @@ static void log_allocate_recent_written(log_t &log);
 @param[out]     log     redo log */
 static void log_deallocate_recent_written(log_t &log);
 
-/** Allocates the log recent closed buffer.
-@param[out]     log     redo log */
-static void log_allocate_recent_closed(log_t &log);
-
-/** Deallocates the log recent closed buffer.
-@param[out]     log     redo log */
-static void log_deallocate_recent_closed(log_t &log);
-
 /** Resets the log encryption buffer (used to write encryption headers).
 @param[out]     log     redo log */
 static void log_reset_encryption_buffer(log_t &log);
@@ -661,7 +651,6 @@ static void log_sys_create() {
   log_allocate_buffer(log);
   log_allocate_write_ahead_buffer(log);
   log_allocate_recent_written(log);
-  log_allocate_recent_closed(log);
   log_allocate_flush_events(log);
   log_allocate_write_events(log);
 
@@ -710,6 +699,21 @@ static void log_fix_first_rec_group(lsn_t block_lsn,
 
 dberr_t log_start(log_t &log, lsn_t checkpoint_lsn, lsn_t start_lsn,
                   bool allow_checkpoints) {
+  /* Declare function that figures out which of the two header locations stores
+  the checkpoint_lsn. We don't expose it through header, because the header is
+  used in various places of InnoDB, while this is a technical detail of the
+  low-level log implementation. */
+  Log_checkpoint_header_no recv_find_checkpoint_header_no(log_t & log,
+                                                          lsn_t checkpoint_lsn);
+
+  /* Make the preservation of max checkpoint info on disk certain by writing
+  the next checkpoint to the other checkpoint header. This is an extra
+  protection in case next checkpoint write will become corrupted because of
+  crash during the write. */
+
+  log.next_checkpoint_header_no = log_next_checkpoint_header(
+      recv_find_checkpoint_header_no(log, checkpoint_lsn));
+
   ut_a(log_sys != nullptr);
   ut_a(checkpoint_lsn >= OS_FILE_LOG_BLOCK_SIZE);
   ut_a(checkpoint_lsn >= LOG_START_LSN);
@@ -754,14 +758,17 @@ dberr_t log_start(log_t &log, lsn_t checkpoint_lsn, lsn_t start_lsn,
   log.recent_written.advance_tail();
   ut_a(log_buffer_ready_for_write_lsn(log) == start_lsn);
 
-  log.recent_closed.add_link(0, start_lsn);
-  log.recent_closed.advance_tail();
-  ut_a(log_buffer_dirty_pages_added_up_to_lsn(log) == start_lsn);
-
   log.write_lsn = start_lsn;
   log.flushed_to_disk_lsn = start_lsn;
 
   log.write_ahead_end_offset = 0;
+
+  /* It's a bit ugly that log_start is responsible for calling
+  buf_flush_list_added->assume_added_up_to(log.flushed_to_disk_lsn),
+  but the alternative seems to be to hunt down 4 (or more?) places where we
+  start the log and add this call immediately after them, which seems even more
+  difficult to maintain and verify. */
+  buf_flush_list_added->assume_added_up_to(log.flushed_to_disk_lsn);
 
   lsn_t block_lsn;
   byte *block;
@@ -820,7 +827,6 @@ static void log_sys_free() {
 
   log_deallocate_write_events(log);
   log_deallocate_flush_events(log);
-  log_deallocate_recent_closed(log);
   log_deallocate_recent_written(log);
   log_deallocate_write_ahead_buffer(log);
   log_deallocate_buffer(log);
@@ -1139,13 +1145,14 @@ void log_print(const log_t &log, FILE *file) {
   lsn_t max_assigned_lsn;
   lsn_t current_lsn;
   lsn_t oldest_lsn;
+  lsn_t max_checkpoint_age;
   uint64_t file_min_id;
   uint64_t file_max_id;
 
   log_files_mutex_enter(log);
 
   last_checkpoint_lsn = log.last_checkpoint_lsn.load();
-  dirty_pages_added_up_to_lsn = log_buffer_dirty_pages_added_up_to_lsn(log);
+  dirty_pages_added_up_to_lsn = buf_flush_list_added->smallest_not_added_lsn();
   ready_for_write_lsn = log_buffer_ready_for_write_lsn(log);
   write_lsn = log.write_lsn.load();
   flush_lsn = log.flushed_to_disk_lsn.load();
@@ -1156,6 +1163,7 @@ void log_print(const log_t &log, FILE *file) {
 
   log_limits_mutex_enter(log);
   oldest_lsn = log.available_for_checkpoint_lsn;
+  max_checkpoint_age = log_free_check_capacity(log);
   log_limits_mutex_exit(log);
 
   log_files_mutex_exit(log);
@@ -1188,6 +1196,15 @@ void log_print(const log_t &log, FILE *file) {
           current_lsn, max_assigned_lsn, ready_for_write_lsn, write_lsn,
           flush_lsn, dirty_pages_added_up_to_lsn, oldest_lsn,
           last_checkpoint_lsn, file_min_id, file_max_id);
+
+  fprintf(file,
+          "Modified age no less than    " LSN_PF
+          "\n"
+          "Checkpoint age               " LSN_PF
+          "\n"
+          "Max checkpoint age           " LSN_PF "\n",
+          current_lsn - buf_pool_get_oldest_modification_lwm(),
+          current_lsn - log_sys->last_checkpoint_lsn, max_checkpoint_age);
 
   time_t current_time = time(nullptr);
 
@@ -1432,16 +1449,6 @@ static void log_deallocate_recent_written(log_t &log) {
   log.recent_written.validate_no_links();
   log.recent_written = {};
 }
-
-static void log_allocate_recent_closed(log_t &log) {
-  log.recent_closed = Link_buf<lsn_t>{srv_log_recent_closed_size};
-}
-
-static void log_deallocate_recent_closed(log_t &log) {
-  log.recent_closed.validate_no_links();
-  log.recent_closed = {};
-}
-
 static void log_reset_encryption_buffer(log_t &log) {
   std::memset(log.m_encryption_buf, 0x00, OS_FILE_LOG_BLOCK_SIZE);
 }

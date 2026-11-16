@@ -101,7 +101,7 @@ ProcessInfo *ProcessInfo::forNodeId(Uint16 nodeId) {
   ProcessInfo *process = getOwnProcessInfo(nodeId);
   if (process->node_id == nodeId) return process;
   /* Make a copy */
-  ProcessInfo *self = new ProcessInfo();
+  auto *self = new ProcessInfo();
   self->node_id = nodeId;  // do not copy node id
   strncpy(self->process_name, process->process_name, ProcessNameLength);
   self->process_id = process->process_id;

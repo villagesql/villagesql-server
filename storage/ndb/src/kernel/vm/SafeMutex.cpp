@@ -28,7 +28,7 @@
 int SafeMutex::create() {
   int ret;
   if (m_initdone) return err(ErrState, __LINE__);
-  ret = native_mutex_init(&m_mutex, 0);
+  ret = native_mutex_init(&m_mutex, nullptr);
   if (ret != 0) return err(ret, __LINE__);
   ret = native_cond_init(&m_cond);
   if (ret != 0) return err(ret, __LINE__);
@@ -63,7 +63,7 @@ int SafeMutex::lock_impl() {
   int ret;
   my_thread_t self = my_thread_self();
   assert(self != 0);
-  while (1) {
+  while (true) {
     if (m_level == 0) {
       assert(m_owner == 0);
       m_owner = self;

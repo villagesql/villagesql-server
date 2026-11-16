@@ -110,6 +110,7 @@ SELECT @@global.optimizer_trace_offset, @@global.activate_all_roles_on_login,
        @@global.innodb_max_dirty_pages_pct, @@global.init_connect,
        @@global.max_join_size;
 
+--replace_result hypergraph_optimizer=on hypergraph_optimizer=off
 SELECT * FROM performance_schema.persisted_variables ORDER BY 1;
 --echo # Restart server
 --source include/restart_mysqld.inc
@@ -124,6 +125,7 @@ SELECT @@global.optimizer_trace_offset, @@global.activate_all_roles_on_login,
        @@global.innodb_max_dirty_pages_pct, @@global.init_connect,
        @@global.max_join_size;
 
+--replace_result hypergraph_optimizer=on hypergraph_optimizer=off
 SELECT * FROM performance_schema.persisted_variables ORDER BY 1;
 
 --echo # Cleanup
@@ -165,6 +167,7 @@ SELECT @@global.collation_database;
 # test SIGNED long value
 SELECT @@global.optimizer_trace_offset;
 # test Sys_var_flagset type
+--replace_result hypergraph_optimizer=on hypergraph_optimizer=off
 SELECT @@global.optimizer_switch;
 # test Sys_var_multi_enum type
 SELECT @@global.enforce_gtid_consistency;
@@ -181,6 +184,7 @@ SET @@persist_only.binlog_cache_size= default,
     @@persist_only.enforce_gtid_consistency= default,
     @@persist_only.sql_mode= default;
 
+--replace_result hypergraph_optimizer=on hypergraph_optimizer=off
 SELECT * FROM performance_schema.persisted_variables ORDER BY 1;
 
 --echo # Restart server
@@ -190,10 +194,12 @@ SELECT * FROM performance_schema.persisted_variables ORDER BY 1;
 SELECT @@global.binlog_cache_size;
 SELECT @@global.collation_database;
 SELECT @@global.optimizer_trace_offset;
+--replace_result hypergraph_optimizer=on hypergraph_optimizer=off
 SELECT @@global.optimizer_switch;
 SELECT @@global.enforce_gtid_consistency;
 SELECT @@global.sql_mode;
 
+--replace_result hypergraph_optimizer=on hypergraph_optimizer=off
 SELECT * FROM performance_schema.persisted_variables ORDER BY 1;
 
 --echo # Cleanup
@@ -207,6 +213,7 @@ SET PERSIST mandatory_roles= default;
 --echo # Restart server and check if server starts
 --source include/restart_mysqld.inc
 
+--replace_result hypergraph_optimizer=on hypergraph_optimizer=off
 SELECT * FROM performance_schema.persisted_variables ORDER BY 1;
 # Cleanup
 RESET PERSIST;
@@ -480,7 +487,7 @@ RESET PERSIST;
 --echo # PERSISTED OPTIONS
 --echo #
 
-SET PERSIST temptable_use_mmap=FALSE;
+SET PERSIST delayed_insert_timeout=300;
 SET PERSIST delayed_insert_limit=100;
 
 --let LOG_ERR=$MYSQLTEST_VARDIR/tmp/myerror.err
@@ -488,9 +495,9 @@ SET PERSIST delayed_insert_limit=100;
 --replace_result $LOG_ERR LOG_ERR
 --source include/restart_mysqld.inc
 
---let $assert_text= Assert that there is a warning at bootstrap when setting temptable_use_mmap
+--let $assert_text= Assert that there is a warning at bootstrap when setting delayed_insert_timeout
 --let $assert_file= $LOG_ERR
---let $assert_select= 'temptable_use_mmap' is deprecated and will be removed in a future release.
+--let $assert_select= '@@delayed_insert_timeout' is deprecated and will be removed in a future release.
 --let $assert_count= 1
 --source include/assert_grep.inc
 
@@ -503,16 +510,16 @@ SET PERSIST delayed_insert_limit=100;
 RESET PERSIST;
 --remove_file $LOG_ERR
 
-SET PERSIST_ONLY temptable_use_mmap=FALSE;
+SET PERSIST_ONLY delayed_insert_timeout=300;
 SET PERSIST_ONLY delayed_insert_limit=100;
 
 --let $restart_parameters=restart:--log_error=$LOG_ERR --no-console
 --replace_result $LOG_ERR LOG_ERR
 --source include/restart_mysqld.inc
 
---let $assert_text= Assert that there is a warning at bootstrap when setting temptable_use_mmap
+--let $assert_text= Assert that there is a warning at bootstrap when setting delayed_insert_timeout
 --let $assert_file= $LOG_ERR
---let $assert_select= 'temptable_use_mmap' is deprecated and will be removed in a future release.
+--let $assert_select= '@@delayed_insert_timeout' is deprecated and will be removed in a future release.
 --let $assert_count= 1
 --source include/assert_grep.inc
 
@@ -660,3 +667,18 @@ SET PERSIST_ONLY disconnect_on_expired_password = ON;
 --source include/restart_mysqld.inc
 
 --echo # End of the 8.0 tests
+
+
+--echo #
+--echo # Bug #36854635: Invalid variable error on restart
+--echo #
+
+RESET PERSIST;
+--error ER_CANNOT_PERSIST_TRANSACTION_ISOLATION
+SET PERSIST_ONLY TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
+--echo # Should be empty
+SELECT VARIABLE_VALUE FROM performance_schema.persisted_variables;
+
+
+--echo # End of the 9.0 tests

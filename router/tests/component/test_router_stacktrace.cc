@@ -95,8 +95,8 @@ TEST_F(RouterStacktraceTest, bootstrap_with_core_file) {
 
   // using a non-bootstrap script makes sure the bootstrap fails early, and
   // still checks that --core-file is accepted.
-  launch_mysql_server_mock(get_data_dir().str() + "/my_port.js", mock_port,
-                           EXIT_SUCCESS, false, 0, 0, get_data_dir().str());
+  mock_server_spawner().spawn(
+      mock_server_cmdline("my_port.js").port(mock_port).args());
 
   TempDirectory tmp_dir;
   // --core-file is added automatically by router_spawner()
@@ -129,9 +129,11 @@ TEST_F(RouterStacktraceTest, crash_me_bootstrap) {
   auto mock_port = port_pool_.get_next_available();
   auto mock_http_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(
-      get_data_dir().str() + "/bootstrap_exec_time_2_seconds.js", mock_port,
-      EXIT_SUCCESS, true, mock_http_port, 0, get_data_dir().str());
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_exec_time_2_seconds.js")
+          .port(mock_port)
+          .http_port(mock_http_port)
+          .args());
 
   TempDirectory tmp_dir;
   // --core-file is added automatically by router_spawner()
@@ -461,19 +463,19 @@ TEST_F(RouterStacktraceTest, no_core_file) {
           .section("http_server", {{"bind_address", "127.0.0.1"},
                                    {"port", std::to_string(http_port)}});
 
-  auto &r = router_spawner()
-                .with_core_dump(false)
+  auto &rtr = router_spawner()
+                  .with_core_dump(false)
 #ifdef _WIN32
-                .expected_exit_code(
-                    ExitStatus{ExitStatus::terminated_t{}, segv_status})
+                  .expected_exit_code(
+                      ExitStatus{ExitStatus::terminated_t{}, segv_status})
 #else
-                .expected_exit_code(ExitStatus{
-                    ExitStatus::exited_t{},
-                    mysql_harness::SignalHandler::HARNESS_FAILURE_EXIT})
+                  .expected_exit_code(ExitStatus{
+                      ExitStatus::exited_t{},
+                      mysql_harness::SignalHandler::HARNESS_FAILURE_EXIT})
 #endif
-                .spawn({"-c", writer.write()});
+                  .spawn({"-c", writer.write()});
 
-  auto core_file_name = CoreFinder(r.executable(), r.get_pid()).core_name();
+  auto core_file_name = CoreFinder(rtr.executable(), rtr.get_pid()).core_name();
 
   // check if the core-file exists before the abort, like from another test or
   // so.
@@ -493,7 +495,7 @@ TEST_F(RouterStacktraceTest, no_core_file) {
   }
 
   SCOPED_TRACE("// wait for the exit");
-  ASSERT_NO_THROW(r.native_wait_for_exit());
+  ASSERT_NO_THROW(rtr.native_wait_for_exit());
 
   if (!core_file_name.empty() && !core_file_exists_already) {
     // remove the core-file if it exists at the end of the test.
@@ -513,11 +515,9 @@ TEST_F(RouterStacktraceTest, no_core_file) {
   }
 
   SCOPED_TRACE("// console output has stacktrace");
-#ifdef HAVE_EXT_BACKTRACE
-  EXPECT_THAT(r.get_full_output(), ::testing::HasSubstr("signal_handler.cc"));
-#else
-  EXPECT_THAT(r.get_full_output(), ::testing::HasSubstr("my_print_stacktrace"));
-#endif
+  EXPECT_THAT(rtr.get_full_output(),
+              testing::AnyOf(::testing::HasSubstr("signal_handler.cc"),
+                             ::testing::HasSubstr("my_print_stacktrace")));
 }
 
 // TS_2_2
@@ -534,19 +534,19 @@ TEST_F(RouterStacktraceTest, core_file_0) {
           .section("http_server", {{"bind_address", "127.0.0.1"},
                                    {"port", std::to_string(http_port)}});
 
-  auto &r = router_spawner()
-                .with_core_dump(false)
+  auto &rtr = router_spawner()
+                  .with_core_dump(false)
 #ifdef _WIN32
-                .expected_exit_code(
-                    ExitStatus{ExitStatus::terminated_t{}, segv_status})
+                  .expected_exit_code(
+                      ExitStatus{ExitStatus::terminated_t{}, segv_status})
 #else
-                .expected_exit_code(ExitStatus{
-                    ExitStatus::exited_t{},
-                    mysql_harness::SignalHandler::HARNESS_FAILURE_EXIT})
+                  .expected_exit_code(ExitStatus{
+                      ExitStatus::exited_t{},
+                      mysql_harness::SignalHandler::HARNESS_FAILURE_EXIT})
 #endif
-                .spawn({"-c", writer.write(), "--core-file", "0"});
+                  .spawn({"-c", writer.write(), "--core-file", "0"});
 
-  auto core_file_name = CoreFinder(r.executable(), r.get_pid()).core_name();
+  auto core_file_name = CoreFinder(rtr.executable(), rtr.get_pid()).core_name();
 
   // check if the core-file exists before the abort, like from another test or
   // so.
@@ -566,7 +566,7 @@ TEST_F(RouterStacktraceTest, core_file_0) {
   }
 
   SCOPED_TRACE("// wait for the exit");
-  ASSERT_NO_THROW(r.native_wait_for_exit());
+  ASSERT_NO_THROW(rtr.native_wait_for_exit());
 
   if (!core_file_name.empty() && !core_file_exists_already) {
     // remove the core-file if it exists at the end of the test.
@@ -586,11 +586,9 @@ TEST_F(RouterStacktraceTest, core_file_0) {
   }
 
   SCOPED_TRACE("// console output has stacktrace");
-#ifdef HAVE_EXT_BACKTRACE
-  EXPECT_THAT(r.get_full_output(), ::testing::HasSubstr("signal_handler.cc"));
-#else
-  EXPECT_THAT(r.get_full_output(), ::testing::HasSubstr("my_print_stacktrace"));
-#endif
+  EXPECT_THAT(rtr.get_full_output(),
+              testing::AnyOf(::testing::HasSubstr("signal_handler.cc"),
+                             ::testing::HasSubstr("my_print_stacktrace")));
 }
 
 #endif  // !defined(HAVE_ASAN) && !defined(HAVE_UBSAN)

@@ -114,6 +114,8 @@ void dict_mem_table_free(dict_table_t *table) /*!< in: table */
 
   dict_table_stats_latch_destroy(table);
 
+  dict_table_stats_compute_mutex_destroy(table);
+
   table->foreign_set.~dict_foreign_set();
   table->referenced_set.~dict_foreign_set();
 #endif /* !UNIV_LIBRARY */
@@ -238,7 +240,10 @@ dict_table_t *dict_mem_table_create(const char *name, space_id_t space,
 
   /* true means that the stats latch will be enabled -
   dict_table_stats_lock() will not be noop. */
-  dict_table_stats_latch_create(table, true);
+  dict_table_stats_latch_create_lazy(table, true);
+
+  /* mutex is enabled */
+  dict_table_stats_compute_mutex_create_lazy(table, true);
 
   table->autoinc_lock = lock_alloc_from_heap(heap);
 
@@ -274,6 +279,7 @@ dict_table_t *dict_mem_table_create(const char *name, space_id_t space,
 #endif /* !UNIV_HOTBACKUP */
   table->is_dd_table = false;
   table->explicitly_non_lru = false;
+  table->is_corrupt = false;
 
   return (table);
 }
@@ -326,7 +332,7 @@ dict_index_t *dict_mem_index_create(
 void dict_mem_table_add_col(dict_table_t *table, mem_heap_t *heap,
                             const char *name, ulint mtype, ulint prtype,
                             ulint len, bool is_visible, uint32_t phy_pos,
-                            uint8_t v_added, uint8_t v_dropped) {
+                            row_version_t v_added, row_version_t v_dropped) {
   dict_col_t *col;
   ulint i;
 
@@ -362,8 +368,8 @@ void dict_mem_table_add_col(dict_table_t *table, mem_heap_t *heap,
 
 void dict_mem_fill_column_struct(dict_col_t *column, ulint col_pos, ulint mtype,
                                  ulint prtype, ulint col_len, bool is_visible,
-                                 uint32_t phy_pos, uint8_t v_added,
-                                 uint8_t v_dropped) {
+                                 uint32_t phy_pos, row_version_t v_added,
+                                 row_version_t v_dropped) {
   column->ind = (unsigned int)col_pos;
   column->ord_part = 0;
   column->max_prefix = 0;

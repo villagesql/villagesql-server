@@ -1,5 +1,4 @@
 /* Copyright (c) 2007, 2026, Oracle and/or its affiliates.
-   Use is subject to license terms
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +31,7 @@ bool printDROP_TABLE_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTableReq *sig = (const DropTableReq *)theData;
+  const auto *sig = (const DropTableReq *)theData;
   fprintf(output, " clientRef: 0x%x", sig->clientRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, " transId: 0x%x", sig->transId);
@@ -51,7 +50,7 @@ bool printDROP_TABLE_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTableConf *sig = (const DropTableConf *)theData;
+  const auto *sig = (const DropTableConf *)theData;
   fprintf(output, " senderRef: 0%x", sig->senderRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, " transId: 0x%x", sig->transId);
@@ -69,7 +68,7 @@ bool printDROP_TABLE_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTableRef *sig = (const DropTableRef *)theData;
+  const auto *sig = (const DropTableRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, " transId: 0x%x", sig->transId);

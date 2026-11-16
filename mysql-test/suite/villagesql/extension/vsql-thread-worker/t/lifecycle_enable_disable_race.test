@@ -36,6 +36,6 @@ while ($counter>0)
 
 --echo # Worker is stopped and the server still answers queries
 SELECT COUNT(*) FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+WHERE info = 'vsql_lifecycle_test/monitor';
 
 UNINSTALL EXTENSION vsql_lifecycle_test;

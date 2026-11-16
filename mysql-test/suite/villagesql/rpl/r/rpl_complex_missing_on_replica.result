@@ -14,7 +14,7 @@ call mtr.add_suppression("The replica coordinator and worker threads are stopped
 include/rpl/wait_for_applier_error.inc [errno=1064]
 Replication error occurred (expected):
 Last_Error_Message
-Worker 1 failed executing transaction 'ANONYMOUS' at source log master-bin.NNNNNN, end_log_pos POSITION; Error 'Expected a type or a custom type instead of "COMPLEX" near 'vsql_complex.COMPLEX DEFAULT NULL,
+Worker 1 failed executing transaction 'MASTER_UUID:1' at source log master-bin.NNNNNN, end_log_pos POSITION; Error 'Expected a type or a custom type instead of "COMPLEX" near 'vsql_complex.COMPLEX DEFAULT NULL,
   PRIMARY KEY (`id`)
 )' at line 3' on query. Default database: 'test'. Query: 'CREATE TABLE `t1` (
   `id` int NOT NULL,

@@ -32,7 +32,7 @@
 #include <winsock2.h>
 #endif  // WIN32
 #include <openssl/ssl.h>
-#include <string.h>
+#include <cstring>
 
 #include "my_compiler.h"
 #include "my_io.h"  // IWYU pragma: keep (for Winsock definitions)

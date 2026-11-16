@@ -63,6 +63,7 @@
 #include "sql/error_handler.h"  // Internal_error_handler
 #include "sql/field.h"
 #include "sql/item.h"
+#include "sql/json_duality_view/ddl.h"
 #include "sql/key.h"
 #include "sql/mdl.h"
 #include "sql/mysqld.h"     // stage_end reg_ext key_file_frm
@@ -73,12 +74,13 @@
 #include "sql/sp_cache.h"   // sp_cache_invalidate
 #include "sql/sql_base.h"   // get_table_def_key
 #include "sql/sql_class.h"  // THD
+#include "sql/sql_cmd_ddl_table.h"
 #include "sql/sql_const.h"
 #include "sql/sql_error.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_parse.h"  // create_default_definer
-#include "sql/sql_show.h"   // append_identifier
+#include "sql/sql_show.h"   // append_identifier_*
 #include "sql/sql_table.h"  // write_bin_log
 #include "sql/strfunc.h"
 #include "sql/system_variables.h"
@@ -313,6 +315,8 @@ static bool fill_defined_view_parts(THD *thd, Table_ref *view) {
     lex->create_view_suid =
         decoy.view_suid ? VIEW_SUID_DEFINER : VIEW_SUID_INVOKER;
 
+  view->view_type = decoy.view_type;
+
   return false;
 }
 
@@ -448,7 +452,9 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
   Query_block *sl;
   Query_expression *const unit = lex->unit;
   bool res = false;
-  bool exists = false;
+  bool schema_exists = false;
+  bool use_existing_view = false;
+
   DBUG_TRACE;
   dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
@@ -500,19 +506,56 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
     Checking the existence of the database in which the view is to be created.
     Errors will be reported in dd::schema_exists().
   */
-  if (dd::schema_exists(thd, view->db, &exists)) {
+  if (dd::schema_exists(thd, view->db, &schema_exists)) {
     res = true;
     goto err;
-  } else if (!exists) {
+  } else if (!schema_exists) {
     my_error(ER_BAD_DB_ERROR, MYF(0), view->db);
     res = true;
     goto err;
   }
 
-  if (mode == enum_view_create_mode::VIEW_ALTER &&
-      fill_defined_view_parts(thd, view)) {
-    res = true;
-    goto err;
+  if (mode == enum_view_create_mode::VIEW_ALTER) {
+    if (fill_defined_view_parts(thd, view)) {
+      res = true;
+      goto err;
+    }
+
+    if (view->view_type != lex->create_view_type) {
+      my_error(ER_JDV_ALTER_OR_REPLACE_NOT_SUPPORTED, MYF(0),
+               view->get_db_name(), view->get_table_name(),
+               view->is_json_duality_view() ? "JSON_DUALITY" : "SQL");
+      res = true;
+      goto err;
+    }
+  } else {
+    view->view_type = lex->create_view_type;
+    if (mode == enum_view_create_mode::VIEW_CREATE_OR_REPLACE) {
+      const dd::Abstract_table *at = nullptr;
+      if (current_thd->dd_client()->acquire(view->db, view->table_name, &at)) {
+        res = true;
+        goto err;
+      }
+
+      if (at != nullptr) {
+        dd::String_type str_view_type = "SQL";
+        const dd::Properties *at_options = &at->options();
+        if (at_options->exists("view_type") &&
+            at_options->get("view_type", &str_view_type)) {
+          res = true;
+          goto err;
+        }
+
+        enum_view_type view_type = dd::get_sql_view_type(str_view_type);
+        if (view_type != lex->create_view_type) {
+          my_error(ER_JDV_ALTER_OR_REPLACE_NOT_SUPPORTED, MYF(0),
+                   view->get_db_name(), view->get_table_name(),
+                   str_view_type.c_str());
+          res = true;
+          goto err;
+        }
+      }
+    }
   }
 
   sp_cache_invalidate();
@@ -615,6 +658,11 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
     bind_fields(thd->stmt_arena->item_list());
   }
 
+  if (view->is_json_duality_view() && jdv::prepare(thd, view)) {
+    res = true;
+    goto err;
+  }
+
   /*
     Compare/check grants on view with grants of underlying tables
   */
@@ -666,17 +714,18 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
     }
   }
 
-  if ((res = mysql_register_view(thd, view, mode))) goto err_with_rollback;
+  if ((res = mysql_register_view(thd, view, mode, &use_existing_view)))
+    goto err_with_rollback;
 
-  /*
-    View TABLE_SHARE must be removed from the table definition cache in order
-    to make ALTER VIEW work properly. Otherwise, we would not be able to
-    detect meta-data changes after ALTER VIEW.
-  */
-  tdc_remove_table(thd, TDC_RT_REMOVE_ALL, view->db, view->table_name, false);
+  if (!use_existing_view) {
+    /*
+      View TABLE_SHARE must be removed from the table definition cache in order
+      to make ALTER VIEW work properly. Otherwise, we would not be able to
+      detect meta-data changes after ALTER VIEW.
+    */
+    tdc_remove_table(thd, TDC_RT_REMOVE_ALL, view->db, view->table_name, false);
 
-  // Update metadata of views referencing "view".
-  {
+    // Update metadata of views referencing "view".
     Uncommitted_tables_guard uncommited_tables(thd);
     uncommited_tables.add_table(view);
     if ((res = update_referencing_views_metadata(thd, view, false,
@@ -695,7 +744,16 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
     buff.append(command[static_cast<int>(thd->lex->create_view_mode)].str,
                 command[static_cast<int>(thd->lex->create_view_mode)].length);
     view_store_options(thd, views, &buff);
+    if (lex->create_view_type == enum_view_type::JSON_DUALITY_VIEW) {
+      buff.append(STRING_WITH_LEN("JSON RELATIONAL DUALITY "));
+    }
     buff.append(STRING_WITH_LEN("VIEW "));
+
+    if ((mode == enum_view_create_mode::VIEW_CREATE_NEW) &&
+        (lex->create_info->options & HA_LEX_CREATE_IF_NOT_EXISTS)) {
+      buff.append(STRING_WITH_LEN("IF NOT EXISTS "));
+    }
+
     /* Test if user supplied a db (ie: we did not use thd->db) */
     if (views->db && views->db[0] &&
         (thd->db().str == nullptr || strcmp(views->db, thd->db().str))) {
@@ -703,7 +761,8 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
       buff.append('.');
     }
     append_identifier(thd, &buff, views->table_name, views->table_name_length);
-    if (view->derived_column_names()) {
+    if ((lex->create_view_type != enum_view_type::JSON_DUALITY_VIEW) &&
+        view->derived_column_names()) {
       int i = 0;
       for (auto name : *view->derived_column_names()) {
         buff.append(i++ ? ", " : "(");
@@ -716,8 +775,10 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
 
     int errcode = query_error_code(thd, true);
     thd->add_to_binlog_accessed_dbs(views->db);
-    if ((res = thd->binlog_query(THD::STMT_QUERY_TYPE, buff.ptr(),
-                                 buff.length(), true, false, false, errcode)))
+
+    if ((res =
+             thd->binlog_query(THD::STMT_QUERY_TYPE, buff.ptr(), buff.length(),
+                               !use_existing_view, false, false, errcode)))
       goto err_with_rollback;
   }
 
@@ -725,6 +786,13 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
   res = DBUG_EVALUATE_IF("simulate_create_view_failure", true, false) ||
         trans_commit_stmt(thd) || trans_commit(thd);
   if (res) goto err_with_rollback;
+
+  if (use_existing_view) {
+    // This is a CREATE VIEW IF NOT EXISTS statement dealing with
+    // an existing view.
+    push_warning_printf(thd, Sql_condition::SL_NOTE, ER_TABLE_EXISTS_ERROR,
+                        ER_THD(thd, ER_TABLE_EXISTS_ERROR), views->table_name);
+  }
 
   my_ok(thd);
   lex->link_first_table_back(view, link_to_local);
@@ -764,6 +832,16 @@ bool is_updatable_view(THD *thd, Table_ref *view) {
   bool updatable_view = false;
   LEX *lex = thd->lex;
 
+  // Storage engine materialized views are not updatable.
+  if (view->is_mv_se_materialized()) {
+    return false;
+  }
+
+  // JSON duality views are updatable always.
+  if (view->is_json_duality_view()) {
+    return true;
+  }
+
   /*
     A view can be merged if it is technically possible and if the user didn't
     ask that we create a temporary table instead.
@@ -789,7 +867,7 @@ bool is_updatable_view(THD *thd, Table_ref *view) {
       bool view_has_updatable_column = false;
       for (Item *item : lex->query_block->visible_fields()) {
         Item_field *item_field = item->field_for_view_update();
-        if (item_field && !item_field->table_ref->schema_table) {
+        if (item_field && !item_field->m_table_ref->schema_table) {
           view_has_updatable_column = true;
           break;
         }
@@ -825,11 +903,13 @@ bool is_updatable_view(THD *thd, Table_ref *view) {
 /**
   Register view by writing its definition to the data-dictionary.
 
-  @param  thd                 Thread handler.
-  @param  view                View description
-  @param  mode                VIEW_CREATE_NEW, VIEW_ALTER or
-                              VIEW_CREATE_OR_REPLACE.
-
+  @param      thd                Thread handler.
+  @param      view               View description
+  @param      mode               VIEW_CREATE_NEW, VIEW_ALTER or
+                                 VIEW_CREATE_OR_REPLACE.
+  @param[out] use_existing_view  Set to true when IF NOT EXISTS clause used
+                                 to create a new view, but a view/table with
+                                 the same name already exists in the schema.
   @note The caller must rollback both statement and transaction on failure,
         before any further accesses to DD. This is because such a failure
         might be caused by a deadlock, which requires rollback before any
@@ -840,8 +920,8 @@ bool is_updatable_view(THD *thd, Table_ref *view) {
   @retval true    Error
 */
 
-bool mysql_register_view(THD *thd, Table_ref *view,
-                         enum_view_create_mode mode) {
+bool mysql_register_view(THD *thd, Table_ref *view, enum_view_create_mode mode,
+                         bool *use_existing_view) {
   /*
     View definition query -- a SELECT statement that fully defines view. It
     is generated from the Item-tree built from the original (specified by
@@ -875,6 +955,7 @@ bool mysql_register_view(THD *thd, Table_ref *view,
 
   DBUG_TRACE;
 
+  *use_existing_view = false;
   /*
     A view can be merged if it is technically possible and if the user didn't
     ask that we create a temporary table instead.
@@ -928,6 +1009,14 @@ bool mysql_register_view(THD *thd, Table_ref *view,
   view->view_suid = lex->create_view_suid;
   view->with_check = lex->create_view_check;
 
+  /* Set storage engine materialization */
+  view->set_mv_se_materialized(lex->create_view_materialization);
+  if (lex->create_view_materialization) {
+    const char *engine_name =
+        ha_resolve_storage_engine_name(get_secondary_engine_handlerton(lex));
+    view->set_mv_se_name(engine_name);
+  }
+
   view->updatable_view = is_updatable_view(thd, view);
 
   /* init timestamp */
@@ -940,22 +1029,26 @@ bool mysql_register_view(THD *thd, Table_ref *view,
 
   if (at != nullptr) {
     if (mode == enum_view_create_mode::VIEW_CREATE_NEW) {
-      my_error(ER_TABLE_EXISTS_ERROR, MYF(0), view->alias);
-      return true;
+      *use_existing_view =
+          lex->create_info->options & HA_LEX_CREATE_IF_NOT_EXISTS;
+      if (!*use_existing_view) {
+        my_error(ER_TABLE_EXISTS_ERROR, MYF(0), view->alias);
+        return true;
+      }
+    } else {
+      if (at->type() != dd::enum_table_type::USER_VIEW &&
+          at->type() != dd::enum_table_type::SYSTEM_VIEW) {
+        my_error(ER_WRONG_OBJECT, MYF(0), view->db, view->table_name, "VIEW");
+        return true;
+      }
+
+      update_view = true;
+
+      /*
+        TODO: read dependence list, too, to process cascade/restrict
+        TODO: special cascade/restrict procedure for alter?
+      */
     }
-
-    if (at->type() != dd::enum_table_type::USER_VIEW &&
-        at->type() != dd::enum_table_type::SYSTEM_VIEW) {
-      my_error(ER_WRONG_OBJECT, MYF(0), view->db, view->table_name, "VIEW");
-      return true;
-    }
-
-    update_view = true;
-
-    /*
-      TODO: read dependence list, too, to process cascade/restrict
-      TODO: special cascade/restrict procedure for alter?
-    */
   } else {
     if (mode == enum_view_create_mode::VIEW_ALTER) {
       my_error(ER_NO_SUCH_TABLE, MYF(0), view->db, view->alias);
@@ -1009,6 +1102,13 @@ bool mysql_register_view(THD *thd, Table_ref *view,
     return true;
   }
 
+  if (*use_existing_view) {
+    // This is a CREATE VIEW IF NOT EXISTS statement dealing with
+    // an existing view, so there's no need to do anything more
+    // here.
+    return false;
+  }
+
   // It is either ALTER or CREATE OR REPLACE of an existing view.
   if (update_view) {
     dd::View *new_view = nullptr;
@@ -1017,6 +1117,10 @@ bool mysql_register_view(THD *thd, Table_ref *view,
       return true;
 
     assert(new_view != nullptr);
+
+    if (secondary_engine_unload_materialized_view(thd, view, new_view)) {
+      return true;
+    }
 
     return dd::update_view(thd, new_view, view);
   }
@@ -1263,6 +1367,9 @@ bool parse_view_definition(THD *thd, Table_ref *view_ref) {
   // Needed for correct units markup for EXPLAIN
   view_lex->explain_format = old_lex->explain_format;
 
+  bool parsing_json_duality_view_saved = thd->parsing_json_duality_view;
+  thd->parsing_json_duality_view = view_ref->is_json_duality_view();
+
   /*
     Push error handler allowing DD table access. Creating views referring
     to DD tables is rejected except for the I_S views. Thus, when parsing
@@ -1300,6 +1407,8 @@ bool parse_view_definition(THD *thd, Table_ref *view_ref) {
   if (thd->parsing_system_view) thd->pop_internal_handler();
 
   thd->parsing_system_view = parsing_system_view_saved;
+
+  thd->parsing_json_duality_view = parsing_json_duality_view_saved;
 
   // Restore environment
   if ((old_lex->sql_command == SQLCOM_SHOW_FIELDS) ||
@@ -1613,13 +1722,16 @@ bool parse_view_definition(THD *thd, Table_ref *view_ref) {
   // Updatability is not decided yet
   assert(!view_ref->is_updatable());
 
-  // another level of nesting would exceed the max supported nesting level
-  if (view_ref->query_block->nest_level >= MAX_SELECT_NESTING) {
-    my_error(ER_TOO_HIGH_LEVEL_OF_NESTING_FOR_SELECT, MYF(0));
-    return true;
+  if (view_ref->query_block) {
+    // another level of nesting would exceed the max supported nesting level
+    if (view_ref->query_block->nest_level >= MAX_SELECT_NESTING) {
+      my_error(ER_TOO_HIGH_LEVEL_OF_NESTING_FOR_SELECT, MYF(0));
+      return true;
+    }
+    // Link query expression of view into the outer query
+    view_lex->unit->include_down(old_lex, view_ref->query_block);
   }
-  // Link query expression of view into the outer query
-  view_lex->unit->include_down(old_lex, view_ref->query_block);
+
   //  Set hints specified in created view to allow printing them in view body.
   if (view_lex->opt_hints_global && !old_lex->opt_hints_global &&
       (old_lex->sql_command == SQLCOM_CREATE_VIEW ||
@@ -1839,6 +1951,11 @@ bool mysql_drop_view(THD *thd, Table_ref *views) {
 
     const dd::View *vw = dynamic_cast<const dd::View *>(at);
     assert(vw);
+
+    if (secondary_engine_unload_materialized_view(thd, view, vw)) {
+      return true;
+    }
+
     /*
       If definer has the SYSTEM_USER privilege then invoker can drop view
       only if latter also has same privilege.

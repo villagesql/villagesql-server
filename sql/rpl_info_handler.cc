@@ -23,7 +23,7 @@
 
 #include "sql/rpl_info_handler.h"
 
-#include <assert.h>
+#include <cassert>
 
 #include "sql/rpl_info_values.h"  // Rpl_info_values
 

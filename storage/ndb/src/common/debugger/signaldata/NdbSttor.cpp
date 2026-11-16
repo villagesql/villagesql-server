@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +27,7 @@
 
 bool printNDB_STTOR(FILE *output, const Uint32 *theData, Uint32 len,
                     Uint16 /*receiverBlockNo*/) {
-  const NdbSttor *const sig = (const NdbSttor *)theData;
+  const auto *const sig = (const NdbSttor *)theData;
   fprintf(output, " senderRef: %x\n", sig->senderRef);
   fprintf(output, " nodeId: %x\n", sig->nodeId);
   fprintf(output, " internalStartPhase: %x\n", sig->internalStartPhase);
@@ -56,7 +55,7 @@ bool printNDB_STTORRY(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const NdbSttorry *const sig = (const NdbSttorry *)theData;
+  const auto *const sig = (const NdbSttorry *)theData;
   fprintf(output, " senderRef: %x\n", sig->senderRef);
   return true;
 }

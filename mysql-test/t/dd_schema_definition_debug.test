@@ -152,7 +152,7 @@ INSERT INTO dd_check_table(t)
 INSERT INTO dd_check_table(t)
   SELECT CONCAT(id, '-', name, '-',
     IFNULL(options, 'NULL'), '-',
-    IFNULL(INSERT(se_private_data, 
+    IFNULL(INSERT(se_private_data,
              INSTR(se_private_data, 'server_version'),
              20, 'server_version=x'),
       'NULL'),
@@ -344,29 +344,50 @@ INSERT INTO dd_published_schema
   VALUES('80017', 1,
     '76c4ef5922cfd8e2a736e538ada4b03b6b122fbd0df2ac5abfbd999e3316b17b');
 INSERT INTO dd_published_schema
+  VALUES('80019', 0,
+    '6b98719841478028345c7c8696ef7fd2495ac06a145df6877b580ad2f319f6c7');
+INSERT INTO dd_published_schema
   VALUES('80021', 0,
-    '80557e59b7af79e8a43e4b5efb7d5bab6a2db966935f0fe411b05b81cfdd1252');
+    '138bfe20f77905a83a20e1b665f91350c3278e3095eafd27dc310a2c7b051e04');
 INSERT INTO dd_published_schema
   VALUES('80021', 1,
     '1e886824945b448e2636e16360fc2078c33cf7980d07d13d62913d8a1d33e7f5');
 INSERT INTO dd_published_schema
   VALUES('80022', 0,
-    '5329f0032a5ea7cae6adcbfa5519c2aca93f8eacc99db4d9ff463320196e87e5');
+    '6b45fcafe54889c7de94a41175bb02bc12164a9dd82dc409c32b41ac7016b8e3');
 INSERT INTO dd_published_schema
   VALUES('80022', 1,
-    '90493021c4a9565f9bd050481f046dbf7e0741f647397a1d8b46aaadd8581484');
+    'b73d62049a1f6017bba5102599e7d2cd8a8203aa8c838c7881334d6adb876fea');
 INSERT INTO dd_published_schema
   VALUES('80023', 0,
-    'ba451f47c6774de7dddec4417b8a923e9ada805ec9ca68e9ef56b3ba6bd414f3');
+    '21dfdd99eb34539df1ac86d683cefda6132112b496875de66f2c82b808d58f6d');
 INSERT INTO dd_published_schema
   VALUES('80023', 1,
     '6e3311099b985c198bb3acbc88495825847dac79588dea4f0be2e4219ad7c52b');
 INSERT INTO dd_published_schema
   VALUES('80200', 0,
-    'a3e8513fa7db0783beba8ced3371196cc20ecb05291a6d0cdef545f1a4e8be25');
+    'c86feb6d88e202b8a576a4f6221d738f273f945ae28f168869d4d48efaeb6920');
  INSERT INTO dd_published_schema
   VALUES('80200', 1,
     '8ee19626f672bcb6e487fe3555cc9580e9de021144aa047a09446244002aaa05');
+INSERT INTO dd_published_schema
+  VALUES('90000', 0,
+    '5d77cc01d3d5660098c55528794e5429a2e4698c111fa7f1df714295e7fd462f');
+INSERT INTO dd_published_schema
+  VALUES('90000', 1,
+    'ef7f041211ae273122471bec470459f852c72d53d00832b8ab4c51697acf9872');
+INSERT INTO dd_published_schema
+  VALUES('90200', 0,
+    '7d7fe9aeb5d869bcea2f286afb24ef1978048d7293f8fd37d38ea457317c6477');
+INSERT INTO dd_published_schema
+  VALUES('90200', 1,
+    '704528302f236d42454293fad744a8c94fa23e771e77f3740ab1d4a64dec04dd');
+INSERT INTO dd_published_schema
+  VALUES('90500', 0,
+    'a099bfed19cfed2a9da20605cfc6182439bda31f50d6ebb860b381375468bba1');
+INSERT INTO dd_published_schema
+  VALUES('90500', 1,
+    '6d72c0fe9da4470df0f2b271a4b613b403f0f5af838efa1a7524d757007b4d3f');
 --sorted_result
 SELECT IFNULL(CONCAT('The schema checksum corresponds to DD version ',
                      version, '.'),

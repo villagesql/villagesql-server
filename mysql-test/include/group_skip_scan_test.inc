@@ -1,4 +1,5 @@
 --source include/elide_costs.inc
+
 #
 # Test file for WL#1724 (Min/Max Optimization for Queries with Group By Clause).
 # The queries in this file test query execution via GroupIndexSkipScan.
@@ -10,6 +11,9 @@
 # - C != const
 # - C IS NOT NULL
 # - HAVING clause
+
+# Note: Wherever temp table is cheaper than index skip scan, the latter is
+# forced by sql_big_result so that we don't defeat the purpose of the test.
 
 --disable_warnings
 drop table if exists t1;
@@ -609,7 +613,7 @@ select a1,a2,b from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1
 
 # plans
 --replace_regex $elide_costs
-explain format=tree select distinct a1,a2,b from t1;
+explain format=tree select sql_big_result distinct a1,a2,b from t1;
 --replace_regex $elide_costs
 explain format=tree select distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a');
 --replace_regex $elide_costs
@@ -621,10 +625,10 @@ explain format=tree select distinct b from t1 where (a2 >= 'b') and (b = 'a');
 
 --replace_column 10 #
 --replace_regex $elide_costs
-explain format=tree select distinct a1,a2,b from t2;
+explain format=tree select sql_big_result distinct a1,a2,b from t2;
 --replace_column 10 #
 --replace_regex $elide_costs
-explain format=tree select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a');
+explain format=tree select sql_big_result distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a');
 --replace_regex $elide_costs
 explain format=tree select distinct a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121');
 --replace_column 10 #
@@ -634,13 +638,13 @@ explain format=tree select distinct a1,a2,b from t2 where (a1 > 'a') and (a2 > '
 explain format=tree select distinct b from t2 where (a2 >= 'b') and (b = 'a');
 
 # queries
-select distinct a1,a2,b from t1;
-select distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a');
+select sql_big_result distinct a1,a2,b from t1;
+select sql_big_result distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a');
 select distinct a1,a2,b,c from t1 where (a2 >= 'b') and (b = 'a') and (c = 'i121');
 select distinct a1,a2,b from t1 where (a1 > 'a') and (a2 > 'a') and (b = 'c');
 select distinct b from t1 where (a2 >= 'b') and (b = 'a');
 
-select distinct a1,a2,b from t2;
+select sql_big_result distinct a1,a2,b from t2;
 select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a');
 select distinct a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121');
 select distinct a1,a2,b from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c');
@@ -668,7 +672,7 @@ select distinct t1.a1,t2.a1 from t1,t2;
 #--source include/turn_off_only_full_group_by.inc
 
 --replace_regex $elide_costs
-explain format=tree select distinct a1,a2,b from t1;
+explain format=tree select sql_big_result distinct a1,a2,b from t1;
 --replace_regex $elide_costs
 explain format=tree select distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 --replace_regex $elide_costs
@@ -680,7 +684,7 @@ explain format=tree select distinct b from t1 where (a2 >= 'b') and (b = 'a') gr
 
 --replace_column 10 #
 --replace_regex $elide_costs
-explain format=tree select distinct a1,a2,b from t2;
+explain format=tree select sql_big_result distinct a1,a2,b from t2;
 --replace_column 10 #
 --replace_regex $elide_costs
 explain format=tree select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
@@ -695,13 +699,13 @@ explain format=tree select distinct a1,a2,b from t2 where (a1 > 'a') and (a2 > '
 explain format=tree select distinct b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 
 # queries
-select distinct a1,a2,b from t1;
+select distinct sql_big_result a1,a2,b from t1;
 select distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 select distinct a1,a2,b,c from t1 where (a2 >= 'b') and (b = 'a') and (c = 'i121') group by a1,a2,b;
 select distinct a1,a2,b from t1 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
 select distinct b from t1 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 
-select distinct a1,a2,b from t2;
+select sql_big_result distinct a1,a2,b from t2;
 select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 select distinct a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121') group by a1,a2,b;
 select distinct a1,a2,b from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
@@ -823,8 +827,8 @@ explain format=tree select sum(ord(a1)) from t1 where (a1 > 'a') group by a1,a2,
 #
 
 --replace_regex $elide_costs
-explain format=tree select distinct(a1) from t1 where ord(a2) = 98;
-select distinct(a1) from t1 where ord(a2) = 98;
+explain format=tree select sql_big_result distinct(a1) from t1 where ord(a2) = 98;
+select sql_big_result distinct(a1) from t1 where ord(a2) = 98;
 
 #
 # BUG#11044: DISTINCT or GROUP BY queries with equality predicates instead of MIN/MAX.
@@ -1039,22 +1043,18 @@ INSERT INTO t1 (a, b) VALUES (1,1), (1,2), (1,3), (1,4), (1,5),
 EXPLAIN FORMAT=TREE SELECT max(b), a FROM t1 GROUP BY a;
 FLUSH STATUS;
 SELECT max(b), a FROM t1 GROUP BY a;
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'handler_read__e%';
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT max(b), a FROM t1 GROUP BY a;
 FLUSH STATUS;
 CREATE TABLE t2 SELECT max(b), a FROM t1 GROUP BY a;
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'handler_read__e%';
 FLUSH STATUS;
 SELECT * FROM (SELECT max(b), a FROM t1 GROUP BY a) b;
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'handler_read__e%';
 FLUSH STATUS;
 (SELECT max(b), a FROM t1 GROUP BY a) UNION
  (SELECT max(b), a FROM t1 GROUP BY a);
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'handler_read__e%';
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE (SELECT max(b), a FROM t1 GROUP BY a) UNION
@@ -1092,23 +1092,19 @@ SELECT * FROM t3;
 --enable_result_log
 FLUSH STATUS;
 INSERT INTO t3 SELECT a,MAX(b) FROM t1 GROUP BY a;
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'handler_read__e%';
 DELETE FROM t3;
 FLUSH STATUS;
 INSERT INTO t3 SELECT 1, (SELECT MAX(b) FROM t1 GROUP BY a HAVING a < 2)
   FROM t1 LIMIT 1;
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'handler_read__e%';
 FLUSH STATUS;
 DELETE FROM t3 WHERE (SELECT MAX(b) FROM t1 GROUP BY a HAVING a < 2) > 10000;
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'handler_read__e%';
 FLUSH STATUS;
 --error ER_SUBQUERY_NO_1_ROW
 DELETE FROM t3 WHERE (SELECT (SELECT MAX(b) FROM t1 GROUP BY a HAVING a < 2) x
                       FROM t1) > 10000;
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'handler_read__e%';
 
 DROP TABLE t1,t2,t3;
@@ -1211,6 +1207,7 @@ INSERT INTO t1 VALUES (1, 1, 1, 1), (1, 1, 1, 2), (1, 1, 1, 3), (1, 1, 1, 4);
 INSERT INTO t1 SELECT * FROM t1;
 INSERT INTO t1 SELECT * FROM t1;
 INSERT INTO t1 SELECT a,b,c+1,d FROM t1;
+ANALYZE TABLE t1;
 
 #Should be non-empty
 # On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
@@ -1338,6 +1335,7 @@ INSERT INTO t2 VALUES (1,1,1,1,1,1), (1,2,1,1,1,1), (1,3,1,1,1,1),
 INSERT INTO t2 SELECT a, b + 4, c,d,e,f FROM t2;
 INSERT INTO t2 SELECT a + 1, b, c,d,e,f FROM t2;
 INSERT INTO t2 SELECT a + 2, b + 8, c,d,e,f FROM t2;
+ANALYZE TABLE t1,t2;
 
 # On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
 --replace_result 11 10
@@ -1582,35 +1580,30 @@ ANALYZE TABLE t;
 SELECT a, SUM(DISTINCT a), MIN(b) FROM t GROUP BY a;
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT a, SUM(DISTINCT a), MIN(b) FROM t GROUP BY a;
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'have_both_agg_distinct_and_min_max' AS OK
   FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
 SELECT a, SUM(DISTINCT a), MAX(b) FROM t GROUP BY a;
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT a, SUM(DISTINCT a), MAX(b) FROM t GROUP BY a;
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'have_both_agg_distinct_and_min_max' AS OK
   FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
 SELECT a, MAX(b) FROM t GROUP BY a HAVING SUM(DISTINCT a);
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT a, MAX(b) FROM t GROUP BY a HAVING SUM(DISTINCT a);
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'have_both_agg_distinct_and_min_max' AS OK
   FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
 SELECT SUM(DISTINCT a), MIN(b), MAX(b) FROM t;
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT SUM(DISTINCT a), MIN(b), MAX(b) FROM t;
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'have_both_agg_distinct_and_min_max' AS OK
   FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
 SELECT a, SUM(DISTINCT a), MIN(b), MAX(b) FROM t GROUP BY a;
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT a, SUM(DISTINCT a), MIN(b), MAX(b) FROM t GROUP BY a;
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'have_both_agg_distinct_and_min_max' AS OK
   FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -1661,7 +1654,6 @@ INSERT INTO t1(c1,c2) VALUES
 EXPLAIN FORMAT=TREE SELECT MAX(c2), c1 FROM t1 WHERE c1 = 4 GROUP BY c1;
 FLUSH STATUS;
 SELECT MAX(c2), c1 FROM t1 WHERE c1 = 4 GROUP BY c1;
---skip_if_hypergraph  # Depends on the query plan (loose index scan is not supported).
 SHOW SESSION STATUS LIKE 'Handler_read%';
 
 DROP TABLE t1;
@@ -1903,7 +1895,6 @@ WHERE (group_by_col IN (70, 9)) OR (aggr_col > 2) GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col) FROM a
 WHERE (group_by_col IN (70 ,9)) OR (aggr_col > 2) GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'disjuntive_predicate_present' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -1914,7 +1905,6 @@ WHERE (group_by_col IN (70, 9)) OR (aggr_col < 9) GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MAX(aggr_col) FROM a
 WHERE (group_by_col IN (70 , 9)) OR (aggr_col < 9) GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'disjuntive_predicate_present' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -1928,7 +1918,6 @@ WHERE (group_by_col IN (70 ,9)) OR (aggr_col > 2) GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col) FROM a
 WHERE (group_by_col IN (70, 9)) OR (aggr_col > 2) GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -1939,7 +1928,6 @@ WHERE (group_by_col IN (70, 9)) OR (aggr_col < 9) GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MAX(aggr_col) FROM a
 WHERE (group_by_col IN (70, 9)) OR (aggr_col < 9) GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -1951,7 +1939,6 @@ WHERE (group_by_col IN (3, 9)) OR (aggr_col = 9) GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE (group_by_col IN (3, 9)) OR (aggr_col = 9) GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -1963,7 +1950,6 @@ WHERE (group_by_col = 3) OR (aggr_col > 8) GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE (group_by_col = 3) OR (aggr_col > 8) GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -1980,7 +1966,6 @@ WHERE (group_by_col = 9) OR aggr_col GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE group_by_col = 9 OR aggr_col GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -1993,7 +1978,6 @@ WHERE group_by_col OR (aggr_col < 9) GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE group_by_col OR (aggr_col < 9) GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -2008,7 +1992,6 @@ WHERE aggr_col = group_by_col GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE aggr_col = group_by_col GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -2020,7 +2003,6 @@ WHERE aggr_col < group_by_col GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE aggr_col < group_by_col GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -2034,7 +2016,6 @@ WHERE aggr_col OR group_by_col GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE aggr_col OR group_by_col GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -2046,7 +2027,6 @@ WHERE aggr_col AND group_by_col GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE aggr_col AND group_by_col GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -2058,7 +2038,6 @@ WHERE aggr_col<>0 AND group_by_col<>0 GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE aggr_col<>0 AND group_by_col<>0 GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
@@ -2070,7 +2049,6 @@ WHERE group_by_col OR (group_by_col < (aggr_col = 1)) GROUP BY group_by_col;
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE group_by_col OR (group_by_col < (aggr_col = 1)) GROUP BY group_by_col;
 
---skip_if_hypergraph  # Does not output the same optimizer trace.
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
                                 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 

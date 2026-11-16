@@ -71,6 +71,8 @@ DELETE FROM t1 WHERE c1 = 12;
 # Do some statements on the non-transactional table.
 #
 INSERT INTO t2 VALUES (1,'varchar-1'), (2,'varchar-2'), (3,'varchar-3');
+Warnings:
+Warning	6414	Combining the storage engines MyISAM and InnoDB is deprecated, but the statement or transaction updates both the MyISAM table test.t2 and the InnoDB table test.t1.
 UPDATE t2 SET c1 = c1 + 10;
 DELETE FROM t2 WHERE c1 = 12;
 #
@@ -101,6 +103,8 @@ DELETE FROM t1 WHERE c1 = 12;
 # Do some statements on the non-transactional table.
 #
 INSERT INTO t2 VALUES (1,'varchar-1'), (2,'varchar-2'), (3,'varchar-3');
+Warnings:
+Warning	6414	Combining the storage engines MyISAM and InnoDB is deprecated, but the statement or transaction updates both the MyISAM table test.t2 and the InnoDB table test.t1.
 UPDATE t2 SET c1 = c1 + 10;
 DELETE FROM t2 WHERE c1 = 12;
 #
@@ -198,7 +202,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### INSERT INTO `test`.`t1`
 ### SET
 ###   @1=1 /* INT meta=0 nullable=1 is_null=0 */
@@ -215,7 +219,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### UPDATE `test`.`t1`
 ### WHERE
 ###   @1=1 /* INT meta=0 nullable=1 is_null=0 */
@@ -241,7 +245,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### DELETE FROM `test`.`t1`
 ### WHERE
 ###   @1=12 /* INT meta=0 nullable=1 is_null=0 */
@@ -293,7 +297,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### INSERT INTO `test`.`t2`
 ### SET
 ###   @1=1 /* INT meta=0 nullable=1 is_null=0 */
@@ -329,7 +333,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### UPDATE `test`.`t2`
 ### WHERE
 ###   @1=1 /* INT meta=0 nullable=1 is_null=0 */
@@ -374,7 +378,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### DELETE FROM `test`.`t2`
 ### WHERE
 ###   @1=12 /* INT meta=0 nullable=1 is_null=0 */
@@ -402,7 +406,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### INSERT INTO `test`.`t1`
 ### SET
 ###   @1=1 /* INT meta=0 nullable=1 is_null=0 */
@@ -419,7 +423,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### UPDATE `test`.`t1`
 ### WHERE
 ###   @1=1 /* INT meta=0 nullable=1 is_null=0 */
@@ -445,7 +449,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### DELETE FROM `test`.`t1`
 ### WHERE
 ###   @1=12 /* INT meta=0 nullable=1 is_null=0 */
@@ -497,7 +501,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### INSERT INTO `test`.`t2`
 ### SET
 ###   @1=1 /* INT meta=0 nullable=1 is_null=0 */
@@ -533,7 +537,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Update_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### UPDATE `test`.`t2`
 ### WHERE
 ###   @1=1 /* INT meta=0 nullable=1 is_null=0 */
@@ -578,7 +582,7 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t2` mapped to number #
 # has_generated_invisible_primary_key=0
 # at #
-# # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F
+# # server id #  end_log_pos # CRC32 # 	Delete_rows: table id # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 ### DELETE FROM `test`.`t2`
 ### WHERE
 ###   @1=12 /* INT meta=0 nullable=1 is_null=0 */

@@ -111,7 +111,7 @@ class ConfigRetriever {
   ErrorType latestErrorType;
 
   void setError(ErrorType, const char *errorMsg);
-  void setError(ErrorType, BaseString err);
+  void setError(ErrorType, const BaseString &err);
 
   bool m_end_session;
   Uint32 m_version;

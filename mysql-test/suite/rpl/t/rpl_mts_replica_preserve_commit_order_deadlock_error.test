@@ -23,7 +23,6 @@
 # ========
 #
 # Commit order deadlock occurs only when MTS + LOGICAL CLOCK are enabled.
---source include/have_replica_parallel_type_logical_clock.inc
 # This test needs at least 2 MTA workers
 --let $option_name = replica_parallel_workers
 --let $option_operator = >
@@ -101,7 +100,7 @@ INSERT INTO t1 VALUES(3, 1);
 --echo # 3.4 Execute Transaction-2
 --echo #
 BEGIN;
-DELETE FROM t1 WHERE c2 <= 1;
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 1;
 INSERT INTO t2 values(1);
 COMMIT;
 

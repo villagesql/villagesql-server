@@ -22,7 +22,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/server_component/mysql_simple_error_log_imp.h"
-#include <stdarg.h>
+#include <cstdarg>
 #include "mysql/components/service.h"
 #include "mysql/components/service_implementation.h"
 #include "mysql/components/services/log_builtins.h"

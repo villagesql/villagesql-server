@@ -677,6 +677,37 @@ connection default;
 
 DROP USER mysqltest_u1@localhost;
 
+#
+# PS#8115: Check a user containing an '@' is processed correctly
+#
+
+--let $user= 'mysqltest_u1@corp'@'localhost'
+--let $event= e1
+--eval CREATE USER $user
+--eval GRANT EVENT ON events_test.* TO $user
+
+--eval CREATE DEFINER=$user EVENT $event ON SCHEDULE EVERY 1 DAY STARTS '2006-01-01 00:00:00' DO SELECT 1
+--eval SHOW CREATE EVENT $event
+
+--eval DROP EVENT $event
+--eval DROP USER $user
+
+# user with several '@' is processed correctly
+--let $user= 'mysqltest_u1@corp@comp'@'localhost'
+--let $event= e1
+--eval CREATE USER $user
+--eval GRANT EVENT ON events_test.* TO $user
+
+--eval CREATE DEFINER=$user EVENT $event ON SCHEDULE EVERY 1 DAY STARTS '2006-01-01 00:00:00' DO SELECT 1
+--eval SHOW CREATE EVENT $event
+
+--eval DROP EVENT $event
+--eval DROP USER $user
+
+# '@' is not allowed in the hostname
+--let $user= 'mysqltest_u1'@'localhost@corp'
+--error ER_UNKNOWN_ERROR
+--eval CREATE USER $user
 
 #
 # BUG#16420: Events: timestamps become UTC
@@ -1092,6 +1123,7 @@ CREATE EVENT e2 ON SCHEDULE EVERY 1 SECOND DO SET @a = 1;
 
 --echo
 
+--sorted_result
 SELECT
   event_name,
   last_executed IS NULL,
@@ -1201,7 +1233,7 @@ DROP USER mysqltest_u1@localhost;
 drop procedure if exists p;
 --enable_warnings
 set @old_mode= @@sql_mode;
-set @@sql_mode= cast(pow(2,33)-1 as unsigned integer) & ~0x1003ff00;
+set @@sql_mode= cast(pow(2,34)-1 as unsigned integer) & ~0x1003ff00;
 create event e1 on schedule every 1 day do select 1;
 select @@sql_mode into @full_mode;
 set @@sql_mode= @old_mode;

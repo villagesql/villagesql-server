@@ -23,7 +23,7 @@
 
 #include "wkb_size_visitor.h"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdint>  // std::uint32_t, std::uint8_t
 
 namespace gis {

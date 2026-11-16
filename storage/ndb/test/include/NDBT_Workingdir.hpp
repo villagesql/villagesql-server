@@ -1,7 +1,6 @@
 /*
    Copyright (c) 2009, 2026, Oracle and/or its affiliates.
 
-   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -56,7 +55,7 @@ class NDBT_Workingdir {
     if (access(m_wd.c_str(), F_OK) == 0) NdbDir::remove_recursive(m_wd.c_str());
   }
 
-  const char *path(void) const { return m_wd.c_str(); }
+  const char *path() const { return m_wd.c_str(); }
 };
 
 #endif

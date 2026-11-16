@@ -103,6 +103,7 @@ extern PSI_memory_key key_memory_applier;
 extern PSI_memory_key key_memory_recovery;
 extern PSI_memory_key key_memory_show_binlog_events;
 extern PSI_memory_key key_memory_relaylog_recovery;
+extern PSI_memory_key key_memory_applier_metric_service;
 extern PSI_memory_key key_memory_REPLICA_INFO;
 extern PSI_memory_key key_memory_ST_SCHEMA_TABLE;
 extern PSI_memory_key key_memory_Slave_applier_json_diff_vector;
@@ -143,7 +144,6 @@ extern PSI_memory_key key_memory_histograms;
 extern PSI_memory_key key_memory_host_cache_hostname;
 extern PSI_memory_key key_memory_locked_table_list;
 extern PSI_memory_key key_memory_locked_thread_list;
-extern PSI_memory_key key_memory_my_bitmap_map;
 extern PSI_memory_key key_memory_my_str_malloc;
 extern PSI_memory_key key_memory_opt_bin_logname;
 extern PSI_memory_key key_memory_partition_syntax_buffer;
@@ -175,5 +175,14 @@ extern PSI_memory_key key_memory_user_var_entry;
 extern PSI_memory_key key_memory_user_var_entry_value;
 extern PSI_memory_key key_memory_sp_cache;
 extern PSI_memory_key key_memory_write_set_extraction;
+
+// Percona PSI memory keys
+
+extern PSI_memory_key key_memory_userstat_table_stats;
+extern PSI_memory_key key_memory_userstat_index_stats;
+extern PSI_memory_key key_memory_userstat_user_stats;
+extern PSI_memory_key key_memory_userstat_thread_stats;
+extern PSI_memory_key key_memory_userstat_client_stats;
+extern PSI_memory_key key_memory_thread_pool_connection;
 
 #endif  // PSI_MEMORY_KEY_INCLUDED

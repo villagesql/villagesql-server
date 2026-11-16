@@ -17,6 +17,7 @@
 --source include/have_binlog_format_row.inc
 --source include/have_debug.inc
 --source include/have_innodb_16k.inc
+--source include/hypergraph_is_active.inc
 
 --mkdir $MYSQLTEST_VARDIR/tmp/wl11613_dir/
 let $restart_parameters = "restart: --innodb_temp_tablespaces_dir=$MYSQLTEST_VARDIR/tmp/wl11613_dir";
@@ -118,6 +119,10 @@ SELECT PATH, SIZE, STATE, PURPOSE FROM INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TA
 --echo # information_schema.innodb_session_temp_tablespaces are
 --echo # in sync
 
+if ($hypergraph_is_active) {
+  # temp_7.ibt has different size with hypergraph.
+  --replace_result 114688 131072
+}
 SELECT USER, b.STATE, INFO, SIZE, a.STATE, PURPOSE FROM
   INFORMATION_SCHEMA.PROCESSLIST a, INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TABLESPACES b
   WHERE a.ID=b.ID ORDER BY SPACE;
@@ -130,6 +135,10 @@ connect (con3, localhost, root,,);
 connection con3;
 
 CREATE TEMPORARY TABLE test.t1(a INT, b BLOB);
+if ($hypergraph_is_active) {
+  # temp_7.ibt has different size with hypergraph.
+  --replace_result 114688 131072
+}
 --replace_regex /\\#innodb_temp\\temp/\/#innodb_temp\/temp/
 SELECT PATH, SIZE, STATE, PURPOSE FROM INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TABLESPACES ORDER BY SPACE;
 
@@ -138,6 +147,10 @@ connect (con4, localhost, root,,);
 connection con4;
 
 CREATE TEMPORARY TABLE test.t1(a INT, b BLOB);
+if ($hypergraph_is_active) {
+  # temp_7.ibt has different size with hypergraph.
+  --replace_result 114688 131072
+}
 --replace_regex /\\#innodb_temp\\temp/\/#innodb_temp\/temp/
 SELECT PATH, SIZE, STATE, PURPOSE FROM INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TABLESPACES ORDER BY SPACE;
 
@@ -146,6 +159,10 @@ connect (con5, localhost, root,,);
 connection con5;
 
 CREATE TEMPORARY TABLE test.t1(a INT, b BLOB);
+if ($hypergraph_is_active) {
+  # temp_7.ibt has different size with hypergraph.
+  --replace_result 114688 131072
+}
 --replace_regex /\\#innodb_temp\\temp/\/#innodb_temp\/temp/
 SELECT PATH, SIZE, STATE, PURPOSE FROM INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TABLESPACES ORDER BY SPACE;
 
@@ -164,6 +181,10 @@ SET SESSION DEBUG = "-d,fil_create_temp_tablespace_fail_fallocate";
 # On executing select query from INNODB_SESSION_TEMP_TABLESPACES,
 # new set of 10 ibt files would be created
 
+if ($hypergraph_is_active) {
+  # temp_7.ibt has different size with hypergraph.
+  --replace_result 114688 131072
+}
 --replace_regex /\\#innodb_temp\\temp/\/#innodb_temp\/temp/
 SELECT PATH, SIZE, STATE, PURPOSE FROM INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TABLESPACES ORDER BY SPACE;
 
@@ -199,23 +220,23 @@ SELECT PATH, SIZE, STATE, PURPOSE FROM INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TA
 
 --echo "Test with invalid values of innodb_temp_tablespaces_dir"
 --echo "invalid abc dir"
---error 1,42
+--error 1
 --exec $MYSQLD --datadir=$MYSQLD_DATADIR --innodb_temp_tablespaces_dir="abc"
 
 --echo "invalid ./sys/ dir"
---error 1,42
+--error 1
 --exec $MYSQLD --datadir=$MYSQLD_DATADIR --innodb_temp_tablespaces_dir="./sys/"
 
 --echo "invalid /wl11613-do-not-exists/ dir"
---error 1,42
+--error 1
 --exec $MYSQLD --datadir=$MYSQLD_DATADIR --innodb_temp_tablespaces_dir="/wl11613-do-not-exist/"
 
 --echo "invalid empty \"\" "
---error 1,42
+--error 1
 --exec $MYSQLD --datadir=$MYSQLD_DATADIR --innodb_temp_tablespaces_dir=""
 
 --echo "invalid #innodb_temp "
---error 1,42
+--error 1
 --exec $MYSQLD --datadir=$MYSQLD_DATADIR --innodb_temp_tablespaces_dir="#innodb_temp"
 
 # Remove #innodb_temp directory manually and check if on next restart the
@@ -275,6 +296,10 @@ let $wl6737_auto_inc = auto_increment;
 --enable_query_log
 --enable_result_log
 
+if ($hypergraph_is_active) {
+  # temp_9.ibt has different size with hypergraph.
+  --replace_result 147456 163840
+}
 --replace_regex /\\#innodb_temp\\temp/\/#innodb_temp\/temp/
 SELECT PATH, SIZE, STATE, PURPOSE FROM INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TABLESPACES ORDER BY SPACE;
 

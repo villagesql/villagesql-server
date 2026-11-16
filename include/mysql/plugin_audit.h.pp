@@ -9,6 +9,8 @@ struct MYSQL_LEX_CSTRING {
 };
 #include "plugin.h"
 #include "status_var.h"
+#include "mysql/components/services/bits/status_variables_bits.h"
+#include "mysql/components/services/bits/thd.h"
 enum enum_mysql_show_type {
   SHOW_UNDEF,
   SHOW_BOOL,
@@ -56,6 +58,7 @@ struct MYSQL_XID {
   char data[128];
 };
 #include <mysql/components/services/bits/system_variables_bits.h>
+#include "mysql/components/services/bits/thd.h"
 struct st_mysql_value {
   int (*value_type)(struct st_mysql_value *);
   const char *(*val_str)(struct st_mysql_value *, char *buffer, int *length);
@@ -68,6 +71,9 @@ typedef int (*mysql_var_check_func)(void * thd, SYS_VAR *var, void *save,
                                     struct st_mysql_value *value);
 typedef void (*mysql_var_update_func)(void * thd, SYS_VAR *var,
                                       void *var_ptr, const void *save);
+struct SYS_VAR {
+  int flags; const char *name; const char *comment; mysql_var_check_func check; mysql_var_update_func update;
+};
 struct st_mysql_plugin {
   int type;
   void *info;
@@ -117,18 +123,37 @@ char *thd_security_context(void * thd, char *buffer, size_t length,
 void thd_inc_row_count(void * thd);
 int thd_allow_batch(void * thd);
 void thd_mark_transaction_to_rollback(void * thd, int all);
+enum mysql_trx_stat_type {
+  MYSQL_TRX_STAT_IO_READ_BYTES,
+  MYSQL_TRX_STAT_IO_READ_WAIT_USECS,
+  MYSQL_TRX_STAT_LOCK_WAIT_USECS,
+  MYSQL_TRX_STAT_INNODB_QUEUE_WAIT_USECS,
+  MYSQL_TRX_STAT_ACCESS_PAGE_ID
+};
+void thd_report_innodb_stat(void * thd, unsigned long long trx_id,
+                            enum mysql_trx_stat_type type, uint64_t value);
+unsigned long thd_log_slow_verbosity(const void * thd);
+int thd_opt_slow_log();
+int thd_is_background_thread(const void * thd);
 int mysql_tmpfile(const char *prefix);
 int thd_killed(const void *v_thd);
 void thd_set_kill_status(const void * thd);
 void thd_binlog_pos(const void * thd, const char **file_var,
                     unsigned long long *pos_var);
 unsigned long thd_get_thread_id(const void * thd);
+int64_t thd_get_query_id(const void * thd);
 void thd_get_xid(const void * thd, MYSQL_XID *xid);
 void *thd_get_ha_data(const void * thd, const struct handlerton *hton);
 void thd_set_ha_data(void * thd, const struct handlerton *hton,
                      const void *ha_data);
 void remove_ssl_err_thread_state();
-unsigned int thd_get_num_vcpus();
+int thd_command(const void * thd);
+long long thd_start_time(const void * thd);
+void thd_kill(unsigned long id);
+int thd_get_ft_query_extra_word_chars(void);
+typedef bool (*ssl_reload_callback_t)(void *);
+bool register_ssl_reload_callback(ssl_reload_callback_t);
+bool deregister_ssl_reload_callback(ssl_reload_callback_t);
 #include <mysql/components/services/bits/plugin_audit_connection_types.h>
 typedef enum {
   MYSQL_AUDIT_CONNECTION_CONNECT = 1 << 0,
@@ -336,6 +361,22 @@ enum enum_sql_command {
   SQLCOM_CREATE_SRS,
   SQLCOM_DROP_SRS,
   SQLCOM_SHOW_PARSE_TREE,
+  SQLCOM_CREATE_LIBRARY,
+  SQLCOM_DROP_LIBRARY,
+  SQLCOM_SHOW_CREATE_LIBRARY,
+  SQLCOM_ALTER_LIBRARY,
+  SQLCOM_SHOW_STATUS_LIBRARY,
+  SQLCOM_CREATE_MASKING_POLICY,
+  SQLCOM_DROP_MASKING_POLICY,
+  SQLCOM_SHOW_CREATE_MASKING_POLICY,
+  SQLCOM_SHOW_USER_STATS,
+  SQLCOM_SHOW_TABLE_STATS,
+  SQLCOM_SHOW_INDEX_STATS,
+  SQLCOM_SHOW_CLIENT_STATS,
+  SQLCOM_SHOW_THREAD_STATS,
+  SQLCOM_LOCK_TABLES_FOR_BACKUP,
+  SQLCOM_CREATE_COMPRESSION_DICTIONARY,
+  SQLCOM_DROP_COMPRESSION_DICTIONARY,
   SQLCOM_MYSQL_COUNT,
   SQLCOM_VSQL_FIRST = 1024,
   SQLCOM_INSTALL_EXTENSION = SQLCOM_VSQL_FIRST,

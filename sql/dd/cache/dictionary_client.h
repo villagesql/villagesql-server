@@ -36,6 +36,7 @@
 #include "object_registry.h"  // Object_registry
 #include "sql/dd/object_id.h"
 #include "sql/dd/string_type.h"
+#include "sql/mdl.h"
 
 class THD;
 struct LEX_USER;
@@ -146,6 +147,22 @@ class SPI_lru_cache_owner_ptr {
 template <typename T>
 class Cache_element;
 
+#ifndef NDEBUG
+/** Data needed to check if an MDL is held. */
+struct MDL_descriptor {
+  MDL_key m_mdl_key;
+  enum_mdl_type m_mdl_type = MDL_TYPE_END;
+};
+
+/** Tracks MDLs for shared DD object. The object pointer
+makes it easier to move the descriptor to a different AR or
+remove it when the corresponding object is moved/removed. */
+struct Release_lock_descriptor {
+  MDL_descriptor m_mdld;
+  const Entity_object *m_object = nullptr;
+};
+#endif /* not NDEBUG */
+
 class Dictionary_client {
  public:
   /**
@@ -181,6 +198,12 @@ class Dictionary_client {
     Dictionary_client *m_client;
     Object_registry m_release_registry;
     Auto_releaser *m_prev;
+
+#ifndef NDEBUG
+    /** Cache of MDL_keys which have been asserted to hold when acquiring,
+     and which should be re-checked before this releaser goes out of scope. */
+    std::vector<Release_lock_descriptor> m_release_locks;
+#endif /* not NDEBUG */
 
     /**
       Register an object to be auto released.
@@ -259,6 +282,7 @@ class Dictionary_client {
   */
   SPI_lru_cache_owner_ptr m_no_table_spids;
 
+ private:
   /**
     Get a dictionary object.
 
@@ -955,6 +979,10 @@ class Dictionary_client {
   [[nodiscard]] bool fetch_schema_table_names_not_hidden_by_se(
       const Schema *schema, std::vector<String_type> *names) const;
 
+  /** TODO.dt */
+  [[nodiscard]] bool fetch_schema_base_table_names_not_hidden_by_se(
+      const Schema *schema, std::vector<String_type> *names) const;
+
   /**
     Fetch all global component ids of the given type.
 
@@ -1072,7 +1100,9 @@ class Dictionary_client {
 
     @param        parent_schema    Schema name of parent table.
     @param        parent_name      Table name of parent table.
-    @param        parent_engine    Storage engine of parent table.
+    @param        parent_engine    Storage engine of parent table or an empty
+                                   string if all child tables should be
+                                   returned regardless of their SE
     @param        uncommitted      Use READ_UNCOMMITTED isolation.
     @param[out]   children_schemas Schema names of child tables.
     @param[out]   children_names   Table names of child tables.
@@ -1262,7 +1292,6 @@ class Dictionary_client {
 
     @tparam T       Dictionary object type.
   */
-
   template <typename T>
   void dump() const;
 };

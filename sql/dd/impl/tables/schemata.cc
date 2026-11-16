@@ -38,11 +38,10 @@
 
 struct CHARSET_INFO;
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Schemata &Schemata::instance() {
-  static Schemata *s_instance = new Schemata();
+  static auto *s_instance = new Schemata();
   return *s_instance;
 }
 
@@ -125,5 +124,4 @@ Object_key *Schemata::create_key_by_catalog_id(Object_id catalog_id) {
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

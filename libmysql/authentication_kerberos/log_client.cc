@@ -27,7 +27,7 @@ void Logger_client::set_log_level(log_client_level level) {
   m_log_level = level;
 }
 
-void Logger_client::write(std::string data) {
+void Logger_client::write(const std::string &data) {
   std::cerr << data << "\n";
   std::cerr.flush();
 }
@@ -48,7 +48,7 @@ void Logger_client::log_client_plugin_data_exchange(const unsigned char *buffer,
     sprintf(ascii_string + (2 * i), "%02X", *(buffer + i));
   }
   logstream << "Kerberos client plug-in data exchange: " << ascii_string;
-  log_client_dbg(logstream.str().c_str());
+  log_client_dbg(logstream.str());
   delete[] ascii_string;
   ascii_string = nullptr;
 }

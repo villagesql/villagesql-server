@@ -1925,18 +1925,24 @@ PARTITION BY HASH (EXTRACT(HOUR_MICROSECOND FROM a));
 SET sql_mode='';
 SELECT FROM_DAYS(3652499), FROM_DAYS(3652500), FROM_DAYS(3652501);
 FROM_DAYS(3652499)	FROM_DAYS(3652500)	FROM_DAYS(3652501)
-NULL	0000-00-00	0000-00-00
+NULL	NULL	NULL
 Warnings:
-Warning	1441	Datetime function: from_days field overflow
+Warning	6527	DATE value is out of range in 'from_days(3652499)'
+Warning	6527	DATE value is out of range in 'from_days(3652500)'
+Warning	6527	DATE value is out of range in 'from_days(3652501)'
 SELECT FROM_DAYS(4294967660), FROM_DAYS(4294967661), FROM_DAYS(4294967663);
 FROM_DAYS(4294967660)	FROM_DAYS(4294967661)	FROM_DAYS(4294967663)
-0000-00-00	0000-00-00	0000-00-00
+NULL	NULL	NULL
+Warnings:
+Warning	6527	DATE value is out of range in 'from_days(4294967660)'
+Warning	6527	DATE value is out of range in 'from_days(4294967661)'
+Warning	6527	DATE value is out of range in 'from_days(4294967663)'
 INSERT t1 VALUES(ADDTIME(0,0)), (FROM_DAYS(3652499));
 Warnings:
 Warning	4095	Delimiter ':' in position 2 in datetime value '00:00:00' at row 1 is deprecated. Prefer the standard '-'.
-Warning	1441	Datetime function: from_days field overflow
+Warning	6527	DATE value is out of range in 'from_days(3652499)'
 Warning	4095	Delimiter ':' in position 2 in datetime value '00:00:00' at row 1 is deprecated. Prefer the standard '-'.
-Warning	1441	Datetime function: from_days field overflow
+Warning	6527	DATE value is out of range in 'from_days(3652499)'
 DROP TABLE t1;
 SET sql_mode=default;
 # Bug#35476172: MySQL server fails when executing query
@@ -1966,12 +1972,3 @@ AS TABLE t0;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '(SELECT c1 FROM t0)) (PARTITION p0 VALUES IN (0))
 AS TABLE t0' at line 2
 DROP TABLE t0;
-#
-# Bug #35451459 MySQL Server crashes when executing query
-#
-# DEFAULT() is not allowed in partitioning expression
-CREATE TABLE v0 (
-c1 INT
-)
-PARTITION BY HASH (DEFAULT(c1));
-ERROR HY000: Constant, random or timezone-dependent expressions in (sub)partitioning function are not allowed

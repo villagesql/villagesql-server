@@ -1,16 +1,16 @@
 INSTALL EXTENSION vsql_lifecycle_test;
 # Thread should NOT be running yet (enabled defaults to OFF)
 SELECT COUNT(*) FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+WHERE info = 'vsql_lifecycle_test/monitor';
 COUNT(*)
 0
 SET GLOBAL vsql_lifecycle_test.monitor_enabled = ON;
 # Thread should appear in processlist after enable
 SELECT id, user, info FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+WHERE info = 'vsql_lifecycle_test/monitor'
 ORDER BY id;
 id	user	info
-<id>	vef_worker	vsql_lifecycle_test/monitor
+<id>	system user	vsql_lifecycle_test/monitor
 # Tick count should be positive (thread ticks every 100ms)
 SELECT vsql_lifecycle_test.tick_count() > 0;
 vsql_lifecycle_test.tick_count() > 0
@@ -18,7 +18,7 @@ vsql_lifecycle_test.tick_count() > 0
 SET GLOBAL vsql_lifecycle_test.monitor_enabled = OFF;
 # Thread is gone from processlist after disable
 SELECT COUNT(*) FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+WHERE info = 'vsql_lifecycle_test/monitor';
 COUNT(*)
 0
 UNINSTALL EXTENSION vsql_lifecycle_test;

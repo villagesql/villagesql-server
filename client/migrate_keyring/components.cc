@@ -23,44 +23,112 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include "components.h"
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
-
-#include <scope_guard.h>
-
-#include "components.h"
-#include "options.h"   /* command line options */
+#include "components/keyrings/common/component_helpers/include/keyring_log_builtins_definition.h"
+#include "mysql/components/service_implementation.h"
+#include "mysql/components/services/component_status_var_service.h"
+#include "mysql/components/services/dynamic_loader.h"
+#include "mysql/components/services/registry.h"
+#include "options.h" /* command line options */
+#include "scope_guard.h"
 #include "utilities.h" /* Error logging */
 
 using options::Options;
 
 namespace components {
 
-registry_type_t *components_registry = nullptr;
-dynamic_loader_type_t *components_dynamic_loader = nullptr;
+SERVICE_TYPE_NO_CONST(registry) *components_registry = nullptr;
+SERVICE_TYPE_NO_CONST(dynamic_loader) *components_dynamic_loader = nullptr;
+SERVICE_TYPE_NO_CONST(registry_registration) *reg_reg = nullptr;
+
+/*
+  We need to register a dummy status variable registration service
+  since some of the keyring components are exposing status vars now.
+*/
+namespace dummy_status_variable_registration_implementation {
+DEFINE_BOOL_METHOD(register_variable, (SHOW_VAR * /*status_var*/)) {
+  return false;
+}
+
+DEFINE_BOOL_METHOD(unregister_variable, (SHOW_VAR * /*status_var*/)) {
+  return false;
+}
+
+void setup() {
+  static BEGIN_SERVICE_IMPLEMENTATION(
+      mysql_migrate_keyring, status_variable_registration) register_variable,
+      unregister_variable, END_SERVICE_IMPLEMENTATION();
+
+  reg_reg->register_service(
+      "status_variable_registration.mysql_migrate_keyring",
+      (my_h_service) const_cast<void *>((const void *)&SERVICE_IMPLEMENTATION(
+          mysql_migrate_keyring, status_variable_registration)));
+}
+
+void teardown() {
+  reg_reg->unregister("status_variable_registration.mysql_migrate_keyring");
+}
+}  // namespace dummy_status_variable_registration_implementation
+
+/*
+  We need to register log_builins implementation because keyring components
+  depends on it (in terms of REQUIRES_SERVICE_PLACEHOLDER)
+  and minchassis does not provide it
+*/
+namespace log_builtins_component_helper {
+KEYRING_LOG_BUILTINS_IMPLEMENTOR(mysql_migrate_keyring);
+KEYRING_LOG_BUILTINS_STRING_IMPLEMENTOR(mysql_migrate_keyring);
+
+void setup() {
+  reg_reg->register_service(
+      "log_builtins.mysql_migrate_keyring",
+      (my_h_service) const_cast<void *>((const void *)&SERVICE_IMPLEMENTATION(
+          mysql_migrate_keyring, log_builtins)));
+
+  reg_reg->register_service(
+      "log_builtins_string.mysql_migrate_keyring",
+      (my_h_service) const_cast<void *>((const void *)&SERVICE_IMPLEMENTATION(
+          mysql_migrate_keyring, log_builtins_string)));
+}
+
+void teardown() {
+  reg_reg->unregister("log_builtins.mysql_migrate_keyring");
+  reg_reg->unregister("log_builtins_string.mysql_migrate_keyring");
+}
+
+}  // namespace log_builtins_component_helper
 
 void init_components_subsystem() {
   minimal_chassis_init((&components_registry), nullptr);
   components_registry->acquire(
       "dynamic_loader",
       reinterpret_cast<my_h_service *>(&components_dynamic_loader));
+  components_registry->acquire("registry_registration",
+                               reinterpret_cast<my_h_service *>(&reg_reg));
+  dummy_status_variable_registration_implementation::setup();
+  log_builtins_component_helper::setup();
 }
 
 void deinit_components_subsystem() {
+  log_builtins_component_helper::teardown();
+  dummy_status_variable_registration_implementation::teardown();
+  components_registry->release(reinterpret_cast<my_h_service>(reg_reg));
   components_registry->release(
       reinterpret_cast<my_h_service>(components_dynamic_loader));
   minimal_chassis_deinit(components_registry, nullptr);
 }
 
-Keyring_component_load::Keyring_component_load(const std::string component_name,
-                                               const std::string type)
+Keyring_component_load::Keyring_component_load(
+    const std::string &component_name, std::string type)
     : dynamic_loader_(components_dynamic_loader),
       component_path_("file://"),
-      type_(type) {
+      type_(std::move(type)) {
   if (Options::s_component_dir != nullptr)
     component_path_.append(Options::s_component_dir);
   component_path_ += "/" + component_name;
@@ -93,8 +161,8 @@ Keyring_component_load::~Keyring_component_load() {
   }
 }
 
-Keyring_services::Keyring_services(const std::string implementation_name,
-                                   const std::string instance_path)
+Keyring_services::Keyring_services(const std::string &implementation_name,
+                                   const std::string &instance_path)
     : registry_(components_registry),
       implementation_name_(implementation_name),
       keyring_load_service_(
@@ -129,7 +197,7 @@ Keyring_services::~Keyring_services() {
 }
 
 Source_keyring_services::Source_keyring_services(
-    const std::string implementation_name, const std::string instance_path)
+    const std::string &implementation_name, const std::string &instance_path)
     : Keyring_services(implementation_name, instance_path),
       keyring_keys_metadata_service_("keyring_keys_metadata_iterator",
                                      keyring_load_service_, registry_),
@@ -157,7 +225,7 @@ Source_keyring_services::~Source_keyring_services() {
 }
 
 Destination_keyring_services::Destination_keyring_services(
-    const std::string implementation_name, const std::string instance_path)
+    const std::string &implementation_name, const std::string &instance_path)
     : Keyring_services(implementation_name, instance_path),
       keyring_writer_service_("keyring_writer", keyring_load_service_,
                               registry_) {
@@ -185,11 +253,11 @@ Keyring_migrate::Keyring_migrate(Source_keyring_services &src,
     : src_(src), dst_(dst), mysql_connection_(online_migration) {
   if (!src_.ok() || !dst_.ok()) return;
   if (online_migration && !mysql_connection_.ok()) return;
-  if (lock_source_keyring() == false) {
+  if (!lock_source_keyring()) {
     log_error << "Failed to lock source keyring" << std::endl;
     return;
   }
-  auto iterator = src_.metadata_iterator();
+  const auto *iterator = src_.metadata_iterator();
   if (iterator->init(&iterator_) != 0) {
     log_error << "Error creating source keyring iterator" << std::endl;
     return;
@@ -198,15 +266,14 @@ Keyring_migrate::Keyring_migrate(Source_keyring_services &src,
 }
 
 bool Keyring_migrate::lock_source_keyring() {
-  if (Options::s_online_migration == false) return true;
+  if (!Options::s_online_migration) return true;
   if (!mysql_connection_.ok()) return false;
   const std::string lock_statement("SET GLOBAL KEYRING_OPERATIONS=0");
   return mysql_connection_.execute(lock_statement);
 }
 
 bool Keyring_migrate::unlock_source_keyring() {
-  if (Options::s_online_migration == false || !mysql_connection_.ok())
-    return true;
+  if (!Options::s_online_migration || !mysql_connection_.ok()) return true;
   const std::string unlock_statement("SET GLOBAL KEYRING_OPERATIONS=1");
   return mysql_connection_.execute(unlock_statement);
 }
@@ -217,9 +284,9 @@ bool Keyring_migrate::migrate_keys() {
                  "keyrings are initialized properly."
               << std::endl;
 
-  auto metadata_iterator = src_.metadata_iterator();
-  auto reader = src_.reader();
-  auto writer = dst_.writer();
+  const auto *metadata_iterator = src_.metadata_iterator();
+  const auto *reader = src_.reader();
+  const auto *writer = dst_.writer();
   size_t migrated_count = 0;
   size_t skipped_count = 0;
   bool retval = true;
@@ -244,7 +311,7 @@ bool Keyring_migrate::migrate_keys() {
     const std::unique_ptr<char[]> data_id(new char[data_id_length + 1]);
     const std::unique_ptr<char[]> auth_id(new char[auth_id_length + 1]);
 
-    if (data_id.get() == nullptr || auth_id.get() == nullptr) {
+    if (data_id == nullptr || auth_id == nullptr) {
       log_error << "Failed to allocated required memory for data_id and auth_id"
                 << std::endl;
       retval = false;
@@ -264,7 +331,7 @@ bool Keyring_migrate::migrate_keys() {
     const bool status =
         reader->init(data_id.get(), auth_id.get(), &reader_object);
 
-    if (status == true) {
+    if (status) {
       log_error << "Keyring reported error" << std::endl;
       retval = false;
       break;
@@ -311,7 +378,7 @@ bool Keyring_migrate::migrate_keys() {
     const std::unique_ptr<char[]> data_type_buffer(
         new char[data_type_size + 1]);
 
-    if (data_buffer.get() == nullptr || data_type_buffer.get() == nullptr) {
+    if (data_buffer == nullptr || data_type_buffer == nullptr) {
       log_error << "Failed to allocated required memory for data pointed by "
                    "data_id: "
                 << data_id.get() << ", auth_id: " << auth_id.get()
@@ -340,7 +407,7 @@ bool Keyring_migrate::migrate_keys() {
                         data_size, data_type_buffer.get());
       memset(data_buffer.get(), 0, data_size);
       memset(data_type_buffer.get(), 0, data_type_size + 1);
-      if (write_status == true) {
+      if (write_status) {
         log_error << "Failed to write data pointed by data_id: "
                   << data_id.get() << ", auth_id: " << auth_id.get()
                   << " into destination keyring" << std::endl;
@@ -373,7 +440,7 @@ bool Keyring_migrate::migrate_keys() {
 }
 
 Keyring_migrate::~Keyring_migrate() {
-  if (unlock_source_keyring() == false) {
+  if (!unlock_source_keyring()) {
     log_error << "Failed to unlock source keyring. Please unlock it manually."
               << std::endl;
   }

@@ -31,9 +31,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace mysql_harness {
-
-namespace utility {
+namespace mysql_harness::utility {
 
 bool matches_glob(const std::string &word, const std::string &pattern) {
   return (fnmatch(pattern.c_str(), word.c_str(), 0) == 0);
@@ -52,6 +50,4 @@ bool regex_pattern_matches(const std::string &s, const std::string &pattern) {
   return (r == 0);
 }
 
-}  // namespace utility
-
-}  // namespace mysql_harness
+}  // namespace mysql_harness::utility

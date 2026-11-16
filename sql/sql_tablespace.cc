@@ -110,7 +110,8 @@ st_alter_tablespace::st_alter_tablespace(
       nodegroup_id{opts.nodegroup_id},
       wait_until_completed{opts.wait_until_completed},
       ts_comment{opts.ts_comment.str},
-      encryption{opts.encryption.str} {
+      encryption{opts.encryption.str},
+      explicit_encryption{opts.encryption.str != nullptr} {
   if (opts.autoextend_size.has_value()) {
     autoextend_size = opts.autoextend_size.value();
   }
@@ -247,6 +248,13 @@ bool lock_tablespace_names(THD *thd, Names... names) {
   }
 
   if (thd->global_read_lock.can_acquire_protection()) {
+    return true;
+  }
+
+  // Acquire Percona's LOCK TABLES FOR BACKUP lock
+  if (thd->backup_tables_lock.abort_if_acquired() ||
+      thd->backup_tables_lock.acquire_protection(
+          thd, MDL_TRANSACTION, thd->variables.lock_wait_timeout)) {
     return true;
   }
 
@@ -530,6 +538,8 @@ bool Sql_cmd_create_tablespace::execute(THD *thd) {
   // - Disallow encryption='y', if SE does not support it.
   if (hton->flags & HTON_SUPPORTS_TABLE_ENCRYPTION) {
     tablespace->options().set("encryption", encrypt_type);
+    tablespace->options().set("explicit_encryption",
+                              m_options->encryption.str ? true : false);
   } else if (encrypt_tablespace) {
     my_error(ER_CHECK_NOT_IMPLEMENTED, MYF(0), "ENCRYPTION");
     return true;
@@ -786,9 +796,9 @@ static bool set_table_encryption_type(THD *thd, const dd::Tablespace &ts,
 
   // If the source tablespace encryption type is same as request type.
   dd::String_type source_tablespace_encryption;
-  if (ts.options().exists("encryption"))
+  if (ts.options().exists("encryption")) {
     (void)ts.options().get("encryption", &source_tablespace_encryption);
-  else
+  } else
     source_tablespace_encryption = "N";
   if (dd::is_encrypted(source_tablespace_encryption) == is_request_to_encrypt)
     return false;
@@ -895,15 +905,12 @@ static bool upgrade_lock_for_tables_in_tablespace(
 
   DEBUG_SYNC(thd, "upgrade_lock_for_tables_in_tablespace_kill_point");
 
-  MDL_request_list::Iterator it(*table_mdl_reqs);
-  const size_t req_count = table_mdl_reqs->elements();
-  for (size_t i = 0; i < req_count; ++i) {
-    MDL_request *r = it++;
-    if (r->key.mdl_namespace() == MDL_key::TABLE &&
-        thd->mdl_context.upgrade_shared_lock(r->ticket, MDL_EXCLUSIVE,
-                                             LONG_TIMEOUT))
-      return true;
-  }
+  if (thd->mdl_context.upgrade_shared_locks(
+          table_mdl_reqs, MDL_EXCLUSIVE, LONG_TIMEOUT, [](MDL_request *r) {
+            // Only process MDL_request's for table locks.
+            return r->key.mdl_namespace() == MDL_key::TABLE;
+          }))
+    return true;
 
   return false;
 }
@@ -983,6 +990,11 @@ bool Sql_cmd_alter_tablespace::execute(THD *thd) {
     }
   }
 
+  if (hton->flags & HTON_SUPPORTS_TABLE_ENCRYPTION) {
+    tsmp.second->options().set("explicit_encryption",
+                               m_options->encryption.str ? true : false);
+  }
+
   if (m_options->engine_attribute.str) {
     tsmp.second->set_engine_attribute(m_options->engine_attribute);
   }
@@ -1052,7 +1064,25 @@ bool Sql_cmd_alter_tablespace::execute(THD *thd) {
     return true;
   }
 
-  if (complete_stmt(thd, hton, [&]() { rollback_on_return.disable(); })) {
+  /*
+    This normal ALTER TABLESPACE execution path is also reached during InnoDB
+    crash recovery: fsp_init_resume_alter_encrypt_tablespace() resumes an
+    interrupted (un)encryption by calling dd::alter_tablespace_encryption(),
+    which builds an "ALTER TABLESPACE ... ENCRYPTION = ..." string and runs it
+    through execute_query() -> here, on the startup background THD created by
+    create_internal_thd() (system_thread == SYSTEM_THREAD_BACKGROUND).
+
+    That replay only repairs local DD/SE state for the original user DDL, which
+    was already binlogged when the user issued it; emitting a second binlog
+    event (and allocating a fresh GTID) here would be wrong. Detect the replay
+    and skip the explicit DDL binlog write below.
+  */
+  const bool recovery_replay = thd->system_thread == SYSTEM_THREAD_BACKGROUND &&
+                               m_options->encryption.str != nullptr;
+
+  if (complete_stmt(
+          thd, hton, [&]() { rollback_on_return.disable(); }, true,
+          recovery_replay)) {
     return true;
   }
 

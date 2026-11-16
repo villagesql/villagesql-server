@@ -58,7 +58,7 @@ class NdbInfoScanNodes : public NdbInfoScanOperation {
   bool execDBINFO_SCANREF(const struct SimpleSignal *signal, int &error_code);
   int sendDBINFO_SCANREQ();
 
-  int receive(void);
+  int receive();
   bool find_next_node();
 
   enum State { Undefined, Initial, Prepared, MoreData, End, Error } m_state;

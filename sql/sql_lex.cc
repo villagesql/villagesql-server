@@ -1,3 +1,4 @@
+
 /*
    Copyright (c) 2000, 2026, Oracle and/or its affiliates.
    Copyright (c) 2026 VillageSQL Contributors
@@ -36,6 +37,7 @@
 #include "field_types.h"
 #include "m_string.h"
 #include "my_alloc.h"
+#include "my_bitmap.h"
 #include "my_dbug.h"
 #include "mysql/mysql_lex_string.h"
 #include "mysql/service_mysql_alloc.h"
@@ -52,12 +54,14 @@
 #include "sql/lexer_yystype.h"
 #include "sql/mysqld.h"  // table_alias_charset
 #include "sql/nested_join.h"
+#include "sql/olap.h"
 #include "sql/opt_hints.h"
 #include "sql/parse_location.h"
 #include "sql/parse_tree_nodes.h"  // PT_with_clause
 #include "sql/protocol.h"
 #include "sql/select_lex_visitor.h"
 #include "sql/sp_head.h"  // sp_head
+#include "sql/sp_instr_inline.h"
 #include "sql/sql_admin.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"  // THD
@@ -71,7 +75,7 @@
 #include "sql/sql_parse.h"      // add_to_list
 #include "sql/sql_plugin.h"     // plugin_unlock_list
 #include "sql/sql_profile.h"
-#include "sql/sql_show.h"   // append_identifier
+#include "sql/sql_show.h"   // append_identifier_*
 #include "sql/sql_table.h"  // primary_key_name
 #include "sql/sql_yacc.h"
 #include "sql/system_variables.h"
@@ -91,6 +95,7 @@ static int lex_one_token(Lexer_yystype *yylval, THD *thd);
   LEX_STRING constant for null-string to be used in parser and other places.
 */
 const LEX_STRING null_lex_str = {nullptr, 0};
+const LEX_CSTRING null_lex_cstr = {nullptr, 0};
 /**
   Mapping from enum values in enum_binlog_stmt_unsafe to error codes.
 
@@ -384,6 +389,12 @@ void Lex_input_stream::reduce_digest_token(uint token_left, uint token_right) {
   }
 }
 
+void Lex_input_stream::adjust_digest_by_numeric_column_token(ulonglong value) {
+  if (m_digest != nullptr) {
+    m_digest = digest_adjust_by_numeric_column_token(m_digest, value);
+  }
+}
+
 void LEX::assert_ok_set_current_query_block() {
   // (2) Only owning thread could change m_current_query_block
   // (1) bypass for bootstrap and "new THD"
@@ -410,7 +421,9 @@ LEX::~LEX() {
 void LEX::reset() {
   // CREATE VIEW
   create_view_mode = enum_view_create_mode::VIEW_CREATE_NEW;
+  create_view_type = enum_view_type::UNDEFINED;
   create_view_algorithm = VIEW_ALGORITHM_UNDEFINED;
+  create_view_materialization = false;
   create_view_suid = true;
 
   context_stack.clear();
@@ -453,7 +466,6 @@ void LEX::reset() {
 
   name.str = nullptr;
   name.length = 0;
-  event_parse_data = nullptr;
   profile_options = PROFILE_NONE;
   select_number = 0;
   allow_sum_func = 0;
@@ -465,6 +477,7 @@ void LEX::reset() {
   explain_format = nullptr;
   is_explain_analyze = false;
   set_using_hypergraph_optimizer(false);
+  m_using_secondary_engine = false;
   is_lex_started = true;
   reset_replica_info.all = false;
   mi.channel = nullptr;
@@ -473,6 +486,7 @@ void LEX::reset() {
   mark_broken(false);
   reset_exec_started();
   max_execution_time = 0;
+  switch_resource_group = nullptr;
   reparse_common_table_expr_at = 0;
   reparse_derived_table_condition = false;
   opt_hints_global = nullptr;
@@ -483,11 +497,13 @@ void LEX::reset() {
 
   clear_privileges();
   grant_as.cleanup();
+  donor_transaction_id = nullptr;
   alter_user_attribute = enum_alter_user_attribute::ALTER_USER_COMMENT_NOT_USED;
   m_was_replication_command_executed = false;
 
   grant_if_exists = false;
   ignore_unknown_user = false;
+  m_has_external_tables = false;
   reset_rewrite_required();
 
   set_execute_only_in_secondary_engine(
@@ -496,6 +512,8 @@ void LEX::reset() {
   set_execute_only_in_hypergraph_optimizer(
       /*execute_in_hypergraph_optimizer_param=*/false,
       SUPPORTED_IN_BOTH_OPTIMIZERS);
+
+  sp_chistics.reset();
 }
 
 /**
@@ -1229,6 +1247,10 @@ Common_table_expr_parser_state::Common_table_expr_parser_state()
 
 Derived_expr_parser_state::Derived_expr_parser_state()
     : Parser_state(GRAMMAR_SELECTOR_DERIVED_EXPR), result(nullptr) {}
+
+Masking_policy_expr_parser_state::Masking_policy_expr_parser_state()
+    : Parser_state{GRAMMAR_SELECTOR_MASKING_EXPR} {}
+
 /*
 ** Calc type of integer; long integer, longlong integer or real.
 ** Returns smallest type that match the string.
@@ -1629,13 +1651,14 @@ static int lex_one_token(Lexer_yystype *yylval, THD *thd) {
         /*
            Note: "SELECT _bla AS 'alias'"
            _bla should be considered as a IDENT if charset haven't been found.
-           So we don't want to produce any warning in find_primary.
+           So we don't use MYF(MY_WME) with get_charset_by_csname to avoid
+           producing an error.
         */
 
         if (yylval->lex_str.str[0] == '_') {
           auto charset_name = yylval->lex_str.str + 1;
           const CHARSET_INFO *underscore_cs =
-              mysql::collation::find_primary(charset_name);
+              get_charset_by_csname(charset_name, MY_CS_PRIMARY, MYF(0));
           if (underscore_cs) {
             lip->warn_on_deprecated_charset(underscore_cs, charset_name);
             if (underscore_cs == &my_charset_utf8mb4_0900_ai_ci) {
@@ -2264,7 +2287,6 @@ Query_expression::Query_expression(enum_parsing_context parsing_context)
       m_query_result(nullptr),
       uncacheable(0),
       cleaned(UC_DIRTY),
-      types(current_thd->mem_root),
       select_limit_cnt(HA_POS_ERROR),
       offset_limit_cnt(0),
       item(nullptr),
@@ -2322,7 +2344,6 @@ Query_block::Query_block(MEM_ROOT *mem_root, Item *where, Item *having)
 */
 
 bool Query_block::set_context(Name_resolution_context *outer_context) {
-  context.init();
   context.query_block = this;
   context.outer_context = outer_context;
   /*
@@ -2616,6 +2637,21 @@ bool Query_block::add_item_to_list(Item *item) {
   return false;
 }
 
+/**
+  Add a grouping expression to the query block
+
+  @param thd   thread handle
+  @param item  grouping expression to be added
+
+  @returns false if success, true if error
+*/
+bool Query_block::add_grouping_expr(THD *thd, Item *item) {
+  ORDER *grouping = new (thd->mem_root) ORDER(item);
+  if (grouping == nullptr) return true;
+  group_list.link_in_list(grouping, &grouping->next);
+  return false;
+}
+
 bool Query_block::add_ftfunc_to_list(Item_func_match *func) {
   return !func || ftfunc_list->push_back(func);  // end of memory?
 }
@@ -2638,37 +2674,19 @@ bool Query_block::setup_base_ref_items(THD *thd) {
   // find_order_in_list() may need some extra space, so multiply by two.
   order_group_num *= 2;
 
-  // create_distinct_group() may need some extra space
-  if (is_distinct()) {
-    uint bitcount = 0;
-    for (Item *item : visible_fields()) {
-      /*
-        Same test as in create_distinct_group, when it pushes new items to the
-        end of base_ref_items. An extra test for 'fixed' which, at this
-        stage, will be true only for columns inserted for a '*' wildcard.
-      */
-      if (item->fixed && item->type() == Item::FIELD_ITEM &&
-          item->data_type() == MYSQL_TYPE_BIT)
-        ++bitcount;
-    }
-    order_group_num += bitcount;
-  }
-
-  /*
-    We have to create array in prepared statement memory if it is
-    prepared statement
-  */
   Query_arena *arena = thd->stmt_arena;
   uint n_elems = n_sum_items + n_child_sum_items + fields.size() +
                  select_n_having_items + select_n_where_fields +
                  order_group_num + n_scalar_subqueries;
-
+  if (sp_inl::needs_stored_function_inlining(thd)) {
+    // if inlined, stored function calls can become projection items
+    n_elems += n_stored_func_calls;
+  }
   /*
     If it is possible that we transform IN(subquery) to a join to a derived
-    table, we will be adding DISTINCT (this possibly has the problem of BIT
-    columns as in the logic above), and we will also be adding one expression to
-    the SELECT list per decorrelated equality in WHERE. So we have to allocate
-    more space.
+    table, we will be adding DISTINCT, and we will also be adding one
+    expression to the SELECT list per decorrelated equality in WHERE. So we
+    have to allocate more space.
 
     The number of decorrelatable equalities is bounded by
     select_n_where_fields. Indeed an equality isn't counted in
@@ -2680,14 +2698,13 @@ bool Query_block::setup_base_ref_items(THD *thd) {
     Note that cond_count cannot be used, as setup_cond() hasn't run yet. So we
     use select_n_where_fields instead.
   */
-  if (master_query_expression()->item &&
+  if (master_query_expression()->item != nullptr &&
       (thd->optimizer_switch_flag(OPTIMIZER_SWITCH_SUBQUERY_TO_DERIVED) ||
        (thd->lex->m_sql_cmd != nullptr &&
         thd->secondary_engine_optimization() ==
             Secondary_engine_optimization::SECONDARY))) {
     Item_subselect *subq_predicate = master_query_expression()->item;
-    if (subq_predicate->subquery_type() == Item_subselect::EXISTS_SUBQUERY ||
-        subq_predicate->subquery_type() == Item_subselect::IN_SUBQUERY) {
+    if (subq_predicate->subquery_type() != Item_subselect::SCALAR_SUBQUERY) {
       // might be transformed to derived table, so:
       n_elems +=
           // possible additions to SELECT list from decorrelation of WHERE
@@ -2699,10 +2716,11 @@ bool Query_block::setup_base_ref_items(THD *thd) {
 
   DBUG_PRINT(
       "info",
-      ("setup_ref_array this %p %4u : %4u %4u %4zu %4u %4u %4u %4u", this,
+      ("setup_ref_array this %p %4u : %4u %4u %4zu %4u %4u %4u %4u %4u", this,
        n_elems,  // :
        n_sum_items, n_child_sum_items, fields.size(), select_n_having_items,
-       select_n_where_fields, order_group_num, n_scalar_subqueries));
+       select_n_where_fields, order_group_num, n_scalar_subqueries,
+       n_stored_func_calls));
   if (!base_ref_items.is_null()) {
     /*
       This should not happen, as it's the sign of preparing an already-prepared
@@ -2713,7 +2731,7 @@ bool Query_block::setup_base_ref_items(THD *thd) {
      */
     if (base_ref_items.size() >= n_elems) return false;
   }
-  Item **array = static_cast<Item **>(arena->alloc(sizeof(Item *) * n_elems));
+  Item **array = pointer_cast<Item **>(arena->alloc(sizeof(Item *) * n_elems));
   if (array == nullptr) return true;
 
   base_ref_items = Ref_item_array(array, n_elems);
@@ -2734,9 +2752,9 @@ void print_set_operation(const THD *thd, Query_term *op, String *str, int level,
     Query_term_set_op *qts = down_cast<Query_term_set_op *>(op);
     const bool needs_parens = level > 0;
     if (needs_parens) str->append('(');
-    for (uint i = 0; i < qts->m_children.size(); ++i) {
-      print_set_operation(thd, qts->m_children[i], str, level + 1, query_type);
-      if (i < qts->m_children.size() - 1) {
+    for (uint i = 0; i < qts->child_count(); ++i) {
+      print_set_operation(thd, qts->child(i), str, level + 1, query_type);
+      if (i < qts->child_count() - 1) {
         switch (op->term_type()) {
           case QT_UNION:
             str->append(STRING_WITH_LEN(" union "));
@@ -2750,7 +2768,7 @@ void print_set_operation(const THD *thd, Query_term *op, String *str, int level,
           default:
             assert(false);
         }
-        if (static_cast<signed int>(i) + 1 > qts->m_last_distinct) {
+        if (static_cast<signed int>(i) + 1 > qts->last_distinct()) {
           str->append(STRING_WITH_LEN("all "));
         }
       }
@@ -3497,18 +3515,49 @@ void Query_block::print_group_by(const THD *thd, String *str,
   // group by & olap
   if (group_list.elements) {
     str->append(STRING_WITH_LEN(" group by "));
-    if (olap == CUBE_TYPE) {
-      str->append(STRING_WITH_LEN("cube ("));
-    }
-    print_order(thd, str, group_list.first, query_type);
     switch (olap) {
-      case ROLLUP_TYPE:
-        str->append(STRING_WITH_LEN(" with rollup"));
+      case CUBE_TYPE: {
+        str->append(STRING_WITH_LEN("cube ("));
         break;
-      case CUBE_TYPE:
+      }
+      case GROUPING_SETS_TYPE: {
+        str->append(STRING_WITH_LEN("grouping sets ("));
+        break;
+      }
+      default:
+        break;
+    }
+    if (is_non_primitive_grouped() && olap == GROUPING_SETS_TYPE) {
+      for (int gs_num = 0; gs_num < m_num_grouping_sets; gs_num++) {
+        str->append(STRING_WITH_LEN("("));
+        bool is_first_element_in_set = true;
+        for (auto *grp = group_list.first; grp != nullptr; grp = grp->next) {
+          /* Check if the GROUP BY element is pat of the current grouping set */
+          if (bitmap_is_set(grp->grouping_set_info, gs_num)) {
+            if (is_first_element_in_set) {
+              is_first_element_in_set = false;
+            } else {
+              str->append(',');
+            }
+            grp->item[0]->print_for_order(thd, str, query_type,
+                                          grp->used_alias);
+          }
+        }
         str->append(STRING_WITH_LEN(")"));
-        break;
-      default:;  // satisfy compiler
+        if (gs_num + 1 < m_num_grouping_sets) {
+          str->append(',');
+        }
+      }
+    } else {
+      print_order(thd, str, group_list.first, query_type);
+    }
+
+    if (is_non_primitive_grouped()) {
+      if (olap == ROLLUP_TYPE) {
+        str->append(STRING_WITH_LEN(" with rollup"));
+      } else {
+        str->append(STRING_WITH_LEN(")"));
+      }
     }
   }
 }
@@ -3714,6 +3763,7 @@ void Query_tables_list::reset_query_tables_list(bool init) {
   sroutines_list_own_last = sroutines_list.next;
   sroutines_list_own_elements = 0;
   croutines_list.clear();
+  has_stored_functions = false;
   binlog_stmt_flags = 0;
   stmt_accessed_table_flag = 0;
   lock_tables_state = LTS_NOT_LOCKED;
@@ -3823,6 +3873,7 @@ bool LEX::can_use_merged() {
     case SQLCOM_SHOW_KEYS:
     case SQLCOM_SHOW_STATUS_FUNC:
     case SQLCOM_SHOW_STATUS_PROC:
+    case SQLCOM_SHOW_STATUS_LIBRARY:
     case SQLCOM_SHOW_TABLES:
     case SQLCOM_SHOW_TABLE_STATUS:
     case SQLCOM_SHOW_TRIGGERS:
@@ -3866,7 +3917,7 @@ bool LEX::can_not_use_merged() {
 */
 
 bool LEX::need_correct_ident() {
-  if (is_explain() && explain_format->is_iterator_based()) return true;
+  if (is_explain() && explain_format->is_iterator_based(thd, thd)) return true;
   switch (sql_command) {
     case SQLCOM_SHOW_CREATE:
     case SQLCOM_SHOW_TABLES:
@@ -3970,7 +4021,9 @@ void Query_expression::include_down(LEX *lex, Query_block *outer) {
   Being mergeable also means that derived table/view is updatable.
 
   A view/derived table is not mergeable if it is one of the following:
-   - A set operation (implementation restriction).
+   - A set operation or a parenthesized simple query followed by
+     ORDER BY / LIMIT (cf. query term type QT_UNARY) (implementation
+     restriction)
    - An aggregated query, or has HAVING, or has DISTINCT
      (A general aggregated query cannot be merged with a non-aggregated one).
    - A table-less query (unimportant special case).
@@ -3980,7 +4033,7 @@ void Query_expression::include_down(LEX *lex, Query_block *outer) {
 */
 
 bool Query_expression::is_mergeable() const {
-  if (is_set_operation()) return false;
+  if (!is_simple()) return false;
 
   Query_block *const select = first_query_block();
   return !select->is_grouped() && select->having_cond() == nullptr &&
@@ -4515,17 +4568,17 @@ enum_explain_type Query_block::type() const {
     // if left child, call block PRIMARY, else UNION/INTERSECT/EXCEPT
     switch (m_parent->term_type()) {
       case QT_EXCEPT:
-        if (m_parent->m_children[0] == this)
+        if (m_parent->child(0) == this)
           return enum_explain_type::EXPLAIN_PRIMARY;
         else
           return enum_explain_type::EXPLAIN_EXCEPT;
       case QT_UNION:
-        if (m_parent->m_children[0] == this)
+        if (m_parent->child(0) == this)
           return enum_explain_type::EXPLAIN_PRIMARY;
         else
           return enum_explain_type::EXPLAIN_UNION;
       case QT_INTERSECT:
-        if (m_parent->m_children[0] == this)
+        if (m_parent->child(0) == this)
           return enum_explain_type::EXPLAIN_PRIMARY;
         else
           return enum_explain_type::EXPLAIN_INTERSECT;
@@ -4928,6 +4981,8 @@ bool Query_block::walk(Item_processor processor, enum_walk walk, uchar *arg) {
       }
     }
   }
+
+  if (qualify_cond() && qualify_cond()->walk(processor, walk, arg)) return true;
   return false;
 }
 
@@ -5337,4 +5392,46 @@ void get_select_options_str(ulonglong options, std::string *str) {
 
   // Delete the last space character.
   if (str->length() > len) str->pop_back();
+}
+
+Acl_type lex_type_to_acl_type(ulong lex_type) {
+  if (lex_type == TYPE_ENUM_FUNCTION) {
+    return Acl_type::FUNCTION;
+  }
+  if (lex_type == TYPE_ENUM_PROCEDURE) {
+    return Acl_type::PROCEDURE;
+  }
+  if (lex_type == TYPE_ENUM_LIBRARY) {
+    return Acl_type::LIBRARY;
+  }
+  assert(false);
+  return Acl_type::INVALID_TYPE;
+}
+
+enum_sp_type acl_type_to_enum_sp_type(Acl_type type) {
+  if (type == Acl_type::FUNCTION) {
+    return enum_sp_type::FUNCTION;
+  }
+  if (type == Acl_type::PROCEDURE) {
+    return enum_sp_type::PROCEDURE;
+  }
+  if (type == Acl_type::LIBRARY) {
+    return enum_sp_type::LIBRARY;
+  }
+  assert(false);
+  return enum_sp_type::INVALID_SP_TYPE;
+}
+
+Acl_type enum_sp_type_to_acl_type(enum_sp_type type) {
+  if (type == enum_sp_type::FUNCTION) {
+    return Acl_type::FUNCTION;
+  }
+  if (type == enum_sp_type::PROCEDURE) {
+    return Acl_type::PROCEDURE;
+  }
+  if (type == enum_sp_type::LIBRARY) {
+    return Acl_type::LIBRARY;
+  }
+  assert(false);
+  return Acl_type::INVALID_TYPE;
 }

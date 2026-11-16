@@ -51,7 +51,7 @@ TEST(DDStringTypeTest, StreamTest) {
   typedef dd::Stringstream_type ss_t;
 
   ss_t ss;
-  double d = 42.65;
+  double const d = 42.65;
   ss << "The value of d is " << d << " this is an integer " << 42 << std::endl;
 
   s_t x("Stream result: ");
@@ -138,7 +138,9 @@ class TrackingStringTypeTest : public ::testing::Test {
   }
 };
 
-TEST_F(TrackingStringTypeTest, TrackingString) { Tracking_string x = "foobar"; }
+TEST_F(TrackingStringTypeTest, TrackingString) {
+  Tracking_string const x = "foobar";
+}
 
 TEST_F(TrackingStringTypeTest, TrackingStringstream) {
   Tracking_stringstream x;
@@ -150,8 +152,8 @@ TEST_F(TrackingStringTypeTest, TrackingStringstreamGetString) {
   Tracking_stringstream x;
   x << "This is a number " << 42 << " followed by a double " << 36.9
     << std::endl;
-  Tracking_string y = x.str();
-  EXPECT_EQ(46u, y.size());
+  Tracking_string const y = x.str();
+  EXPECT_EQ(46U, y.size());
 }
 
 }  // namespace dd_string_type_unit_test

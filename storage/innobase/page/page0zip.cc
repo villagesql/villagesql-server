@@ -959,6 +959,10 @@ bool page_zip_compress(page_zip_des_t *page_zip, /*!< in: size; out: data,
   cmp_per_index_enabled = srv_cmp_per_index_enabled;
 #endif /* !UNIV_HOTBACKUP */
 
+  if (!page) {
+    return (false);
+  }
+
   ut_a(page_is_comp(page));
   ut_a(fil_page_index_page_check(page));
   ut_ad(page_simple_validate_new((page_t *)page));
@@ -1025,7 +1029,9 @@ bool page_zip_compress(page_zip_des_t *page_zip, /*!< in: size; out: data,
 
   if (cmp_per_index_enabled) {
     mutex_enter(&page_zip_stat_per_index_mutex);
-    page_zip_stat_per_index[ind_id].compressed++;
+    if (!page_zip_stat_per_index[ind_id].dropped) {
+      page_zip_stat_per_index[ind_id].compressed++;
+    }
     mutex_exit(&page_zip_stat_per_index_mutex);
   }
 #endif /* !UNIV_HOTBACKUP */
@@ -1246,8 +1252,10 @@ bool page_zip_compress(page_zip_des_t *page_zip, /*!< in: size; out: data,
   page_zip_stat[page_zip->ssize - 1].compress_time += time_diff;
   if (cmp_per_index_enabled) {
     mutex_enter(&page_zip_stat_per_index_mutex);
-    page_zip_stat_per_index[ind_id].compressed_ok++;
-    page_zip_stat_per_index[ind_id].compress_time += time_diff;
+    if (!page_zip_stat_per_index[ind_id].dropped) {
+      page_zip_stat_per_index[ind_id].compressed_ok++;
+      page_zip_stat_per_index[ind_id].compress_time += time_diff;
+    }
     mutex_exit(&page_zip_stat_per_index_mutex);
   }
 
@@ -1290,8 +1298,10 @@ bool page_zip_decompress(
     index_id_t index_id(page_get_space_id(page), btr_page_get_index_id(page));
 
     mutex_enter(&page_zip_stat_per_index_mutex);
-    page_zip_stat_per_index[index_id].decompressed++;
-    page_zip_stat_per_index[index_id].decompress_time += time_diff;
+    if (!page_zip_stat_per_index[index_id].dropped) {
+      page_zip_stat_per_index[index_id].decompressed++;
+      page_zip_stat_per_index[index_id].decompress_time += time_diff;
+    }
     mutex_exit(&page_zip_stat_per_index_mutex);
   }
 #endif /* !UNIV_HOTBACKUP */

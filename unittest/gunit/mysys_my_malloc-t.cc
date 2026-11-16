@@ -23,7 +23,7 @@
 
 #include <gtest/gtest.h>
 #include <mysql/service_mysql_alloc.h>
-#include <stddef.h>
+#include <cstddef>
 
 #include "my_inttypes.h"
 #include "my_sys.h"

@@ -56,8 +56,9 @@ static const char PREFIX_NAME[] = "temp_";
 This location is decided after consulting srv_temp_dir */
 static std::string temp_tbsp_dir;
 
-/** Tablespace to be used by the replication thread */
+/** Tablespaces to be used by the replication thread */
 static Tablespace *rpl_slave_tblsp = nullptr;
+static Tablespace *enc_rpl_slave_tblsp = nullptr;
 
 Tablespace_pool *tbsp_pool = nullptr;
 
@@ -69,9 +70,12 @@ Tablespace::Tablespace()
     : m_space_id(++m_last_used_space_id), m_inited(), m_thread_id() {
   ut_ad(m_space_id <= dict_sys_t::s_max_temp_space_id);
   m_purpose = TBSP_NONE;
+  mutex_create(LATCH_ID_TEMP_POOL_TBLSP, &m_mutex);
 }
 
 Tablespace::~Tablespace() {
+  mutex_destroy(&m_mutex);
+
   if (!m_inited) {
     return;
   }
@@ -139,9 +143,14 @@ bool Tablespace::truncate() {
     return false;
   }
 
+  acquire();
+
   if (!fil_truncate_tablespace(m_space_id, FIL_IBT_FILE_INITIAL_SIZE)) {
+    release();
     return false;
   }
+
+  decrypt();
 
   mtr_t mtr;
 
@@ -150,7 +159,50 @@ bool Tablespace::truncate() {
   fsp_header_init(m_space_id, FIL_IBT_FILE_INITIAL_SIZE, &mtr);
   mtr_commit(&mtr);
 
+  release();
+
   return true;
+}
+
+bool Tablespace::encrypt() {
+  fil_space_t *space = fil_space_get(m_space_id);
+  dberr_t err = fil_temp_update_encryption(space);
+  if (err != DB_SUCCESS) {
+    my_error(ER_CANNOT_FIND_KEY_IN_KEYRING, MYF(0));
+    return (false);
+  } else {
+    return (true);
+  }
+}
+
+void Tablespace::decrypt() {
+  if (!is_encrypted()) {
+    return;
+  }
+  byte encryption_info[Encryption::INFO_SIZE];
+  memset(encryption_info, 0, Encryption::INFO_SIZE);
+
+  fil_space_t *space = fil_space_get(m_space_id);
+
+  fsp_flags_unset_encryption(space->flags);
+
+  /* There is no need to empty the encryption info in page 0
+  here. This is because the file is just truncated and extended
+  (zero-filled) to initial size. Just make sure that in-memory
+  tablespace structure (fil_space_t) doesn't have encryption info */
+
+  rw_lock_x_lock(&space->latch, UT_LOCATION_HERE);
+  /* Reset In-mem encryption for tablespace */
+
+  /* fil_space_t of session temp tablespace will be always found and
+  DB_NOT_FOUND is not possible from fil_reset_encryption() */
+  dberr_t err = fil_reset_encryption(m_space_id);
+  ut_a(err == DB_SUCCESS);
+
+  rw_lock_x_unlock(&space->latch);
+}
+
+void Tablespace::rotate_encryption_key() {
 }
 
 uint32_t Tablespace::file_id() const {
@@ -215,6 +267,14 @@ Tablespace *Tablespace_pool::get(my_thread_id id, enum tbsp_purpose purpose) {
   }
 
   ts = m_free->back();
+  if (Tablespace::is_encrypted(purpose)) {
+    if (!ts->encrypt()) {
+      release();
+      ib::error() << "Unable to encrypt a session temp tablespace. Probably due"
+                  << " to missing keyring plugin";
+      return (nullptr);
+    }
+  }
   m_free->pop_back();
   m_active->push_back(ts);
   ts->set_thread_id_and_purpose(id, purpose);
@@ -241,6 +301,7 @@ void Tablespace_pool::free_ts(Tablespace *ts) {
     ut_d(ut_error);
   }
 
+  ts->reset_thread_id_and_purpose();
   m_free->push_back(ts);
 
   release();
@@ -378,15 +439,14 @@ dberr_t open_or_create(bool create_new_db) {
   return (err);
 }
 
-void free_tmp(Tablespace *ts) {
-  ts->reset_thread_id_and_purpose();
-  tbsp_pool->free_ts(ts);
-}
+void free_tmp(Tablespace *ts) { tbsp_pool->free_ts(ts); }
 
 void delete_pool_manager() { ut::delete_(tbsp_pool); }
 
 void close_files() {
   auto close = [&](const ibt::Tablespace *ts) { ts->close(); };
+
+  if (!ibt::tbsp_pool) return;
 
   ibt::tbsp_pool->iterate_tbsp(close);
 }
@@ -396,6 +456,13 @@ Tablespace *get_rpl_slave_tblsp() {
     rpl_slave_tblsp = tbsp_pool->get(SLAVE_THREAD_ID, TBSP_SLAVE);
   }
   return (rpl_slave_tblsp);
+}
+
+Tablespace *get_enc_rpl_slave_tblsp() {
+  if (enc_rpl_slave_tblsp == nullptr) {
+    enc_rpl_slave_tblsp = tbsp_pool->get(SLAVE_THREAD_ID, TBSP_ENC_SLAVE);
+  }
+  return (enc_rpl_slave_tblsp);
 }
 
 }  // namespace ibt

@@ -25,7 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #define UNIT_TEST_COMMON
 
 #include "unit_test_common.h"
-#include <string.h>
+#include <cstring>
 #ifdef _WIN32
 #include <Windows.h>
 #include <direct.h>  // getcwd
@@ -76,7 +76,7 @@ int make_realpath(char *to, const char *filename) {
 #ifndef _WIN32
   int result = 0;
 
-  unique_ptr_free<char> ptr(realpath(filename, nullptr));
+  unique_ptr_free<char> const ptr(realpath(filename, nullptr));
   if (ptr) {
     make_str(to, ptr.get(), FN_REFLEN - 1);
   } else {

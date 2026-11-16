@@ -21,6 +21,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
+# This cmake file is duplicated in `router/cmake/copy_custom_library.cmake`.
+
 IF(EXISTS "./${library_version}")
   RETURN()
 ENDIF()

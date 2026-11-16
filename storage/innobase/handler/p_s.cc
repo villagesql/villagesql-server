@@ -341,6 +341,7 @@ parsed_table_path parse_table_path(PSI_server_data_lock_container *container,
     /* Get schema partition and sub-partition name in system cs. */
     dict_name::get_partition(partition, true, part, sub_part);
   }
+
   return {
       .schema = alloc_identifier(container, PSI_IDENTIFIER_SCHEMA, schema),
       .table = alloc_identifier(container, PSI_IDENTIFIER_TABLE, table),

@@ -29,8 +29,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <mysql/components/services/security_context.h>
 #include <mysql/components/services/udf_registration.h>
 #include <mysql/service_srv_session_info.h>
-#include <stdio.h>
-#include <string>
+#include <cstdio>
+#include <cstring>
+#include <thread>
 
 REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_thd_security_context, thd_security_ctx);
 REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_account_database_security_context_lookup,
@@ -39,6 +40,7 @@ REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_security_context_options,
                                 security_ctx_options);
 REQUIRES_SERVICE_PLACEHOLDER_AS(udf_registration, udf_srv);
 REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_command_factory, cmd_factory_srv);
+REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_command_thread, cmd_thread_srv);
 REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_command_options, cmd_options_srv);
 REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_command_query, cmd_query_srv);
 REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_command_query_result,
@@ -58,6 +60,7 @@ REQUIRES_SERVICE_AS(udf_registration, udf_srv),
                         account_db_security_ctx_lookup),
     REQUIRES_SERVICE_AS(mysql_security_context_options, security_ctx_options),
     REQUIRES_SERVICE_AS(mysql_command_factory, cmd_factory_srv),
+    REQUIRES_SERVICE_AS(mysql_command_thread, cmd_thread_srv),
     REQUIRES_SERVICE_AS(mysql_command_options, cmd_options_srv),
     REQUIRES_SERVICE_AS(mysql_command_query, cmd_query_srv),
     REQUIRES_SERVICE_AS(mysql_command_query_result, cmd_query_result_srv),
@@ -230,7 +233,6 @@ static char *test_mysql_command_services_apis_udf(UDF_INIT *, UDF_ARGS *args,
   uint64_t row_count = 0;
   unsigned int num_column = 0;
   std::string result_set;
-  void *option_val = nullptr;
 
   //  Execute the SQL specified in the argument.
   if (cmd_factory_srv->init(&mysql_h)) {
@@ -263,7 +265,10 @@ static char *test_mysql_command_services_apis_udf(UDF_INIT *, UDF_ARGS *args,
   }
 
   /* To get the mysql option value */
-  cmd_options_srv->get(mysql_h, MYSQL_OPT_MAX_ALLOWED_PACKET, &option_val);
+  {
+    void *option_val = nullptr;
+    cmd_options_srv->get(mysql_h, MYSQL_OPT_MAX_ALLOWED_PACKET, &option_val);
+  }
 
   {
     std::string query(
@@ -355,6 +360,90 @@ err:
   return result;
 }
 
+static long long test_mysql_command_services_error_code_udf(
+    UDF_INIT *, UDF_ARGS *args, unsigned char *is_null, unsigned char *error) {
+  *error = 1;
+  if (args->arg_count < 1 || args->arg_type[0] != STRING_RESULT) return 0;
+
+  std::string query(args->args[0], args->lengths[0]);
+  MYSQL_H mysql_h = nullptr;
+  unsigned int err_no = 0;
+
+  //  Execute the SQL specified in the argument.
+  if (cmd_factory_srv->init(&mysql_h)) {
+    return 0;
+  }
+  if (mysql_h) {
+    if (cmd_factory_srv->connect(mysql_h)) {
+      return 0;
+    }
+  } else {
+    return 0;
+  }
+
+  cmd_query_srv->query(mysql_h, query.data(), query.length());
+  cmd_error_info_srv->sql_errno(mysql_h, &err_no);
+
+  *error = 0;
+  *is_null = 0;
+
+  cmd_factory_srv->close(mysql_h);
+
+  // Return the err_no or 0 in case of error
+  return static_cast<long long>(err_no);
+}
+
+// Run in thread + failed connect + cleanup
+static long long test_mysql_command_services_explicit_connect_fail_cleanup_udf(
+    UDF_INIT *, UDF_ARGS *, unsigned char *is_null, unsigned char *error) {
+  *is_null = 0;
+  *error = 1;
+
+  constexpr const char *bad_user = "no_such_user";
+  constexpr const char *host = "localhost";
+
+  long long ret_err = -1;
+
+  // Spawn a thread, since the cmd thread must run off the server's main session
+  // thread
+  std::thread worker([&] {
+    MYSQL_H mysql_h = nullptr;
+
+    if (cmd_thread_srv->init() != 0) return;
+
+    do {
+      if (cmd_factory_srv->init(&mysql_h) != 0 || mysql_h == nullptr) break;
+
+      // Set the options
+      if (cmd_options_srv->set(mysql_h, MYSQL_NO_LOCK_REGISTRY,
+                               reinterpret_cast<void *>(1)) != 0 ||
+          cmd_options_srv->set(mysql_h, MYSQL_COMMAND_USER_NAME, bad_user) !=
+              0 ||
+          cmd_options_srv->set(mysql_h, MYSQL_COMMAND_HOST_NAME, host) != 0) {
+        cmd_factory_srv->close(mysql_h);
+        mysql_h = nullptr;
+        break;  // Failed setting the options, exit
+      }
+
+      // Expect failure: wrong user
+      ret_err = (cmd_factory_srv->connect(mysql_h) != 0) ? 1 : 0;
+
+      // Always close the handle even on failure
+      cmd_factory_srv->close(mysql_h);
+      mysql_h = nullptr;
+    } while (false);
+
+    cmd_thread_srv->end();
+  });
+
+  worker.join();
+
+  *error = (ret_err == -1)
+               ? 1
+               : 0;  // only mark UDF-level error if we never tried connect
+  return ret_err;
+}
+
 static mysql_service_status_t init() {
   Udf_func_string udf1 = test_mysql_command_services_udf;
   if (udf_srv->udf_register("test_mysql_command_services_udf", STRING_RESULT,
@@ -371,6 +460,29 @@ static mysql_service_status_t init() {
             "Can't register the test_mysql_command_services_apis_udf UDF\n");
     return 1;
   }
+
+  Udf_func_longlong udf3 = test_mysql_command_services_error_code_udf;
+  if (udf_srv->udf_register("test_mysql_command_services_error_code_udf",
+                            INT_RESULT, reinterpret_cast<Udf_func_any>(udf3),
+                            nullptr, nullptr)) {
+    fprintf(
+        stderr,
+        "Can't register the test_mysql_command_services_error_code_udf UDF\n");
+    return 1;
+  }
+
+  Udf_func_longlong udf4 =
+      test_mysql_command_services_explicit_connect_fail_cleanup_udf;
+  if (udf_srv->udf_register(
+          "test_mysql_command_services_explicit_connect_fail_cleanup_udf",
+          INT_RESULT, reinterpret_cast<Udf_func_any>(udf4), nullptr, nullptr)) {
+    fprintf(
+        stderr,
+        "Can't register "
+        "test_mysql_command_services_explicit_connect_fail_cleanup_udf UDF\n");
+    return 1;
+  }
+
   return 0;
 }
 
@@ -383,6 +495,18 @@ static mysql_service_status_t deinit() {
                               &was_present))
     fprintf(stderr,
             "Can't unregister the test_mysql_command_services_apis_udf UDF\n");
+  if (udf_srv->udf_unregister("test_mysql_command_services_error_code_udf",
+                              &was_present))
+    fprintf(stderr,
+            "Can't unregister the test_mysql_command_services_error_code_udf "
+            "UDF\n");
+  if (udf_srv->udf_unregister(
+          "test_mysql_command_services_explicit_connect_fail_cleanup_udf",
+          &was_present))
+    fprintf(
+        stderr,
+        "Can't unregister "
+        "test_mysql_command_services_explicit_connect_fail_cleanup_udf UDF\n");
   return 0; /* success */
 }
 

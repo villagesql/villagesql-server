@@ -44,7 +44,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** Default value for maximum on-disk size of change buffer in terms
 of percentage of the buffer pool. */
-constexpr uint32_t CHANGE_BUFFER_DEFAULT_SIZE = 25;
+constexpr uint32_t CHANGE_BUFFER_DEFAULT_SIZE = 5;
 
 #ifndef UNIV_HOTBACKUP
 /* Possible operations buffered in the insert/whatever buffer. See
@@ -209,7 +209,7 @@ static inline bool ibuf_bitmap_page(const page_id_t &page_id,
                                     const page_size_t &page_size);
 
 /** Checks if a page is a level 2 or 3 page in the ibuf hierarchy of pages.
-Must not be called when recv_no_ibuf_operations==true.
+Must not be called when recv_recovery_is_on().
 @param[in]      page_id         page id
 @param[in]      page_size       page size
 @param[in]      x_latch         false if relaxed check (avoid latching the
@@ -225,7 +225,7 @@ in which case a new transaction is created.
                                  mtr_t *mtr) MY_ATTRIBUTE((warn_unused_result));
 
 /** Checks if a page is a level 2 or 3 page in the ibuf hierarchy of pages.
-Must not be called when recv_no_ibuf_operations==true.
+Must not be called when recv_recovery_is_on().
 @param[in]      page_id         Tablespace/page identifier
 @param[in]      page_size       Page size
 @param[in]  location Location where requested
@@ -336,6 +336,9 @@ void ibuf_close(void);
 [[nodiscard]] dberr_t ibuf_check_bitmap_on_import(
     const trx_t *trx,     /*!< in: transaction */
     space_id_t space_id); /*!< in: tablespace identifier */
+
+/** Function to pass ibuf status variables */
+void ibuf_export_ibuf_status(ulint *free_list, ulint *segment_size);
 
 /** Updates free bits and buffered bits for bulk loaded page.
 @param[in]      block   index page

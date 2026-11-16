@@ -32,6 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 12/27/1996 Heikki Tuuri
  *******************************************************/
 
+#include <sql/sql_thd_internal_api.h>
 #include <sys/types.h>
 
 #include "dict0dict.h"
@@ -44,7 +45,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0upd.h"
 #include "trx0undo.h"
 #ifndef UNIV_HOTBACKUP
-#include <algorithm>
 
 #include <debug_sync.h>
 #include "btr0btr.h"
@@ -56,7 +56,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "eval0eval.h"
 #include "fts0fts.h"
 #include "fts0types.h"
-#include "lob0lob.h"
 #include "lock0lock.h"
 #include "log0chkp.h"
 #include "mach0data.h"
@@ -68,8 +67,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0ins.h"
 #include "row0log.h"
 #ifndef UNIV_HOTBACKUP
-#include "fts0fts.h"
-#include "fts0types.h"
 #include "row0row.h"
 #include "row0sel.h"
 #include "trx0rec.h"
@@ -77,7 +74,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <algorithm>
 #include "lob0lob.h"
 #ifndef UNIV_HOTBACKUP
-#include "current_thd.h"
 #include "dict0dd.h"
 #include "villagesql/custom_column.h"
 #include "villagesql/custom_index.h"
@@ -838,14 +834,14 @@ the equal ordering fields. NOTE: we compare the fields as binary strings!
 @param[in]      heap            memory heap from which allocated
 @param[in]      mysql_table     NULL, or mysql table object when
                                 user thread invokes dml
+@param[in]      prebuilt        compress_heap must be taken from here
 @param[out]     error           error number in case of failure
 @return own: update vector of differing fields, excluding roll ptr and
 trx id */
-upd_t *row_upd_build_difference_binary(dict_index_t *index,
-                                       const dtuple_t *entry, const rec_t *rec,
-                                       const ulint *offsets, bool no_sys,
-                                       trx_t *trx, mem_heap_t *heap,
-                                       TABLE *mysql_table, dberr_t *error) {
+upd_t *row_upd_build_difference_binary(
+    dict_index_t *index, const dtuple_t *entry, const rec_t *rec,
+    const ulint *offsets, bool no_sys, trx_t *trx, mem_heap_t *heap,
+    TABLE *mysql_table, row_prebuilt_t *prebuilt, dberr_t *error) {
   ut_d(entry->validate_for_index(index));
   upd_field_t *upd_field;
   dfield_t *dfield;
@@ -949,7 +945,8 @@ upd_t *row_upd_build_difference_binary(dict_index_t *index,
       dfield = dtuple_get_nth_v_field(entry, i);
 
       const dfield_t *const vfield = innobase_get_computed_value(
-          update->old_vrow, col, table, &v_heap, heap, thd, mysql_table);
+          &prebuilt->blob_heap, update->old_vrow, col, table, &v_heap, heap,
+          thd, mysql_table);
 
       if (vfield == nullptr) {
         *error = DB_COMPUTE_VALUE_FAILED;
@@ -1830,13 +1827,16 @@ static void row_upd_dup_v_new_vals(upd_t *update) {
 @param[in,out]  node            row update node
 @param[in,out]  update          an update vector if it is update
 @param[in]      thd             mysql thread handle
-@param[in,out]  mysql_table     mysql table object */
+@param[in,out]  prebuilt        nullptr, or a prebuilt object: used to extract
+                                mysql table object when user thread invokes
+                                dml and for compress heap */
 static void row_upd_store_v_row(upd_node_t *node, upd_t *update, THD *thd,
-                                TABLE *mysql_table) {
+                                row_prebuilt_t *prebuilt) {
   mem_heap_t *heap = nullptr;
   const dict_table_t *const table = node->table;
   bool new_val_v_cols_dup = false;
   const ulint n_upd = update ? upd_get_n_fields(update) : 0;
+  TABLE *const mysql_table = prebuilt ? prebuilt->m_mysql_table : nullptr;
 
   for (ulint col_no = 0; col_no < dict_table_get_n_v_cols(node->table);
        col_no++) {
@@ -1887,15 +1887,17 @@ static void row_upd_store_v_row(upd_node_t *node, upd_t *update, THD *thd,
                 row_upd_dup_v_new_vals(update);
                 new_val_v_cols_dup = true;
               }
-              innobase_get_computed_value(node->row, col, table, &heap,
-                                          node->heap, thd, mysql_table);
+              innobase_get_computed_value(&prebuilt->blob_heap, node->row, col,
+                                          table, &heap, node->heap, thd,
+                                          mysql_table);
             }
           }
         } else {
           /* Need to compute, this happens when
           deleting row */
-          innobase_get_computed_value(node->row, col, table, &heap, node->heap,
-                                      thd, mysql_table);
+          innobase_get_computed_value(&prebuilt->blob_heap, node->row, col,
+                                      table, &heap, node->heap, thd,
+                                      mysql_table);
         }
       }
     }
@@ -1906,7 +1908,7 @@ static void row_upd_store_v_row(upd_node_t *node, upd_t *update, THD *thd,
   }
 }
 
-void row_upd_store_row(upd_node_t *node, THD *thd, TABLE *mysql_table) {
+void row_upd_store_row(upd_node_t *node, THD *thd, row_prebuilt_t *prebuilt) {
   dict_index_t *clust_index;
   rec_t *rec;
   mem_heap_t *heap = nullptr;
@@ -1946,7 +1948,7 @@ void row_upd_store_row(upd_node_t *node, THD *thd, TABLE *mysql_table) {
 
   if (node->table->n_v_cols) {
     row_upd_store_v_row(node, node->is_delete ? nullptr : node->update, thd,
-                        mysql_table);
+                        prebuilt);
   }
 
   if (node->is_delete) {
@@ -2353,7 +2355,8 @@ code or DB_LOCK_WAIT */
 
       ut_ad(err == DB_SUCCESS);
 
-      if (referenced) {
+      if (!thd_is_sql_fk_checks_enabled() && referenced) {
+        DBUG_PRINT("fk", ("InnoDB FK on table %s", index->table->name.m_name));
         ulint *offsets;
 
         offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
@@ -2656,7 +2659,8 @@ static inline bool row_upd_clust_rec_by_insert_inherit(
         }
       }
     check_fk:
-      if (referenced) {
+      if (!thd_is_sql_fk_checks_enabled() && referenced) {
+        DBUG_PRINT("fk", ("InnoDB FK on table %s", table->name.m_name));
         /* NOTE that the following call loses
         the position of pcur ! */
 
@@ -2999,8 +3003,7 @@ func_exit:
   /* Store row because we have to build also the secondary index
   entries */
 
-  row_upd_store_row(node, thr_get_trx(thr)->mysql_thd,
-                    thr->prebuilt ? thr->prebuilt->m_mysql_table : nullptr);
+  row_upd_store_row(node, thr_get_trx(thr)->mysql_thd, thr->prebuilt);
 
   /* Mark the clustered index record deleted; we do not have to check
   locks, because we assume that we have an x-lock on the record */
@@ -3008,7 +3011,8 @@ func_exit:
   err = btr_cur_del_mark_set_clust_rec(flags, btr_cur_get_block(btr_cur),
                                        btr_cur_get_rec(btr_cur), index, offsets,
                                        thr, node->row, mtr);
-  if (err == DB_SUCCESS && referenced) {
+  if (err == DB_SUCCESS && !thd_is_sql_fk_checks_enabled() && referenced) {
+    DBUG_PRINT("fk", ("InnoDB FK on table %s", index->table->name.m_name));
     /* NOTE that the following call loses the position of pcur ! */
 
     err = row_upd_check_references_constraints(node, pcur, index->table, index,
@@ -3048,8 +3052,6 @@ func_exit:
 
   index = node->table->first_index();
 
-  auto referenced = row_upd_index_is_referenced(index);
-
   pcur = node->pcur;
 
   /* We have to restore the cursor to its position */
@@ -3085,7 +3087,6 @@ func_exit:
   DEBUG_SYNC(trx->mysql_thd, "innodb_row_upd_clust_step_enter");
 
   if (dict_index_is_online_ddl(index)) {
-    ut_ad(node->table->id != DICT_INDEXES_ID);
     mode = BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED;
     mtr_s_lock(dict_index_get_lock(index), &mtr, UT_LOCATION_HERE);
   } else {
@@ -3156,7 +3157,7 @@ func_exit:
 
   if (node->is_delete) {
     err = row_upd_del_mark_clust_rec(flags, node, index, offsets, thr,
-                                     referenced, &mtr);
+                                     row_upd_index_is_referenced(index), &mtr);
 
     if (err == DB_SUCCESS) {
       node->state = UPD_NODE_UPDATE_ALL_SEC;
@@ -3181,8 +3182,7 @@ func_exit:
     goto exit_func;
   }
 
-  row_upd_store_row(node, trx->mysql_thd,
-                    thr->prebuilt ? thr->prebuilt->m_mysql_table : nullptr);
+  row_upd_store_row(node, trx->mysql_thd, thr->prebuilt);
 
   if (row_upd_changes_ord_field_binary(index, node->update, thr, node->row,
                                        node->ext, nullptr)) {
@@ -3197,8 +3197,8 @@ func_exit:
     choosing records to update. MySQL solves now the problem
     externally! */
 
-    err =
-        row_upd_clust_rec_by_insert(flags, node, index, thr, referenced, &mtr);
+    err = row_upd_clust_rec_by_insert(flags, node, index, thr,
+                                      row_upd_index_is_referenced(index), &mtr);
 
     if (err != DB_SUCCESS) {
       goto exit_func;

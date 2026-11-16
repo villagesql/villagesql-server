@@ -41,6 +41,7 @@
 #include "sql/join_optimizer/optimizer_trace.h"
 #include "sql/join_optimizer/print_utils.h"
 #include "sql/join_optimizer/relational_expression.h"
+#include "sql/join_optimizer/secondary_statistics.h"
 #include "sql/key.h"
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"
@@ -299,7 +300,7 @@ KeySelectivityResult EstimateSelectivityFromIndexStatistics(
      clearly prefer the least risky choice here.
 
   Returns -1.0 if no index or no histogram was found. Lifted from
-  Item_equal::get_filtering_effect.
+  Item_multi_eq::get_filtering_effect.
 
   @param[in] thd The current thread.
   @param[in] equal_fields  The equijoined fields for which we calculate
@@ -316,6 +317,12 @@ double EstimateEqualPredicateSelectivity(THD *thd,
   double selectivity_cap = 1.0;
 
   for (const Field *equal_field : equal_fields) {
+    if (equal_field->table->pos_in_table_list == nullptr ||
+        equal_field->table->pos_in_table_list->is_view_or_derived()) {
+      // No statistics on derived tables.
+      continue;
+    }
+
     for (uint key_no = equal_field->part_of_key.get_first_set();
          key_no != MY_BIT_NONE;
          key_no = equal_field->part_of_key.get_next_set(key_no)) {
@@ -343,10 +350,34 @@ double EstimateEqualPredicateSelectivity(THD *thd,
 
   if (selectivity >= 0.0) {
     selectivity = std::min(selectivity, selectivity_cap);
+    if (TraceStarted(thd)) {
+      Trace(thd) << " - Using index statistics: selectivity = "
+                 << std::to_string(selectivity) << '\n';
+    }
   } else {
-    // Look for histograms if there was no suitable index.
+    // Check if we can use statistics from secondary engine or histograms
+    double histogram_selectivity = -1.0;
     for (const Field *field : equal_fields) {
-      selectivity = std::max(selectivity, HistogramSelectivity(thd, *field));
+      const double ndv = secondary_statistics::NumDistinctValues(thd, *field);
+      const double secondary_sel = ndv > 0.0 ? 1.0 / ndv : -1.0;
+      selectivity = std::max(selectivity, secondary_sel);
+
+      if (selectivity < 0.0) {
+        double hist_sel = HistogramSelectivity(thd, *field);
+        histogram_selectivity = std::max(histogram_selectivity, hist_sel);
+      }
+    }
+
+    // Use histogram if there was no statistics from secondary engine
+    if (selectivity < 0.0) {
+      selectivity = histogram_selectivity;
+      if (selectivity >= 0.0 && TraceStarted(thd)) {
+        Trace(thd) << " - Using histogram statistics:  selectivity = "
+                   << std::to_string(selectivity) << '\n';
+      }
+    } else if (TraceStarted(thd)) {
+      Trace(thd) << " - Using statistics from secondary engine: "
+                 << " selectivity = " << std::to_string(selectivity) << '\n';
     }
   }
 
@@ -368,12 +399,12 @@ double EstimateSelectivity(THD *thd, Item *condition,
     return (condition->val_int() != 0) ? 1.0 : 0.0;
   }
 
-  // For field = field (e.g. t1.x = t2.y), we try to use index
-  // information or histograms to find a better selectivity estimate.
-  // TODO(khatlen): Do the same for field <=> field?
+  // For field = field (e.g. t1.x = t2.y) or field <=> field, we try to use
+  // index information or histograms to find a better selectivity estimate.
   double selectivity_cap = 1.0;
-  if (is_function_of_type(condition, Item_func::EQ_FUNC)) {
-    Item_func_eq *eq = down_cast<Item_func_eq *>(condition);
+  if (is_function_of_type(condition, Item_func::EQ_FUNC) ||
+      is_function_of_type(condition, Item_func::EQUAL_FUNC)) {
+    Item_eq_base *eq = down_cast<Item_eq_base *>(condition);
     if (eq->source_multiple_equality != nullptr &&
         eq->source_multiple_equality->const_arg() == nullptr) {
       // To get consistent selectivities, we want all equalities that come from
@@ -393,9 +424,9 @@ double EstimateSelectivity(THD *thd, Item *condition,
 
         if (selectivity >= 0.0) {
           if (TraceStarted(thd)) {
-            Trace(thd) << StringPrintf(
-                " - used an index or a histogram for %s, selectivity = %g\n",
-                ItemToString(condition).c_str(), selectivity);
+            Trace(thd) << StringPrintf(" - selectivity for %s = %g\n",
+                                       ItemToString(condition).c_str(),
+                                       selectivity);
           }
           return selectivity;
         }
@@ -446,8 +477,8 @@ double EstimateSelectivity(THD *thd, Item *condition,
   // If we get more sophisticated cardinality estimation, e.g. by histograms
   // or the likes, we need to revisit this assumption, and potentially adjust
   // our model here.
-  if (is_function_of_type(condition, Item_func::MULT_EQUAL_FUNC)) {
-    Item_equal *equal = down_cast<Item_equal *>(condition);
+  if (is_function_of_type(condition, Item_func::MULTI_EQ_FUNC)) {
+    Item_multi_eq *equal = down_cast<Item_multi_eq *>(condition);
 
     // These should have been expanded early, before we get here.
     assert(equal->const_arg() == nullptr);
@@ -461,9 +492,9 @@ double EstimateSelectivity(THD *thd, Item *condition,
 
     if (selectivity >= 0.0) {
       if (TraceStarted(thd)) {
-        Trace(thd) << StringPrintf(
-            " - used an index or a histogram for %s, selectivity = %g\n",
-            ItemToString(condition).c_str(), selectivity);
+        Trace(thd) << StringPrintf(" - selectivity for %s = %g\n",
+                                   ItemToString(condition).c_str(),
+                                   selectivity);
       }
       return selectivity;
     }

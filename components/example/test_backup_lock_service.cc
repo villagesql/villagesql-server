@@ -25,7 +25,7 @@
 #include <mysql/components/service_implementation.h>
 #include <mysql/components/services/backup_lock_service.h>
 
-#include <stdio.h>
+#include <cstdio>
 
 extern REQUIRES_SERVICE_PLACEHOLDER(mysql_backup_lock);
 

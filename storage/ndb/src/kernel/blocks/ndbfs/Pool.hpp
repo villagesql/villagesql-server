@@ -205,7 +205,7 @@ class Pool {
     allocate(anInitSize);
   }
 
-  virtual ~Pool(void) {
+  virtual ~Pool() {
     for (int i = 0; i < theTop; ++i) delete theList[i];
 
     delete[] theList;
@@ -239,8 +239,8 @@ class Pool {
   }
 
  private:
-  Pool<T> &operator=(const Pool<T> &cp);
-  Pool(const Pool<T> &cp);
+  Pool<T> &operator=(const Pool<T> &cp) = delete;
+  Pool(const Pool<T> &cp) = delete;
 
   int theIncSize;
   int theTop;

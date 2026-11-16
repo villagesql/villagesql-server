@@ -41,7 +41,6 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "my_compiler.h"
 #include "mysql/strings/m_ctype.h"
 #include "strings/m_ctype_internals.h"
 

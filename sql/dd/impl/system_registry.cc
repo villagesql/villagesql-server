@@ -29,11 +29,12 @@
 #include "sql/dd/impl/system_views/character_sets.h"     // Character_sets
 #include "sql/dd/impl/system_views/check_constraints.h"  // Check_constraints
 #include "sql/dd/impl/system_views/collation_charset_applicability.h"  // Collati...
-#include "sql/dd/impl/system_views/collations.h"          // Collations
-#include "sql/dd/impl/system_views/column_statistics.h"   // Column_statistics
-#include "sql/dd/impl/system_views/columns.h"             // Columns
+#include "sql/dd/impl/system_views/collations.h"         // Collations
+#include "sql/dd/impl/system_views/column_statistics.h"  // Column_statistics
+#include "sql/dd/impl/system_views/columns.h"            // Columns
 #include "sql/dd/impl/system_views/columns_extensions.h"  // Columns_extensions
-
+#include "sql/dd/impl/system_views/compression_dictionary.h"  // Compression_dictionary
+#include "sql/dd/impl/system_views/compression_dictionary_tables.h"  // Compression_dictionary_tables
 #include "sql/dd/impl/system_views/enabled_roles.h"        // Enabled_roles
 #include "sql/dd/impl/system_views/events.h"               // Events
 #include "sql/dd/impl/system_views/files.h"                // Files
@@ -42,15 +43,21 @@
 #include "sql/dd/impl/system_views/innodb_foreign.h"       // Innodb_foreign
 #include "sql/dd/impl/system_views/innodb_foreign_cols.h"  // Innodb_foreign_cols
 #include "sql/dd/impl/system_views/innodb_tablespaces_brief.h"  // Innodb_tablespace_brief
-#include "sql/dd/impl/system_views/key_column_usage.h"  // key_column_usage
-#include "sql/dd/impl/system_views/keywords.h"          // keywords
-#include "sql/dd/impl/system_views/parameters.h"        // Parameters
-#include "sql/dd/impl/system_views/partitions.h"        // Partitions
+#include "sql/dd/impl/system_views/json_duality_view_columns.h"  // json_duality_view_columns
+#include "sql/dd/impl/system_views/json_duality_view_links.h"  // json_duality_view_links
+#include "sql/dd/impl/system_views/json_duality_view_tables.h"  // json_duality_view_tables
+#include "sql/dd/impl/system_views/json_duality_views.h"  // json_duality_views
+#include "sql/dd/impl/system_views/key_column_usage.h"    // key_column_usage
+#include "sql/dd/impl/system_views/keywords.h"            // keywords
+#include "sql/dd/impl/system_views/libraries.h"           // Libraries
+#include "sql/dd/impl/system_views/parameters.h"          // Parameters
+#include "sql/dd/impl/system_views/partitions.h"          // Partitions
 #include "sql/dd/impl/system_views/referential_constraints.h"  // Referential_con...
 #include "sql/dd/impl/system_views/resource_groups.h"      // Resource_groups
 #include "sql/dd/impl/system_views/role_column_grants.h"   // Role_column_grant
 #include "sql/dd/impl/system_views/role_routine_grants.h"  // Role_routine_gran
 #include "sql/dd/impl/system_views/role_table_grants.h"    // Role_table_grants
+#include "sql/dd/impl/system_views/routine_libraries.h"    // Routine_libraries
 #include "sql/dd/impl/system_views/routines.h"             // Routines
 #include "sql/dd/impl/system_views/schemata.h"             // Schemata
 #include "sql/dd/impl/system_views/schemata_extensions.h"  //Schemata_extensions
@@ -114,7 +121,7 @@ void register_table(dd::System_tables::Types type) {
   dd::System_tables::instance()->add(
       MYSQL_SCHEMA_NAME.str, X::instance().name(), type, &X::instance());
 }
-void register_table(const dd::String_type table,
+void register_table(const dd::String_type &table,
                     dd::System_tables::Types type) {
   dd::System_tables::instance()->add(MYSQL_SCHEMA_NAME.str, table, type,
                                      nullptr);
@@ -154,7 +161,7 @@ System_tablespaces *System_tablespaces::instance() {
 */
 void System_tables::add_inert_dd_tables() {
   // Se header file for explanation of table categories.
-  dd::System_tables::Types inert = dd::System_tables::Types::INERT;
+  dd::System_tables::Types const inert = dd::System_tables::Types::INERT;
   register_table<DD_properties>(inert);
 }
 
@@ -168,9 +175,9 @@ void System_tables::add_inert_dd_tables() {
 */
 void System_tables::add_remaining_dd_tables() {
   // Se header file for explanation of table categories.
-  dd::System_tables::Types core = dd::System_tables::Types::CORE;
-  dd::System_tables::Types second = dd::System_tables::Types::SECOND;
-  dd::System_tables::Types system = dd::System_tables::Types::SYSTEM;
+  dd::System_tables::Types const core = dd::System_tables::Types::CORE;
+  dd::System_tables::Types const second = dd::System_tables::Types::SECOND;
+  dd::System_tables::Types const system = dd::System_tables::Types::SYSTEM;
 
   register_table<Catalogs>(core);
   register_table<Character_sets>(core);
@@ -215,6 +222,8 @@ void System_tables::add_remaining_dd_tables() {
   register_table("backup_sbt_history", system);
   register_table("columns_priv", system);
   register_table("component", system);
+  register_table("compression_dictionary", system);
+  register_table("compression_dictionary_cols", system);
   register_table("db", system);
   register_table("default_roles", system);
   register_table("engine_cost", system);
@@ -263,9 +272,13 @@ void System_tables::add_remaining_dd_tables() {
 
 void System_views::init() {
   // Register system views with the server.
-  dd::System_views::Types is = dd::System_views::Types::INFORMATION_SCHEMA;
-  dd::System_views::Types non_dd_based_is =
+  dd::System_views::Types const is =
+      dd::System_views::Types::INFORMATION_SCHEMA;
+  dd::System_views::Types const non_dd_based_is =
       dd::System_views::Types::NON_DD_BASED_INFORMATION_SCHEMA;
+  bool register_library_views = true;  // it will be compiled out in release.
+  DBUG_EXECUTE_IF("dd_register_view_sans_libraries",
+                  register_library_views = false;);
 
   register_view<dd::system_views::Enabled_roles>(non_dd_based_is);
   register_view<dd::system_views::Applicable_roles>(non_dd_based_is);
@@ -281,6 +294,9 @@ void System_views::init() {
   register_view<villagesql::system_views::Columns>(non_dd_based_is);
   register_view<dd::system_views::Columns_extensions>(is);
   register_view<dd::system_views::Column_statistics>(is);
+  register_view<dd::system_views::Compression_dictionary>(non_dd_based_is);
+  register_view<dd::system_views::Compression_dictionary_tables>(
+      non_dd_based_is);
   register_view<dd::system_views::Events>(is);
   register_view<dd::system_views::Files>(is);
   register_view<dd::system_views::Innodb_datafiles>(is);
@@ -288,8 +304,13 @@ void System_views::init() {
   register_view<dd::system_views::Innodb_foreign_cols>(is);
   register_view<dd::system_views::Innodb_fields>(is);
   register_view<dd::system_views::Innodb_tablespaces_brief>(is);
+  register_view<dd::system_views::Json_duality_view_columns>(is);
+  register_view<dd::system_views::Json_duality_view_links>(is);
+  register_view<dd::system_views::Json_duality_view_tables>(is);
+  register_view<dd::system_views::Json_duality_views>(is);
   register_view<dd::system_views::Key_column_usage>(is);
   register_view<dd::system_views::Keywords>(is);
+  if (register_library_views) register_view<dd::system_views::Libraries>(is);
   register_view<dd::system_views::Parameters>(is);
   register_view<dd::system_views::Partitions>(is);
   register_view<dd::system_views::Referential_constraints>(is);
@@ -297,6 +318,8 @@ void System_views::init() {
   register_view<dd::system_views::Role_column_grants>(non_dd_based_is);
   register_view<dd::system_views::Role_routine_grants>(non_dd_based_is);
   register_view<dd::system_views::Role_table_grants>(non_dd_based_is);
+  if (register_library_views)
+    register_view<dd::system_views::Routine_libraries>(is);
   register_view<dd::system_views::Routines>(is);
   register_view<dd::system_views::Schemata>(is);
   register_view<dd::system_views::Schemata_extensions>(is);

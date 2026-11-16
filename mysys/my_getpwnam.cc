@@ -32,15 +32,15 @@
 
 #include "my_getpwnam.h"
 
-#include <atomic>
+#include <cstddef>
 #include <vector>
 
-#include <errno.h>
 #include <unistd.h>
+#include <cerrno>
 
 namespace {
 std::size_t start_bufsz() {
-  long scsz = sysconf(_SC_GETPW_R_SIZE_MAX);
+  long const scsz = sysconf(_SC_GETPW_R_SIZE_MAX);
   return (scsz == -1L ? 256 : scsz);
 }
 

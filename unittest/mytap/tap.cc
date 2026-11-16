@@ -26,11 +26,11 @@
 
 #include "my_config.h"
 
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <csignal>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "my_stacktrace.h"
 #ifdef HAVE_UNISTD_H

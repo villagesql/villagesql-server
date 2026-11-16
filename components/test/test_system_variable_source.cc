@@ -26,8 +26,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <mysql/components/services/system_variable_source.h>
 
 #include <fcntl.h>
-#include <stdio.h>
 #include <typelib.h>
+#include <cstdio>
 
 #define MAX_BUFFER_LENGTH 100
 int log_text_len = 0;

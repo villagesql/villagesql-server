@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <mysql/components/services/mysql_psi_system_service.h>
 #include <mysql/components/services/mysql_runtime_error.h>
 #include <mysql/components/services/mysql_rwlock_service.h>
+#include <mysql/components/services/psi_memory_service.h>
 
 #include <mysql/components/minimal_chassis.h>
 #include <mysql/components/services/dynamic_loader.h>
@@ -46,6 +47,10 @@ REQUIRES_SERVICE_PLACEHOLDER(mysql_rwlock_v1);
 extern SERVICE_TYPE(mysql_psi_system_v1)
     SERVICE_IMPLEMENTATION(mysql_minimal_chassis, mysql_psi_system_v1);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_psi_system_v1);
+
+extern SERVICE_TYPE(psi_memory_v2)
+    SERVICE_IMPLEMENTATION(mysql_minimal_chassis, psi_memory_v2);
+REQUIRES_SERVICE_PLACEHOLDER(psi_memory_v2);
 
 REQUIRES_SERVICE_PLACEHOLDER(mysql_runtime_error);
 my_h_service h_err_service;
@@ -131,6 +136,7 @@ PROVIDES_SERVICE(mysql_minimal_chassis, registry),
     PROVIDES_SERVICE(mysql_minimal_chassis, mysql_runtime_error),
     PROVIDES_SERVICE(mysql_minimal_chassis, mysql_rwlock_v1),
     PROVIDES_SERVICE(mysql_minimal_chassis, mysql_psi_system_v1),
+    PROVIDES_SERVICE(mysql_minimal_chassis, psi_memory_v2),
     END_COMPONENT_PROVIDES();
 
 BEGIN_COMPONENT_REQUIRES_WITHOUT_REGISTRY(mysql_minimal_chassis)
@@ -291,15 +297,15 @@ void minimal_chassis_services_refresh(bool use_related) {
     mysql_service_mysql_runtime_error =
         reinterpret_cast<SERVICE_TYPE(mysql_runtime_error) *>(h_err_service);
   } else {
-    my_service<SERVICE_TYPE(mysql_runtime_error)> error_service(
+    my_service<SERVICE_TYPE(mysql_runtime_error)> const error_service(
         "mysql_runtime_error", &imp_mysql_minimal_chassis_registry);
     mysql_service_mysql_runtime_error = error_service;
 
-    my_service<SERVICE_TYPE(mysql_rwlock_v1)> rwlock_service(
+    my_service<SERVICE_TYPE(mysql_rwlock_v1)> const rwlock_service(
         "mysql_rwlock_v1", &imp_mysql_minimal_chassis_registry);
     mysql_service_mysql_rwlock_v1 = rwlock_service;
 
-    my_service<SERVICE_TYPE(mysql_psi_system_v1)> psi_system_service(
+    my_service<SERVICE_TYPE(mysql_psi_system_v1)> const psi_system_service(
         "mysql_psi_system_v1", &imp_mysql_minimal_chassis_registry);
     mysql_service_mysql_psi_system_v1 = psi_system_service;
   }

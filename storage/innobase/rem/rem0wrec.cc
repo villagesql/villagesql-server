@@ -66,7 +66,9 @@ void validate_rec_offset(const dict_index_t *index, const ulint *offsets,
   ut_ad(rec_offs_validate(nullptr, nullptr, offsets));
   if (n >= rec_offs_n_fields(offsets)) {
 #ifndef UNIV_NO_ERR_MSGS
-    dump_metadata_dict_table(index->table);
+    if (index != nullptr) {
+      dump_metadata_dict_table(index->table);
+    }
     auto num_fields = static_cast<size_t>(rec_offs_n_fields(offsets));
     ib::fatal(L, ER_IB_DICT_INVALID_COLUMN_POSITION, ulonglong{n}, num_fields);
 #endif /* !UNIV_NO_ERR_MSGS */
@@ -84,7 +86,7 @@ ulint rec_get_nth_field_size(const dict_index_t *index, const rec_t *rec,
   if (index) {
     ut_ad(!dict_table_is_comp(index->table));
     if (index->has_row_versions()) {
-      uint8_t version = UINT8_UNDEFINED;
+      row_version_t version = INVALID_ROW_VERSION;
       if (rec_old_is_versioned(rec)) {
         version = rec_get_instant_row_version_old(rec);
       }
@@ -101,7 +103,7 @@ ulint rec_get_nth_field_offs_old(const dict_index_t *index, const rec_t *rec,
   if (index) {
     ut_ad(!dict_table_is_comp(index->table));
     if (index->has_row_versions()) {
-      uint8_t version = UINT8_UNDEFINED;
+      row_version_t version = INVALID_ROW_VERSION;
       if (rec_old_is_versioned(rec)) {
         version = rec_get_instant_row_version_old(rec);
       }
@@ -127,7 +129,7 @@ ulint rec_offs_nth_sql_null(const dict_index_t *index, const ulint *offsets,
     n = index->get_field_off_pos(n);
   }
 
-  validate_rec_offset(index, offsets, n, UT_LOCATION_HERE);
+  ut_d(validate_rec_offset(index, offsets, n, UT_LOCATION_HERE));
   return (rec_offs_nth_sql_null_low(offsets, n));
 }
 
@@ -137,7 +139,7 @@ ulint rec_offs_nth_default(const dict_index_t *index, const ulint *offsets,
     n = index->get_field_off_pos(n);
   }
 
-  validate_rec_offset(index, offsets, n, UT_LOCATION_HERE);
+  ut_d(validate_rec_offset(index, offsets, n, UT_LOCATION_HERE));
   return (rec_offs_nth_default_low(offsets, n));
 }
 
@@ -147,7 +149,7 @@ ulint rec_offs_nth_size(const dict_index_t *index, const ulint *offsets,
     n = index->get_field_off_pos(n);
   }
 
-  validate_rec_offset(index, offsets, n, UT_LOCATION_HERE);
+  ut_d(validate_rec_offset(index, offsets, n, UT_LOCATION_HERE));
   return (rec_offs_nth_size_low(offsets, n));
 }
 
@@ -166,7 +168,7 @@ ulint rec_2_is_field_extern(const dict_index_t *index, const rec_t *rec,
   if (index) {
     ut_ad(!dict_table_is_comp(index->table));
     if (index->has_row_versions()) {
-      uint8_t version = UINT8_UNDEFINED;
+      row_version_t version = INVALID_ROW_VERSION;
       if (rec_old_is_versioned(rec)) {
         version = rec_get_instant_row_version_old(rec);
       }

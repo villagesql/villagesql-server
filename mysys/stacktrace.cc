@@ -32,14 +32,12 @@
 
 #include "my_config.h"
 
-#include <errno.h>
 #include <fcntl.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
-#include <cstdint>
+#include <cerrno>
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
 #include <string_view>
 #if defined(__linux__) || defined(__sun) || defined(__FreeBSD__)
 #include <sys/syscall.h>
@@ -47,18 +45,23 @@
 #include <backtrace/stacktrace.hpp>
 #endif
 #endif
-#include <time.h>
+#include <ctime>
 
 #include <algorithm>
 #include <cinttypes>
+#include <iterator>
 
 #include "my_inttypes.h"
-#include "my_macros.h"
 #include "my_stacktrace.h"
-#include "template_utils.h"
+#include "template_utils.h"  // IWYU pragma: keep
 
 #ifndef _WIN32
-#include <signal.h>
+#include <csignal>
+
+#if HAVE_LIBCOREDUMPER
+#include <coredumper/coredumper.h>
+#include "my_io.h"
+#endif
 
 #include "my_thread.h"
 #ifdef HAVE_UNISTD_H
@@ -67,11 +70,11 @@
 #ifdef HAVE_STACKTRACE
 
 #ifdef __linux__
-#include <ctype.h> /* isprint */
+#include <cctype> /* isprint */
 #endif
 
 #ifdef HAVE_EXECINFO_H
-#include <execinfo.h>
+#include <execinfo.h>  // IWYU pragma: keep
 #endif
 
 #ifdef __FreeBSD__
@@ -146,10 +149,8 @@ static int safe_print_str(const char *addr, int max_len) {
 
     if ((nbytes = pread(fd, buf, count, offset)) < 0) {
       /* Just in case... */
-      if (errno == EINTR)
-        continue;
-      else
-        break;
+      if (errno == EINTR) continue;
+      break;
     }
 
     /* Advance offset into memory. */
@@ -238,7 +239,7 @@ void my_print_stacktrace(const uchar *stack_bottom, ulong thread_stack) {
     my_safe_printf_stderr("\n");
   };
   cookie_t cookie{.index = 0};
-  stacktrace::full(1, print_callback, error_callback, &cookie);
+  stacktrace::full(0, print_callback, error_callback, &cookie);
 }
 #elif defined(HAVE_BACKTRACE)
 
@@ -299,7 +300,6 @@ static void my_demangle_symbols(char **addrs, int n) {
 }
 
 #endif /* HAVE_ABI_CXA_DEMANGLE */
-
 void my_print_stacktrace(const uchar *stack_bottom, ulong thread_stack) {
 #if defined(__FreeBSD__)
   static char procname_buffer[2048];
@@ -337,6 +337,29 @@ void my_print_stacktrace(const uchar *stack_bottom, ulong thread_stack) {
 }
 #endif /* HAVE_EXT_BACKTRACE || HAVE_BACKTRACE */
 #endif /* HAVE_STACKTRACE */
+
+#if HAVE_LIBCOREDUMPER
+/* Produce a lib coredumper for the thread */
+void my_write_libcoredumper(int sig, char *path, time_t curr_time) {
+  int ret = 0;
+  char suffix[FN_REFLEN];
+  char core[FN_REFLEN];
+  struct tm *timeinfo = gmtime(&curr_time);
+  my_safe_printf_stderr("PATH: %s\n\n", path);
+  if (path == NULL)
+    strcpy(core, "core");
+  else
+    strcpy(core, path);
+  sprintf(suffix, ".%d%02d%02d%02d%02d%02d", (1900 + timeinfo->tm_year),
+          timeinfo->tm_mon, timeinfo->tm_mday, timeinfo->tm_hour,
+          timeinfo->tm_min, timeinfo->tm_sec);
+  strcat(core, suffix);
+  ret = WriteCoreDump(core);
+  if (ret != 0) {
+    my_safe_printf_stderr("Error writting coredump: %d Signal: %d\n", ret, sig);
+  }
+}
+#endif
 
 /* Produce a core for the thread */
 void my_write_core(int sig) {

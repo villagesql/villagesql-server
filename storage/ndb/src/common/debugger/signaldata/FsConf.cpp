@@ -26,7 +26,7 @@
 
 bool printFSCONF(FILE *output, const Uint32 *theData, Uint32 len,
                  Uint16 /*receiverBlockNo*/) {
-  const FsConf *const sig = (const FsConf *)theData;
+  const auto *const sig = (const FsConf *)theData;
 
   fprintf(output, " UserPointer: %d\n", sig->userPointer);
 

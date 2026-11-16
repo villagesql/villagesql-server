@@ -1,4 +1,5 @@
 --source include/no_valgrind_without_big.inc
+
 --let $variable= binlog_direct_non_transactional_updates
 --source include/rpl/begin_replace_gtid_combination.inc
 

@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,7 +32,7 @@ bool printFAIL_REP(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const FailRep *const sig = (const FailRep *)theData;
+  const auto *const sig = (const FailRep *)theData;
 
   fprintf(output, " FailedNode: %d, FailCause: %d\n", sig->failNodeId,
           sig->failCause);

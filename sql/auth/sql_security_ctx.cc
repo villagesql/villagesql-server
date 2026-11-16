@@ -24,6 +24,7 @@
 
 #include <map>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -591,11 +592,11 @@ Access_bitmask Security_context::procedure_acl(LEX_CSTRING db,
   else {
     SP_access_map::iterator it;
     String q_name;
-    append_identifier(&q_name, db.str, db.length);
+    append_identifier_with_backtick(&q_name, db.str, db.length);
     q_name.append(".");
     std::string name(procedure_name.str, procedure_name.length);
     my_casedn_str(files_charset_info, &name[0]);
-    append_identifier(&q_name, name.c_str(), name.length());
+    append_identifier_with_backtick(&q_name, name.c_str(), name.length());
     it = m_acl_map->sp_acls()->find(q_name.c_ptr());
     if (it == m_acl_map->sp_acls()->end()) return 0;
     return filter_access(it->second, q_name.c_ptr());
@@ -608,16 +609,31 @@ Access_bitmask Security_context::function_acl(LEX_CSTRING db,
     return 0;
   else {
     String q_name;
-    append_identifier(&q_name, db.str, db.length);
+    append_identifier_with_backtick(&q_name, db.str, db.length);
     q_name.append(".");
     std::string name(func_name.str, func_name.length);
     my_casedn_str(files_charset_info, &name[0]);
-    append_identifier(&q_name, name.c_str(), name.length());
+    append_identifier_with_backtick(&q_name, name.c_str(), name.length());
     SP_access_map::iterator it;
     it = m_acl_map->func_acls()->find(q_name.c_ptr());
     if (it == m_acl_map->func_acls()->end()) return 0;
     return filter_access(it->second, q_name.c_ptr());
   }
+}
+
+Access_bitmask Security_context::library_acl(LEX_CSTRING db,
+                                             LEX_CSTRING lib_name) {
+  if (m_acl_map == nullptr) return 0;
+  String q_name;
+  append_identifier_with_backtick(&q_name, db.str, db.length);
+  q_name.append(".");
+  std::string name(lib_name.str, lib_name.length);
+  my_casedn_str(files_charset_info, &name[0]);
+  append_identifier_with_backtick(&q_name, name.c_str(), name.length());
+  SP_access_map::iterator it;
+  it = m_acl_map->lib_acls()->find(q_name.c_ptr());
+  if (it == m_acl_map->lib_acls()->end()) return 0;
+  return filter_access(it->second, q_name.c_ptr());
 }
 
 // return the entire element instead of just the acl?
@@ -626,9 +642,9 @@ Grant_table_aggregate Security_context::table_and_column_acls(
   if (m_acl_map == nullptr) return Grant_table_aggregate();
   Table_access_map::iterator it;
   String q_name;
-  append_identifier(&q_name, db.str, db.length);
+  append_identifier_with_backtick(&q_name, db.str, db.length);
   q_name.append(".");
-  append_identifier(&q_name, table.str, table.length);
+  append_identifier_with_backtick(&q_name, table.str, table.length);
   it = m_acl_map->table_acls()->find(std::string(q_name.c_ptr_quick()));
   if (it == m_acl_map->table_acls()->end()) return Grant_table_aggregate();
   return it->second;
@@ -645,9 +661,9 @@ bool Security_context::has_with_admin_acl(const LEX_CSTRING &role_name,
   DBUG_TRACE;
   if (m_acl_map == nullptr) return false;
   String q_name;
-  append_identifier(&q_name, role_name.str, role_name.length);
+  append_identifier_with_backtick(&q_name, role_name.str, role_name.length);
   q_name.append("@");
-  append_identifier(&q_name, role_host.str, role_host.length);
+  append_identifier_with_backtick(&q_name, role_host.str, role_host.length);
   Grant_acl_set::iterator it =
       m_acl_map->grant_acls()->find(std::string(q_name.c_ptr_quick()));
   if (it != m_acl_map->grant_acls()->end()) return true;
@@ -659,7 +675,7 @@ bool Security_context::any_sp_acl(const LEX_CSTRING &db) {
   SP_access_map::iterator it = m_acl_map->sp_acls()->begin();
   for (; it != m_acl_map->sp_acls()->end(); ++it) {
     String id_db;
-    append_identifier(&id_db, db.str, db.length);
+    append_identifier_with_backtick(&id_db, db.str, db.length);
     if (it->first.compare(0, id_db.length(), id_db.c_ptr(), id_db.length()) ==
         0) {
       /* There's at least one SP with grants for this db */
@@ -674,7 +690,7 @@ bool Security_context::any_table_acl(const LEX_CSTRING &db) {
   Table_access_map::iterator table_it = m_acl_map->table_acls()->begin();
   for (; table_it != m_acl_map->table_acls()->end(); ++table_it) {
     String id_db;
-    append_identifier(&id_db, db.str, db.length);
+    append_identifier_with_backtick(&id_db, db.str, db.length);
     if (table_it->first.compare(0, id_db.length(), id_db.c_ptr(),
                                 id_db.length()) == 0) {
       /* There's at least one table with grants for this db*/
@@ -705,6 +721,13 @@ std::pair<bool, bool> Security_context::has_global_grant(const char *priv,
   if (!initialized || m_is_skip_grants_user) return std::make_pair(true, true);
 
   const std::string privilege(priv, priv_len);
+
+  if (acl_utility_user.user) {
+    if (acl_is_utility_user(m_priv_user, m_priv_host, nullptr)) {
+      auto res = acl_utility_user_has_global_grant(privilege);
+      return std::make_pair(res, res);
+    }
+  }
 
   if (m_acl_map == nullptr) {
     THD *thd = m_thd ? m_thd : current_thd;
@@ -1367,4 +1390,79 @@ bool Security_context::has_column_access(Access_bitmask priv,
       return false;
   }
   return true;
+}
+
+/**
+  Check if current user is part of the given list of Auth IDs
+
+  @param [in] comma_separated_auth_id_list List of Auth IDs
+
+  @returns true if current_user is part of the list - false otherwise.
+*/
+
+bool Security_context::is_current_user_part_of(
+    std::string_view comma_separated_auth_id_list) const {
+  bool found{false};
+  Auth_id current_user(&m_priv_user[0], m_priv_user_length, &m_priv_host[0],
+                       m_priv_host_length);
+  iterate_comma_separated_quoted_string(
+      comma_separated_auth_id_list,
+      [&found, &current_user](std::string_view element) -> bool {
+        auto el = get_authid_from_quoted_string(element);
+        if (el.second == "") el.second = "%";
+        Auth_id auth_id(el.first, el.second);
+        if (auth_id == current_user) {
+          found = true;
+          return true;
+        }
+        return false;  // Continue searching
+      });
+  return found;
+}
+
+/**
+  Check if any of the current roles is part of the given list.
+
+  @param [in]  comma_separated_auth_id_list
+                Comma-separated list of quoted or unquoted auth IDs.
+  @param [out] first_find
+                Optional. If non-null and a match is found, it is set to the
+                first matching auth ID in backtick-quoted form (e.g. ``
+                `role`@`%` ``). If nullptr, no output is produced. If non-null
+                and no match is found, the pointed-to string is left unmodified.
+
+  @returns Status of the check
+    @retval true  One of the current roles is present in the list
+    @retval false None of the current roles are present in the list
+*/
+bool Security_context::is_current_role_part_of(
+    std::string_view comma_separated_auth_id_list,
+    std::string *first_find) const {
+  bool found{false};
+  if (m_active_roles.empty() || comma_separated_auth_id_list.empty())
+    return found;
+  iterate_comma_separated_quoted_string(
+      comma_separated_auth_id_list, [&](std::string_view element) -> bool {
+        auto el = get_authid_from_quoted_string(element);
+        if (el.second == "") el.second = "%";
+        Auth_id role_id(el.first, el.second);
+        auto it =
+            std::ranges::find_if(m_active_roles, [&](const Auth_id_ref &one) {
+              if (el.first ==
+                  std::string_view(one.first.str, one.first.length)) {
+                if (native_strcasecmp(el.second.c_str(), one.second.str) == 0)
+                  return true;
+              }
+              return false;
+            });
+        if (it != m_active_roles.end()) {
+          if (first_find != nullptr) {
+            role_id.auth_str(first_find);
+          }
+          found = true;
+          return true;
+        }
+        return false;  // Continue searching
+      });
+  return found;
 }

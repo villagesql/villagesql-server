@@ -33,6 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "read0read.h"
 #include "clone0clone.h"
+#include "read0i_s.h"
 
 #include "srv0srv.h"
 #include "trx0sys.h"
@@ -317,9 +318,9 @@ ReadView::ReadView()
       m_up_limit_id(),
       m_creator_trx_id(),
       m_ids(),
-      m_low_limit_no() {
+      m_low_limit_no(),
+      m_cloned(false) {
   ut_d(::memset(&m_view_list, 0x0, sizeof(m_view_list)));
-  ut_d(m_view_low_limit_no = 0);
 }
 
 /**
@@ -348,10 +349,23 @@ MVCC::~MVCC() {
   ut_a(UT_LIST_GET_LEN(m_views) == 0);
 }
 
+/** Insert the view in the proper order into the view list.
+@param	view	view to add */
+void MVCC::view_add(const ReadView *view) {
+  ut_ad(trx_sys_mutex_own());
+
+  UT_LIST_ADD_FIRST(m_views, const_cast<ReadView *>(view));
+
+  ut_ad(!view->is_closed());
+
+  ut_ad(validate());
+}
+
 /**
 Copy the transaction ids from the source vector */
 
 void ReadView::copy_trx_ids(const trx_ids_t &trx_ids) {
+  ut_ad(!m_cloned);
   ut_ad(trx_sys_mutex_own());
 
   ulint size = trx_ids.size();
@@ -445,6 +459,7 @@ point in time are seen in the view.
 @param id               Creator transaction id */
 
 void ReadView::prepare(trx_id_t id) {
+  ut_ad(!m_cloned);
   ut_ad(trx_sys_mutex_own());
 
   m_creator_trx_id = id;
@@ -466,8 +481,7 @@ void ReadView::prepare(trx_id_t id) {
 
   ut_a(m_up_limit_id <= m_low_limit_id);
 
-  ut_d(m_view_low_limit_no = m_low_limit_no);
-  m_closed = false;
+  m_closed.store(false);
 }
 
 /**
@@ -508,23 +522,110 @@ void MVCC::view_open(ReadView *&view, trx_t *trx) {
 
     view = reinterpret_cast<ReadView *>(p & ~1);
 
-    ut_ad(view->m_closed);
+    ut_ad(view->m_closed.load());
 
-    /* NOTE: This can be optimised further, for now we only
-    reuse the view if there are no active RW transactions.
+    /* The following method of reopening views, makes following assumptions:
+        * view->empty() == true
+        * removing an ID from trx_sys->rw_trx_ids requires trx_sys->mutex
+        * the purge coordinator holds trx_sys->mutex when determining new
+          purge_sys->view
+        * the purge coordinator refuses to update purge_sys->view to one with
+          a lower-or-equal value of m_low_limit_no.
+        * adding a view to the trx_sys->mvcc->m_views happens in a critical
+          section under trx_sys->mutex spanning reading the values used for
+          initialization and storing them in view
+        * trx_sys->serialisation_min_trx_no is monotonic w.r.t. happens-before
+    Keep in mind, the complicating factors like:
+        * bumping trx_sys->next_trx_id_or_no for assignment to trx->no, and
+          adding it to serialization_list happens without trx_sys->mutex - it
+          uses trx_sys->serialization mutex instead, and is sequenced-before
+          removing he trx->id from trx_sys->rw_trx_ids
+        * the purge coordinator doesn't acquire trx_sys->serialization_mutex
+        * the purge coordinator might create an "artificial" view if it could
+          not find any suitable open view in the list
+        * two views can have same m_low_limit_no, yet represent different sets
+          of committed transactions
+        * two views can represent the same set of committed transactions, but
+          differ in m_low_limit_no
 
-    There is an inherent race here between purge and this
-    thread. Purge will skip views that are marked as closed.
-    Therefore we must set the low limit id after we reset the
-    closed status after the check. */
+    Let's define "V1 is-subset-of V2" to mean that the set of transaction IDs
+    that V1 considers visible/committed, is a subset of those for V2.
+    (In particular, if a given natural number is used as NO, instead of ID, then
+    the answer for this number doesn't influence the is-subset-of relation.)
+
+    We need following properties:
+
+    P1. If we decide to reopen the view, then if someone at any moment observes
+    that "purge_sys->view is-subset-of the view" doesn't hold, then the
+    observation must have happened-after the view became closed again.
+
+    P2. If any observation of purge_sys->view == V1 happens-before
+    an observation of purge_sys->view == V2, then V1 is-subset-of V2.
+
+    The P1 is needed, so that we don't crash when using this view when trying to
+    restore older version of a record by traversing undo log chains.
+
+    The P2 is definitely helpful to traverse undo chains "until trx seen by V2",
+    without having to worry about undo log record being already purged when
+    purge_sys->view was V1. We also need P2 in the rollback logic to properly
+    decide if the record should be physically removed by the transaction thread
+    as no longer needed or should it be deleted later lazily by purge thread -
+    a wrong decision here can lead to a leak or a crash.
+
+    We achieve P2 "trivially" in purge coordinator logic of clone_oldest_view(),
+    by simply refusing to change purge_sys->view to a view which has smaller
+    or equal m_low_limit_no, which ensures that V2 must have strictly larger
+    m_low_limit_no than V1. Because m_low_limit_no values are assigned a value
+    loaded from trx_sys->serialisation_min_trx_no which we know to be
+    non-decreasing in time, and load and assignment happen under trx_sys->mutex,
+    it follows the assignment to V2->m_low_limit_no happened-after the one for
+    V1. The m_ids is also initialized by copying trx_sys->rw_trx_ids inside same
+    critical section protected by trx_sys->mutex, so it follows that V1 copied
+    an older state of trx_sys->rw_trx_ids than V2, and thus V1 is-subset-of V2,
+    as needed.
+
+    The proof of P1 is by contradiction:
+    Assume that someone sees "purge_sys->view is-subset-of the view" doesn't
+    hold and we did reopen. This means purge_sys->view can see an ID which view
+    can't. Observers of purge_sys->view hold purge_sys->latch, so this
+    observation had to happened-after the purge coordinator has set the
+    purge_sys->view, which it does while x-latching the purge_sys->latch, which
+    means such assignments are well ordered, so lets focus on the oldest such
+    assignment which violated "purge_sys->view is-subset-of the view" for the
+    first time. Let's call the purge_sys->view assigned then V2, and the one
+    before it V1. The purge coordinator assigns purge_sys->view under
+    trx_sys->mutex, and removing ID from trx_sys->rw_trx_ids is done under
+    this mutex, so it had to happen-before V2 was constructed if V2 can see
+    ID. This means trx_sys->next_trx_id_or_no was already > ID before purge
+    coordinator started iterating the trx_sys->mvcc->m_views list. Our view can
+    not see ID, and view->empty() == true, so view->m_low_limit_id <= ID. As we
+    assumed we will reopen it means we saw trx_sys->next_trx_id_or_no ==
+    view->m_low_limit_id, so <= ID, which implies the `S-order` relation between
+    our load() and fetch_add() in the following timeline:
+
+    view->m_closed = false `S-ordered-before`
+    trx_sys->next_trx_id_or_no.load() == view->m_low_limit_id `S-ordered-before`
+    ID=trx_sys->next_trx_id_or_no.fetch_add() `sequenced-before`
+    trx_sys->mutex.exit() in commit of ID `happens-before`
+    trx_sys->mutex.enter() of purge coordinator `sequenced-before`
+    purge coordinator reads view->m_closed `sequenced-before`
+    purge coordinator selects purge_sys->view which sees ID.
+
+    `S-order` must be consistent with `happens-before` and modification order of
+    view->m_closed, so to avoid a cycle it has to be that purge coordinator sees
+    either the false stored by us to view->m_closed, or some later store, which
+    could happen if we closed it again. But, seeing view->m_closed == false, the
+    purge coordinator should either select our view as V2, or keep the old V1,
+    both of which contradict definition of V2 as first such that it sees ID.
+    */
 
     if (trx_is_autocommit_non_locking(trx) && view->empty()) {
-      view->m_closed = false;
-
+      view->m_closed.store(false);
+      DEBUG_SYNC_C("after_setting_m_closed_false");
       if (view->m_low_limit_id == trx_sys_get_next_trx_id_or_no()) {
         return;
       } else {
-        view->m_closed = true;
+        view->m_closed.store(true);
       }
     }
   }
@@ -541,22 +642,23 @@ void MVCC::view_open(ReadView *&view, trx_t *trx) {
   if (view != nullptr) {
     view->prepare(trx->id);
 
-    UT_LIST_ADD_FIRST(m_views, view);
-
-    ut_ad(!view->is_closed());
-
-    ut_ad(validate());
+    view_add(view);
   }
 
   trx_sys_mutex_exit();
 }
 
 /**
-Get the oldest (active) view in the system.
+Get the oldest (active) view in the system for statistical purposes.
+
+@note This method should be used for statistical purposes only, purge needs
+to use more strict condition (see clone_oldest_view()) when selecting the
+oldest view.
+
 @return oldest view if found or NULL */
 
-ReadView *MVCC::get_oldest_view() const {
-  ReadView *view;
+const ReadView *MVCC::get_oldest_view_stats() const {
+  const ReadView *view;
 
   ut_ad(trx_sys_mutex_own());
 
@@ -589,8 +691,6 @@ void ReadView::copy_prepare(const ReadView &other) {
 
   m_low_limit_no = other.m_low_limit_no;
 
-  ut_d(m_view_low_limit_no = other.m_view_low_limit_no);
-
   m_low_limit_id = other.m_low_limit_id;
 
   m_creator_trx_id = other.m_creator_trx_id;
@@ -618,16 +718,77 @@ void ReadView::copy_complete() {
   m_creator_trx_id = 0;
 }
 
-/** Clones the oldest view and stores it in view. No need to
-call view_close(). The caller owns the view that is passed in.
-It will also move the closed views from the m_views list to the
-m_free list. This function is called by Purge to determine whether it should
-purge the delete marked record or not.
-@param view             Preallocated view, owned by the caller */
+/**
+Clones a read view object. The resulting read view has identical change
+visibility as the donor read view
+@param	result	pointer to resulting read view. If NULL, a view will be
+        allocated. If non-NULL, a view will overwrite a previously-existing
+        in-use or released view.
+@param	from_trx	transation owning the donor read view. */
+
+void ReadView::clone(ReadView *&result, trx_t *from_trx) const {
+  ut_ad(from_trx->read_view == this);
+  ut_ad(trx_sys_mutex_own());
+
+  if (!result)
+    result = trx_sys->mvcc->get_view();
+  else {
+    result =
+        reinterpret_cast<ReadView *>(reinterpret_cast<uintptr_t>(result) & ~1);
+  }
+
+  // Set the creating trx id of the clone to that of donor.
+  trx_id_t from_trx_id;
+  if (from_trx->read_view->m_creator_trx_id != 0) {
+    // The donor transaction is RO, and a clone itself
+    from_trx_id = from_trx->read_view->m_creator_trx_id;
+  } else if (from_trx->id == 0) {
+    // The donor transaction is RO, thus does not have a trx ID
+    // yet which the cloned view must see, if it assigned later
+    if (!from_trx->preallocated_id) {
+      // Preallocate a transaction id for the donor
+      from_trx_id = from_trx->preallocated_id = trx_sys_allocate_trx_id();
+    } else {
+      // This transaction has already been cloned
+      from_trx_id = from_trx->preallocated_id;
+    }
+  } else {
+    // The donor transaction is RW
+    from_trx_id = from_trx->id;
+  }
+
+  result->copy_prepare(*this);
+  // Calling copy_complete would be redundant for us and would force
+  // a too early trx sys mutex release.
+  result->m_creator_trx_id = from_trx_id;
+  // If the clone transaction is RO and is later promoted to RW, make
+  // sure not to add its own id to its view
+  result->m_cloned = true;
+  result->m_closed.store(false);
+}
+
 void MVCC::clone_oldest_view(ReadView *view) {
   trx_sys_mutex_enter();
 
-  ReadView *oldest_view = get_oldest_view();
+  ReadView *oldest_view;
+  for (oldest_view = UT_LIST_GET_LAST(m_views); oldest_view != nullptr;
+       oldest_view = UT_LIST_GET_PREV(m_view_list, oldest_view)) {
+    if (!oldest_view->is_closed()) {
+      if (oldest_view->low_limit_no() <= view->low_limit_no()) {
+        /* We won't gain anything by switching to oldest_view - as purge will
+        not be able to move any further than low_limit_no(). More importantly,
+        switching to oldest_view poses a risk of a crash, if it saw a strictly
+        smaller subset of transaction than view. Thankfully, we can prove the
+        later case happens only when a transaction is considering to reopen the
+        oldest_view, but will decide not to do it, so we can - and should! -
+        ignore it. See the proof in MVCC::view_open(). In either case not
+        updating purge's view is the right decision here. */
+        trx_sys_mutex_exit();
+        return;
+      }
+      break;
+    }
+  }
 
   if (oldest_view == nullptr) {
     view->prepare(0);
@@ -641,10 +802,6 @@ void MVCC::clone_oldest_view(ReadView *view) {
 
     view->copy_complete();
   }
-  /* Update view to block purging transaction till GTID is persisted. */
-  auto &gtid_persistor = clone_sys->get_gtid_persistor();
-  auto gtid_oldest_trxno = gtid_persistor.get_oldest_trx_no();
-  view->reduce_low_limit(gtid_oldest_trxno);
 }
 
 /**
@@ -680,9 +837,11 @@ void MVCC::view_close(ReadView *&view, bool own_mutex) {
     /* Sanitise the pointer first. */
     ReadView *ptr = reinterpret_cast<ReadView *>(p & ~1);
 
-    /* Note this can be called for a read view that
-    was already closed. */
-    ptr->m_closed = true;
+    /* Note this can be called for a read view that was already closed. */
+    if (!ptr->m_closed.load()) {
+      ptr->m_closed.store(true);
+    }
+    ptr->m_cloned = false;
 
     /* Set the view as closed. */
     view = reinterpret_cast<ReadView *>(p | 0x1);
@@ -698,4 +857,25 @@ void MVCC::view_close(ReadView *&view, bool own_mutex) {
 
     view = nullptr;
   }
+}
+
+i_s_xtradb_read_view_t *read_fill_i_s_xtradb_read_view(
+    i_s_xtradb_read_view_t *rv) {
+  const ReadView *view;
+
+  mutex_enter(&trx_sys->mutex);
+
+  view = trx_sys->mvcc->get_oldest_view_stats();
+  if (!view) {
+    mutex_exit(&trx_sys->mutex);
+    return NULL;
+  }
+
+  rv->low_limit_no = view->low_limit_no();
+  rv->up_limit_id = view->up_limit_id();
+  rv->low_limit_id = view->low_limit_id();
+
+  mutex_exit(&trx_sys->mutex);
+
+  return rv;
 }

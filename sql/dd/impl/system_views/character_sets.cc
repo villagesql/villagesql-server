@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/character_sets.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Character_sets &Character_sets::instance() {
-  static Character_sets *s_instance = new Character_sets();
+  static auto *s_instance = new Character_sets();
   return *s_instance;
 }
 
@@ -47,5 +46,4 @@ Character_sets::Character_sets() {
       "cs.default_collation_id=col.id ");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

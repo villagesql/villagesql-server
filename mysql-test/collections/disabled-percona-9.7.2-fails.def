@@ -1,0 +1,162 @@
+# Tests that fail on Percona Server 9.7.2 for reasons outside VillageSQL.
+#
+# thread_pool: Percona PS-11352 (5448fde376c) makes the upstream (Oracle)
+# thread_pool plugin refuse to initialize, in favor of Percona's built-in
+# thread pool (--thread-handling=pool-of-threads).  The suite was left as is,
+# so its tests run against a plugin that never starts.  Remove these entries
+# if Percona revives the plugin.
+#
+# main.user_host_name expects the percona.telemetry user, which exists only in
+# builds with WITH_PERCONA_TELEMETRY=ON.
+main.user_host_name : BUG#0 VillageSQL - needs a build with WITH_PERCONA_TELEMETRY=ON
+thread_pool.telemetry_traces_server : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_admin_interface : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_admin_interface_ipv4_mapped : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_algorithm_basic : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_algorithm_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_algorithm_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_auth_fail_max_connect_threads : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_basic : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_connect : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_connection_abort_stats : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_connection_handler : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_connection_report : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_dedicated_listeners_mtl_mismatch : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_dedicated_listeners_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_dedicated_listeners_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_defaults : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_disconnect_sigalrm : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_dual_threadpool_guard : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_error_log_throttling : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_func1 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_func2a : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_func2b : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_func3b : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_func3c : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_func4 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_func5 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_func6 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_high_priority_connection_sys_var : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_hpc_basic : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_i_s : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_kill_case1 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_kill_case2 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_kill_case3 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_kill_case4 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_kill_case5 : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_kill_coverage : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_kill_mtl : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_longrun_trx_limit_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_longrun_trx_limit_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_max_active_query_threads : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_max_active_query_threads_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_max_active_query_threads_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_max_trxn_limit : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_max_trxn_limit_bypass : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_mem_cnt_common : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_mem_cnt_common_debug : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_mtl_override : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_mtl_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_mtl_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_mut_basic : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_mut_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_mut_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_p_s : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_p_s_debug : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_p_s_native_func : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_p_s_restart : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_par_add_index : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_perf_benchmark : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_perf_schema : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_persisted_system_variables : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_pfs : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_pkt_basic : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_pkt_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_pkt_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_query_threads_exceeds_mtl_pg : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_query_threads_per_group : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_query_threads_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_query_threads_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_size_basic : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_size_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_sl_basic : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_sl_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_sl_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_throttle_thread_create : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_transaction_delay : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_transaction_delay_debug : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_trx_delay_wrong_max : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_trx_delay_wrong_min : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_variables : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_wait_timeout : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_wrong_cmd_line : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_wrong_config_file : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool.thread_pool_wrong_persisted_system_variables : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+thread_pool_rpl.telemetry_traces_server : BUG#0 VillageSQL - PS-11352 disabled the upstream thread_pool plugin
+#
+# component_keyring_vault/kms/kmip: these need an external keyring service
+# (Vault via MTR_VAULT_VERSION, AWS KMS, or KMIP) that our MTR runs do not set up.
+component_keyring_kmip.dynamic_loading : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.alter_rename_table : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.alter_table : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.create_table : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.engine : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.keyring_component_status : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.log_encrypt_1 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.log_encrypt_2 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.log_encrypt_3 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.rename_table : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.table_encrypt_2 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.table_encrypt_3 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.table_encrypt_4 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.table_encrypt_6 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.table_encrypt_debug : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.table_encrypt_fts : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.tablespace : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.tablespace_encrypt_1 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.tablespace_encrypt_3 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.tablespace_encrypt_4 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.tablespace_encrypt_8 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.tablespace_with_tables : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_kms.udf_test : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.alter_rename_table : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.alter_table : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.create_table : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.database : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.engine : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.innodb_online_alter_encryption : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.innodb_row_log_encryption : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.keyring_vault_thd_wait : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.load : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.log_encrypt_1 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.log_encrypt_2 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.log_encrypt_3 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.migrate_keyring : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.reload : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.rename_table : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.rpl_encryption_master_key_rotation_at_startup : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.table_encrypt_2 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.table_encrypt_3 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.table_encrypt_4 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.table_encrypt_6 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.table_encrypt_debug : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.table_encrypt_fts : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.tablespace : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.tablespace_encrypt_1 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.tablespace_encrypt_3 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.tablespace_encrypt_4 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.tablespace_encrypt_8 : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.tablespace_with_tables : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.temp_table_encrypt_keyring_vault : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+component_keyring_vault.udf_test : BUG#0 VillageSQL - keyring service (Vault/KMS/KMIP) not set up for MTR
+#
+# These hang to the 900s timeout on every platform.
+# percona.coredump: with WITH_COREDUMPER=OFF (as in CI) it never finds the
+# pattern it greps for; see villagesql/bld_tools/build_ci.sh.
+# abort_during_startup: passes --mysql_native_password=OFF, which 9.x removed.
+percona.coredump : BUG#0 VillageSQL - hangs when built WITH_COREDUMPER=OFF
+component_audit_log_filter.abort_during_startup : BUG#0 VillageSQL - passes removed --mysql_native_password option, hangs
+#
+# Assumes 9.7 is LTS, but cmake/mysql_version.cmake forces
+# MYSQL_VERSION_MATURITY_IS_LTS 0 (TODO(villagesql-production)).
+rpl_gtid.rpl_replica_compatibility_rules_lts : BUG#0 VillageSQL - LTS maturity forced off in cmake/mysql_version.cmake

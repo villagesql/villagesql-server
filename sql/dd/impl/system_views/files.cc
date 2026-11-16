@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/files.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Files &Files::instance() {
-  static Files *s_instance = new Files();
+  static auto *s_instance = new Files();
   return *s_instance;
 }
 
@@ -128,5 +127,4 @@ Files::Files() {
       "ON ts.id=tsf.tablespace_id");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

@@ -43,6 +43,7 @@ our @EXPORT = qw(
   mtr_report_stats
   mtr_report_test
   mtr_report_test_passed
+  mtr_report_test_opt_passed
   mtr_report_test_skipped
   mtr_summary_file_init
   mtr_verbose
@@ -54,6 +55,7 @@ our @EXPORT = qw(
 );
 
 use File::Spec;
+use My::Constants;
 use IO::Handle qw[ flush ];
 use POSIX qw(_exit floor);
 
@@ -167,6 +169,12 @@ sub mtr_report_test_skipped ($) {
   mtr_report_test($tinfo);
 }
 
+sub mtr_report_test_opt_passed ($) {
+  my ($tinfo) = @_;
+  $tinfo->{'result'} = 'MTR_RES_OPT_PASSED';
+  mtr_report_test($tinfo);
+}
+
 sub mtr_report_test_passed ($) {
   my ($tinfo) = @_;
 
@@ -201,6 +209,7 @@ sub mtr_report_test ($) {
   my $retry    = $tinfo->{'retries'} ? "retry-" : "";
   my $warnings = $tinfo->{'warnings'};
   my $skip_ignored   = $tinfo->{'skip_ignored'};
+  my $opt_pass = $tinfo->{'opt_pass'};
 
   if ($::opt_test_progress and $tinfo->{'name'} and !$retry) {
     $tests_completed = $tests_completed + 1;
@@ -276,6 +285,20 @@ sub mtr_report_test ($) {
         mtr_buffered_report(sprintf("%-60s%-s", $report, "[ skipped ]"));
       } else {
         mtr_report($report, "[ skipped ]");
+      }
+    }
+  } elsif ($result eq 'MTR_RES_OPT_PASSED') {
+    if ($comment) {
+      if ($::opt_quiet) {
+        mtr_buffered_report(sprintf("%-60s%-s", $report, "[ opt-pass ]"));
+      } else {
+        mtr_report($report, "[ opt-pass ]  $comment");
+      }
+    } else {
+      if ($::opt_quiet) {
+        mtr_buffered_report(sprintf("%-60s%-s", $report, "[ opt-pass ]"));
+      } else {
+        mtr_report($report, "[ opt-pass ]");
       }
     }
   } elsif ($result eq 'MTR_RES_PASSED') {
@@ -508,7 +531,11 @@ sub mtr_generate_xml_report($) {
       $tinfo->{'comment'} =~ s/</&gt;/g;
       print $xml_report_file "<testcase name=\"$tname\"$combination " .
         "status=\"$not_run_status\" " . "time=\"$test_time\" " .
-        "suitename=\"$tsuite\" " . "comment=\"$tinfo->{'comment'}\" />\n";
+        "suitename=\"$tsuite\">\n";
+          print $xml_report_file " " x 7;
+      print $xml_report_file "<$not_run_status message=\"$tinfo->{'comment'}\" />\n";
+      print $xml_report_file " " x 4;
+      print $xml_report_file "</testcase>\n";
     } elsif ($tinfo->{'result'} eq 'MTR_RES_PASSED') {
       print $xml_report_file " " x 4;
       print $xml_report_file "<testcase name=\"$tname\"$combination " .
@@ -586,8 +613,11 @@ sub mtr_report_stats ($$;$) {
     } elsif ($tinfo->{'result'} eq 'MTR_RES_SKIPPED') {
       # Test was skipped (disabled not counted)
       $tot_skipped++ unless $tinfo->{'disable'};
-      $tot_skipdetect++ if $tinfo->{'skip_detected_by_test'};
-    } elsif ($tinfo->{'result'} eq 'MTR_RES_PASSED') {
+      $tot_skipdetect++
+        if (defined $tinfo->{'skip_reason'}
+            and $tinfo->{skip_reason} eq MTR_SKIP_BY_TEST);
+    } elsif ($tinfo->{'result'} eq 'MTR_RES_PASSED' or
+             $tinfo->{'result'} eq 'MTR_RES_OPT_PASSED') {
       # Test passed
       $tot_tests++;
       $tot_passed++;
@@ -674,6 +704,7 @@ sub mtr_report_stats ($$;$) {
     # Hashes to keep track of reported failures
     my %seen          = ();
     my %seen_unstable = ();
+    my %seen_timeout  = ();
 
     foreach my $tinfo (@$tests) {
       my $tname = $tinfo->{'name'};
@@ -694,6 +725,10 @@ sub mtr_report_stats ($$;$) {
           $seen{$tname} = 1;
         }
       }
+
+      if ($tinfo->{'timeout'}) {
+        $seen_timeout{$tname} = 1;
+      }
     }
 
     # Print the list of tests that failed in a format that can be copy
@@ -707,6 +742,11 @@ sub mtr_report_stats ($$;$) {
       summary_print("Unstable test(s)(failures/attempts): " .
                 join(" ", map { $_ . $seen_unstable{$_} } sort keys %seen_unstable) .
                 "\n\n");
+    }
+
+    # Print the list of tests that have timed out, if any.
+    if (%seen_timeout) {
+      summary_print("Timed out test(s): " . join(" ", sort keys %seen_timeout) . "\n\n");
     }
 
     # Print info about reporting the error

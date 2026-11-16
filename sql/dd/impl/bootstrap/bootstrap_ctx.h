@@ -66,6 +66,9 @@ static constexpr uint DD_VERSION_80022 = 80022;
 static constexpr uint DD_VERSION_80023 = 80023;
 static constexpr uint DD_VERSION_80200 = 80200;
 static constexpr uint DD_VERSION_80300 = 80300;
+static constexpr uint DD_VERSION_80400 = 80400;
+static constexpr uint DD_VERSION_90000 = 90000;
+static constexpr uint DD_VERSION_90200 = 90200;
 
 /*
   Set of supported DD version labels. A supported DD version is a version
@@ -78,7 +81,8 @@ static constexpr uint DD_VERSION_80300 = 80300;
 static std::set<uint> supported_dd_versions = {
     DD_VERSION_80011, DD_VERSION_80012, DD_VERSION_80013, DD_VERSION_80014,
     DD_VERSION_80015, DD_VERSION_80016, DD_VERSION_80017, DD_VERSION_80021,
-    DD_VERSION_80022, DD_VERSION_80023, DD_VERSION_80200};
+    DD_VERSION_80022, DD_VERSION_80023, DD_VERSION_80200, DD_VERSION_80300,
+    DD_VERSION_90000, DD_VERSION_90200};
 
 // Individual server version labels that we can refer to.
 static constexpr uint SERVER_VERSION_50700 = 50700;
@@ -87,7 +91,7 @@ static constexpr uint SERVER_VERSION_80013 = 80013;
 static constexpr uint SERVER_VERSION_80014 = 80014;
 static constexpr uint SERVER_VERSION_80015 = 80015;
 static constexpr uint SERVER_VERSION_80016 = 80016;
-static constexpr uint SERVER_VERSION_80400 = 80400;
+static constexpr uint SERVER_VERSION_90100 = 90100;
 
 /*
   Set of unsupported server version labels. An unsupported server version is a
@@ -101,6 +105,7 @@ class DD_bootstrap_ctx {
   uint m_actual_dd_version = 0;
   uint m_upgraded_server_version = 0;
   Stage m_stage = Stage::NOT_STARTED;
+  bool m_dd_encrypted = false;
 
   uint m_did_I_S_upgrade_from = 0;
   uint m_actual_I_S_version = 0;
@@ -126,6 +131,8 @@ class DD_bootstrap_ctx {
   void set_actual_I_S_version(uint actual_I_S_version) {
     m_actual_I_S_version = actual_I_S_version;
   }
+
+  void set_dd_encrypted() noexcept { m_dd_encrypted = true; }
 
   uint get_actual_dd_version() const { return m_actual_dd_version; }
 
@@ -219,6 +226,8 @@ class DD_bootstrap_ctx {
   bool is_initialize() const {
     return opt_initialize && (m_actual_dd_version == dd::DD_VERSION);
   }
+
+  bool is_dd_encrypted() const noexcept { return m_dd_encrypted; }
 };
 
 }  // namespace bootstrap

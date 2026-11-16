@@ -38,7 +38,6 @@ extern int mysqld_main(int argc, char **argv);
 DEFINE_METHOD(int, mysql_server_runnable_imp::run, (int argc, char **argv)) {
   if (argc == 0) {
     return 1;
-  } else {
-    return mysqld_main(argc, argv);
   }
+  return mysqld_main(argc, argv);
 }

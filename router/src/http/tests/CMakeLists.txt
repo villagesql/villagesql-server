@@ -24,9 +24,6 @@
 INCLUDE_DIRECTORIES(SYSTEM ${GMOCK_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/tests/)
 
-# Google-test TYPED_TEST doesn't override the virtual method in derived class.
-STRING(REPLACE "-Wsuggest-override" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-
 SET(TEST_FILES
   server-key.pem
   server-cert.pem
@@ -143,6 +140,22 @@ TARGET_INCLUDE_DIRECTORIES(routertest_http_matcher
   PRIVATE
   ${PROJECT_SOURCE_DIR}/src/http/src/
   ${PROJECT_SOURCE_DIR}/src/http/include/
+  )
+
+add_googletest_file(test_http_request_router.cc
+  MODULE http
+  EXTRA_SOURCES
+    ${CMAKE_SOURCE_DIR}/unittest/gunit/benchmark.cc
+  LIB_DEPENDS
+    router_utils        # uri
+    http_server_lib     # request-router
+    test-helpers        # init_test_logger
+    ext::icu
+  )
+
+add_googletest_file(test_client.cc
+  MODULE http
+  LIB_DEPENDS http_client
   )
 
 add_googletest_file(test_server_limits.cc

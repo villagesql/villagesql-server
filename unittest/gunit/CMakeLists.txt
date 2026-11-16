@@ -35,9 +35,6 @@ ENDIF()
 
 INCLUDE_DIRECTORIES(SYSTEM ${GMOCK_INCLUDE_DIRS})
 
-# TODO(sgunders): Remove when all GMock tests use MOCK_METHOD().
-STRING(REPLACE "-Wsuggest-override" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-
 MY_CHECK_CXX_COMPILER_FLAG("-fno-builtin-memcmp" HAVE_NO_BUILTIN_MEMCMP)
 
 SET(DISABLE_PSI_DEFINITIONS
@@ -118,11 +115,9 @@ SET(TESTS
   charset_bug32788301
   collation_loader
   cost_estimate
-  dbug
   decimal
   dns_srv_data
   dphyp
-  dynarray
   filesort_buffer
   filesort_compare
   filesort_mergechunk
@@ -133,10 +128,12 @@ SET(TESTS
   like_range
   m_string
   mdl
+  mem_root_array
   mem_root_deque
   mutex_lock
   my_alloc
   my_bitmap
+  my_char_traits
   my_error
   my_fileutils
   my_gcvt
@@ -156,7 +153,9 @@ SET(TESTS
   mysys_my_rdtsc
   mysys_my_read
   mysys_my_symlink
+  mysys_my_system
   mysys_my_time
+  mysys_my_version
   mysys_my_write
   mysys_pathfuncs
   opt_recperkey
@@ -183,10 +182,17 @@ SET(TESTS
   thread_utils
   timespec
   unhex
+  utf8alias
   val_int_compare
+  vector_distance
   )
 
 LIST(TRANSFORM TESTS APPEND "-t.cc" OUTPUT_VARIABLE ALL_SMALL_TESTS)
+
+OPTION(WITH_FAILING_GUNIT_TESTS "Build deliberately failing GUint tests" OFF)
+IF (WITH_FAILING_GUNIT_TESTS)
+    LIST(APPEND TESTS junit_integration)
+ENDIF()
 
 # Add tests (link them with gunit/gmock libraries and the server libraries)
 SET(SERVER_TESTS
@@ -235,6 +241,7 @@ SET(SERVER_TESTS
   graph_simplification
   gtid_specification_parsing
   handler
+  hash
   hash_join
   histograms
   histogram_selectivity
@@ -250,7 +257,9 @@ SET(SERVER_TESTS
   item_func_regexp
   item_json_func
   item_like
+  item_param
   item_timefunc
+  jdv
   join_syntax
   join_tab_sort
   json_binary
@@ -271,6 +280,7 @@ SET(SERVER_TESTS
   opt_ref
   opt_trace
   persisted_variables
+  print_utils
   protocol_classic
   regexp_engine
   regexp_facade
@@ -287,6 +297,7 @@ SET(SERVER_TESTS
   tc_log_mmap
   temptable_allocator
   temptable_storage
+  temporal
   thd_manager
   union_syntax
   unique
@@ -306,8 +317,23 @@ IF(LINUX_ALPINE)
   LIST(REMOVE_ITEM SERVER_TESTS segfault)
 ENDIF()
 
+# Warnings from googlemock
+IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
+  IF(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+    STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-error=maybe-uninitialized")
+  ENDIF()
+ENDIF()
+
 IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
-  ADD_COMPILE_FLAGS(regexp_engine-t.cc COMPILE_FLAGS "-Wno-restrict")
+  ADD_COMPILE_FLAGS(
+    regexp_engine-t.cc
+    gis_area-t.cc
+    gis_is_simple-t.cc
+    gis_isvalid-t.cc
+    gis_relops-t.cc
+    gis_setops-t.cc
+    COMPILE_FLAGS "-Wno-restrict"
+  )
 ENDIF()
 
 IF(WIN32)
@@ -320,15 +346,31 @@ IF(HAS_WARN_FLAG)
   ADD_COMPILE_FLAGS(segfault-t.cc COMPILE_FLAGS ${HAS_WARN_FLAG})
 ENDIF()
 
+# Suppress warnings for gcc-10 or newer
+IF(CMAKE_COMPILER_IS_GNUCXX AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)
+  ADD_CXX_COMPILE_FLAGS_TO_FILES(-Wno-stringop-overflow FILES integer_digits-t.cc)
+ENDIF()
+
+# Suppress warnings for gcc-14 or newer
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+  ADD_COMPILE_FLAGS(hypergraph_optimizer-t.cc COMPILE_FLAGS "-Wno-array-bounds")
+ENDIF()
+
+# Avoid 'requires dynamic R_X86_64_PC32 reloc' linker error for dd_sdi-t.cc
+# when built with ASAN
+IF(WITH_ASAN OR WITH_VALGRIND)
+  ADD_CXX_COMPILE_FLAGS_TO_FILES(-fPIC FILES dd_sdi-t.cc)
+ENDIF()
+
 # Warnings about missing PGO profile data are not useful for unit tests.
 DISABLE_MISSING_PROFILE_WARNING()
 
 LIST(TRANSFORM SERVER_TESTS APPEND "-t.cc" OUTPUT_VARIABLE ALL_LARGE_TESTS)
 
 SET(SQL_GUNIT_LIB_SOURCE
+  ${CMAKE_SOURCE_DIR}/vector-common/vector_distance.cc
   ${CMAKE_SOURCE_DIR}/sql/filesort_utils.cc
   ${CMAKE_SOURCE_DIR}/sql/mdl.cc
-  ${CMAKE_SOURCE_DIR}/sql/stream_cipher.cc
   ${CMAKE_SOURCE_DIR}/sql/sql_list.cc
   ${CMAKE_SOURCE_DIR}/sql/stateless_allocator.cc
   ${CMAKE_SOURCE_DIR}/sql-common/sql_string.cc
@@ -351,7 +393,8 @@ MYSQL_ADD_EXECUTABLE(merge_small_tests-t ${ALL_SMALL_TESTS}
   COMPILE_DEFINITIONS ${DISABLE_PSI_DEFINITIONS}
   ENABLE_EXPORTS
   EXCLUDE_FROM_GCOV
-  LINK_LIBRARIES sqlgunitlib gunit_small extra::rapidjson extra::boost server_unittest_library
+  LINK_LIBRARIES sqlgunitlib gunit_small extra::rapidjson extra::boost
+    library_mysys server_unittest_library
   )
 IF(TARGET merge_small_tests-t)
   DOWNGRADE_STRINGOP_WARNINGS(merge_small_tests-t)
@@ -393,11 +436,21 @@ FOREACH(test ${TESTS})
     COMPILE_DEFINITIONS ${DISABLE_PSI_DEFINITIONS}
     ENABLE_EXPORTS
     EXCLUDE_FROM_ALL
-    LINK_LIBRARIES sqlgunitlib gunit_small extra::boost
+    LINK_LIBRARIES sqlgunitlib gunit_small extra::boost library_mysys
     SKIP_INSTALL
     ADD_GCOV_TEST ${test}
   )
 ENDFOREACH()
+
+# vector_distance per-tier benchmark — all SIMD tiers × 6 sizes × euclidean/cosine/dot_product.
+# Unavailable tiers (wrong ISA or CPU) are skipped at runtime via GTEST_SKIP().
+MYSQL_ADD_EXECUTABLE(vector_distance_benchmark-t vector_distance_benchmark-t.cc
+  COMPILE_DEFINITIONS ${DISABLE_PSI_DEFINITIONS}
+  ENABLE_EXPORTS
+  EXCLUDE_FROM_ALL
+  LINK_LIBRARIES sqlgunitlib gunit_small extra::boost
+  SKIP_INSTALL
+)
 
 # Disable by default, since it dumps a stack trace.
 # We don't want ppl to think there was a segfault or something.
@@ -456,12 +509,28 @@ IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
   ADD_COMPILE_FLAGS(dd_string_type-t.cc COMPILE_FLAGS
     "-Wno-alloc-size-larger-than"
     )
+  ADD_COMPILE_FLAGS(field-t.cc COMPILE_FLAGS
+    "-Wno-stringop-overflow"
+    )
 ENDIF()
+
+ADD_LIBRARY(rpl_event_ctx_lib STATIC
+  ${CMAKE_SOURCE_DIR}/sql/rpl_event_ctx.cc
+)
+TARGET_LINK_LIBRARIES(rpl_event_ctx_lib ext::zlib)
+
+MYSQL_ADD_EXECUTABLE(rpl_event_ctx-t rpl_event_ctx-t.cc
+  ENABLE_EXPORTS
+  ADD_TEST rpl_event_ctx
+  LINK_LIBRARIES rpl_event_ctx_lib gunit_small
+)
 
 ADD_SUBDIRECTORY(ddl_rewriter)
 ADD_SUBDIRECTORY(innodb)
 ADD_SUBDIRECTORY(components/mysql_server)
 ADD_SUBDIRECTORY(components/keyring_common)
+ADD_SUBDIRECTORY(components/keyring_vault)
+ADD_SUBDIRECTORY(components/percona_telemetry)
 ADD_SUBDIRECTORY(xplugin)
 ADD_SUBDIRECTORY(group_replication)
 ADD_SUBDIRECTORY(libmysqlgcs)
@@ -471,6 +540,14 @@ ADD_SUBDIRECTORY(memory)
 ADD_SUBDIRECTORY(containers)
 ADD_SUBDIRECTORY(locks)
 ADD_SUBDIRECTORY(changestreams)
-ADD_SUBDIRECTORY(libs/utils)
+ADD_SUBDIRECTORY(libs/gtids)
+ADD_SUBDIRECTORY(libs/iterators)
+ADD_SUBDIRECTORY(libs/math)
+ADD_SUBDIRECTORY(libs/meta)
+ADD_SUBDIRECTORY(libs/ranges)
 ADD_SUBDIRECTORY(libs/serialization)
+ADD_SUBDIRECTORY(libs/sets)
+ADD_SUBDIRECTORY(libs/strconv)
+ADD_SUBDIRECTORY(libs/utils)
+ADD_SUBDIRECTORY(libs/uuids)
 ADD_SUBDIRECTORY(villagesql)

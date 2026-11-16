@@ -78,11 +78,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 
-/**
-  Shallow clone the list of ORDER objects using mem_root and return
-  the cloned list.
-*/
-static ORDER *clone(THD *thd, ORDER *order) {
+ORDER *clone(THD *thd, ORDER *order) {
   ORDER *clone = nullptr;
   ORDER **prev_next = &clone;
   for (; order != nullptr; order = order->next) {
@@ -205,12 +201,24 @@ static Item_cache *make_result_item(Item *value) {
       result = new Item_cache_decimal();
       break;
     case STRING_RESULT:
-      if (value->is_temporal())
-        result = new Item_cache_datetime(value->data_type());
-      else if (value->data_type() == MYSQL_TYPE_JSON)
-        result = new Item_cache_json();
-      else
-        result = new Item_cache_str(value);
+      switch (value->data_type()) {
+        case MYSQL_TYPE_JSON:
+          result = new Item_cache_json();
+          break;
+        case MYSQL_TYPE_TIME:
+          result = new Item_cache_time();
+          break;
+        case MYSQL_TYPE_DATE:
+          result = new Item_cache_date();
+          break;
+        case MYSQL_TYPE_DATETIME:
+        case MYSQL_TYPE_TIMESTAMP:
+          result = new Item_cache_datetime(value->data_type());
+          break;
+        default:
+          result = new Item_cache_str(value);
+          break;
+      }
       break;
     default:
       assert(false);
@@ -255,6 +263,11 @@ bool Window::setup_range_expressions(THD *thd) {
       if (m_frame->m_to->m_border_type == WBT_CURRENT_ROW)
         m_frame->m_to->m_border_type = WBT_UNBOUNDED_FOLLOWING;
     }
+  } else if (o->value.first->item_initial->is_non_deterministic()) {
+    // With RANGE frame, the ordering must be monotonically ascending or
+    // descending, so forbid non-deterministic expressions.
+    my_error(ER_WINDOW_RANGE_FRAME_ORDER_TYPE, MYF(0), printable_name());
+    return true;
   }
 
   for (PT_border *border : {m_frame->m_from, m_frame->m_to}) {
@@ -633,7 +646,7 @@ bool Window::check_unique_name(const List<Window> &windows) {
   for (const Window &w : windows) {
     if (w.name() == nullptr) continue;
 
-    if (&w != this && m_name->eq(w.name(), false)) {
+    if (&w != this && m_name->eq(w.name())) {
       my_error(ER_WINDOW_DUPLICATE_NAME, MYF(0), printable_name());
       return true;
     }
@@ -685,7 +698,7 @@ bool Window::resolve_window_ordering(THD *thd, Ref_item_array ref_item_array,
     Item *oi = *order->item;
 
     /* Order by position is not allowed for windows: legacy SQL 1992 only */
-    if (oi->type() == Item::INT_ITEM && oi->basic_const_item()) {
+    if (oi->type() == Item::INT_ITEM) {
       my_error(ER_WINDOW_ILLEGAL_ORDER_BY, MYF(0), printable_name());
       return true;
     }
@@ -742,7 +755,7 @@ bool Window::equal_sort(Window *w1, Window *w2) {
   if (o1 == nullptr || o2 == nullptr) return false;
 
   while (o1 != nullptr && o2 != nullptr) {
-    if (o1->direction != o2->direction || !(*o1->item)->eq(*o2->item, false))
+    if (o1->direction != o2->direction || !(*o1->item)->eq(*o2->item))
       return false;
 
     o1 = o1->next;
@@ -1533,8 +1546,13 @@ void Window::apply_temp_table(THD *thd, const Func_ptr_array &items_to_copy,
   // ordering and partitioning items. We need to see through them, so we unwrap
   // them here. Since they get removed on the first call to apply_temp_table(),
   // only unwrap on the first call.
+  // Items might not always be of type Item_ref. set_cmp_func() creates cached
+  // items based on the type of comparison for these types. Therefore,
+  // unwrapping should occur only when the item is an Item_ref.
   const auto unwrap = [first](Item *item) {
-    return first ? down_cast<Item_ref *>(item)->ref_item() : item;
+    return (first && item->type() == Item::REF_ITEM)
+               ? down_cast<Item_ref *>(item)->ref_item()
+               : item;
   };
 
   for (Mem_root_array<Cached_item *> *cached_items :

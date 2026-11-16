@@ -352,6 +352,9 @@ class Parallel_reader {
   /** @return the configured max threads size. */
   [[nodiscard]] size_t max_threads() const { return m_max_threads; }
 
+  /** @return true iff this reader runs worker() on the caller's thread. */
+  [[nodiscard]] bool is_sync() const noexcept { return m_sync; }
+
   /** @return true if in error state. */
   [[nodiscard]] bool is_error_set() const {
     return m_err.load(std::memory_order_relaxed) != DB_SUCCESS;
@@ -467,6 +470,9 @@ class Parallel_reader {
 
   /** If the caller wants to wait for the parallel_read to finish it's run */
   bool m_sync;
+
+  /** Covering transaction for slow query log. */
+  trx_t *m_trx_for_slow_log;
 
   /** Context information related to each parallel reader thread. */
   std::vector<Thread_ctx *, ut::allocator<Thread_ctx *>> m_thread_ctxs;
@@ -656,7 +662,7 @@ class Parallel_reader::Scan_ctx {
   Config m_config;
 
   /** Covering transaction. */
-  const trx_t *m_trx{};
+  trx_t *m_trx{};
 
   /** Callback function. */
   F m_f;

@@ -24,7 +24,7 @@
 */
 #include "client/path.h"
 
-#include <stddef.h>
+#include <cstddef>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -66,7 +66,7 @@ void Path::trim() {
 }
 
 void Path::parent_directory(Path *out) {
-  size_t idx = m_path.rfind(FN_DIRSEP);
+  const size_t idx = m_path.rfind(FN_DIRSEP);
   if (idx == std::string::npos) {
     out->path("");
   } else
@@ -74,7 +74,7 @@ void Path::parent_directory(Path *out) {
 }
 
 Path &Path::up() {
-  size_t idx = m_path.rfind(FN_DIRSEP);
+  const size_t idx = m_path.rfind(FN_DIRSEP);
   if (idx == std::string::npos) {
     m_path.clear();
   } else
@@ -108,7 +108,7 @@ void Path::path(const Path &p) { path(p.m_path); }
 void Path::filename(const Path &p) { path(p.m_filename); }
 
 bool Path::qpath(const std::string &qp) {
-  size_t idx = qp.rfind(FN_DIRSEP);
+  const size_t idx = qp.rfind(FN_DIRSEP);
   if (idx == std::string::npos) {
     m_filename = qp;
     m_path.clear();
@@ -116,10 +116,7 @@ bool Path::qpath(const std::string &qp) {
     filename(qp.substr(idx + 1, qp.size() - idx));
     path(qp.substr(0, idx));
   }
-  if (is_qualified_path())
-    return true;
-  else
-    return false;
+  return is_qualified_path();
 }
 
 bool Path::normalize_path() {
@@ -148,17 +145,16 @@ bool Path::exists() {
     if (dir == nullptr) return false;
     my_dirend(dir);
     return true;
-  } else {
-    MY_STAT s;
-    std::string qpath(m_path);
-    qpath.append(FN_DIRSEP).append(m_filename);
-    if (my_stat(qpath.c_str(), &s, MYF(0)) == nullptr) return false;
-    if (!MY_S_ISREG(s.st_mode)) return false;
-    return true;
   }
+  MY_STAT s;
+  std::string qpath(m_path);
+  qpath.append(FN_DIRSEP).append(m_filename);
+  if (my_stat(qpath.c_str(), &s, MYF(0)) == nullptr) return false;
+  if (!MY_S_ISREG(s.st_mode)) return false;
+  return true;
 }
 
-const std::string Path::to_str() {
+std::string Path::to_str() {
   std::string qpath(m_path);
   if (m_filename.length() != 0) {
     qpath.append(FN_DIRSEP);

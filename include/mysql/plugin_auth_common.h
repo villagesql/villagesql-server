@@ -43,6 +43,20 @@
 */
 
 /**
+  Authentication failed, account locked error.
+  The account is locked.
+  These errors are reported in table performance_schema.host_cache,
+  column COUNT_ACCOUNT_LOCKED_ERRORS.
+*/
+#define CR_AUTH_ACCOUNT_LOCKED_ERROR 5
+/**
+  Authentication failed, temporary account locked error.
+  The account is temporarily locked.
+  These errors are reported in table performance_schema.host_cache,
+  column COUNT_TEMPORARY_ACCOUNT_LOCKED_ERRORS.
+*/
+#define CR_AUTH_TEMPORARY_ACCOUNT_LOCKED_ERROR 4
+/**
   Authentication failed, plugin internal error.
   An error occurred in the authentication plugin itself.
   These errors are reported in table performance_schema.host_cache,
@@ -102,6 +116,12 @@
 */
 #define CR_OK_AUTH_IN_SANDBOX_MODE -3
 /**
+  Authentication was successful with limited operations.
+  User should change the password.
+*/
+#define CR_OK_FORCE_PASSWORD_CHANGE -4
+
+/**
 Flag to be passed back to server from authentication plugins via
 authenticated_as when proxy mapping should be done by the server.
 */
@@ -127,6 +147,7 @@ struct MYSQL_PLUGIN_VIO_INFO {
     MYSQL_VIO_MEMORY
   } protocol;
   int socket; /**< it's set, if the protocol is SOCKET or TCP */
+  bool is_tls_established;
 #if defined(_WIN32) && !defined(MYSQL_ABI_CHECK)
   HANDLE handle; /**< it's set, if the protocol is PIPE or MEMORY */
 #endif

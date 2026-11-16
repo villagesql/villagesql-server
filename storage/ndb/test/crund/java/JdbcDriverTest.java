@@ -1,6 +1,5 @@
 /*
   Copyright (c) 2010, 2026, Oracle and/or its affiliates.
-   Use is subject to license terms
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -53,7 +52,7 @@ public class JdbcDriverTest {
         }
         try {
             //Class.forName(driver);
-            Class.forName(driver).newInstance();
+            Class.forName(driver).getDeclaredConstructor().newInstance();
         } catch (ClassNotFoundException e) {
             System.out.println("Cannot load JDBC driver '" + driver
                                + "' from classpath '"

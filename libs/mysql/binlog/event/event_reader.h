@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
-  @file event_reader.h
+  @file
 
   @brief Contains the class responsible for deserializing fields of an event
          previously stored in a buffer.
@@ -439,6 +439,14 @@ class Event_reader {
     @param[in] dest_length the max length supported by the destination buffer.
   */
   void strncpyz(char *destination, size_t max_length, size_t dest_length);
+
+  /**
+    Reserves the vector memory for at least a specified length.
+
+    @param[out] destination the vector.
+    @param[in] length the amount of elements to reserve.
+  */
+  void reserve(std::vector<uint8_t> *destination, size_t length);
 
   /**
     Fills a vector with a sequence of bytes from the cursor.

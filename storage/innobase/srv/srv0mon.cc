@@ -305,6 +305,20 @@ static monitor_info_t innodb_counter_info[] = {
                                  MONITOR_DEFAULT_ON),
      MONITOR_DEFAULT_START, MONITOR_OVLD_BUF_POOL_PAGES_FREE},
 
+    {"buffer_pool_pages_flushed", "buffer",
+     "Number of requests to flush pages from the buffer "
+     "(innodb_buffer_pool_pages_flushed)",
+     static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DISPLAY_CURRENT |
+                                 MONITOR_DEFAULT_ON),
+     MONITOR_DEFAULT_START, MONITOR_OVLD_BUF_POOL_PAGES_FLUSHED},
+
+    {"buffer_pool_pages_lru_flushed", "buffer",
+     "Number of requests to flush pages from the LRU list "
+     "(innodb_buffer_pool_pages_LRU_flushed)",
+     static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DISPLAY_CURRENT |
+                                 MONITOR_DEFAULT_ON),
+     MONITOR_DEFAULT_START, MONITOR_OVLD_BUF_POOL_PAGES_LRU_FLUSHED},
+
     {"buffer_pages_created", "buffer",
      "Number of pages created (innodb_pages_created)",
      static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DEFAULT_ON),
@@ -318,6 +332,11 @@ static monitor_info_t innodb_counter_info[] = {
     {"buffer_pages_read", "buffer", "Number of pages read (innodb_pages_read)",
      static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DEFAULT_ON),
      MONITOR_DEFAULT_START, MONITOR_OVLD_PAGES_READ},
+
+    {"buffer_pages0_read", "buffer",
+     "Number of page 0 read (innodb_pages0_read)",
+     static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DEFAULT_ON),
+     MONITOR_DEFAULT_START, MONITOR_OVLD_PAGES0_READ},
 
     {"buffer_data_reads", "buffer",
      "Amount of data read in bytes (innodb_data_read)",
@@ -581,6 +600,16 @@ static monitor_info_t innodb_counter_info[] = {
      "Page scanned per single LRU unzip search", MONITOR_SET_MEMBER,
      MONITOR_LRU_UNZIP_SEARCH_SCANNED,
      MONITOR_LRU_UNZIP_SEARCH_SCANNED_PER_CALL},
+
+    {"buffer_LRU_single_page_flush_count", "buffer",
+     "Times a user thread issued its own single-page flush while"
+     " searching for a free block",
+     MONITOR_NONE, MONITOR_DEFAULT_START, MONITOR_LRU_SINGLE_PAGE_FLUSH_COUNT},
+
+    {"buffer_LRU_flush_await_count", "buffer",
+     "Times a user thread waited for an in-progress LRU flush instead of"
+     " issuing single-page flush",
+     MONITOR_NONE, MONITOR_DEFAULT_START, MONITOR_LRU_FLUSH_AWAIT_COUNT},
 
     /* ========== Counters for Buffer Page I/O ========== */
     {"module_buffer_page", "buffer_page_io", "Buffer Page I/O Module",
@@ -981,6 +1010,10 @@ static monitor_info_t innodb_counter_info[] = {
      "Waits on redo archiver in log writer", MONITOR_NONE,
      MONITOR_DEFAULT_START, MONITOR_LOG_WRITER_ON_ARCHIVER_WAITS},
 
+    {"log_writer_on_tracker_waits", "log",
+     "Waits on redo tracker in log writer", MONITOR_NONE, MONITOR_DEFAULT_START,
+     MONITOR_LOG_WRITER_ON_TRACKER_WAITS},
+
     MONITOR_WAIT_STATS("log_flusher_", "log",
                        "Waits on task in log_flusher thread",
                        MONITOR_LOG_FLUSHER_),
@@ -1022,9 +1055,10 @@ static monitor_info_t innodb_counter_info[] = {
      MONITOR_LOG_ON_RECENT_WRITTEN_WAIT_LOOPS},
 
     {"log_on_recent_closed_wait_loops", "log",
-     "Loops of waits in user threads on space in log.recent_closed",
-     /* Non-zero values of the counter => writes to log buffer are delayed.
-     Then innodb_log_recent_closed_slots should be increased. */
+     "Loops of waits in user threads on space in "
+     "innodb_buf_flush_list_added_size",
+     /* Non-zero values of the counter => appends to flush lists are delayed.
+     Then innodb_buf_flush_list_added_size should be increased. */
      MONITOR_NONE, MONITOR_DEFAULT_START,
      MONITOR_LOG_ON_RECENT_CLOSED_WAIT_LOOPS},
 
@@ -1706,6 +1740,17 @@ void srv_mon_process_existing_counter(
       value = free_len;
       break;
 
+    /* innodb_buffer_pool_pages_flushed */
+    case MONITOR_OVLD_BUF_POOL_PAGES_FLUSHED:
+      value = srv_stats.buf_pool_flushed;
+      break;
+
+    /* innodb_buffer_pool_pages_LRU_flushed */
+    case MONITOR_OVLD_BUF_POOL_PAGES_LRU_FLUSHED:
+      buf_get_total_stat(&stat);
+      value = stat.buf_lru_flush_page_count;
+      break;
+
     /* innodb_pages_created, the number of pages created */
     case MONITOR_OVLD_PAGE_CREATED:
       buf_get_total_stat(&stat);
@@ -1724,8 +1769,13 @@ void srv_mon_process_existing_counter(
       value = stat.n_pages_read;
       break;
 
+    /* innodb_pages0_read */
+    case MONITOR_OVLD_PAGES0_READ:
+      value = srv_stats.page0_read;
+      break;
+
     /* innodb_data_read, the amount of data read since the server was started
-     * (in bytes) */
+    (in bytes) */
     case MONITOR_OVLD_BYTE_READ:
       value = srv_stats.data_read;
       break;
@@ -1964,7 +2014,7 @@ void srv_mon_process_existing_counter(
     } break;
 
     case MONITOR_OVLD_LSN_BUF_DIRTY_PAGES_ADDED:
-      value = (mon_type_t)log_buffer_dirty_pages_added_up_to_lsn(*log_sys);
+      value = (mon_type_t)buf_flush_list_added->smallest_not_added_lsn();
       break;
 
     case MONITOR_OVLD_BUF_OLDEST_LSN_APPROX:

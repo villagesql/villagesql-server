@@ -57,7 +57,7 @@
 
 #include <string.h>
 
-#include "my_compiler.h"
+#include "my_compiler.h"  // for ALWAYS_INLINE
 #include "my_config.h"
 #include "mysql/strings/m_ctype.h"
 

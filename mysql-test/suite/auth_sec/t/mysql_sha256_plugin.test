@@ -15,8 +15,6 @@
 #                                                                             #
 ###############################################################################
 
-CALL mtr.add_suppression("from authentication policy cannot be used for initial handshake");
-
 --source include/mysql_upgrade_preparation.inc
 
 # This test will intentionally generate errors in the server error log
@@ -31,7 +29,7 @@ call mtr.add_suppression(".*Password salt for user.*");
 --echo
 --echo 
 --echo ===========================================================================================================================================
---echo Checking the password authentication using the sha256_password plugin at the client and mysql_native_password plugin at the server side
+--echo Checking the password authentication using the sha256_password plugin at the client and caching_sha2_password plugin at the server side
 --echo ===========================================================================================================================================
 --echo 
 

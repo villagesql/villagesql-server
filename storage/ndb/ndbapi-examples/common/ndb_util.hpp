@@ -30,8 +30,7 @@
 #include <sstream>
 #include <string>
 
-static const std::string column_type_to_string(
-    NdbDictionary::Column::Type type) {
+static std::string column_type_to_string(NdbDictionary::Column::Type type) {
   switch (type) {
     case NdbDictionary::Column::Undefined:
       return "Undefined";

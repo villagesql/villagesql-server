@@ -23,18 +23,15 @@
 
 INCLUDE(GenerateExportHeader)
 
-IF (NOT TARGET ext::libprotobuf-lite)
-  MESSAGE(FATAL_ERROR "Routing plugin requires protobuf-lite library")
-ENDIF()
-
 ADD_LIBRARY(sql_lexer STATIC
   sql_lexer.cc
+  sql_lexer_thd.cc
   ${CMAKE_SOURCE_DIR}/sql/sql_lex_hash.cc
   )
 TARGET_INCLUDE_DIRECTORIES(sql_lexer
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # generate sql_yacc.h
-ADD_DEPENDENCIES(sql_lexer GenServerSource)
+ADD_DEPENDENCIES(sql_lexer GenServerSource GenError)
 
 ADD_LIBRARY(routing_frontend_lib STATIC
   routing.cc
@@ -72,10 +69,9 @@ ROUTER_ADD_SHARED_LIBRARY(routing
   mysql_routing.cc
   destination.cc
   destination_error.cc
+  destinations_option_parser.cc
   dest_metadata_cache.cc
-  dest_first_available.cc
-  dest_next_available.cc
-  dest_round_robin.cc
+  dest_static.cc
   context.cc
   mysql_routing_common.cc
   connection_container.cc
@@ -86,8 +82,9 @@ ROUTER_ADD_SHARED_LIBRARY(routing
   x_connection.cc
   connection.cc
   blocked_endpoints.cc
+  routing_guidelines_adapter.cc
 
-  await_client_or_server.cc
+  processors/base/await_client_or_server.cc
   processors/base/forwarding_processor.cc
   processors/base/processor.cc
   processors/base/processor_diagnostics.cc
@@ -97,7 +94,7 @@ ROUTER_ADD_SHARED_LIBRARY(routing
   classic_auth_caching_sha2.cc
   classic_auth_native.cc
   classic_auth_sha256_password.cc
-  classic_command.cc
+  processors/session/classic_command.cc
   processors/session/classic_connect.cc
   processors/session/classic_flow.cc
   processors/base/classic_forwarder.cc
@@ -137,6 +134,8 @@ ROUTER_ADD_SHARED_LIBRARY(routing
   processors/senders/classic_auth_native_sender.cc
   processors/senders/classic_auth_sha256_password_sender.cc
   processors/senders/classic_change_user_sender.cc
+  processors/forwarders/classic_auth_openid_connect_forwarder.cc
+  processors/senders/classic_auth_openid_connect_sender.cc
   # classic_greeting_sender.cc
   processors/senders/classic_init_schema_sender.cc
   processors/senders/classic_query_sender.cc
@@ -171,11 +170,12 @@ ROUTER_ADD_SHARED_LIBRARY(routing
   routing_connections
   router_mysqlxmessages
   routing_frontend_lib
-  ext::libprotobuf-lite
+  ext::libprotobuf
   metadata_cache
   connection_pool
   destination_status
   sql_lexer
+  routing_guidelines
   )
 
 IF(SOLARIS)

@@ -209,6 +209,16 @@ struct ref_t {
   the changes are undo logged like any other update operation. */
   static const ulint LOB_SMALL_CHANGE_THRESHOLD = 100;
 
+  /* Whether the update to the LOB can be considered as a small change.
+  Currently, the small partial update optimization is restricted to only the
+  first version of the lob, to avoid interacting with the partial update
+  feature.  This restriction is because reconstructing the older versions of
+  the lob is not yet completely implemented. */
+  static bool is_small_change(size_t bytes_changed, const ref_t &blobref) {
+    return (bytes_changed <= ref_t::LOB_SMALL_CHANGE_THRESHOLD) &&
+           (blobref.version() == 1);
+  }
+
   /** Constructor.
   @param[in]    ptr     Pointer to the external field reference. */
   explicit ref_t(byte *ptr) : m_ref(ptr) {}
@@ -278,6 +288,9 @@ struct ref_t {
   @return true if field reference is made of zeroes, false otherwise. */
   bool is_null() const { return (memcmp(field_ref_zero, m_ref, SIZE) == 0); }
 
+  /** Initialize the reference object with zeroes. */
+  void init() { memset(m_ref, 0, SIZE); }
+
 #ifdef UNIV_DEBUG
   /** Check if the LOB reference is null (all zeroes) except the "is being
   modified" bit.
@@ -311,6 +324,22 @@ struct ref_t {
     }
 
     mlog_write_ulint(m_ref + BTR_EXTERN_LEN, byte_val, MLOG_1BYTE, mtr);
+  }
+
+  /** Set the ownership flag in the blob reference.
+  @param[in]  owner Whether to own or disown. If owner, unset
+                    the owner flag. */
+  void set_owner(bool owner) {
+    ulint byte_val = mach_read_from_1(m_ref + BTR_EXTERN_LEN);
+
+    if (owner) {
+      /* owns the blob */
+      byte_val &= ~BTR_EXTERN_OWNER_FLAG;
+    } else {
+      byte_val |= BTR_EXTERN_OWNER_FLAG;
+    }
+
+    mach_write_ulint(m_ref + BTR_EXTERN_LEN, byte_val, MLOG_1BYTE);
   }
 
   /** Set the being_modified flag in the field reference.
@@ -436,11 +465,23 @@ struct ref_t {
     mlog_write_ulint(m_ref + BTR_EXTERN_SPACE_ID, space_id, MLOG_4BYTES, mtr);
   }
 
+  /** Set the space_id in the external field reference.
+  @param[in]    space_id        the space identifier. */
+  void set_space_id(const space_id_t space_id) {
+    mach_write_ulint(m_ref + BTR_EXTERN_SPACE_ID, space_id, MLOG_4BYTES);
+  }
+
   /** Set the page number in the external field reference.
   @param[in]    page_no the page number.
   @param[in]    mtr     mini-trx or NULL. */
   void set_page_no(const ulint page_no, mtr_t *mtr) {
     mlog_write_ulint(m_ref + BTR_EXTERN_PAGE_NO, page_no, MLOG_4BYTES, mtr);
+  }
+
+  /** Set the page number in the external field reference.
+  @param[in]    page_no the page number. */
+  void set_page_no(const ulint page_no) {
+    mach_write_ulint(m_ref + BTR_EXTERN_PAGE_NO, page_no, MLOG_4BYTES);
   }
 
   /** Set the offset information in the external field reference.
@@ -450,12 +491,25 @@ struct ref_t {
     mlog_write_ulint(m_ref + BTR_EXTERN_OFFSET, offset, MLOG_4BYTES, mtr);
   }
 
+  /** Set the version information in the external field reference.
+  @param[in]    version  the lob version. */
+  void set_version(const ulint version) {
+    mach_write_ulint(m_ref + BTR_EXTERN_VERSION, version, MLOG_4BYTES);
+  }
+
   /** Set the length of blob in the external field reference.
   @param[in]    len     the blob length .
   @param[in]    mtr     mini-trx or NULL. */
   void set_length(const ulint len, mtr_t *mtr) {
     ut_ad(len <= MAX_SIZE);
     mlog_write_ulint(m_ref + BTR_EXTERN_LEN + 4, len, MLOG_4BYTES, mtr);
+  }
+
+  /** Set the length of blob in the external field reference.
+  @param[in]    len     the blob length . */
+  void set_length(const ulint len) {
+    ut_ad(len <= MAX_SIZE);
+    mach_write_ulint(m_ref + BTR_EXTERN_LEN + 4, len, MLOG_4BYTES);
   }
 
   /** Get the start of a page containing this blob reference.

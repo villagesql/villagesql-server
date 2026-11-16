@@ -164,9 +164,7 @@ std::string Ndb_schema_result_table::define_table_dd() const {
 
 bool Ndb_schema_result_table::drop_events_in_NDB() const {
   // Drop the default event
-  if (!drop_event_in_NDB("REPL$mysql/ndb_schema_result")) return false;
-
-  return true;
+  return drop_event_in_NDB("REPL$mysql/ndb_schema_result");
 }
 
 void Ndb_schema_result_table::pack_message(const char *message, char *buf) {

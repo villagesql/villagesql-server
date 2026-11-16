@@ -1063,7 +1063,8 @@ URI URIParser::parse_shorthand_uri(const std::string &uri,
 /*static*/ URI URIParser::parse(const std::string &uri,
                                 bool allow_path_rootless, bool allow_schemeless,
                                 bool path_keep_last_slash,
-                                bool query_single_parameter_when_cant_parse) {
+                                bool query_single_parameter_when_cant_parse,
+                                bool keep_empty_root) {
   size_t pos = 0;
   bool have_scheme = true;
 
@@ -1143,8 +1144,12 @@ URI URIParser::parse_shorthand_uri(const std::string &uri,
     }
   }
 
-  URI u{"", allow_path_rootless, allow_schemeless, path_keep_last_slash,
-        query_single_parameter_when_cant_parse};
+  URI u{"",
+        allow_path_rootless,
+        allow_schemeless,
+        path_keep_last_slash,
+        query_single_parameter_when_cant_parse,
+        keep_empty_root};
 
   u.scheme = tmp_scheme;
   u.host = pct_decode(tmp_host);
@@ -1269,9 +1274,9 @@ void URI::init_from_uri(const std::string &uri) {
     return;
   }
 
-  *this = URIParser::parse(uri, allow_path_rootless_, allow_schemeless_,
-                           path_keep_last_slash_,
-                           query_single_parameter_when_cant_parse_);
+  *this = URIParser::parse(
+      uri, allow_path_rootless_, allow_schemeless_, path_keep_last_slash_,
+      query_single_parameter_when_cant_parse_, keep_empty_root_);
 }
 
 void URI::set_path_from_string(const std::string &p) {
@@ -1279,7 +1284,7 @@ void URI::set_path_from_string(const std::string &p) {
   const bool path_begins_with_slash = !p.empty() && *p.begin() == '/';
   const bool is_first_element_empty = !path.empty() && path[0].empty();
 
-  if (path_begins_with_slash && is_first_element_empty) {
+  if (!keep_empty_root_ && path_begins_with_slash && is_first_element_empty) {
     path.erase(path.begin());
   }
 

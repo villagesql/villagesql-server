@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 
 #include "fsp0space.h"
+#include "fsp0sysspace.h"
 #include "fut0lst.h"
 #include "mtr0mtr.h"
 #include "mysql/components/services/bits/mysql_cond_bits.h"
@@ -686,7 +687,10 @@ is 127. The translation from an undo_space_num is:
 @return true if it is undo tablespace else false. */
 bool fsp_is_undo_tablespace(space_id_t space_id);
 
-static inline bool fsp_is_system_tablespace(space_id_t space_id) {
+/** Check if the space_id is for a shared system tablespace.
+@param[in]	space_id	tablespace ID
+@return true if id is a system tablespace, false if not. */
+static inline bool fsp_is_system_tablespace(space_id_t space_id) noexcept {
   return (space_id == TRX_SYS_SPACE);
 }
 
@@ -758,6 +762,12 @@ dict_table_t::flags |     0     |    1    |     1      |    1
 @param[in]      compact         true if not Redundant row format
 @return tablespace flags (fil_space_t::flags) */
 uint32_t fsp_flags_to_dict_tf(uint32_t fsp_flags, bool compact);
+
+/** Enable encryption for already existing tablespace.
+@param[in,out]	space	tablespace object
+@return true if success, else false */
+[[nodiscard]]
+bool fsp_enable_encryption(fil_space_t *space);
 
 /** Calculates the descriptor index within a descriptor page.
 @param[in]      page_size       page size

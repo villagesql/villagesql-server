@@ -61,6 +61,8 @@ while(<IN_FILE>) {
     # VillageSQL's line carries a single year; mask it too so this test
     # stays year-proof like the Oracle line above it.
     $_=~ s/(Copyright\s\(c\))\s[0-9]+\s(VillageSQL)/$1 YEAR $2/g;
+    # From Percona 9.7.2-2
+    $_=~ s/(Copyright\s\(c\))\s([0-9]*)-([0-9]*)(.*)/$1 YEAR-YEAR $4/g;
     $_=~ s/Usage:.*\[-c/Usage: innochecksum [-c/g;
     print OUT_FILE $_;
  }

@@ -170,15 +170,15 @@ SHOW CREATE SCHEMA s;
 Database	Create Database
 s	CREATE DATABASE `s` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */
 USE s;
-ALTER SCHEMA s DEFAULT COLLATE= utf8_general_ci;
+ALTER SCHEMA s DEFAULT COLLATE= utf8mb3_general_ci;
 Warnings:
 Warning	3778	'utf8mb3_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 SHOW CREATE SCHEMA s;
 Database	Create Database
 s	CREATE DATABASE `s` /*!40100 DEFAULT CHARACTER SET utf8mb3 */ /*!80016 DEFAULT ENCRYPTION='N' */
 DROP SCHEMA s;
-ERROR HY000: Schema directory './s/' does not exist
-DROP SCHEMA s;
+Warnings:
+Note	3679	Schema directory './s/' does not exist
 CREATE SCHEMA s;
 CREATE VIEW s.v AS SELECT * FROM mysql.time_zone;
 DROP SCHEMA s;
@@ -232,7 +232,7 @@ connection default;
 # Reap DROP DATABASE. Statement should succeed, but send warnings
 # about problems with removing database directory to user ...
 Warnings:
-Warning	3607	Problem while dropping database. Can't remove database directory (Error dropping database (can't rmdir './db1', errno: ## - ...). Please remove it manually.
+Warning	3607	Problem while dropping database. Can't remove database directory (Error dropping database (can't rmdir './db1/', errno: ## - ...). Please remove it manually.
 # ... and error log too. Let's check that.
 Pattern "Problem while dropping database. Can't remove database directory .* Please remove it manually." found
 # Clean-up.
@@ -302,10 +302,7 @@ DROP SCHEMA IF EXISTS bogus__;
 ERROR HY000: Schema 'bogus__' does not exist, but schema directory './bogus__/' was found. This must be resolved manually (e.g. by moving the schema directory to another location).
 CREATE SCHEMA broken;
 # Remove the schema directory for an existing schema
-# Drop then fails with new error message
-DROP SCHEMA broken;
-ERROR HY000: Schema directory './broken/' does not exist
-# but drop succeeds (with warning) when adding IF EXISTS
+# Drop succeeds with warning.
 # Suppress output since it is not stable across platforms
 DROP SCHEMA IF EXISTS broken;
 # Create and drop schema again to make sure nothing is left behind

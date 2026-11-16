@@ -140,7 +140,7 @@ bool Ndb_metadata_change_monitor::detect_logfile_group_changes(
         continue;
       }
       // Check if the logfile group's undofiles have been created
-      if (undofile_names.size() == 0) {
+      if (undofile_names.empty()) {
         log_info(
             "No undofiles assigned to logfile group '%s' found, skip "
             "submission",
@@ -204,7 +204,7 @@ bool Ndb_metadata_change_monitor::detect_tablespace_changes(
         continue;
       }
       // Check if the tablespace's datafiles have been created
-      if (datafile_names.size() == 0) {
+      if (datafile_names.empty()) {
         log_info(
             "No datafiles assigned to tablespace '%s' found, skip submission",
             tablespace_name.c_str());

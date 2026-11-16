@@ -23,6 +23,7 @@ enum enum_field_types {
   MYSQL_TYPE_DATETIME2,
   MYSQL_TYPE_TIME2,
   MYSQL_TYPE_TYPED_ARRAY,
+  MYSQL_TYPE_VECTOR = 242,
   MYSQL_TYPE_INVALID = 243,
   MYSQL_TYPE_BOOL = 244,
   MYSQL_TYPE_JSON = 245,
@@ -120,6 +121,7 @@ void mysql_compress_context_init(mysql_compress_context *cmp_ctx,
                                  enum enum_compression_algorithm algorithm,
                                  unsigned int compression_level);
 void mysql_compress_context_deinit(mysql_compress_context *mysql_compress_ctx);
+static const int PURGE_BITMAPS_TO_LSN = 1;
 enum SERVER_STATUS_flags_enum {
   SERVER_STATUS_IN_TRANS = 1,
   SERVER_STATUS_AUTOCOMMIT = 2,
@@ -203,6 +205,8 @@ bool net_write_command(struct NET *net, unsigned char command,
 bool net_write_packet(struct NET *net, const unsigned char *packet,
                       size_t length);
 unsigned long my_net_read(struct NET *net);
+bool my_net_shrink_buffer(NET *net, unsigned long min_buf_size,
+                          unsigned long *max_interval_packet);
 void my_net_set_write_timeout(struct NET *net, unsigned int timeout);
 void my_net_set_read_timeout(struct NET *net, unsigned int timeout);
 void my_net_set_retry_count(struct NET *net, unsigned int retry_count);
@@ -308,6 +312,7 @@ struct MYSQL_PLUGIN_VIO_INFO {
     MYSQL_VIO_MEMORY
   } protocol;
   int socket;
+  bool is_tls_established;
 };
 enum net_async_status {
   NET_ASYNC_COMPLETE = 0,
@@ -372,6 +377,7 @@ typedef struct MYSQL_TIME {
 void init_client_errs(void);
 void finish_client_errs(void);
 extern const char *client_errors[];
+extern const char **mysql_client_errors;
 static inline const char *ER_CLIENT(int client_errno) {
   if (client_errno >= 2000 && client_errno <= 2075)
     return client_errors[client_errno - 2000];

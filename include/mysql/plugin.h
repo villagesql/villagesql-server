@@ -23,7 +23,9 @@
 
 #ifndef _my_plugin_h
 #define _my_plugin_h
-
+#if defined(MYSQL_COMPONENT) && !defined(ALLOW_COMPONENT_INCLUDE)
+#error This header shall not be included in components
+#endif
 /**
   @file include/mysql/plugin.h
 */
@@ -83,7 +85,13 @@ typedef void *MYSQL_PLUGIN;
 
 #ifndef MYSQL_ABI_CHECK
 #include <mysql/services.h>
-#endif
+#ifndef __WIN__
+#ifndef __STDC_FORMAT_MACROS
+#define __STDC_FORMAT_MACROS /* Enable C99 printf format macros */
+#endif                       /* !__STDC_FORMAT_MACROS */
+#include <inttypes.h>
+#endif /* !__WIN__ */
+#endif /* !MYSQL_ABI_CHECK */
 
 #define MYSQL_XIDDATASIZE 128
 /**
@@ -194,47 +202,6 @@ struct MYSQL_XID {
 
 #include <mysql/components/services/bits/system_variables_bits.h>
 
-struct SYS_VAR;
-
-/*
-  SYNOPSIS
-    (*mysql_var_check_func)()
-      thd               thread handle
-      var               dynamic variable being altered
-      save              pointer to temporary storage
-      value             user provided value
-  RETURN
-    0   user provided value is OK and the update func may be called.
-    any other value indicates error.
-
-  This function should parse the user provided value and store in the
-  provided temporary storage any data as required by the update func.
-  There is sufficient space in the temporary storage to store a double.
-  Note that the update func may not be called if any other error occurs
-  so any memory allocated should be thread-local so that it may be freed
-  automatically at the end of the statement.
-*/
-
-typedef int (*mysql_var_check_func)(MYSQL_THD thd, SYS_VAR *var, void *save,
-                                    struct st_mysql_value *value);
-
-/*
-  SYNOPSIS
-    (*mysql_var_update_func)()
-      thd               thread handle
-      var               dynamic variable being altered
-      var_ptr           pointer to dynamic variable
-      save              pointer to temporary storage
-   RETURN
-     NONE
-
-   This function should use the validated value stored in the temporary store
-   and persist it in the provided pointer to the dynamic variable.
-   For example, strings may require memory to be allocated.
-*/
-typedef void (*mysql_var_update_func)(MYSQL_THD thd, SYS_VAR *var,
-                                      void *var_ptr, const void *save);
-
 /* the following declarations are for internal use only */
 
 #define PLUGIN_VAR_MASK                                                \
@@ -242,7 +209,7 @@ typedef void (*mysql_var_update_func)(MYSQL_THD thd, SYS_VAR *var,
    PLUGIN_VAR_NOCMDARG | PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_RQCMDARG |   \
    PLUGIN_VAR_MEMALLOC | PLUGIN_VAR_NODEFAULT | PLUGIN_VAR_NOPERSIST | \
    PLUGIN_VAR_PERSIST_AS_READ_ONLY | PLUGIN_VAR_INVISIBLE |            \
-   PLUGIN_VAR_SENSITIVE)
+   PLUGIN_VAR_SENSITIVE | PLUGIN_VAR_HINTUPDATEABLE)
 
 #define MYSQL_PLUGIN_VAR_HEADER \
   int flags;                    \
@@ -422,6 +389,20 @@ typedef void (*mysql_var_update_func)(MYSQL_THD thd, SYS_VAR *var,
       def,                                                                 \
       min,                                                                 \
       max,                                                                 \
+      blk}
+
+#define MYSQL_SYSVAR_UINT64_T(name, varname, opt, comment, check, update, def, \
+                              min, max, blk)                                   \
+  DECLARE_MYSQL_SYSVAR_SIMPLE(name, uint64_t) = {                              \
+      PLUGIN_VAR_LONGLONG | PLUGIN_VAR_UNSIGNED | ((opt)&PLUGIN_VAR_MASK),     \
+      #name,                                                                   \
+      comment,                                                                 \
+      check,                                                                   \
+      update,                                                                  \
+      &varname,                                                                \
+      def,                                                                     \
+      min,                                                                     \
+      max,                                                                     \
       blk}
 
 #define MYSQL_SYSVAR_ENUM(name, varname, opt, comment, check, update, def, \
@@ -769,6 +750,44 @@ int thd_allow_batch(MYSQL_THD thd);
 
 void thd_mark_transaction_to_rollback(MYSQL_THD thd, int all);
 
+/** Types of statistics that can be passed to thd_report_innodb_stat */
+enum mysql_trx_stat_type {
+  /** Volume of I/O read requests in bytes */
+  MYSQL_TRX_STAT_IO_READ_BYTES,
+  /** Time in microseconds spent waiting for I/O reads to complete */
+  MYSQL_TRX_STAT_IO_READ_WAIT_USECS,
+  /** Time in microseconds spent waiting for row locks */
+  MYSQL_TRX_STAT_LOCK_WAIT_USECS,
+  /** Time in microseconds spent waiting to enter InnoDB */
+  MYSQL_TRX_STAT_INNODB_QUEUE_WAIT_USECS,
+  /** A logical data page accessed */
+  MYSQL_TRX_STAT_ACCESS_PAGE_ID
+};
+
+/**
+  Report various InnoDB statistics for the slow query log extensions
+
+  @param[in]    thd     user thread connection handle
+  @param[in]    trx_id  InnoDB tranaction ID
+  @param[in]    type    type of statistics being reported
+  @param[in]    value   the value of statistics
+*/
+void thd_report_innodb_stat(MYSQL_THD thd, unsigned long long trx_id,
+                            enum mysql_trx_stat_type type, uint64_t value);
+
+unsigned long thd_log_slow_verbosity(const MYSQL_THD thd);
+
+int thd_opt_slow_log();
+
+/**
+  Check whether given connection handle is associated with a background thread.
+
+  @param thd  connection handle
+  @retval non-zero  the connection handle belongs to a background thread
+  @retval 0   the connection handle belongs to a different thread type
+*/
+int thd_is_background_thread(const MYSQL_THD thd);
+
 /**
   Create a temporary file.
 
@@ -828,6 +847,13 @@ void thd_binlog_pos(const MYSQL_THD thd, const char **file_var,
 unsigned long thd_get_thread_id(const MYSQL_THD thd);
 
 /**
+  Return the query id of a thread
+  @param thd user thread
+  @return query id
+*/
+int64_t thd_get_query_id(const MYSQL_THD thd);
+
+/**
   Get the XID for this connection's transaction
 
   @param thd  user thread connection handle
@@ -871,10 +897,22 @@ void thd_set_ha_data(MYSQL_THD thd, const struct handlerton *hton,
 
 void remove_ssl_err_thread_state();
 
+int thd_command(const MYSQL_THD thd);
+long long thd_start_time(const MYSQL_THD thd);
+void thd_kill(unsigned long id);
+
 /**
-  Interface to get the number of VCPUs.
+  Check whether ft_query_extra_word_chars server variable is enabled for the
+  current session
+
+  @return ft_query_extra_word_chars value
 */
-unsigned int thd_get_num_vcpus();
+int thd_get_ft_query_extra_word_chars(void);
+
+typedef bool (*ssl_reload_callback_t)(void *);
+bool register_ssl_reload_callback(ssl_reload_callback_t);
+bool deregister_ssl_reload_callback(ssl_reload_callback_t);
+
 #ifdef __cplusplus
 }
 #endif

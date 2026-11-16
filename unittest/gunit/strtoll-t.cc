@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <gtest/gtest.h>
-#include <limits.h>
+#include <climits>
 
 #include "strings/m_ctype_internals.h"
 

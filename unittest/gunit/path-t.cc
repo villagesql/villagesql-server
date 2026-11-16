@@ -28,10 +28,10 @@ namespace file_path_ns {
 #include "../client/path.cc"
 
 TEST(Client, Path) {
-  std::string filename = "filename";
-  std::string filename2 = "filename2";
+  std::string const filename = "filename";
+  std::string const filename2 = "filename2";
   static const std::string path1 = "/root";
-  std::string path2 = "/subdir";
+  std::string const path2 = "/subdir";
 
   Path p1(path1);
   Path p2;

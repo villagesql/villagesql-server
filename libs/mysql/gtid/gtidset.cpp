@@ -21,9 +21,14 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+// Suppress the deprecation warning for gtidset.h, because this is the cpp file
+// where we define this deprecated functionality. When we remove the feature,
+// remove this entire file.
+#define NO_DEPRECATION_WARNING_FOR_HEADER_GTIDSET_H
 #include "mysql/gtid/gtidset.h"
 #include <map>
 #include <string>
+#include "my_compiler.h"
 
 namespace mysql::gtid {
 
@@ -277,8 +282,11 @@ bool Gtid_set::is_empty() const { return m_gtid_set.empty(); }
 std::size_t Gtid_set::count() const {
   std::size_t count{0};
 
+  MY_COMPILER_DIAGNOSTIC_PUSH()
+  MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wunused-variable")
   for (auto const &[uuid, tag_map] : m_gtid_set) {
     for (auto const &[tag, intervals] : tag_map) {
+      MY_COMPILER_DIAGNOSTIC_POP()
       for (auto &interval : intervals) {
         count += interval.count();
       }
@@ -291,8 +299,11 @@ std::size_t Gtid_set::count() const {
 void Gtid_set::reset() { m_gtid_set.clear(); }
 
 Gtid_format Gtid_set::get_gtid_set_format() const {
+  MY_COMPILER_DIAGNOSTIC_PUSH()
+  MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wunused-variable")
   for (auto const &[uuid, tag_map] : m_gtid_set) {
     for (auto const &[tag, intervals] : tag_map) {
+      MY_COMPILER_DIAGNOSTIC_POP()
       if (tag.is_defined()) {
         return Gtid_format::tagged;
       }

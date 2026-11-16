@@ -31,9 +31,9 @@ ERROR 22018: Invalid JSON value for CAST to INTEGER from column json_extract at 
 INSERT INTO t(j) VALUES ('"abc"');
 ERROR 22018: Invalid JSON value for CAST to INTEGER from column json_extract at row 1
 INSERT INTO t(j) VALUES ('');
-ERROR 22032: Invalid JSON text: "The document is empty." at position 0 in value for column 't.j'.
+ERROR 22032: Invalid JSON text: "The document is empty." at position 0 in value for column 't.j' at row 1.
 INSERT INTO t(j) VALUES ('[');
-ERROR 22032: Invalid JSON text: "Invalid value." at position 1 in value for column 't.j'.
+ERROR 22032: Invalid JSON text: "Invalid value." at position 1 in value for column 't.j' at row 1.
 SELECT * FROM t ORDER BY id;
 id	j	gc
 0	"5"	5
@@ -48,16 +48,16 @@ id	j	gc
 2	[123]	123
 3	[123]	123
 UPDATE t SET j = '[';
-ERROR 22032: Invalid JSON text: "Invalid value." at position 1 in value for column 't.j'.
+ERROR 22032: Invalid JSON text: "Invalid value." at position 1 in value for column 't.j' at row 1.
 DROP TABLE t;
 CREATE TABLE t(id INT, j JSON,
 gc JSON GENERATED ALWAYS AS (JSON_ARRAY(j)));
 INSERT INTO t(id, j)
 VALUES (1, '1'), (2, '[true, false]'), (3, '{"a":1,"b":2}');
 INSERT INTO t(j) VALUES ('');
-ERROR 22032: Invalid JSON text: "The document is empty." at position 0 in value for column 't.j'.
+ERROR 22032: Invalid JSON text: "The document is empty." at position 0 in value for column 't.j' at row 1.
 INSERT INTO t(j) VALUES ('[');
-ERROR 22032: Invalid JSON text: "Invalid value." at position 1 in value for column 't.j'.
+ERROR 22032: Invalid JSON text: "Invalid value." at position 1 in value for column 't.j' at row 1.
 SELECT * FROM t ORDER BY id;
 id	j	gc
 1	1	[1]
@@ -70,7 +70,7 @@ id	j	gc
 2	"abc"	["abc"]
 3	"abc"	["abc"]
 UPDATE t SET j = '[';
-ERROR 22032: Invalid JSON text: "Invalid value." at position 1 in value for column 't.j'.
+ERROR 22032: Invalid JSON text: "Invalid value." at position 1 in value for column 't.j' at row 1.
 DROP TABLE t;
 CREATE TABLE t(ts TIMESTAMP, j JSON AS (CAST(ts AS JSON)));
 INSERT INTO t(ts) VALUES ('2000-01-01 00:00:00');
@@ -403,10 +403,10 @@ drop table t1;
 #
 CREATE TABLE t1 (
 pk integer auto_increment key,
-col_varchar_255_utf8_key varchar(255)  CHARACTER SET utf8
+col_varchar_255_utf8_key varchar(255)  CHARACTER SET utf8mb3
 );
 Warnings:
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 VALUES (NULL, 'q') , (NULL, 'tgzvsj') ,
 (NULL, 'b') , (NULL, 'q') , (NULL, 'up') , (NULL, 'up') ;
 ALTER TABLE t1 ADD COLUMN json_varchar255_utf8_key json;
@@ -420,10 +420,10 @@ SELECT SQL_BIG_RESULT table1.json_varchar255_utf8_key AS field1, count(*)
 FROM t1 AS table1 LEFT JOIN t1 AS table2 ON table1.pk <= table2.pk
 GROUP  BY field1;
 field1	count(*)
-{"col_varchar_255_utf8_key": "up"}	3
-{"col_varchar_255_utf8_key": "q"}	9
 {"col_varchar_255_utf8_key": "b"}	4
 {"col_varchar_255_utf8_key": "tgzvsj"}	5
+{"col_varchar_255_utf8_key": "q"}	9
+{"col_varchar_255_utf8_key": "up"}	3
 Warnings:
 Warning	1235	This version of MySQL doesn't yet support 'sorting of non-scalar JSON values'
 DROP TABLE t1;

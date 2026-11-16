@@ -62,7 +62,7 @@ std::vector<std::string> Ssl_session_options::ssl_cipher_list() const {
   const char *versions[num_of_elements];
 
   if (active_tls()) {
-    int64_t number_of_items =
+    int64_t const number_of_items =
         ssl_wrapper_cipher_list(m_vio->get_vio(), versions, num_of_elements);
 
     std::copy(versions, versions + number_of_items, std::back_inserter(result));

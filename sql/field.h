@@ -45,6 +45,7 @@
 #include "my_dbug.h"
 #include "my_double2ulonglong.h"
 #include "my_inttypes.h"
+#include "my_temporal.h"
 #include "my_time.h"  // MYSQL_TIME_NOTE_TRUNCATED
 #include "mysql/binlog/event/export/binary_log_funcs.h"  // my_time_binary_length
 #include "mysql/strings/dtoa.h"
@@ -57,11 +58,15 @@
 #include "sql/gis/srid.h"
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"
-#include "sql/sql_error.h"  // Sql_condition
+#include "sql/sql_error.h"         // Sql_condition
+#include "sql/system_variables.h"  // MODE_NO_ZERO_DATE, etc
 #include "sql/table.h"
 #include "sql_string.h"  // String
 #include "template_utils.h"
+#include "vector-common/vector_constants.h"  // max_dimensions
 #include "villagesql/schema/descriptor/type_context.h"
+
+using sql_mode_t = uint64_t;
 
 namespace villagesql {
 class TypeDecoder;
@@ -74,7 +79,6 @@ class Field;
 class Field_bit;
 class Field_bit_as_char;
 class Field_blob;
-class Field_datetime;
 class Field_decimal;
 class Field_double;
 class Field_enum;
@@ -84,7 +88,7 @@ class Field_long;
 class Field_longlong;
 class Field_medium;
 class Field_new_decimal;
-class Field_newdate;
+class Field_date;
 class Field_num;
 class Field_real;
 class Field_set;
@@ -94,10 +98,7 @@ class Field_string;
 class Field_temporal;
 class Field_temporal_with_date;
 class Field_temporal_with_date_and_time;
-class Field_temporal_with_date_and_timef;
 class Field_time;
-class Field_time_common;
-class Field_timef;
 class Field_timestamp;
 class Field_tiny;
 class Field_varstring;
@@ -156,24 +157,20 @@ Field (abstract)
 |  |     +--Field_geom
 |  |     +--Field_json
 |  |        +--Field_typed_array
+|  |     +--Field_vector
 |  |
 |  +--Field_null
 |  +--Field_enum
 |     +--Field_set
 |
 +--Field_temporal (abstract)
-   +--Field_time_common (abstract)
-   |  +--Field_time
-   |  +--Field_timef
+   +--Field_time
    |
    +--Field_temporal_with_date (abstract)
-      +--Field_newdate
+      +--Field_date
       +--Field_temporal_with_date_and_time (abstract)
          +--Field_timestamp
          +--Field_datetime
-         +--Field_temporal_with_date_and_timef (abstract)
-            +--Field_timestampf
-            +--Field_datetimef
 */
 
 enum enum_check_fields : int {
@@ -184,20 +181,22 @@ enum enum_check_fields : int {
 
 /// For use @see DTCollation::aggregate()
 enum Derivation {
-  DERIVATION_IGNORABLE = 6,
+  DERIVATION_NONE = 7,
+  DERIVATION_NULL = 6,
   DERIVATION_NUMERIC = 5,
   DERIVATION_COERCIBLE = 4,
   DERIVATION_SYSCONST = 3,
   DERIVATION_IMPLICIT = 2,
-  DERIVATION_NONE = 1,
+  DERIVATION_UNUSED = 1,  // Avoids changes in COERCIBILITY() results
   DERIVATION_EXPLICIT = 0
 };
 
 /* Specifies data storage format for individual columns */
 enum column_format_type {
-  COLUMN_FORMAT_TYPE_DEFAULT = 0, /* Not specified (use engine default) */
-  COLUMN_FORMAT_TYPE_FIXED = 1,   /* FIXED format */
-  COLUMN_FORMAT_TYPE_DYNAMIC = 2  /* DYNAMIC format */
+  COLUMN_FORMAT_TYPE_DEFAULT = 0,   /* Not specified (use engine default) */
+  COLUMN_FORMAT_TYPE_FIXED = 1,     /* FIXED format */
+  COLUMN_FORMAT_TYPE_DYNAMIC = 2,   /* DYNAMIC format */
+  COLUMN_FORMAT_TYPE_COMPRESSED = 3 /* COMPRESSED format*/
 };
 
 /**
@@ -783,6 +782,8 @@ class Field {
 
    */
   bool is_created_from_null_item;
+  LEX_CSTRING zip_dict_name;  // associated compression dictionary name
+  LEX_CSTRING zip_dict_data;  // associated compression dictionary data
   /**
     If true, it's a Create_field_wrapper (a sub-class of Field used during
     CREATE/ALTER that we mustn't cast to other sub-classes of Field that
@@ -815,6 +816,9 @@ class Field {
   */
   unsigned int m_warnings_pushed;
 
+  /// Holds the name of the masking policy applied to the field.
+  LEX_CSTRING m_masking_policy = EMPTY_CSTR;
+
  public:
   /* Generated column data */
   Value_generator *gcol_info{nullptr};
@@ -841,6 +845,18 @@ class Field {
     @param hidden the new hidden type to set.
   */
   void set_hidden(dd::Column::enum_hidden_type hidden) { m_hidden = hidden; }
+
+  /// Sets the name of the masking policy to apply to this column.
+  void set_masking_policy(LEX_CSTRING masking_policy) {
+    m_masking_policy = masking_policy;
+  }
+
+  /// Does this column have a masking policy?
+  bool has_masking_policy() const { return m_masking_policy.length != 0; }
+
+  /// Returns the name of the masking policy, or an empty string if no masking
+  /// policy is defined on this column.
+  LEX_CSTRING masking_policy() const { return m_masking_policy; }
 
   /// @returns the hidden type for this field.
   dd::Column::enum_hidden_type hidden() const { return m_hidden; }
@@ -930,10 +946,12 @@ class Field {
                                        const CHARSET_INFO *cs) = 0;
   virtual type_conversion_status store(double nr) = 0;
   virtual type_conversion_status store(longlong nr, bool unsigned_val) = 0;
+  virtual type_conversion_status store_time(Time_val time, uint8 dec_arg);
+  virtual type_conversion_status store_date(Date_val date);
+
   /**
     Store a temporal value in packed longlong format into a field.
-    The packed value is compatible with TIME_to_longlong_time_packed(),
-    TIME_to_longlong_date_packed() or TIME_to_longlong_datetime_packed().
+    The packed value is compatible with TIME_to_longlong_datetime_packed().
     Note, the value must be properly rounded or truncated according
     according to field->decimals().
 
@@ -978,15 +996,6 @@ class Field {
   virtual double val_real() const = 0;
   virtual longlong val_int() const = 0;
   /**
-    Returns TIME value in packed longlong format.
-    This method should not be called for non-temporal types.
-    Temporal field types override the default method.
-  */
-  virtual longlong val_time_temporal() const {
-    assert(0);
-    return 0;
-  }
-  /**
     Returns DATE/DATETIME value in packed longlong format.
     This method should not be called for non-temporal types.
     Temporal field types override the default method.
@@ -996,25 +1005,10 @@ class Field {
     return 0;
   }
 
-  virtual longlong val_time_temporal_at_utc() const {
-    return val_time_temporal();
-  }
-
   virtual longlong val_date_temporal_at_utc() const {
     return val_date_temporal();
   }
 
-  /**
-    Returns "native" packed longlong representation of
-    a TIME or DATE/DATETIME field depending on field type.
-  */
-  longlong val_temporal_by_field_type() const {
-    // Return longlong TIME or DATETIME representation, depending on field type
-    const enum_field_types field_type = type();
-    if (field_type == MYSQL_TYPE_TIME) return val_time_temporal();
-    assert(is_temporal_type_with_date(field_type));
-    return val_date_temporal();
-  }
   virtual my_decimal *val_decimal(my_decimal *) const = 0;
   String *val_str(String *str) const { return val_str(str, str); }
   /*
@@ -1280,6 +1274,17 @@ class Field {
     if (is_tmp_nullable()) return m_is_tmp_null;
 
     return false;
+  }
+
+  /**
+    Checks if the field has COLUMN_FORMAT_TYPE_COMPRESSED flag and non-empty
+    associated compression dictionary.
+  */
+  bool has_associated_compression_dictionary() const noexcept {
+    assert(zip_dict_name.str == 0 ||
+           column_format() == COLUMN_FORMAT_TYPE_COMPRESSED);
+    return column_format() == COLUMN_FORMAT_TYPE_COMPRESSED &&
+           zip_dict_name.str != 0;
   }
 
   /**
@@ -1607,9 +1612,39 @@ class Field {
 
   void copy_data(ptrdiff_t src_record_offset);
 
-  virtual bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const;
+  /**
+    Retrieve field value and return the result as a date.
 
-  virtual bool get_time(MYSQL_TIME *ltime) const;
+    @param[out] date returned date value
+    @param flags     Limit the value returned according to TIME_NO_ZERO_IN_DATE,
+                     TIME_NO_ZERO_DATE, TIME_NO_INVALID_DATES.
+
+    @returns false retrieval was successful, date contains the result.
+             true  evaluation resulted in error, or a NULL value is returned.
+  */
+  virtual bool val_date(Date_val *date, my_time_flags_t flags) const;
+
+  /**
+    Retrieve field value and return the result as a time.
+
+    @param[out] time returned time value
+
+    @returns false retrieval was successful, time contains the result.
+             true  evaluation resulted in error, or a NULL value is returned.
+  */
+  virtual bool val_time(Time_val *time) const;
+
+  /**
+    Retrieve field value and return the result as a datetime/timestamp.
+
+    @param[out] dt returned datetime value
+    @param flags   Limit the value returned according to TIME_NO_ZERO_IN_DATE,
+                   TIME_NO_ZERO_DATE, TIME_NO_INVALID_DATES.
+
+    @returns false retrieval was successful, dt contains the result.
+             true  evaluation resulted in error, or a NULL value is returned.
+  */
+  virtual bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const;
 
   virtual const CHARSET_INFO *charset() const { return &my_charset_bin; }
 
@@ -1733,10 +1768,15 @@ class Field {
 
   void set_column_format(column_format_type column_format_arg) {
     assert(column_format() == COLUMN_FORMAT_TYPE_DEFAULT);
+    flags &= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
     flags |= (column_format_arg << FIELD_FLAGS_COLUMN_FORMAT);
   }
 
-  /* Validate the value stored in a field */
+  /**
+    Validate the value stored in a field.
+    Used to validate a default value against the current SQL mode,
+    especially for temporal fields.
+  */
   virtual type_conversion_status validate_stored_val(THD *thd
                                                      [[maybe_unused]]) {
     return TYPE_OK;
@@ -1889,6 +1929,20 @@ class Field {
 
   const uchar *unpack_int64(uchar *to, const uchar *from) const;
 
+ public:
+  /**
+    Checks if the current field definition and provided create field
+    definition have different compression attributes.
+
+    @param   new_field   create field definition to compare with
+
+    @return
+      true  - if compression attributes are different
+      false - if compression attributes are identical.
+  */
+  bool has_different_compression_attributes_with(
+      const Create_field &new_field) const noexcept;
+
  private:
   // TODO(villagesql): Collapse these into one object (here and in Item)
   const villagesql::TypeContext *custom_type{nullptr};
@@ -1973,6 +2027,18 @@ class Create_field_wrapper final : public Field {
     assert(false);
     return TYPE_ERR_BAD_VALUE;
   }
+  type_conversion_status store_time(Time_val, uint8) final {
+    assert(false);
+    return TYPE_ERR_BAD_VALUE;
+  }
+  type_conversion_status store_date(Date_val) final {
+    assert(false);
+    return TYPE_ERR_BAD_VALUE;
+  }
+  type_conversion_status store_time(MYSQL_TIME *, uint8) final {
+    assert(false);
+    return TYPE_ERR_BAD_VALUE;
+  }
   double val_real(void) const final {
     assert(false);
     return 0.0;
@@ -2038,10 +2104,13 @@ class Field_num : public Field {
   uint decimals() const final { return (uint)dec; }
   bool eq_def(const Field *field) const final;
   type_conversion_status store_decimal(const my_decimal *) override;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) override;
+  type_conversion_status store_date(Date_val date) override;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) override;
   my_decimal *val_decimal(my_decimal *) const override;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const override;
-  bool get_time(MYSQL_TIME *ltime) const override;
+  bool val_date(Date_val *date, my_time_flags_t flags) const override;
+  bool val_time(Time_val *time) const override;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const override;
   uint is_equal(const Create_field *new_field) const override;
   uint row_pack_length() const final { return pack_length(); }
   uint32 pack_length_from_metadata(uint) const override {
@@ -2114,7 +2183,7 @@ class Field_longstr : public Field_str {
   type_conversion_status check_string_copy_error(
       const char *well_formed_error_pos, const char *cannot_convert_error_pos,
       const char *from_end_pos, const char *end, bool count_spaces,
-      const CHARSET_INFO *cs);
+      const CHARSET_INFO *from_cs, const CHARSET_INFO *to_cs);
 
  public:
   Field_longstr(uchar *ptr_arg, uint32 len_arg, uchar *null_ptr_arg,
@@ -2145,11 +2214,14 @@ class Field_real : public Field_num {
       : Field_num(ptr_arg, len_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
                   field_name_arg, dec_arg, zero_arg, unsigned_arg),
         not_fixed(dec_arg >= DECIMAL_NOT_SPECIFIED) {}
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
+  type_conversion_status store_date(Date_val date) final;
   type_conversion_status store_decimal(const my_decimal *) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   my_decimal *val_decimal(my_decimal *) const final;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
+  bool val_date(Date_val *date, my_time_flags_t flags) const final;
+  bool val_time(Time_val *time) const final;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const override;
   Truncate_result truncate(double *nr, double max_length);
   Truncate_result truncate(double *nr, double max_length) const;
   uint32 max_display_length() const final { return field_length; }
@@ -2238,13 +2310,16 @@ class Field_new_decimal : public Field_num {
                                const CHARSET_INFO *charset) final;
   type_conversion_status store(double nr) final;
   type_conversion_status store(longlong nr, bool unsigned_val) final;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
+  type_conversion_status store_date(Date_val date) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   type_conversion_status store_decimal(const my_decimal *) final;
   double val_real() const final;
   longlong val_int() const final;
   my_decimal *val_decimal(my_decimal *) const final;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
+  bool val_date(Date_val *date, my_time_flags_t flags) const final;
+  bool val_time(Time_val *time) const final;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const final;
   String *val_str(String *, String *) const final;
   int cmp(const uchar *, const uchar *) const final;
   using Field_num::make_sort_key;
@@ -2653,11 +2728,10 @@ class Field_null final : public Field_str {
 
 /*
   Abstract class for TIME, DATE, DATETIME, TIMESTAMP
-  with and without fractional part.
 */
 class Field_temporal : public Field {
  protected:
-  uint8 dec;  // Number of fractional digits
+  uint8 dec;  // Number of fractional digits (N/A for DATE)
 
   /**
     Adjust number of decimal digits from DECIMAL_NOT_SPECIFIED to
@@ -2670,7 +2744,7 @@ class Field_temporal : public Field {
   /**
     Low level routine to store a MYSQL_TIME value into a field.
     The value must be already properly rounded or truncated
-    and checked for being a valid TIME/DATE/DATETIME value.
+    and checked for being a valid DATETIME value.
 
     @param[in]  ltime   MYSQL_TIME value.
     @param[out] error   Error flag vector, set in case of error.
@@ -2723,7 +2797,7 @@ class Field_temporal : public Field {
     into MYSQL_TIME, according to the field type. Nanoseconds
     are rounded to milliseconds and added to ltime->second_part.
 
-    @param[in]  nr            Number
+    @param[in]  val           Number
     @param[in]  unsigned_val  SIGNED/UNSIGNED flag
     @param[in]  nanoseconds   Fractional part in nanoseconds
     @param[out] ltime         The value is stored here
@@ -2733,16 +2807,15 @@ class Field_temporal : public Field {
     @retval     false         On success
     @retval     true          On error
   */
-  virtual type_conversion_status convert_number_to_TIME(longlong nr,
+  virtual type_conversion_status convert_number_to_TIME(longlong val,
                                                         bool unsigned_val,
                                                         int nanoseconds,
                                                         MYSQL_TIME *ltime,
                                                         int *warning) = 0;
-
   /**
     Convert an integer number into MYSQL_TIME, according to the field type.
 
-    @param[in]  nr            Number
+    @param[in]  val           Number
     @param[in]  unsigned_val  SIGNED/UNSIGNED flag
     @param[out] ltime         The value is stored here
     @param[in,out] warnings   Warnings found during execution
@@ -2750,8 +2823,8 @@ class Field_temporal : public Field {
     @retval     false         On success
     @retval     true          On error
   */
-  longlong convert_number_to_datetime(longlong nr, bool unsigned_val,
-                                      MYSQL_TIME *ltime, int *warnings);
+  longlong convert_int_to_datetime(longlong val, bool unsigned_val,
+                                   MYSQL_TIME *ltime, int *warnings);
 
   /**
     Set warnings from a warning vector.
@@ -2771,16 +2844,16 @@ class Field_temporal : public Field {
 
   /**
     Flags that are passed as "flag" argument to
-    check_date(), number_to_datetime(), str_to_datetime().
+    store functions, and to e.g. int_to_datetime(), str_to_datetime().
 
     Flags depend on the session sql_mode settings, such as
     MODE_NO_ZERO_DATE, MODE_NO_ZERO_IN_DATE.
-    Also, Field_newdate, Field_datetime, Field_datetimef add TIME_FUZZY_DATE
-    to the session sql_mode settings, to allow relaxed date format,
-    while Field_timestamp, Field_timestampf do not.
+    Field_timestamp always add MODE_NO_ZERO_IN_DATE and MODE_NO_INVALID_DATES,
+    as such values cannot be stored.
 
-    @param  thd  THD
-    @retval      sql_mode flags mixed with the field type flags.
+    @param   thd  THD
+
+    @returns sql_mode flags mixed with the field type flags.
   */
   virtual my_time_flags_t date_flags(const THD *thd [[maybe_unused]]) const {
     return 0;
@@ -2788,7 +2861,7 @@ class Field_temporal : public Field {
 
   /**
     Flags that are passed as "flag" argument to
-    check_date(), number_to_datetime(), str_to_datetime().
+    check_date(), int_to_datetime(), str_to_datetime().
     Similar to the above when we don't have a THD value.
   */
   my_time_flags_t date_flags() const;
@@ -2867,6 +2940,20 @@ class Field_temporal : public Field {
   }
 
   uint8 get_fractional_digits() const { return dec; }
+
+  /**
+    Flags for evaluation of temporal values, based on current SQL mode.
+
+    @param mode     current thd containing SQL mode and truncation mode.
+
+    @returns derived evaluation flags
+  */
+  static inline my_time_flags_t temporal_flags(sql_mode_t mode) {
+    return ((mode & MODE_INVALID_DATES) == 0 ? TIME_NO_INVALID_DATES : 0) |
+           (mode & MODE_NO_ZERO_DATE ? TIME_NO_ZERO_DATE : 0) |
+           (mode & MODE_NO_ZERO_IN_DATE ? TIME_NO_ZERO_IN_DATE : 0) |
+           (mode & MODE_TIME_TRUNCATE_FRACTIONAL ? TIME_FRAC_TRUNCATE : 0);
+  }
 };
 
 /**
@@ -2894,7 +2981,7 @@ class Field_temporal_with_date : public Field_temporal {
   bool get_internal_check_zero(MYSQL_TIME *ltime,
                                my_time_flags_t fuzzydate) const;
 
-  type_conversion_status convert_number_to_TIME(longlong nr, bool unsigned_val,
+  type_conversion_status convert_number_to_TIME(longlong val, bool unsigned_val,
                                                 int nanoseconds,
                                                 MYSQL_TIME *ltime,
                                                 int *warning) final;
@@ -2923,50 +3010,25 @@ class Field_temporal_with_date : public Field_temporal {
       : Field_temporal(ptr_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
                        field_name_arg, int_length_arg, dec_arg) {}
   bool send_to_protocol(Protocol *protocol) const override;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) override;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   String *val_str(String *, String *) const override;
-  longlong val_time_temporal() const override;
   longlong val_date_temporal() const override;
-  longlong val_time_temporal_at_utc() const override;
   longlong val_date_temporal_at_utc() const override;
-  bool get_time(MYSQL_TIME *ltime) const final {
-    return get_date(ltime, TIME_FUZZY_DATE);
-  }
-  /* Validate the value stored in a field */
+  bool val_time(Time_val *time) const final;
   type_conversion_status validate_stored_val(THD *thd) override;
 };
 
 /**
-  Abstract class for types with date and time,
-  with or without fractional part:
+  Abstract class for types with date and time:
   DATETIME, DATETIME(N), TIMESTAMP, TIMESTAMP(N).
 */
 class Field_temporal_with_date_and_time : public Field_temporal_with_date {
  private:
-  int do_save_field_metadata(uchar *metadata_ptr) const override {
-    if (decimals()) {
-      *metadata_ptr = decimals();
-      return 1;
-    }
-    return 0;
+  int do_save_field_metadata(uchar *metadata_ptr) const final {
+    *metadata_ptr = decimals();
+    return 1;
   }
-
- protected:
-  /**
-     Initialize flags for TIMESTAMP DEFAULT CURRENT_TIMESTAMP / ON UPDATE
-     CURRENT_TIMESTAMP columns.
-
-     @todo get rid of TIMESTAMP_FLAG and ON_UPDATE_NOW_FLAG.
-  */
-  void init_timestamp_flags();
-  /**
-    Store "struct timeval" value into field.
-    The value must be properly rounded or truncated according
-    to the number of fractional second digits.
-  */
-  virtual void store_timestamp_internal(const my_timeval *tm) = 0;
-  bool convert_TIME_to_timestamp(const MYSQL_TIME *ltime, const Time_zone &tz,
-                                 my_timeval *tm, int *error);
 
  public:
   /**
@@ -2984,41 +3046,10 @@ class Field_temporal_with_date_and_time : public Field_temporal_with_date {
       : Field_temporal_with_date(ptr_arg, null_ptr_arg, null_bit_arg,
                                  auto_flags_arg, field_name_arg,
                                  MAX_DATETIME_WIDTH, dec_arg) {}
-  void store_timestamp(const my_timeval *tm) override;
-};
-
-/**
-  Abstract class for types with date and time, with fractional part:
-  DATETIME, DATETIME(N), TIMESTAMP, TIMESTAMP(N).
-*/
-class Field_temporal_with_date_and_timef
-    : public Field_temporal_with_date_and_time {
- private:
-  int do_save_field_metadata(uchar *metadata_ptr) const final {
-    *metadata_ptr = decimals();
-    return 1;
-  }
-
- public:
-  /**
-    Constructor for Field_temporal_with_date_and_timef
-    @param ptr_arg           See Field definition
-    @param null_ptr_arg      See Field definition
-    @param null_bit_arg      See Field definition
-    @param auto_flags_arg    See Field definition
-    @param field_name_arg    See Field definition
-    @param dec_arg           Number of second fraction digits, 0..6.
-  */
-  Field_temporal_with_date_and_timef(uchar *ptr_arg, uchar *null_ptr_arg,
-                                     uchar null_bit_arg, uchar auto_flags_arg,
-                                     const char *field_name_arg, uint8 dec_arg)
-      : Field_temporal_with_date_and_time(ptr_arg, null_ptr_arg, null_bit_arg,
-                                          auto_flags_arg, field_name_arg,
-                                          dec_arg) {}
 
   uint decimals() const final { return dec; }
   const CHARSET_INFO *sort_charset() const final { return &my_charset_bin; }
-  using Field_temporal_with_date_and_time::make_sort_key;
+  using Field_temporal_with_date::make_sort_key;
   size_t make_sort_key(uchar *to, size_t length) const final {
     memcpy(to, ptr, length);
     return length;
@@ -3030,72 +3061,31 @@ class Field_temporal_with_date_and_timef
   double val_real() const final;
   longlong val_int() const final;
   my_decimal *val_decimal(my_decimal *decimal_value) const final;
-};
 
-/*
-  Field implementing TIMESTAMP data type without fractional seconds.
-  We will be removed eventually.
-*/
-class Field_timestamp : public Field_temporal_with_date_and_time {
+  void store_timestamp(const my_timeval *tm) override;
+
  protected:
-  my_time_flags_t date_flags(const THD *thd) const final;
-  type_conversion_status store_internal(const MYSQL_TIME *ltime,
-                                        int *error) final;
-  bool get_date_internal(MYSQL_TIME *ltime) const final;
-  bool get_date_internal_at_utc(MYSQL_TIME *ltime) const final;
-  void store_timestamp_internal(const my_timeval *tm) final;
-
- public:
-  static const int PACK_LENGTH = 4;
-  Field_timestamp(uchar *ptr_arg, uint32 len_arg, uchar *null_ptr_arg,
-                  uchar null_bit_arg, uchar auto_flags_arg,
-                  const char *field_name_arg);
-  Field_timestamp(bool is_nullable_arg, const char *field_name_arg);
-  enum_field_types type() const final { return MYSQL_TYPE_TIMESTAMP; }
-  enum ha_base_keytype key_type() const final { return HA_KEYTYPE_ULONG_INT; }
-  type_conversion_status store_packed(longlong nr) final;
-  longlong val_int() const final;
-  int cmp(const uchar *, const uchar *) const final;
-  using Field_temporal_with_date_and_time::make_sort_key;
-  size_t make_sort_key(uchar *buff, size_t length) const final;
-  uint32 pack_length() const final { return PACK_LENGTH; }
-  void sql_type(String &str) const final;
-  bool zero_pack() const final { return false; }
-  /* Get TIMESTAMP field value as seconds since begging of Unix Epoch */
-  bool get_timestamp(my_timeval *tm, int *warnings) const final;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
-  Field_timestamp *clone(MEM_ROOT *mem_root) const final {
-    assert(type() == MYSQL_TYPE_TIMESTAMP);
-    return new (mem_root) Field_timestamp(*this);
-  }
-  uchar *pack(uchar *to, const uchar *from, size_t max_length) const final {
-    return pack_int32(to, from, max_length);
-  }
-  const uchar *unpack(uchar *to, const uchar *from,
-                      uint param_data [[maybe_unused]]) final {
-    return unpack_int32(to, from);
-  }
-  /* Validate the value stored in a field */
-  type_conversion_status validate_stored_val(THD *thd) final;
-
- private:
   /**
-    Retrieves a value from a record, without checking fuzzy date flags.
+     Initialize flags for TIMESTAMP DEFAULT CURRENT_TIMESTAMP / ON UPDATE
+     CURRENT_TIMESTAMP columns.
 
-    @param tz The time zone to convert to
-    @param[out] ltime The timestamp value in the time zone.
-
-    @retval true  Means that the timestamp value read is 0. ltime is not touched
-    in this case.
-    @retval false If timestamp is non-zero.
+     @todo get rid of TIMESTAMP_FLAG and ON_UPDATE_NOW_FLAG.
   */
-  bool get_date_internal_at(const Time_zone *tz, MYSQL_TIME *ltime) const;
+  void init_timestamp_flags();
+  /**
+    Store "struct timeval" value into field.
+    The value must be properly rounded or truncated according
+    to the number of fractional second digits.
+  */
+  virtual void store_timestamp_internal(const my_timeval *tm) = 0;
+  bool convert_TIME_to_timestamp(const MYSQL_TIME *ltime, const Time_zone &tz,
+                                 my_timeval *tm, int *error);
 };
 
 /*
   Field implementing TIMESTAMP(N) data type, where N=0..6.
 */
-class Field_timestampf : public Field_temporal_with_date_and_timef {
+class Field_timestamp : public Field_temporal_with_date_and_time {
  protected:
   bool get_date_internal(MYSQL_TIME *ltime) const final;
   bool get_date_internal_at_utc(MYSQL_TIME *ltime) const final;
@@ -3106,7 +3096,7 @@ class Field_timestampf : public Field_temporal_with_date_and_timef {
 
  public:
   /**
-    Field_timestampf constructor
+    Field_timestamp constructor
     @param ptr_arg           See Field definition
     @param null_ptr_arg      See Field definition
     @param null_bit_arg      See Field definition
@@ -3114,20 +3104,20 @@ class Field_timestampf : public Field_temporal_with_date_and_timef {
     @param field_name_arg    See Field definition
     @param dec_arg           Number of fractional second digits, 0..6.
   */
-  Field_timestampf(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
-                   uchar auto_flags_arg, const char *field_name_arg,
-                   uint8 dec_arg);
+  Field_timestamp(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
+                  uchar auto_flags_arg, const char *field_name_arg,
+                  uint8 dec_arg);
   /**
-    Field_timestampf constructor
+    Field_timestamp constructor
     @param is_nullable_arg   See Field definition
     @param field_name_arg    See Field definition
     @param dec_arg           Number of fractional second digits, 0..6.
   */
-  Field_timestampf(bool is_nullable_arg, const char *field_name_arg,
-                   uint8 dec_arg);
-  Field_timestampf *clone(MEM_ROOT *mem_root) const final {
+  Field_timestamp(bool is_nullable_arg, const char *field_name_arg,
+                  uint8 dec_arg);
+  Field_timestamp *clone(MEM_ROOT *mem_root) const final {
     assert(type() == MYSQL_TYPE_TIMESTAMP);
-    return new (mem_root) Field_timestampf(*this);
+    return new (mem_root) Field_timestamp(*this);
   }
 
   enum_field_types type() const final { return MYSQL_TYPE_TIMESTAMP; }
@@ -3143,11 +3133,11 @@ class Field_timestampf : public Field_temporal_with_date_and_timef {
   }
 
   type_conversion_status store_packed(longlong nr) final;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
+  bool val_date(Date_val *date, my_time_flags_t flags) const final;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const final;
   void sql_type(String &str) const final;
 
   bool get_timestamp(my_timeval *tm, int *warnings) const final;
-  /* Validate the value stored in a field */
   type_conversion_status validate_stored_val(THD *thd) final;
 
  private:
@@ -3179,10 +3169,15 @@ class Field_year final : public Field_tiny {
                                const CHARSET_INFO *charset) final;
   type_conversion_status store(double nr) final;
   type_conversion_status store(longlong nr, bool unsigned_val) final;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
+  type_conversion_status store_date(Date_val date) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   double val_real() const final;
   longlong val_int() const final;
   String *val_str(String *, String *) const final;
+  bool val_date(Date_val *date, my_time_flags_t flags) const final;
+  bool val_time(Time_val *time) const final;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const final;
   bool send_to_protocol(Protocol *protocol) const final;
   void sql_type(String &str) const final;
   bool can_be_compared_as_longlong() const final { return true; }
@@ -3192,7 +3187,7 @@ class Field_year final : public Field_tiny {
   }
 };
 
-class Field_newdate : public Field_temporal_with_date {
+class Field_date : public Field_temporal_with_date {
  protected:
   static const int PACK_LENGTH = 3;
   my_time_flags_t date_flags(const THD *thd) const final;
@@ -3201,21 +3196,20 @@ class Field_newdate : public Field_temporal_with_date {
                                         int *error) final;
 
  public:
-  Field_newdate(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
-                uchar auto_flags_arg, const char *field_name_arg)
+  Field_date(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
+             uchar auto_flags_arg, const char *field_name_arg)
       : Field_temporal_with_date(ptr_arg, null_ptr_arg, null_bit_arg,
                                  auto_flags_arg, field_name_arg, MAX_DATE_WIDTH,
                                  0) {}
-  Field_newdate(bool is_nullable_arg, const char *field_name_arg)
+  Field_date(bool is_nullable_arg, const char *field_name_arg)
       : Field_temporal_with_date(nullptr,
                                  is_nullable_arg ? &dummy_null_buffer : nullptr,
                                  0, NONE, field_name_arg, MAX_DATE_WIDTH, 0) {}
   enum_field_types type() const final { return MYSQL_TYPE_DATE; }
   enum_field_types real_type() const final { return MYSQL_TYPE_NEWDATE; }
   enum ha_base_keytype key_type() const final { return HA_KEYTYPE_UINT24; }
-  type_conversion_status store_packed(longlong nr) final;
+  type_conversion_status store_date(Date_val date) final;
   longlong val_int() const final;
-  longlong val_time_temporal() const final;
   longlong val_date_temporal() const final;
   String *val_str(String *, String *) const final;
   bool send_to_protocol(Protocol *protocol) const final;
@@ -3225,19 +3219,29 @@ class Field_newdate : public Field_temporal_with_date {
   uint32 pack_length() const final { return PACK_LENGTH; }
   void sql_type(String &str) const final;
   bool zero_pack() const final { return true; }
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
-  Field_newdate *clone(MEM_ROOT *mem_root) const final {
+  bool val_date(Date_val *date, my_time_flags_t flags) const final;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const final;
+  Field_date *clone(MEM_ROOT *mem_root) const final {
     assert(type() == MYSQL_TYPE_DATE);
     assert(real_type() == MYSQL_TYPE_NEWDATE);
-    return new (mem_root) Field_newdate(*this);
+    return new (mem_root) Field_date(*this);
   }
 };
 
 /**
-  Abstract class for TIME and TIME(N).
+  Field implementing TIME(N) data type, where N=0..6.
 */
-class Field_time_common : public Field_temporal {
+class Field_time final : public Field_temporal {
+ private:
+  int do_save_field_metadata(uchar *metadata_ptr) const final {
+    *metadata_ptr = decimals();
+    return 1;
+  }
+
  protected:
+  type_conversion_status store_internal(const MYSQL_TIME *ltime,
+                                        int *error) final;
+
   bool convert_str_to_TIME(const char *str, size_t len, const CHARSET_INFO *cs,
                            MYSQL_TIME *ltime, MYSQL_TIME_STATUS *status) final;
   /**
@@ -3245,16 +3249,10 @@ class Field_time_common : public Field_temporal {
     two different interfaces: return value and warning. It should be
     refactored to only use return value.
    */
-  type_conversion_status convert_number_to_TIME(longlong nr, bool unsigned_val,
+  type_conversion_status convert_number_to_TIME(longlong val, bool unsigned_val,
                                                 int nanoseconds,
                                                 MYSQL_TIME *ltime,
                                                 int *warning) final;
-  /**
-    Low-level function to store MYSQL_TIME value.
-    The value must be rounded or truncated according to decimals().
-  */
-  type_conversion_status store_internal(const MYSQL_TIME *ltime,
-                                        int *error) override = 0;
   /**
     Function to store time value.
     The value is rounded/truncated according to decimals() and sql_mode.
@@ -3267,7 +3265,7 @@ class Field_time_common : public Field_temporal {
 
  public:
   /**
-    Constructor for Field_time_common
+    Constructor for Field_time
     @param ptr_arg           See Field definition
     @param null_ptr_arg      See Field definition
     @param null_bit_arg      See Field definition
@@ -3275,104 +3273,39 @@ class Field_time_common : public Field_temporal {
     @param field_name_arg    See Field definition
     @param dec_arg           Number of second fraction digits, 0..6.
   */
-  Field_time_common(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
-                    uchar auto_flags_arg, const char *field_name_arg,
-                    uint8 dec_arg)
+  Field_time(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
+             uchar auto_flags_arg, const char *field_name_arg, uint8 dec_arg)
       : Field_temporal(ptr_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
                        field_name_arg, MAX_TIME_WIDTH, dec_arg) {}
-  type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
-  String *val_str(String *, String *) const final;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
-  longlong val_date_temporal() const final;
-  bool send_to_protocol(Protocol *protocol) const final;
-};
-
-/*
-  Field implementing TIME data type without fractional seconds.
-  It will be removed eventually.
-*/
-class Field_time final : public Field_time_common {
- protected:
-  type_conversion_status store_internal(const MYSQL_TIME *ltime,
-                                        int *error) final;
-
- public:
-  Field_time(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
-             uchar auto_flags_arg, const char *field_name_arg)
-      : Field_time_common(ptr_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
-                          field_name_arg, 0) {}
-  Field_time(const char *field_name_arg)
-      : Field_time_common(nullptr, nullptr, 0, NONE, field_name_arg, 0) {}
-  enum_field_types type() const final { return MYSQL_TYPE_TIME; }
-  enum ha_base_keytype key_type() const final { return HA_KEYTYPE_INT24; }
-  type_conversion_status store_packed(longlong nr) final;
-  longlong val_int() const final;
-  longlong val_time_temporal() const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
-  int cmp(const uchar *, const uchar *) const final;
-  using Field_time_common::make_sort_key;
-  size_t make_sort_key(uchar *buff, size_t length) const final;
-  uint32 pack_length() const final { return 3; }
-  void sql_type(String &str) const final;
-  bool zero_pack() const final { return true; }
-  Field_time *clone(MEM_ROOT *mem_root) const final {
-    assert(type() == MYSQL_TYPE_TIME);
-    return new (mem_root) Field_time(*this);
-  }
-};
-
-/*
-  Field implementing TIME(N) data type, where N=0..6.
-*/
-class Field_timef final : public Field_time_common {
- private:
-  int do_save_field_metadata(uchar *metadata_ptr) const final {
-    *metadata_ptr = decimals();
-    return 1;
-  }
-
- protected:
-  type_conversion_status store_internal(const MYSQL_TIME *ltime,
-                                        int *error) final;
-
- public:
   /**
-    Constructor for Field_timef
-    @param ptr_arg           See Field definition
-    @param null_ptr_arg      See Field definition
-    @param null_bit_arg      See Field definition
-    @param auto_flags_arg    See Field definition
-    @param field_name_arg    See Field definition
-    @param dec_arg           Number of second fraction digits, 0..6.
-  */
-  Field_timef(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
-              uchar auto_flags_arg, const char *field_name_arg, uint8 dec_arg)
-      : Field_time_common(ptr_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
-                          field_name_arg, dec_arg) {}
-  /**
-    Constructor for Field_timef
+    Constructor for Field_time
     @param is_nullable_arg   See Field definition
     @param field_name_arg    See Field definition
     @param dec_arg           Number of second fraction digits, 0..6.
   */
-  Field_timef(bool is_nullable_arg, const char *field_name_arg, uint8 dec_arg)
-      : Field_time_common(nullptr,
-                          is_nullable_arg ? &dummy_null_buffer : nullptr, 0,
-                          NONE, field_name_arg, dec_arg) {}
-  Field_timef *clone(MEM_ROOT *mem_root) const final {
+  Field_time(bool is_nullable_arg, const char *field_name_arg, uint8 dec_arg)
+      : Field_temporal(nullptr, is_nullable_arg ? &dummy_null_buffer : nullptr,
+                       0, NONE, field_name_arg, MAX_TIME_WIDTH, dec_arg) {}
+  Field_time *clone(MEM_ROOT *mem_root) const final {
     assert(type() == MYSQL_TYPE_TIME);
-    return new (mem_root) Field_timef(*this);
+    return new (mem_root) Field_time(*this);
   }
   uint decimals() const final { return dec; }
   enum_field_types type() const final { return MYSQL_TYPE_TIME; }
   enum_field_types real_type() const final { return MYSQL_TYPE_TIME2; }
   enum_field_types binlog_type() const final { return MYSQL_TYPE_TIME2; }
-  type_conversion_status store_packed(longlong nr) final;
+  type_conversion_status store_date(Date_val date) final;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
+  type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   type_conversion_status reset() final;
   double val_real() const final;
   longlong val_int() const final;
-  longlong val_time_temporal() const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
+  String *val_str(String *, String *) const final;
+  bool val_date(Date_val *date, my_time_flags_t flags) const final;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const final;
+  longlong val_date_temporal() const final;
+  bool send_to_protocol(Protocol *protocol) const final;
+  bool val_time(Time_val *time) const final;
   my_decimal *val_decimal(my_decimal *) const final;
   uint32 pack_length() const final { return my_time_binary_length(dec); }
   uint pack_length_from_metadata(uint field_metadata) const final {
@@ -3384,7 +3317,7 @@ class Field_timef final : public Field_time_common {
   void sql_type(String &str) const final;
   bool zero_pack() const final { return true; }
   const CHARSET_INFO *sort_charset() const final { return &my_charset_bin; }
-  using Field_time_common::make_sort_key;
+  using Field_temporal::make_sort_key;
   size_t make_sort_key(uchar *to, size_t length) const final {
     memcpy(to, ptr, length);
     return length;
@@ -3395,71 +3328,10 @@ class Field_timef final : public Field_time_common {
 };
 
 /*
-  Field implementing DATETIME data type without fractional seconds.
-  We will be removed eventually.
+  Field implementing DATETIME(N) data type, where N=0..6.
 */
 class Field_datetime : public Field_temporal_with_date_and_time {
  protected:
-  type_conversion_status store_internal(const MYSQL_TIME *ltime,
-                                        int *error) final;
-  bool get_date_internal(MYSQL_TIME *ltime) const final;
-  my_time_flags_t date_flags(const THD *thd) const final;
-  void store_timestamp_internal(const my_timeval *tm) final;
-
- public:
-  static const int PACK_LENGTH = 8;
-
-  /**
-     DATETIME columns can be defined as having CURRENT_TIMESTAMP as the
-     default value on inserts or updates. This constructor accepts a
-     auto_flags argument which controls the column default expressions.
-
-     For DATETIME columns this argument is a bitmap combining two flags:
-
-     - DEFAULT_NOW - means that column has DEFAULT CURRENT_TIMESTAMP attribute.
-     - ON_UPDATE_NOW - means that column has ON UPDATE CURRENT_TIMESTAMP.
-
-     (these two flags can be used orthogonally to each other).
-  */
-  Field_datetime(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
-                 uchar auto_flags_arg, const char *field_name_arg)
-      : Field_temporal_with_date_and_time(ptr_arg, null_ptr_arg, null_bit_arg,
-                                          auto_flags_arg, field_name_arg, 0) {}
-  Field_datetime(const char *field_name_arg)
-      : Field_temporal_with_date_and_time(nullptr, nullptr, 0, NONE,
-                                          field_name_arg, 0) {}
-  enum_field_types type() const final { return MYSQL_TYPE_DATETIME; }
-  enum ha_base_keytype key_type() const final { return HA_KEYTYPE_ULONGLONG; }
-  using Field_temporal_with_date_and_time::store;  // Make -Woverloaded-virtual
-  type_conversion_status store(longlong nr, bool unsigned_val) final;
-  type_conversion_status store_packed(longlong nr) final;
-  longlong val_int() const final;
-  String *val_str(String *, String *) const final;
-  int cmp(const uchar *, const uchar *) const final;
-  using Field_temporal_with_date_and_time::make_sort_key;
-  size_t make_sort_key(uchar *buff, size_t length) const final;
-  uint32 pack_length() const final { return PACK_LENGTH; }
-  void sql_type(String &str) const final;
-  bool zero_pack() const final { return true; }
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
-  Field_datetime *clone(MEM_ROOT *mem_root) const final {
-    assert(type() == MYSQL_TYPE_DATETIME);
-    return new (mem_root) Field_datetime(*this);
-  }
-  uchar *pack(uchar *to, const uchar *from, size_t max_length) const final {
-    return pack_int64(to, from, max_length);
-  }
-  const uchar *unpack(uchar *to, const uchar *from,
-                      uint param_data [[maybe_unused]]) final {
-    return unpack_int64(to, from);
-  }
-};
-
-/*
-  Field implementing DATETIME(N) data type, where N=0..6.
-*/
-class Field_datetimef : public Field_temporal_with_date_and_timef {
- protected:
   bool get_date_internal(MYSQL_TIME *ltime) const final;
   type_conversion_status store_internal(const MYSQL_TIME *ltime,
                                         int *error) final;
@@ -3468,7 +3340,7 @@ class Field_datetimef : public Field_temporal_with_date_and_timef {
 
  public:
   /**
-    Constructor for Field_datetimef
+    Constructor for Field_datetime
     @param ptr_arg           See Field definition
     @param null_ptr_arg      See Field definition
     @param null_bit_arg      See Field definition
@@ -3476,26 +3348,29 @@ class Field_datetimef : public Field_temporal_with_date_and_timef {
     @param field_name_arg    See Field definition
     @param dec_arg           Number of second fraction digits, 0..6.
   */
-  Field_datetimef(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
-                  uchar auto_flags_arg, const char *field_name_arg,
-                  uint8 dec_arg)
-      : Field_temporal_with_date_and_timef(ptr_arg, null_ptr_arg, null_bit_arg,
-                                           auto_flags_arg, field_name_arg,
-                                           dec_arg) {}
+  Field_datetime(uchar *ptr_arg, uchar *null_ptr_arg, uchar null_bit_arg,
+                 uchar auto_flags_arg, const char *field_name_arg,
+                 uint8 dec_arg)
+      : Field_temporal_with_date_and_time(ptr_arg, null_ptr_arg, null_bit_arg,
+                                          auto_flags_arg, field_name_arg,
+                                          dec_arg) {}
   /**
-    Constructor for Field_datetimef
+    Constructor for Field_datetime
     @param is_nullable_arg   See Field definition
     @param field_name_arg    See Field definition
     @param dec_arg           Number of second fraction digits, 0..6.
   */
-  Field_datetimef(bool is_nullable_arg, const char *field_name_arg,
-                  uint8 dec_arg)
-      : Field_temporal_with_date_and_timef(
+  Field_datetime(bool is_nullable_arg, const char *field_name_arg,
+                 uint8 dec_arg)
+      : Field_temporal_with_date_and_time(
             nullptr, is_nullable_arg ? &dummy_null_buffer : nullptr, 0, NONE,
             field_name_arg, dec_arg) {}
-  Field_datetimef *clone(MEM_ROOT *mem_root) const final {
+  Field_datetime(const char *field_name_arg)
+      : Field_temporal_with_date_and_time(nullptr, nullptr, 0, NONE,
+                                          field_name_arg, 0) {}
+  Field_datetime *clone(MEM_ROOT *mem_root) const final {
     assert(type() == MYSQL_TYPE_DATETIME);
-    return new (mem_root) Field_datetimef(*this);
+    return new (mem_root) Field_datetime(*this);
   }
 
   enum_field_types type() const final { return MYSQL_TYPE_DATETIME; }
@@ -3512,7 +3387,8 @@ class Field_datetimef : public Field_temporal_with_date_and_timef {
   type_conversion_status store_packed(longlong nr) final;
   type_conversion_status reset() final;
   longlong val_date_temporal() const final;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
+  bool val_date(Date_val *date, my_time_flags_t flags) const final;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const final;
   void sql_type(String &str) const final;
 };
 
@@ -3688,7 +3564,8 @@ class Field_blob : public Field_longstr {
 
  private:
   /**
-    In order to support update of virtual generated columns of blob type,
+    In order to support update of virtual generated columns and columns in
+    a Blackhole table of BLOB type,
     we need to allocate the space blob needs on server for old_row and
     new_row respectively. This variable is used to record the
     allocated blob space for old_row.
@@ -3834,7 +3711,7 @@ class Field_blob : public Field_longstr {
   */
   uint32 pack_length_no_ptr() const { return (uint32)(packlength); }
   uint row_pack_length() const final { return pack_length_no_ptr(); }
-  uint32 max_data_length() const final {
+  uint32 max_data_length() const override {
     return (uint32)(((ulonglong)1 << (packlength * 8)) - 1);
   }
   size_t get_field_buffer_size() { return value.alloced_length(); }
@@ -3846,7 +3723,7 @@ class Field_blob : public Field_longstr {
     return get_length(row_offset);
   }
   uint32 get_length(ptrdiff_t row_offset = 0) const;
-  uint32 get_length(const uchar *ptr, uint packlength) const;
+  static uint32 get_length(const uchar *ptr, uint packlength);
   uint32 get_length(const uchar *ptr_arg) const;
   /** Get a const pointer to the BLOB data of this field. */
   const uchar *get_blob_data() const { return get_blob_data(ptr + packlength); }
@@ -3906,7 +3783,7 @@ class Field_blob : public Field_longstr {
     return charset() == &my_charset_bin ? false : true;
   }
   uint32 max_display_length() const final;
-  uint32 char_length() const override;
+  uint32 char_length() const noexcept override;
   bool copy_blob_value(MEM_ROOT *mem_root);
   uint is_equal(const Create_field *new_field) const override;
   bool is_text_key_type() const final { return binary() ? false : true; }
@@ -3914,21 +3791,16 @@ class Field_blob : public Field_longstr {
   /**
     Mark that the BLOB stored in value should be copied before updating it.
 
-    When updating virtual generated columns we need to keep the old
-    'value' for BLOBs since this can be needed when the storage engine
-    does the update. During read of the record the old 'value' for the
+    When updating virtual generated columns or columns in a Blackhole table
+    we need to keep the old 'value' for BLOBs since this can be needed when
+    the storage engine does the update.
+    During read of the record the old 'value' for the
     BLOB is evaluated and stored in 'value'. This function is to be used
     to specify that we need to copy this BLOB 'value' into 'old_value'
     before we compute the new BLOB 'value'. For more information @see
     Field_blob::keep_old_value().
   */
   void set_keep_old_value(bool old_value_flag) {
-    /*
-      We should only need to keep a copy of the blob 'value' in the case
-      where this is a virtual generated column (that is indexed).
-    */
-    assert(is_virtual_gcol());
-
     /*
       If set to true, ensure that 'value' is copied to 'old_value' when
       keep_old_value() is called.
@@ -3939,8 +3811,9 @@ class Field_blob : public Field_longstr {
   /**
     Save the current BLOB value to avoid that it gets overwritten.
 
-    This is used when updating virtual generated columns that are
-    BLOBs. Some storage engines require that we have both the old and
+    This is used when updating virtual generated columns or columns in a
+    Blackhole table that are BLOBs.
+    Some storage engines require that we have both the old and
     new BLOB value for virtual generated columns that are indexed in
     order for the storage engine to be able to maintain the index. This
     function will transfer the buffer storing the current BLOB value
@@ -3965,16 +3838,15 @@ class Field_blob : public Field_longstr {
     old value for the BLOB and use table->record[0] to read the new
     value.
 
+    Similarly, in case of Blackhole "old" BLOB values are not read by
+    the storage engine and therefore 'Field_blob' is not made to point to the
+    engine's internal buffer. Therefore, in order to avoid "old" BLOB data
+    corruption, it also needs to be saved in 'old_value'.
+
     This function must be called before we store the new BLOB value in
     this field object.
   */
   void keep_old_value() {
-    /*
-      We should only need to keep a copy of the blob value in the case
-      where this is a virtual generated column (that is indexed).
-    */
-    assert(is_virtual_gcol());
-
     // Transfer ownership of the current BLOB value to old_value
     if (m_keep_old_value) {
       old_value.takeover(value);
@@ -4008,6 +3880,67 @@ class Field_blob : public Field_longstr {
  private:
   int do_save_field_metadata(uchar *first_byte) const override;
 };
+
+class Field_vector : public Field_blob {
+ public:
+  static const uint32 max_dimensions = vector_constants::max_dimensions;
+  static const uint32 precision = sizeof(float);
+  static uint32 dimension_bytes(uint32 dimensions) {
+    return precision * dimensions;
+  }
+  uint32 get_max_dimensions() const {
+    return get_dimensions(field_length, precision);
+  }
+
+  Field_vector(uchar *ptr_arg, uint32 len_arg, uchar *null_ptr_arg,
+               uchar null_bit_arg, uchar auto_flags_arg,
+               const char *field_name_arg, TABLE_SHARE *share,
+               uint blob_pack_length, const CHARSET_INFO *cs)
+      : Field_blob(ptr_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
+                   field_name_arg, share, blob_pack_length, cs) {
+    set_field_length(len_arg);
+    assert(packlength == 4);
+  }
+
+  Field_vector(uint32 len_arg, bool is_nullable_arg, const char *field_name_arg,
+               const CHARSET_INFO *cs)
+      : Field_blob(len_arg, is_nullable_arg, field_name_arg, cs, false) {
+    set_field_length(len_arg);
+    assert(packlength == 4);
+  }
+
+  Field_vector(const Field_vector &field) : Field_blob(field) {
+    assert(packlength == 4);
+  }
+
+  void sql_type(String &res) const override {
+    const CHARSET_INFO *cs = res.charset();
+    size_t length =
+        cs->cset->snprintf(cs, res.ptr(), res.alloced_length(), "%s(%u)",
+                           "vector", get_max_dimensions());
+    res.length(length);
+  }
+  Field_vector *clone(MEM_ROOT *mem_root) const override {
+    assert(type() == MYSQL_TYPE_VECTOR);
+    return new (mem_root) Field_vector(*this);
+  }
+  uint32 max_data_length() const override { return field_length; }
+  uint32 char_length() const noexcept override { return field_length; }
+  enum_field_types type() const final { return MYSQL_TYPE_VECTOR; }
+  enum_field_types real_type() const final { return MYSQL_TYPE_VECTOR; }
+  void make_send_field(Send_field *field) const override;
+  using Field_blob::store;
+  type_conversion_status store(double nr) final;
+  type_conversion_status store(longlong nr, bool unsigned_val) final;
+  type_conversion_status store_decimal(const my_decimal *) final;
+  type_conversion_status store(const char *from, size_t length,
+                               const CHARSET_INFO *cs) final;
+  bool eq_def(const Field *field) const override;
+  uint is_equal(const Create_field *new_field) const override;
+  String *val_str(String *, String *) const override;
+};
+
+void store_blob_length(uchar *i_ptr, uint i_packlength, uint32 i_number);
 
 class Field_geom final : public Field_blob {
  private:
@@ -4109,6 +4042,8 @@ class Field_json : public Field_blob {
   type_conversion_status store(longlong nr, bool unsigned_val) override;
   type_conversion_status store_decimal(const my_decimal *) final;
   type_conversion_status store_json(const Json_wrapper *json);
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
+  type_conversion_status store_date(Date_val date) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec_arg) final;
   type_conversion_status store(const Field_json *field);
 
@@ -4186,8 +4121,9 @@ class Field_json : public Field_blob {
   */
   String *val_str(String *buf1, String *buf2) const final;
   my_decimal *val_decimal(my_decimal *m) const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
+  bool val_time(Time_val *time) const final;
+  bool val_date(Date_val *date, my_time_flags_t flags) const final;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) const final;
   Field_json *clone(MEM_ROOT *mem_root) const override;
   uint is_equal(const Create_field *new_field) const final;
   Item_result cast_to_int_type() const final { return INT_RESULT; }
@@ -4268,7 +4204,7 @@ class Field_typed_array final : public Field_json {
                     uchar auto_flags_arg, const char *field_name_arg,
                     TABLE_SHARE *share, uint blob_pack_length,
                     const CHARSET_INFO *cs);
-  uint32 char_length() const override {
+  uint32 char_length() const noexcept override {
     return field_length / charset()->mbmaxlen;
   }
   void init(TABLE *table_arg) override;
@@ -4488,8 +4424,7 @@ class Field_set final : public Field_enum {
             const char *field_name_arg, uint32 packlength_arg,
             TYPELIB *typelib_arg, const CHARSET_INFO *charset_arg)
       : Field_enum(ptr_arg, len_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
-                   field_name_arg, packlength_arg, typelib_arg, charset_arg),
-        empty_set_string("", 0, charset_arg) {
+                   field_name_arg, packlength_arg, typelib_arg, charset_arg) {
     clear_flag(ENUM_FLAG);
     set_flag(SET_FLAG);
   }
@@ -4518,9 +4453,6 @@ class Field_set final : public Field_enum {
     assert(real_type() == MYSQL_TYPE_SET);
     return new (mem_root) Field_set(*this);
   }
-
- private:
-  const String empty_set_string;
 };
 
 /*

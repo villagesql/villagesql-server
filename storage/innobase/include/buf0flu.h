@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
+Copyright (c) 2016, Percona Inc. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -34,13 +35,22 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef buf0flu_h
 #define buf0flu_h
 
+#include <utility>
+
 #include "buf0types.h"
+#include "log0types.h"
 #include "univ.i"
 #include "ut0byte.h"
+#include "ut0cpu_cache.h"
+#include "ut0link_buf.h"
 
+#include <memory>
 #ifndef UNIV_HOTBACKUP
 /** Checks if the page_cleaner is in active state. */
 bool buf_flush_page_cleaner_is_active();
+
+/** Returns the count of currently active LRU manager threads. */
+size_t buf_flush_active_lru_managers();
 
 #ifdef UNIV_DEBUG
 
@@ -102,7 +112,17 @@ buf_flush_batch() and buf_flush_page().
 [[nodiscard]] bool buf_flush_page_try(buf_pool_t *buf_pool, buf_block_t *block);
 #endif /* UNIV_DEBUG || UNIV_IBUF_DEBUG */
 
-/** Do flushing batch of a given type.
+/** Result of a buffer flush batch. */
+struct buf_flush_batch_result_t {
+  /** Pages for which a write was queued. */
+  ulint n_flushed{};
+  /** Clean or stale pages moved directly to the free list. */
+  ulint n_evicted{};
+  /** Pages examined by the batch. Currently reported for BUF_FLUSH_LRU. */
+  ulint n_scanned{};
+};
+
+/** Do a flush-list batch.
 NOTE: The calling thread is not allowed to own any latches on pages!
 @param[in,out]  buf_pool        buffer pool instance
 @param[in]      type            flush type
@@ -111,12 +131,12 @@ NOTE: The calling thread is not allowed to own any latches on pages!
 @param[in]      lsn_limit       in the case BUF_FLUSH_LIST all blocks whose
 oldest_modification is smaller than this should be flushed (if their number
 does not exceed min_n), otherwise ignored
-@param[out]     n_processed     the number of pages which were processed is
-passed back to caller. Ignored if NULL
+@param[out]     result          batch result; n_evicted and n_scanned are 0.
+Ignored if NULL
 @retval true    if a batch was queued successfully.
 @retval false   if another batch of same type was already running. */
 bool buf_flush_do_batch(buf_pool_t *buf_pool, buf_flush_t type, ulint min_n,
-                        lsn_t lsn_limit, ulint *n_processed);
+                        lsn_t lsn_limit, buf_flush_batch_result_t *result);
 
 /** This utility flushes dirty blocks from the end of the flush list of all
 buffer pool instances.
@@ -170,14 +190,6 @@ static inline void buf_flush_note_modification(buf_block_t *block,
                                                lsn_t start_lsn, lsn_t end_lsn,
                                                Flush_observer *observer);
 
-/** This function should be called when recovery has modified a buffer page.
-@param[in]      block           block which is modified
-@param[in]      start_lsn       start lsn of the first mtr in a set of mtr's
-@param[in]      end_lsn         end lsn of the last mtr in the set of mtr's */
-static inline void buf_flush_recv_note_modification(buf_block_t *block,
-                                                    lsn_t start_lsn,
-                                                    lsn_t end_lsn);
-
 /** Returns true if the file page block is immediately suitable for replacement,
 i.e., the transition FILE_PAGE => NOT_USED allowed. The caller must hold the
 LRU list and block mutexes.
@@ -189,7 +201,7 @@ bool buf_flush_ready_for_replace(const buf_page_t *bpage);
 #ifdef UNIV_DEBUG
 struct SYS_VAR;
 
-/** Disables page cleaner threads (coordinator and workers).
+/** Disables page cleaner threads (coordinator and workers) and LRU threads.
 It's used by: SET GLOBAL innodb_page_cleaner_disabled_debug = 1 (0).
 @param[in]      thd             thread handle
 @param[in]      var             pointer to system variable
@@ -208,14 +220,6 @@ void buf_flush_page_cleaner_init();
  @return true if ok */
 bool buf_flush_validate(buf_pool_t *buf_pool);
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
-
-/** Initialize the red-black tree to speed up insertions into the flush_list
- during recovery process. Should be called at the start of recovery
- process before any page has been read/written. */
-void buf_flush_init_flush_rbt(void);
-
-/** Frees up the red-black tree. */
-void buf_flush_free_flush_rbt(void);
 
 /** Writes a flushable page asynchronously from the buffer pool to a file.
 NOTE: 1. in simulated aio we must call os_aio_simulated_wake_handler_threads
@@ -239,6 +243,7 @@ Requires buf_page_get_mutex(bpage).
 [[nodiscard]] bool buf_flush_ready_for_flush(buf_page_t *bpage,
                                              buf_flush_t flush_type);
 
+#ifdef UNIV_DEBUG
 /** Check if there are any dirty pages that belong to a space id in the flush
  list in a particular buffer pool.
  @return number of dirty pages present in a single buffer pool */
@@ -246,6 +251,7 @@ ulint buf_pool_get_dirty_pages_count(
     buf_pool_t *buf_pool,      /*!< in: buffer pool */
     space_id_t id,             /*!< in: space id to check */
     Flush_observer *observer); /*!< in: flush observer to check */
+#endif
 
 /** Executes fsync for all tablespaces, to fsync all pages written to disk. */
 void buf_flush_fsync();
@@ -351,7 +357,101 @@ class Flush_observer {
 };
 
 lsn_t get_flush_sync_lsn() noexcept;
+
+// Forward declaration.
+class Buf_flush_list_added_lsns;
+
+// Simplified type alias for the aligned unique_ptr
+using Buf_flush_list_added_lsns_aligned_ptr =
+    std::unique_ptr<Buf_flush_list_added_lsns,
+                    ut::detail::Aligned_deleter<Buf_flush_list_added_lsns>>;
+
+/** Tracks the concurrent executions of adding dirty pages to the flush lists.
+It allows to relax order in which dirty pages have to be added to the flush
+lists and helps in advancing the checkpoint LSN.
+Note : Earlier it was known as recent_closed buffer. */
+class Buf_flush_list_added_lsns {
+ public:
+  /** Factory method that creates a dynamically allocated instance that is
+  aligned to the cache line boundary. This is needed since C++17 doesn't
+  guarantee allocating aligned types dynamically */
+  static Buf_flush_list_added_lsns_aligned_ptr create();
+
+  /** Validates using assertions that the specified LSN range is not yet added
+  to the flush lists.
+  @param[in]    begin   start LSN of the range
+  @param[in]    end     end LSN of the range*/
+  void validate_not_added(lsn_t begin, lsn_t end);
+
+  /** Assume that the start_lsn is the start lsn of the first mini-transaction,
+  for which report_added(mtr.start_lsn, mtr.end_lsn) was not yet called.
+  Before the call smallest_not_added_lsn() can't be larger than start_lsn.
+  During the call smallest_not_added_lsn() becomes start_lsn.
+  @param[in]   start_lsn   LSNs that are already flushed.*/
+  void assume_added_up_to(lsn_t start_lsn);
+
+  /** Used to report that we know that all changes in a specified range of lsns
+  were already applied to pages in BP and all these pages were already added to
+  corresponding flush lists. The committing mtr should use this function to
+  report that it has added all the pages that it has dirtied to corresponding
+  flush lists already.
+  The newest_modification should be the mtr->commit_lsn().
+  The oldest_modification should be the start_lsn assigned to the mtr
+  (which equals commit_lsn() of the previous mtr).
+
+  Information from these reports is used by smallest_not_added_lsn() to
+  establish the smallest not yet reported lsn, which in turn can be used by page
+  cleaners, or other mtrs which are currently waiting for their turn in
+  wait_to_add().
+  @param[in]    oldest_modification    start lsn of the range
+  @param[in]    newest_modification    end lsn fo the range */
+  void report_added(lsn_t oldest_modification, lsn_t newest_modification);
+
+  /** The flush lists are not completely sorted, and the amount of disorder is
+  limited by the order_lag() - which is controlled by immutable
+  srv_buf_flush_list_added_size  sysvar - in the following way. If page A is
+  added before page B in a flush_list, then it must hold that
+  A.oldest_modification returned value < B.oldest_modification.
+  @return the maximum lsn distance the subsequent elements of the flush list can
+  lag behind the first element w.r.t. oldest_modification */
+  uint64_t order_lag();
+
+  /** Return lsn up to which we know that all dirty pages with smaller
+  oldest_modification were added to the flush list.
+  @return The smallest lsn for which there was no call to assume_added_up_to(y)
+  with lsn<y nor to report_added(x,y) with x<=lsn<y yet */
+  lsn_t smallest_not_added_lsn();
+
+  /** Wait until it is safe to add dirty pages with a given oldest_modification
+  lsn to flush list without exceeding the disorder limit imposed by older_lag().
+  This function will block and wait until all the pages having
+  page.oldest_modification smaller than oldest_modification - older_lag() are
+  reported to be added to flush list by other threads.
+  @param[in]  oldest_modification  Oldest LSN that does not violate the
+              order_lag() */
+  void wait_to_add(lsn_t oldest_modification);
+
+ private:
+  /** Ring buffer that keeps track of the ranges of LSNs added to
+  flush_list(s) already.*/
+  alignas(ut::INNODB_CACHE_LINE_SIZE) Link_buf<lsn_t> m_buf_added_lsns;
+
+  /** Constructor. Clients must use factory method to create an instance */
+  Buf_flush_list_added_lsns();
+
+  template <typename T, typename... Args>
+  friend T *ut::aligned_new_withkey(ut::PSI_memory_key_t key,
+                                    std::size_t alignment, Args &&...args);
+};
+
+extern Buf_flush_list_added_lsns_aligned_ptr buf_flush_list_added;
 #endif /* !UNIV_HOTBACKUP */
+
+/** If LRU list of a buf_pool is less than this size then LRU eviction
+should not happen. This is because when we do LRU flushing we also put
+the blocks on free list. If LRU list is very small then we can end up
+in thrashing. */
+static constexpr auto BUF_LRU_MIN_LEN = 256;
 
 #include "buf0flu.ic"
 

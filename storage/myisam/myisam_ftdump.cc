@@ -25,8 +25,8 @@
    added support for long options (my_getopt) 22.5.2002 by Jani Tolonen */
 
 #include <fcntl.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cstdlib>
 
 #include "m_string.h"
 #include "my_compiler.h"
@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
     lengths[keylen]++;
 
     if (count || stats) {
-      if (strcmp(buf, buf2)) {
+      if (strcmp(buf, buf2) != 0) {
         if (*buf2) {
           uniq++;
           avg_gws += gws = GWS_IN_USE;

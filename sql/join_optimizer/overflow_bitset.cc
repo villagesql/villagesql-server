@@ -23,9 +23,9 @@
 
 #include "sql/join_optimizer/overflow_bitset.h"
 
-#include <stdint.h>
-#include <string.h>
 #include <bit>
+#include <cstdint>
+#include <cstring>
 
 #include "my_alloc.h"
 #include "template_utils.h"

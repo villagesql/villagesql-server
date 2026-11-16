@@ -45,16 +45,17 @@
 #include "mysql/harness/utility/string.h"
 #include "mysql_server_mock.h"
 #include "mysqlrouter/io_component.h"
+#include "mysqlrouter/mock_server_component.h"
 
 IMPORT_LOG_FUNCTIONS()
 
 namespace {
-constexpr const std::array<std::pair<const char *, mysql_ssl_mode>, 3>
-    allowed_ssl_modes = {{
+constexpr const auto allowed_ssl_modes =
+    std::to_array<std::pair<const char *, mysql_ssl_mode>>({
         {"DISABLED", SSL_MODE_DISABLED},
         {"PREFERRED", SSL_MODE_PREFERRED},
         {"REQUIRED", SSL_MODE_REQUIRED},
-    }};
+    });
 
 static constexpr const char kSectionName[]{"mock_server"};
 
@@ -104,10 +105,11 @@ class StringsOption {
 using mysql_harness::IntOption;
 using mysql_harness::StringOption;
 
-static constexpr std::array<const char *, 14> supported_options{
-    "filename", "module_prefix", "bind_address", "port",       "protocol",
-    "ssl_ca",   "ssl_capath",    "ssl_cert",     "ssl_key",    "ssl_cipher",
-    "ssl_crl",  "ssl_crlpath",   "ssl_mode",     "tls_version"};
+static constexpr std::array supported_options{
+    "filename", "module_prefix", "bind_address", "port",        "protocol",
+    "ssl_ca",   "ssl_capath",    "ssl_cert",     "ssl_key",     "ssl_cipher",
+    "ssl_crl",  "ssl_crlpath",   "ssl_mode",     "tls_version", "named_socket",
+};
 
 #define GET_OPTION_CHECKED(option, section, name, value)                    \
   static_assert(mysql_harness::str_in_collection(supported_options, name)); \
@@ -118,6 +120,7 @@ class PluginConfig : public mysql_harness::BasePluginConfig {
   std::vector<std::string> module_prefixes;
   std::string srv_address;
   uint16_t srv_port;
+  std::string srv_socket;
   std::string srv_protocol;
   std::string ssl_ca;
   std::string ssl_capath;
@@ -138,6 +141,7 @@ class PluginConfig : public mysql_harness::BasePluginConfig {
     module_prefixes.push_back(module_prefix_str);
     GET_OPTION_CHECKED(srv_address, section, "bind_address", StringOption{});
     GET_OPTION_CHECKED(srv_port, section, "port", IntOption<uint16_t>{});
+    GET_OPTION_CHECKED(srv_socket, section, "named_socket", StringOption{});
     GET_OPTION_CHECKED(srv_protocol, section, "protocol", StringOption{});
     GET_OPTION_CHECKED(ssl_ca, section, "ssl_ca", StringOption{});
     GET_OPTION_CHECKED(ssl_capath, section, "ssl_capath", StringOption{});
@@ -160,16 +164,13 @@ class PluginConfig : public mysql_harness::BasePluginConfig {
     const std::map<std::string_view, std::string> defaults{
         {"bind_address", "0.0.0.0"},
         {"module_prefix", cwd.native()},
-        {"port", "3306"},
+        {"port", "0"},
         {"protocol", "classic"},
         {"ssl_mode", "DISABLED"},
     };
 
     auto it = defaults.find(option);
-    if (it == defaults.end()) {
-      return std::string();
-    }
-    return it->second;
+    return (it != defaults.end()) ? it->second : std::string{};
   }
 
   bool is_required(std::string_view option) const override {
@@ -310,10 +311,24 @@ static void start(mysql_harness::PluginFuncEnv *env) {
 
     net::io_context &io_ctx = IoComponent::get_instance().io_context();
 
+    if (config.srv_port != 0 && !config.srv_socket.empty()) {
+      throw std::runtime_error("--port and --socket can not be set together.");
+    }
+
+    // if neither socket, nor port are set, use 3306 as default for port.
+    if (config.srv_port == 0 && config.srv_socket.empty()) {
+      config.srv_port = 3306;
+    }
+
+    auto dest = !config.srv_socket.empty()
+                    ? mysql_harness::Destination(
+                          mysql_harness::LocalDestination(config.srv_socket))
+                    : mysql_harness::Destination(mysql_harness::TcpDestination{
+                          config.srv_address, config.srv_port});
+
     auto srv = std::make_shared<server_mock::MySQLServerMock>(
-        io_ctx, config.trace_filename, config.module_prefixes,
-        config.srv_address, config.srv_port, config.srv_protocol, 0,
-        std::move(tls_server_ctx), config.ssl_mode);
+        io_ctx, config.trace_filename, config.module_prefixes, dest,
+        config.srv_protocol, 0, std::move(tls_server_ctx), config.ssl_mode);
 
     MockServerComponent::get_instance().register_server(key, srv);
 
@@ -339,12 +354,12 @@ static void deinit(mysql_harness::PluginFuncEnv * /* env */) {
   io_context_work_guards([](auto &work_guards) { work_guards.clear(); });
 }
 
-static const std::array<const char *, 4> required = {{
+static constexpr std::array required{
     "logger",
     "router_openssl",
     "router_protobuf",
     "io",
-}};
+};
 
 extern "C" {
 mysql_harness::Plugin MOCK_SERVER_EXPORT harness_plugin_mock_server = {

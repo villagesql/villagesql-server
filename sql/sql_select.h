@@ -876,7 +876,8 @@ bool check_field_is_const(Item *cond, const Item *order_item,
                           const Field *order_field = nullptr,
                           Item **const_item = nullptr);
 bool test_if_subpart(ORDER *a, ORDER *b);
-void calc_group_buffer(JOIN *join, ORDER *group);
+void calc_group_buffer(JOIN *join, ORDER *group,
+                       Temp_table_param *tmp_table_param = nullptr);
 bool make_join_readinfo(JOIN *join, uint no_jbuf_after);
 bool create_ref_for_key(JOIN *join, JOIN_TAB *j, Key_use *org_keyuse,
                         table_map used_tables);
@@ -1047,28 +1048,12 @@ bool validate_use_secondary_engine(const LEX *lex);
 bool optimize_secondary_engine(THD *thd);
 
 /**
-  Calculates the cost of executing a statement, including all its
-  subqueries and stores it in thd->m_current_query_cost.
-
-  @param lex the statement
-*/
-void accumulate_statement_cost(const LEX *lex);
-
-/**
   Returns secondary_engine handler for the statement.
   If none exist, nullptr is returned.
 
   @param lex the statement
 */
 const handlerton *get_secondary_engine_handlerton(const LEX *lex);
-
-/**
-  Checks if any of the tables referenced belong to an external engine.
-  If an external table is found, return true, false otherwise.
-
-  @param lex the statement
-*/
-bool has_external_table(const LEX *lex);
 
 /**
   Sets the reason of failure for the statement to the external engine.
@@ -1088,7 +1073,11 @@ void notify_plugins_after_select(THD *thd, const Sql_cmd *cmd);
 
 std::string_view get_secondary_engine_fail_reason(const LEX *lex);
 
+bool set_secondary_engine_fail_reason(const LEX *lex, std::string_view reason);
+
 void set_fail_reason_and_raise_error(const LEX *lex, std::string_view reason);
+
+bool equal_engines(const LEX_CSTRING &engine1, const LEX_CSTRING &engine2);
 
 const MYSQL_LEX_CSTRING *get_eligible_secondary_engine_from(const LEX *lex);
 
@@ -1096,6 +1085,7 @@ std::string_view find_secondary_engine_fail_reason(const LEX *lex);
 
 void find_and_set_offload_fail_reason(const LEX *lex);
 
-bool reads_not_secondary_columns(const LEX *lex);
+bool reads_not_secondary_columns(const LEX *lex,
+                                 std::string_view *not_secondary_col_str);
 
 #endif /* SQL_SELECT_INCLUDED */

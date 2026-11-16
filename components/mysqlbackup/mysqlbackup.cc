@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql/components/library_mysys/my_memory.h"
 #include "mysql/components/services/psi_memory.h"
 #include "mysql/service_security_context.h"
+#include "mysql_version.h"
 #include "mysqld_error.h"
 #include "string_with_len.h"
 
@@ -117,7 +118,7 @@ static SHOW_VAR mysqlbackup_status_variables[] = {
 */
 static bool register_status_variables() {
   if (mysqlbackup_component_version) {
-    std::string msg{
+    std::string const msg{
         "Status variable mysqlbackup.component_version is not NULL. Most "
         "likely the status variable does already exist."};
     LogErr(ERROR_LEVEL, ER_MYSQLBACKUP_MSG, msg.c_str());
@@ -131,17 +132,17 @@ static bool register_status_variables() {
           strlen(MYSQL_SERVER_VERSION) + 1);
 
   if (mysqlbackup_component_version == nullptr) {
-    std::string msg{std::string("Cannot register status variable '") +
-                    mysqlbackup_status_variables[0].name +
-                    "' due to insufficient memory."};
+    std::string const msg{std::string("Cannot register status variable '") +
+                          mysqlbackup_status_variables[0].name +
+                          "' due to insufficient memory."};
     LogErr(ERROR_LEVEL, ER_MYSQLBACKUP_MSG, msg.c_str());
     return (true);
   }
 
   if (mysql_service_status_variable_registration->register_variable(
           (SHOW_VAR *)&mysqlbackup_status_variables)) {
-    std::string msg{std::string(mysqlbackup_status_variables[0].name) +
-                    " register failed."};
+    std::string const msg{std::string(mysqlbackup_status_variables[0].name) +
+                          " register failed."};
     LogEvent()
         .type(LOG_TYPE_ERROR)
         .prio(ERROR_LEVEL)
@@ -171,8 +172,8 @@ static bool unregister_status_variables() {
       return false;
     }
 
-    std::string msg{std::string(mysqlbackup_status_variables[0].name) +
-                    " unregister failed."};
+    std::string const msg{std::string(mysqlbackup_status_variables[0].name) +
+                          " unregister failed."};
     LogEvent()
         .type(LOG_TYPE_ERROR)
         .prio(ERROR_LEVEL)
@@ -239,8 +240,9 @@ static bool register_system_variables() {
           "Backup id of an ongoing backup.", mysqlbackup_backup_id_check,
           mysqlbackup_backup_id_update, (void *)&str_arg,
           (void *)&mysqlbackup_backup_id)) {
-    std::string msg{std::string(Backup_comp_constants::mysqlbackup) + "." +
-                    Backup_comp_constants::backupid + " register failed."};
+    std::string const msg{std::string(Backup_comp_constants::mysqlbackup) +
+                          "." + Backup_comp_constants::backupid +
+                          " register failed."};
     LogEvent()
         .type(LOG_TYPE_ERROR)
         .prio(ERROR_LEVEL)
@@ -271,8 +273,9 @@ static bool unregister_system_variables() {
       return (false);
     }
 
-    std::string msg{std::string(Backup_comp_constants::mysqlbackup) + "." +
-                    Backup_comp_constants::backupid + " unregister failed."};
+    std::string const msg{std::string(Backup_comp_constants::mysqlbackup) +
+                          "." + Backup_comp_constants::backupid +
+                          " unregister failed."};
     LogEvent()
         .type(LOG_TYPE_ERROR)
         .prio(ERROR_LEVEL)
@@ -386,6 +389,7 @@ REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
+REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
 REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
 REQUIRES_SERVICE_PLACEHOLDER(udf_registration);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_thd_security_context);
@@ -405,6 +409,7 @@ BEGIN_COMPONENT_REQUIRES(mysqlbackup)
 REQUIRES_SERVICE(registry), REQUIRES_SERVICE(log_builtins),
     REQUIRES_SERVICE(log_builtins_string),
     REQUIRES_SERVICE(component_sys_variable_register),
+    REQUIRES_SERVICE(mysql_system_variable_reader),
     REQUIRES_SERVICE(component_sys_variable_unregister),
     REQUIRES_SERVICE(status_variable_registration),
     REQUIRES_SERVICE(udf_registration),

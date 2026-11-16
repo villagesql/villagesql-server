@@ -80,7 +80,7 @@ class NdbOut {
   NdbOut &operator<<(const void *);
   NdbOut &operator<<(float);
   NdbOut &operator<<(double);
-  NdbOut &endline(void);
+  NdbOut &endline();
   NdbOut &flushline(bool force = true);
   NdbOut &setHexFormat(int _format);
   NdbOut &hexdump(const Uint32 *words, size_t count);

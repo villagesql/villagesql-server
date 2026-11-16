@@ -128,6 +128,13 @@ bool Rotate_innodb_master_key::execute() {
     return true;
   }
 
+  // Acquire Percona's LOCK TABLES FOR BACKUP lock
+  if (m_thd->backup_tables_lock.abort_if_acquired() ||
+      m_thd->backup_tables_lock.acquire_protection(
+          m_thd, MDL_TRANSACTION, m_thd->variables.lock_wait_timeout)) {
+    return true;
+  }
+
   if (hton->rotate_encryption_master_key()) {
     /* SE should have raised error */
     assert(m_thd->get_stmt_da()->is_error());
@@ -183,6 +190,13 @@ bool Innodb_redo_log::execute() {
                                     true) ||
       acquire_shared_backup_lock(m_thd, m_thd->variables.lock_wait_timeout)) {
     assert(m_thd->get_stmt_da()->is_error());
+    return true;
+  }
+
+  // Acquire Percona's LOCK TABLES FOR BACKUP lock
+  if (m_thd->backup_tables_lock.abort_if_acquired() ||
+      m_thd->backup_tables_lock.acquire_protection(
+          m_thd, MDL_TRANSACTION, m_thd->variables.lock_wait_timeout)) {
     return true;
   }
 

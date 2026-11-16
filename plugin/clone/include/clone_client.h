@@ -33,6 +33,7 @@ Clone Plugin: Client Interface
 
 #include "plugin/clone/include/clone.h"
 #include "plugin/clone/include/clone_hton.h"
+#include "plugin/clone/include/clone_json.h"
 #include "plugin/clone/include/clone_status.h"
 
 #include "mysql/psi/mysql_thread.h"
@@ -388,6 +389,10 @@ struct Remote_Parameters {
   /** Remote plugins with shared object name */
   Key_Values m_plugins_with_so;
 
+  //-- From Percona Server 9.7.2-2
+  /** Remote configurations required to support cloning to next LTS */
+  rapidjson::Document m_json_configs;
+
   /** Opaque VillageSQL extension payload from the donor, validated by
   villagesql/veb without clone interpreting its contents. Empty if the donor
   sent none. */
@@ -700,6 +705,12 @@ class Client {
   @param[in]	other	true if additional configuration
   @return error code */
   int add_config(const uchar *packet, size_t length, bool other);
+
+  /** Extract and add json remote configuration from network packet.
+  @param[in]	packet	network packet
+  @param[in]	length	packet length
+  @return error code */
+  int add_json_configs(const uchar *packet, size_t length);
 
   /** Use additional configurations if sent by donor. */
   void use_other_configs();

@@ -96,6 +96,8 @@ static inline int is_socket_error(int x) { return x == SOCKET_ERROR || x < 0; }
 #define SOCK_ECONNRESET ECONNRESET
 #define SOCK_ERRNO task_errno
 #define SOCK_OPT_REUSEADDR SO_REUSEADDR
+#define SOCK_OPT_RECVTIMEOUT SO_RCVTIMEO
+#define SOCK_OPT_SENDTIMEOOUT SO_SNDTIMEO
 #define GET_OS_ERR errno
 #define SET_OS_ERR(x) errno = (x)
 #define CLOSESOCKET(x) close(x)
@@ -162,7 +164,7 @@ static inline int xcom_getpeername(int s, struct sockaddr *name,
 static inline result xcom_close_socket(int *sock) {
   result res = {0, 0};
   if (*sock != -1) {
-    IFDBG(D_FILEOP, FN; STRLIT("closing socket "); NDBG(*sock, d));
+    XCOM_IFDBG(D_FILEOP, FN; STRLIT("closing socket "); NDBG(*sock, d));
     do {
       SET_OS_ERR(0);
       res.val = CLOSESOCKET(*sock);

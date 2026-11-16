@@ -205,14 +205,13 @@ class RoutingSplittingTestBase : public RouterComponentTest {
       node.x_port = port_pool_.get_next_available();
       node.http_port = port_pool_.get_next_available();
 
-      node.proc = &ProcessManager::launch_mysql_server_mock(
-          get_data_dir().join("splitting.js").str(), node.classic_port,
-          EXIT_SUCCESS, false, node.http_port, node.x_port,
-          "",  // module-prefix
-          "127.0.0.1",
-          30s,  // wait notify.
-          true  // enable-ssl
-      );
+      node.proc = &mock_server_spawner().wait_for_notify_ready(30s).spawn(
+          mock_server_cmdline("splitting.js")
+              .port(node.classic_port)
+              .http_port(node.http_port)
+              .x_port(node.x_port)
+              .enable_ssl(true)
+              .args());
     }
 
     gr_nodes = classic_ports_to_gr_nodes(classic_ports);
@@ -3342,9 +3341,13 @@ TEST_F(RoutingSplittingTest,
   }
 }
 
-class RouterBootstrapTest : public RouterComponentBootstrapTest {};
+class RouterBootstrapTest : public RouterComponentBootstrapTest,
+                            public ::testing::WithParamInterface<bool> {
+ public:
+  RouterBootstrapTest() : RouterComponentBootstrapTest(GetParam()) {}
+};
 
-TEST_F(RouterBootstrapTest, default_has_rw_split) {
+TEST_P(RouterBootstrapTest, default_has_rw_split) {
   RecordProperty("Worklog", "12794");
   RecordProperty("RequirementId", "FR18.1");
   RecordProperty("Requirement",
@@ -3353,9 +3356,12 @@ TEST_F(RouterBootstrapTest, default_has_rw_split) {
                  "section which enables read-write splitting.");
 
   std::vector<Config> config{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_gr.js",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -3369,7 +3375,7 @@ TEST_F(RouterBootstrapTest, default_has_rw_split) {
               ::testing::HasSubstr("[routing:bootstrap_rw_split]"));
 }
 
-TEST_F(RouterBootstrapTest, disable_rw_split) {
+TEST_P(RouterBootstrapTest, disable_rw_split) {
   RecordProperty("Worklog", "12794");
   RecordProperty("RequirementId", "FR18.2");
   RecordProperty("Requirement",
@@ -3378,9 +3384,12 @@ TEST_F(RouterBootstrapTest, disable_rw_split) {
                  "section which enables read-write splitting.");
 
   std::vector<Config> config{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_gr.js",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -3397,6 +3406,9 @@ TEST_F(RouterBootstrapTest, disable_rw_split) {
       config_file_str,
       ::testing::Not(::testing::HasSubstr("[routing:bootstrap_rw_split]")));
 }
+
+INSTANTIATE_TEST_SUITE_P(InstantiationOldNewExe, RouterBootstrapTest,
+                         testing::Values(false, true));
 
 // fail-to-start.
 
@@ -3452,14 +3464,13 @@ class RoutingSplittingConfigInvalid
       node.x_port = port_pool_.get_next_available();
       node.http_port = port_pool_.get_next_available();
 
-      node.proc = &ProcessManager::launch_mysql_server_mock(
-          get_data_dir().join("splitting.js").str(), node.classic_port,
-          EXIT_SUCCESS, false, node.http_port, node.x_port,
-          "",  // module-prefix
-          "127.0.0.1",
-          30s,  // wait notify.
-          true  // enable-ssl
-      );
+      node.proc = &mock_server_spawner().wait_for_notify_ready(30s).spawn(
+          mock_server_cmdline("splitting.js")
+              .port(node.classic_port)
+              .http_port(node.http_port)
+              .x_port(node.x_port)
+              .enable_ssl(true)
+              .args());
     }
 
     gr_nodes = classic_ports_to_gr_nodes(classic_ports);

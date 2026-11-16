@@ -23,8 +23,8 @@
 
 /* Written by Sergei A. Golubchik, who has a shared copyright to this code */
 
-#include <stddef.h>
 #include <sys/types.h>
+#include <cstddef>
 
 #include "my_inttypes.h"
 #include "storage/myisam/ftdefs.h"

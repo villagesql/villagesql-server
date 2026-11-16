@@ -42,8 +42,7 @@ using keyring_common::iterator::Iterator;
 using keyring_common::meta::Metadata;
 using keyring_common::operations::Keyring_operations;
 
-namespace keyring_common {
-namespace service_implementation {
+namespace keyring_common::service_implementation {
 
 /**
   Initialize reader
@@ -68,7 +67,7 @@ int init_reader_template(
     Keyring_operations<Backend, Data_extension> &keyring_operations,
     Component_callbacks &callbacks) {
   try {
-    if (callbacks.keyring_initialized() == false) {
+    if (!callbacks.keyring_initialized()) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_NOT_INITIALIZED);
       return -1;
@@ -77,18 +76,17 @@ int init_reader_template(
     if (data_id == nullptr || !*data_id) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_EMPTY_DATA_ID);
-      assert(false);
       return 0;
     }
 
     Metadata metadata(data_id, auth_id);
-    if (keyring_operations.init_read_iterator(it, metadata) == true) {
+    if (keyring_operations.init_read_iterator(it, metadata)) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_KEY_READ_ITERATOR_INIT_FAILED);
       return 0;
     }
 
-    if (keyring_operations.is_valid(it) == false) {
+    if (!keyring_operations.is_valid(it)) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_READ_DATA_NOT_FOUND, data_id,
                       (auth_id == nullptr || !*auth_id) ? "NULL" : auth_id);
@@ -123,7 +121,7 @@ bool deinit_reader_template(
     Keyring_operations<Backend, Data_extension> &keyring_operations,
     Component_callbacks &callbacks) {
   try {
-    if (callbacks.keyring_initialized() == false) {
+    if (!callbacks.keyring_initialized()) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_NOT_INITIALIZED);
       return true;
@@ -157,7 +155,7 @@ bool fetch_length_template(
     Keyring_operations<Backend, Data_extension> &keyring_operations,
     Component_callbacks &callbacks) {
   try {
-    if (callbacks.keyring_initialized() == false) {
+    if (!callbacks.keyring_initialized()) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_NOT_INITIALIZED);
       return true;
@@ -170,7 +168,7 @@ bool fetch_length_template(
 
     Data_extension data;
     Metadata metadata;
-    if (keyring_operations.get_iterator_data(it, metadata, data) == true) {
+    if (keyring_operations.get_iterator_data(it, metadata, data)) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_KEY_READ_ITERATOR_FETCH_FAILED);
       return true;
@@ -212,7 +210,7 @@ bool fetch_template(
     Keyring_operations<Backend, Data_extension> &keyring_operations,
     Component_callbacks &callbacks) {
   try {
-    if (callbacks.keyring_initialized() == false) {
+    if (!callbacks.keyring_initialized()) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_NOT_INITIALIZED);
       return true;
@@ -220,7 +218,7 @@ bool fetch_template(
 
     Data_extension data;
     Metadata metadata;
-    if (keyring_operations.get_iterator_data(it, metadata, data) == true) {
+    if (keyring_operations.get_iterator_data(it, metadata, data)) {
       LogComponentErr(INFORMATION_LEVEL,
                       ER_NOTE_KEYRING_COMPONENT_KEY_READ_ITERATOR_FETCH_FAILED);
       return true;
@@ -240,7 +238,7 @@ bool fetch_template(
     memset(data_buffer, 0, data_buffer_length);
     memset(data_type_buffer, 0, data_type_buffer_length);
 
-    memcpy(data_buffer, data.data().c_str(), data.data().length());
+    memcpy(data_buffer, data.data().decode().c_str(), data.data().length());
     *data_size = data.data().length();
 
     memcpy(data_type_buffer, data.type().c_str(), data.type().length());
@@ -256,7 +254,6 @@ bool fetch_template(
   }
 }
 
-}  // namespace service_implementation
-}  // namespace keyring_common
+}  // namespace keyring_common::service_implementation
 
 #endif  // KEYRING_READER_SERVICE_IMPL_TEMPLATE_INCLUDED

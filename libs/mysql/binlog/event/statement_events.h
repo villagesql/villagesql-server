@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
-  @file statement_events.h
+  @file
 
   @brief Contains the classes representing statement events occurring in the
   replication stream. Each event is represented as a byte sequence with logical
@@ -203,8 +203,8 @@ bool is_user_var_decimal_metadata_valid(const char *val, std::size_t val_len,
     <td>Q_SQL_MODE_CODE == 1</td>
     <td>8 byte bitfield</td>
     <td>The @c sql_mode variable.  See the section "SQL Modes" in the
-    MySQL manual, and see sql_class.h for a list of the possible
-    flags. Currently (2007-10-04), the following flags are available:
+    MySQL manual, and see system_variables.h for a list of the possible
+    flags. Currently, the following flags are available:
     <pre>
     MODE_REAL_AS_FLOAT==0x1
     MODE_PIPES_AS_CONCAT==0x2
@@ -227,6 +227,7 @@ bool is_user_var_decimal_metadata_valid(const char *val, std::size_t val_len,
     MODE_HIGH_NOT_PRECEDENCE==0x40000000
     MODE_PAD_CHAR_TO_FULL_LENGTH==0x80000000
     MODE_TIME_TRUNCATE_FRACTIONAL==0x100000000
+    MODE_INTERPRET_UTF8_AS_UTF8MB4==0x200000000
    </pre>
     All these flags are replicated from the server.  However, all
     flags except @c MODE_NO_DIR_IN_CREATE are honored by the slave;
@@ -439,6 +440,12 @@ bool is_user_var_decimal_metadata_valid(const char *val, std::size_t val_len,
     <td>2 byte integer</td>
     <td>Value of the config variable default_table_encryption</td>
   </tr>
+  <tr>
+    <td>enable_cascade_triggers</td>
+    <td>Q_ENABLE_CASCADE_TRIGGERS</td>
+    <td>1 byte boolean</td>
+    <td>Value of the config variable enable_cascade_triggers</td>
+  </tr>
   </table>
 
   @subsection Query_event_notes_on_previous_versions Notes on Previous Versions
@@ -541,7 +548,12 @@ class Query_event : public Binary_log_event {
     /*
       Replicate default_table_encryption.
     */
-    Q_DEFAULT_TABLE_ENCRYPTION
+    Q_DEFAULT_TABLE_ENCRYPTION,
+
+    /*
+      Replicate enable_cascade_triggers.
+    */
+    Q_ENABLE_CASCADE_TRIGGERS
   };
   const char *query;
   const char *db;
@@ -658,6 +670,8 @@ class Query_event : public Binary_log_event {
   uint8_t sql_require_primary_key;
 
   uint8_t default_table_encryption;
+
+  uint8_t enable_cascade_triggers;
 
   /**
     The constructor will be used while creating a Query_event, to be

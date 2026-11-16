@@ -383,7 +383,6 @@ INSERT INTO t2 VALUES( '2010-02-01 09:31:11' );
 --echo # performed.
 FLUSH STATUS;
 SELECT * FROM t2 WHERE a < '2010-02-01 09:31:02.0';
---skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'Handler_read_next';
 
 DROP TABLE t1, t2;
@@ -520,3 +519,33 @@ FROM t1;
 DROP TABLE t1;
 
 SET SESSION SQL_MODE=DEFAULT;
+
+--echo #
+--echo # Bug#38883917: WL#16895: Assertion 'm_eval_type == MYSQL_TYPE_DATETIME'
+--echo #
+
+CREATE TABLE t1
+ (ts1 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ts2 TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO t1 VALUES
+ (TIMESTAMP'1996-04-20 20:22:36', TIMESTAMP'2000-12-31 22:01:01'),
+ (TIMESTAMP'2024-04-01 13:18:49', TIMESTAMP'1980-01-12 23:38:06');
+
+SELECT ts1, ts2, GREATEST(ts1, ts2) AS f FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#39280411: Assertion 'dt->time_type = MYSQL_TIMESTAMP_DATETIME ||
+--echo #               dt->time_type = MYSQL_TIMESTAMP_DATETIME_TZ' failed
+--echo #
+
+CREATE TABLE t (c3 TIMESTAMP(3));
+INSERT INTO t VALUES(NOW());
+
+--error ER_TRUNCATED_WRONG_VALUE
+UPDATE t SET c3 = JSON_REPLACE('{"abcca":"c"}' , '$', '2016-12-03');
+
+DROP TABLE t;

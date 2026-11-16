@@ -1,0 +1,22 @@
+--source include/have_debug.inc
+--source include/have_rocksdb.inc
+
+--let $coltype=BIGINT UNSIGNED
+--let $timegen=UNIX_TIMESTAMP()
+--let $timegen_1s=UNIX_TIMESTAMP()+1
+--source ttl_secondary.inc
+
+--let $coltype=TIMESTAMP
+--let $timegen=NOW()
+--let $timegen_1s=ADDTIME(NOW(), '00:00:01')
+--source ttl_secondary.inc
+
+--let $coltype=TIMESTAMP DEFAULT NOW()
+--let $timegen=NOW()
+--let $timegen_1s=ADDTIME(NOW(), '00:00:01')
+--source ttl_secondary.inc
+
+--let $coltype=TIMESTAMP(6)
+--let $timegen=NOW()
+--let $timegen_1s=ADDTIME(NOW(), '00:00:01')
+--source ttl_secondary.inc

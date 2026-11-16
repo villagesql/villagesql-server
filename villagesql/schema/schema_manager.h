@@ -142,6 +142,14 @@ class SchemaManager {
   static bool is_villagesql_upgrade_needed();
 
   /**
+   * Returns true once preinit() has read the stored schema version, so that
+   * is_villagesql_upgrade_needed() may be called. It stays false when preinit()
+   * could not read the version, e.g. because the data dictionary failed to
+   * start.
+   */
+  static bool is_villagesql_upgrade_status_known();
+
+  /**
    * Read the version of the schema manager from memory, it is updated:
    * during startup when read from the database
    * immediately after any schema updates run during server startup

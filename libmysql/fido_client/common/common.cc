@@ -63,7 +63,7 @@ int get_user_input(const std::string &msg, input_type type, void *arg,
   int retval = 1;
   switch (type) {
     case input_type::UINT: {
-      unsigned int *uint_input = pointer_cast<unsigned int *>(arg);
+      auto *uint_input = pointer_cast<unsigned int *>(arg);
       get_plugin_messages(msg, message_type::INFO);
       if (mc_get_uint) {
         retval = mc_get_uint(uint_input);

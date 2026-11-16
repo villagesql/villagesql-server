@@ -71,7 +71,7 @@
 #include "sql/sql_plugin_ref.h"
 #include "sql/sql_plugin_var.h"
 #include "sql/sql_select.h"        // free_underlaid_joins
-#include "sql/sql_show.h"          // append_identifier
+#include "sql/sql_show.h"          // append_identifier_*
 #include "sql/sys_vars_shared.h"   // PolyLock_mutex
 #include "sql/system_variables.h"  // system_variables
 #include "sql/table.h"             // table
@@ -207,8 +207,10 @@ void sys_var_end() {
 bool check_priv(THD *thd, bool static_variable) {
   Security_context *sctx = thd->security_context();
   /* for dynamic variables user needs SUPER_ACL or SYSTEM_VARIABLES_ADMIN */
+  const bool is_utility_user = acl_is_utility_user(
+      sctx->priv_user().str, sctx->host().str, sctx->ip().str);
   if (!static_variable) {
-    if (!sctx->check_access(SUPER_ACL) &&
+    if (!is_utility_user && !sctx->check_access(SUPER_ACL) &&
         !(sctx->has_global_grant(STRING_WITH_LEN("SYSTEM_VARIABLES_ADMIN"))
               .first)) {
       my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0),
@@ -408,7 +410,7 @@ uchar *sys_var::global_var_ptr() {
 
 bool sys_var::check(THD *thd, set_var *var) {
   if ((var->value && do_check(thd, var)) ||
-      (on_check && on_check(this, thd, var))) {
+      (var->type != OPT_PERSIST_ONLY && on_check && on_check(this, thd, var))) {
     if (!thd->is_error()) {
       char buff[STRING_BUFFER_USUAL_SIZE];
       String str(buff, sizeof(buff), system_charset_info), *res;
@@ -1430,6 +1432,8 @@ int sql_set_variables(THD *thd, List<set_var_base> *var_list, bool opened) {
         thd->optimizer_switch_flag(OPTIMIZER_SWITCH_HYPERGRAPH_OPTIMIZER));
 
     const Prepared_stmt_arena_holder ps_arena_holder(thd);
+    const Prepare_error_tracker tracker(thd);
+
     while ((var = it++)) {
       if ((error = var->resolve(thd))) goto err;
     }
@@ -1534,6 +1538,22 @@ int sql_set_variables(THD *thd, List<set_var_base> *var_list, bool opened) {
     if (pv && pv->flush_to_file()) {
       my_error(ER_VARIABLE_NOT_PERSISTED, MYF(0));
       return 1;
+    }
+
+    /* if GLOBAL system variable changed, reset its attributes */
+    it.rewind();
+    while ((var = it++)) {
+      set_var *setvar = dynamic_cast<set_var *>(var);
+      if (setvar &&
+          (setvar->type == OPT_GLOBAL || setvar->type == OPT_PERSIST)) {
+        // TODO(villagesql-rebase): upstream raises ER_UNKNOWN_SYSTEM_VARIABLE
+        // here if an UNINSTALL removed the variable after the update released
+        // LOCK_system_variables_hash, and the statement then asserts in
+        // my_ok(). A vanished variable has no attributes left to reset, so
+        // suppress the error. Drop this if upstream fixes the race.
+        set_global_variable_attribute(setvar->m_var_tracker, nullptr, nullptr,
+                                      Suppress_not_found_error::YES);
+      }
     }
   }
 
@@ -1755,7 +1775,7 @@ int set_var::check(THD *thd) {
       my_error(ER_WRONG_TYPE_FOR_VAR, MYF(0), var->name.str);
       return -1;
     }
-    return (type != OPT_PERSIST_ONLY && var->check(thd, this)) ? -1 : 0;
+    return var->check(thd, this) ? -1 : 0;
   };
 
   int ret =
@@ -1860,10 +1880,13 @@ int set_var::update(THD *thd) {
     bool ret = false;
     /* for persist only syntax do not update the value */
     if (type != OPT_PERSIST_ONLY) {
+      auto saved_var_source = var->get_source();
+      var->set_source(enum_variable_source::DYNAMIC);
       if (value)
         ret = var->update(thd, this);
       else
         ret = var->set_default(thd, this);
+      var->set_source(saved_var_source);
       /*
        For PERSIST_ONLY syntax we dont change the value of the variable
        for the current session, thus we should not change variables
@@ -2138,4 +2161,112 @@ bool set_var_collation_client::print(const THD *, String *str) {
     }
   }
   return true;
+}
+
+bool get_global_variable_attributes(
+    const char *variable_base, const char *variable_name,
+    std::vector<std::pair<std::string, std::string>> &attributes) {
+  if (variable_name == nullptr || *variable_name == '\0') return true;
+
+  attributes.clear();
+
+  const System_variable_tracker var_tracker =
+      System_variable_tracker::make_tracker(
+          variable_base == nullptr ? "" : variable_base, variable_name);
+
+  auto f = [&attributes](const System_variable_tracker &, sys_var *var) -> int {
+    if ((var->scope() & sys_var::flag_enum::GLOBAL) == 0) {
+      return -1;
+    }
+
+    for (auto &attr : var->m_global_attributes)
+      attributes.emplace_back(attr.first, attr.second);
+    return 0;
+  };
+
+  int ret = var_tracker
+                .access_system_variable<int>(current_thd, f,
+                                             Suppress_not_found_error::NO)
+                .value_or(-1);
+  return ret != 0;
+}
+
+bool get_global_variable_attribute(const char *variable_base,
+                                   const char *variable_name,
+                                   const char *attribute_name,
+                                   std::string &value) {
+  if (variable_name == nullptr || *variable_name == '\0') return true;
+  if (attribute_name == nullptr || *attribute_name == '\0') return true;
+
+  const System_variable_tracker var_tracker =
+      System_variable_tracker::make_tracker(
+          variable_base == nullptr ? "" : variable_base, variable_name);
+
+  auto f = [attribute_name, &value](const System_variable_tracker &,
+                                    sys_var *var) -> int {
+    if ((var->scope() & sys_var::flag_enum::GLOBAL) == 0) {
+      return -1;
+    }
+
+    const auto it = var->m_global_attributes.find(attribute_name);
+    if (it == var->m_global_attributes.end()) return -1;
+
+    value = it->second;
+    return 0;
+  };
+
+  int ret = var_tracker
+                .access_system_variable<int>(current_thd, f,
+                                             Suppress_not_found_error::NO)
+                .value_or(-1);
+  return ret != 0;
+}
+
+bool set_global_variable_attribute(const char *variable_base,
+                                   const char *variable_name,
+                                   const char *attribute_name,
+                                   const char *attribute_value) {
+  const System_variable_tracker var_tracker =
+      System_variable_tracker::make_tracker(
+          variable_base == nullptr ? "" : variable_base, variable_name);
+
+  return set_global_variable_attribute(var_tracker, attribute_name,
+                                       attribute_value);
+}
+
+bool set_global_variable_attribute(
+    const System_variable_tracker &var_tracker, const char *attribute_name,
+    const char *attribute_value,
+    Suppress_not_found_error suppress_not_found_error) {
+  auto f = [attribute_name, attribute_value](const System_variable_tracker &,
+                                             sys_var *var) -> int {
+    if ((var->scope() & sys_var::flag_enum::GLOBAL) == 0) {
+      return -1;
+    }
+
+    if (attribute_name == nullptr) {
+      var->m_global_attributes.clear();
+    } else if (attribute_value == nullptr) {
+      var->m_global_attributes.erase(attribute_name);
+    } else {
+      // validate data to prevent wasting memory
+      constexpr size_t COL_SHORT_NAME_SIZE = 32;
+      constexpr size_t COL_INFO_SIZE = 1024;
+
+      const size_t name_len = strlen(attribute_name);
+      if (name_len > COL_SHORT_NAME_SIZE) return -1;
+      if (name_len == 0U) return -1;
+      const size_t value_len = strlen(attribute_value);
+      if (value_len > COL_INFO_SIZE) return -1;
+
+      var->m_global_attributes[attribute_name] = attribute_value;
+    }
+    return 0;
+  };
+
+  int ret = var_tracker
+                .access_system_variable<int>(current_thd, f,
+                                             suppress_not_found_error)
+                .value_or(-1);
+  return ret != 0;
 }

@@ -31,12 +31,12 @@
 #include <Windows.h>
 #include <malloc.h>  // _aligned_alloc
 #else
-#include <errno.h>
-#include <stdlib.h>  // aligned_alloc or posix_memalign
+#include <cerrno>
+#include <cstdlib>  // aligned_alloc or posix_memalign
 #define __STDC_WANT_LIB_EXT1__ 1
-#include <string.h>  // explict_bzero or memset_s
 #include <sys/mman.h>
 #include <unistd.h>  // sysconf
+#include <cstring>   // explict_bzero or memset_s
 #endif
 
 #include <NdbMem.h>

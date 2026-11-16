@@ -28,8 +28,8 @@
 
 #include "sql/gstream.h"
 
-#include <string.h>
 #include <sys/types.h>
+#include <cstring>
 
 #include "m_string.h"  // my_stpcpy
 #include "my_inttypes.h"

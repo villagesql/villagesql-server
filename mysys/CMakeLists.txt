@@ -23,17 +23,20 @@
 
 ADD_WSHADOW_WARNING()
 
-SET(MY_TIME_SOURCES my_time.cc my_systime.cc)
+SET(MY_TIME_SOURCES my_time.cc my_systime.cc my_temporal.cc)
 
 ADD_CONVENIENCE_LIBRARY(mytime ${MY_TIME_SOURCES})
 
+INCLUDE_DIRECTORIES(SYSTEM ${BOOST_PATCHES_DIR} ${BOOST_INCLUDE_DIR})
+
 SET(MYSYS_SOURCES
-  array.cc
   base64_encode.cc
+  buffered_error_log.cc
   charset.cc
   dbug.cc
   decimal.cc
   errors.cc
+  escape_string.cc
   lf_alloc-pin.cc
   lf_dynarray.cc
   lf_hash.cc
@@ -87,6 +90,7 @@ SET(MYSYS_SOURCES
   my_rdtsc.cc
   my_read.cc
   my_rename.cc
+  my_rm_dir_w_symlink.cc
   my_seek.cc
   my_static.cc
   my_string.cc
@@ -94,7 +98,6 @@ SET(MYSYS_SOURCES
   my_symlink.cc
   my_sync.cc
   my_syslog.cc
-  my_system.cc
   my_thread.cc
   my_thr_init.cc
   my_user.cc
@@ -118,17 +121,17 @@ SET(MYSYS_SOURCES
   typelib.cc
   unhex.cc
   keyring_operations_helper.cc
+  stream_cipher.cc
   # From deleted mysys_ssl library
   crypt_genhash_impl.cc
   my_default.cc
   my_getopt.cc
   my_kdf.cc
   my_aes.cc
-  my_sha1.cc
   my_sha2.cc
-  my_md5.cc
   my_rnd.cc
   my_openssl_fips.cc
+  my_ssl_algo_cache.cc
 )
 LIST(APPEND MYSYS_SOURCES my_aes_openssl.cc)
 
@@ -193,6 +196,10 @@ IF(HAS_MISSING_PROFILE)
   ADD_COMPILE_FLAGS(mf_path.cc COMPILE_FLAGS "${HAS_MISSING_PROFILE}")
 ENDIF()
 
+IF (WITH_COREDUMPER)
+  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extra/coredumper/include)
+ENDIF()
+
 ADD_CONVENIENCE_LIBRARY(mysys ${MYSYS_SOURCES}
   LINK_LIBRARIES
   mytime
@@ -221,14 +228,12 @@ ENDIF()
 IF(CMAKE_USE_PTHREADS_INIT AND CMAKE_C_FLAGS MATCHES "-fsanitize=")
   TARGET_LINK_LIBRARIES(mysys pthread)
 ENDIF()
+IF (WITH_COREDUMPER)
+  TARGET_LINK_LIBRARIES(mysys coredumper)
+ENDIF()
 # Needed to resolve OpenSSL dependency on Windows
 IF(WIN32)
   TARGET_LINK_LIBRARIES(mysys crypt32)
-ENDIF()
-
-# MD5_Init() and others are deprecated.
-IF(SOLARIS AND MY_COMPILER_IS_GNU_OR_CLANG)
-  ADD_COMPILE_FLAGS(my_md5.cc COMPILE_FLAGS "-Wno-deprecated-declarations")
 ENDIF()
 
 # WinSDK files included by these .cc files generate warnings in /analyze

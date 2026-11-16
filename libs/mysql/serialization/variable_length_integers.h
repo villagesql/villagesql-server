@@ -36,6 +36,7 @@
 #include <concepts>
 #include <limits>
 #include "my_byteorder.h"
+#include "mysql/serialization/byte_order_helpers.h"  // htole64
 
 /// @addtogroup GroupLibsMysqlSerialization
 /// @{
@@ -43,7 +44,6 @@
 namespace mysql::serialization::detail {
 
 /// @brief Calculates the number of bytes necessary to store data
-/// @tparam Type Integer type
 /// @param data The number to be stored into the memory
 /// @return The number of bytes necessary to store data.
 size_t get_size_integer_varlen_unsigned(

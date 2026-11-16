@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,4 +30,10 @@ struct EventOperationStats {
   int n_duplicates;
   int n_consecutive;
   int n_inconsistent_gcis;
+};
+
+struct EventOperationConfig {
+  unsigned int slice_count = 1;
+  unsigned int slice_id = 0;
+  unsigned int slice_records = 0;
 };

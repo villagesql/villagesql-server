@@ -24,8 +24,8 @@
 #include <gtest/gtest.h>
 #include "my_config.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 
 #include "unittest/gunit/benchmark.h"
 #include "unittest/gunit/gunit_test_main.h"

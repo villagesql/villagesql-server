@@ -38,12 +38,12 @@ class MysqlRoutingClassicConnection : public MysqlRoutingClassicConnectionBase {
   //
   // use ::create() instead.
   MysqlRoutingClassicConnection(
-      MySQLRoutingContext &context, RouteDestination *route_destination,
+      MySQLRoutingContext &context, DestinationManager *destination_manager,
       std::unique_ptr<ConnectionBase> client_connection,
       std::unique_ptr<RoutingConnectionBase> client_routing_connection,
       std::function<void(MySQLRoutingConnectionBase *)> remove_callback)
       : MysqlRoutingClassicConnectionBase{
-            context, route_destination, std::move(client_connection),
+            context, destination_manager, std::move(client_connection),
             std::move(client_routing_connection), std::move(remove_callback)} {}
 
  public:

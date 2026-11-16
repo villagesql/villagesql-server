@@ -25,7 +25,7 @@
 
 #include "sql/conn_handler/connection_handler_manager.h"
 
-#include <assert.h>
+#include <cassert>
 #include <ctime>
 #include <new>
 
@@ -44,8 +44,11 @@
 #include "sql/conn_handler/connection_handler_impl.h"  // Per_thread_connection_handler
 #include "sql/conn_handler/plugin_connection_handler.h"  // Plugin_connection_handler
 #include "sql/current_thd.h"
+#include "sql/derror.h"
+#include "sql/log.h"
 #include "sql/mysqld.h"        // max_connections
 #include "sql/sql_callback.h"  // MYSQL_CALLBACK
+#include "sql/sql_class.h"
 #include "thr_lock.h"
 #include "thr_mutex.h"
 
@@ -55,6 +58,8 @@ struct Connection_handler_functions;
 uint Connection_handler_manager::connection_count = 0;
 ulong Connection_handler_manager::max_used_connections = 0;
 ulong Connection_handler_manager::max_used_connections_time = 0;
+std::atomic_ulong Connection_handler_manager::incoming_connection_count = 0;
+
 THD_event_functions *Connection_handler_manager::event_functions = nullptr;
 THD_event_functions *Connection_handler_manager::saved_event_functions =
     nullptr;
@@ -71,23 +76,35 @@ uint Connection_handler_manager::max_threads = 0;
 */
 
 static void scheduler_wait_lock_begin() {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
-                 (current_thd, THD_WAIT_TABLE_LOCK));
+  THD *thd = current_thd;
+  MYSQL_CALLBACK(thd->scheduler, thd_wait_begin, (thd, THD_WAIT_TABLE_LOCK));
 }
 
 static void scheduler_wait_lock_end() {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,
-                 (current_thd));
+  THD *thd = current_thd;
+  MYSQL_CALLBACK(thd->scheduler, thd_wait_end, (thd));
 }
 
 static void scheduler_wait_sync_begin() {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
-                 (current_thd, THD_WAIT_SYNC));
+  THD *thd = current_thd;
+  if (likely(thd))
+    MYSQL_CALLBACK(thd->scheduler, thd_wait_begin, (thd, THD_WAIT_SYNC));
 }
 
 static void scheduler_wait_sync_end() {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,
-                 (current_thd));
+  THD *thd = current_thd;
+  if (likely(thd)) MYSQL_CALLBACK(thd->scheduler, thd_wait_end, (thd));
+}
+
+static void scheduler_wait_net_begin() {
+  THD *thd = current_thd;
+  if (likely(thd))
+    MYSQL_CALLBACK(thd->scheduler, thd_wait_begin, (thd, THD_WAIT_NET));
+}
+
+static void scheduler_wait_net_end() {
+  THD *thd = current_thd;
+  if (likely(thd)) MYSQL_CALLBACK(thd->scheduler, thd_wait_end, (thd));
 }
 
 bool Connection_handler_manager::valid_connection_count() {
@@ -102,7 +119,7 @@ bool Connection_handler_manager::valid_connection_count() {
 }
 
 bool Connection_handler_manager::check_and_incr_conn_count(
-    bool is_admin_connection) {
+    bool is_admin_connection, bool internal_session) {
   bool connection_accepted = true;
   mysql_mutex_lock(&LOCK_connection_count);
   /*
@@ -118,7 +135,7 @@ bool Connection_handler_manager::check_and_incr_conn_count(
     m_connection_errors_max_connection++;
   } else {
     ++connection_count;
-
+    if (!internal_session) ++incoming_connection_count;
     if (connection_count > max_used_connections) {
       max_used_connections = connection_count;
       max_used_connections_time = time(nullptr);
@@ -157,6 +174,9 @@ bool Connection_handler_manager::init() {
       break;
     case SCHEDULER_NO_THREADS:
       connection_handler = new (std::nothrow) One_thread_connection_handler();
+      break;
+    case SCHEDULER_THREAD_POOL:
+      connection_handler = new (std::nothrow) Thread_pool_connection_handler();
       break;
     default:
       assert(false);
@@ -198,6 +218,7 @@ bool Connection_handler_manager::init() {
                              scheduler_wait_lock_end);
   thr_set_sync_wait_callback(scheduler_wait_sync_begin,
                              scheduler_wait_sync_end);
+  vio_set_wait_callback(scheduler_wait_net_begin, scheduler_wait_net_end);
   return false;
 }
 
@@ -208,6 +229,10 @@ void Connection_handler_manager::wait_till_no_connection() {
     mysql_cond_wait(&COND_connection_count, &LOCK_connection_count);
   }
   mysql_mutex_unlock(&LOCK_connection_count);
+}
+
+void Connection_handler_manager::post_daemonize_init() {
+  m_connection_handler->post_daemonize_init();
 }
 
 void Connection_handler_manager::destroy_instance() {
@@ -254,8 +279,9 @@ bool Connection_handler_manager::unload_connection_handler() {
 void Connection_handler_manager::process_new_connection(
     Channel_info *channel_info) {
   if (connection_events_loop_aborted() ||
-      !check_and_incr_conn_count(channel_info->is_admin_connection())) {
+      !check_and_incr_conn_count(channel_info->is_admin_connection(), false)) {
     channel_info->send_error_and_close_channel(ER_CON_COUNT_ERROR, 0, true);
+    sql_print_warning("%s", ER_DEFAULT(ER_CON_COUNT_ERROR));
     delete channel_info;
     return;
   }
@@ -289,8 +315,7 @@ int my_connection_handler_set(Connection_handler_functions *chf,
   assert(chf != nullptr && tef != nullptr);
   if (chf == nullptr || tef == nullptr) return 1;
 
-  Plugin_connection_handler *conn_handler =
-      new (std::nothrow) Plugin_connection_handler(chf);
+  auto *conn_handler = new (std::nothrow) Plugin_connection_handler(chf);
   if (conn_handler == nullptr) return 1;
 
   Connection_handler_manager::get_instance()->load_connection_handler(

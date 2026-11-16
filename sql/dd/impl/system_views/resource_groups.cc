@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/resource_groups.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Resource_groups &Resource_groups::instance() {
-  static Resource_groups *s_instance = new Resource_groups();
+  static auto *s_instance = new Resource_groups();
   return *s_instance;
 }
 
@@ -48,5 +47,4 @@ Resource_groups::Resource_groups() {
   m_target_def.add_where("CAN_ACCESS_RESOURCE_GROUP(res.resource_group_name)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

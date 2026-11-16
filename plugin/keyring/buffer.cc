@@ -23,7 +23,7 @@
 
 #include "plugin/keyring/buffer.h"
 
-#include <assert.h>
+#include <cassert>
 #include <memory>
 
 #include "plugin/keyring/common/keyring_key.h"

@@ -24,12 +24,11 @@
 
 #include "sql/dd/impl/upgrade/server.h"
 
-#include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <sys/types.h>
-#include <chrono>
 #include <iomanip>
+#include <ranges>
 #include <sstream>
 #include <string>
 
@@ -47,13 +46,14 @@
 #include <vector>
 
 #include "my_dbug.h"
-#include "my_rapidjson_size_t.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/strings/m_ctype.h"
 #include "nulls.h"
+
+#include "my_rapidjson_size_t.h"  // Needed, even if flagged as unused.
 #include "rapidjson/document.h"
-#include "rapidjson/prettywriter.h"
+#include "rapidjson/prettywriter.h"  // Needed, even if flagged as unused
 #include "rapidjson/stringbuffer.h"
 #include "scripts/mysql_fix_privilege_tables_sql.h"
 #include "scripts/sql_commands_system_tables_data_fix.h"
@@ -87,9 +87,12 @@
 #include "sql/table_trigger_dispatcher.h"  // Table_trigger_dispatcher
 #include "sql/thd_raii.h"
 #include "sql/trigger.h"  // Trigger
-#include "sql/trigger_def.h"
 #include "string_with_len.h"
 #include "villagesql/schema/schema_manager.h"
+
+#ifdef HAVE_PERCONA_TELEMETRY
+#include "sql/dd/dd_utility.h"  // check_if_server_ddse_readonly
+#endif
 
 using sql_mode_t = uint64_t;
 extern const char *mysql_sys_schema[];
@@ -225,22 +228,6 @@ bool Syntax_error_handler::handle_condition(
   return false;
 }
 
-void Syntax_error_handler::reset_last_condition() {
-  // This method was created to handle a corner case in upgrades to 8.4
-  // where old servers contain routines with unsupported terminology.
-  // TODO: As upgrades to 9.0 only come from 8.4+, this code can be removed
-  // in 9.0
-  assert(
-      dd::bootstrap::DD_bootstrap_ctx::instance().is_server_upgrade_from_before(
-          bootstrap::SERVER_VERSION_80400) &&
-      strstr(reason.c_str(), " to use near 'SLAVE STATUS"));
-
-  parse_error_count--;
-  if (m_global_counter) (*m_global_counter)--;
-  is_parse_error = false;
-  reason = "";
-}
-
 bool Syntax_error_handler::has_too_many_errors() {
   return parse_error_count > MAX_SERVER_CHECK_FAILS;
 }
@@ -261,16 +248,12 @@ Upgrade_error_counter Upgrade_error_counter::operator++(int) {
   m_error_count++;
   return *this;
 }
-Upgrade_error_counter Upgrade_error_counter::operator--(int) {
-  m_error_count--;
-  return *this;
-}
 
 namespace {
 
 static std::vector<uint> ignored_errors{
     ER_DUP_FIELDNAME, ER_DUP_KEYNAME, ER_BAD_FIELD_ERROR,
-    ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE_V2, ER_DUP_ENTRY};
+    ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE_V2, ER_DUP_ENTRY, ER_NO_SUCH_TABLE};
 
 template <typename T>
 class Server_option_guard {
@@ -285,90 +268,65 @@ class Server_option_guard {
   ~Server_option_guard() { *server_opt = old_value; }
 };
 
+const dd::String_type MYSQL_SCHEMA_NAME = "mysql";
+const dd::String_type SYS_SCHEMA_NAME = "sys";
+
+dd::String_type &append_escaped(dd::String_type &dst,
+                                const dd::String_type &s) {
+  dst.append(1, '`');
+  for (auto c : s) {
+    if (c == '`') {
+      dst.append(1, '`');
+    }
+    dst.append(1, c);
+  }
+  dst.append(1, '`');
+  return dst;
+}
+
+void comma_separated_join(std::vector<dd::String_type> &list,
+                          dd::String_type &dest) {
+  assert(!list.empty());
+  dest.append(list.front());
+  for (const dd::String_type &elt : list | std::ranges::views::drop(1)) {
+    dest.append(", ").append(elt);
+  }
+}
+
 class MySQL_check {
  private:
   std::vector<dd::String_type> alter_cmds, repairs;
-  bool needs_repair;
+  bool needs_repair = false;
+  dd::String_type m_ddstrbuf;
 
-  static dd::String_type escape_str(const dd::String_type &src) {
-    dd::String_type res = "`";
-    for (size_t i = 0; i < src.size(); i++) {
-      if (src[i] == '`') res += '`';
-      res += src[i];
-    }
-    res += "`";
-    return res;
-  }
-
-  void comma_separated_join(std::vector<dd::String_type> &list,
-                            dd::String_type &dest) {
-    dest = list[0];
-    for (auto it = list.begin() + 1; it != list.end(); it++) dest += "," + *it;
-  }
-
-  bool get_schema_tables(THD *thd, const char *schema,
+  bool get_schema_tables(THD *thd, const dd::String_type &schema_name,
                          dd::String_type &tables_list) {
     Schema_MDL_locker mdl_handler(thd);
     dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
     const dd::Schema *sch = nullptr;
-    std::vector<String_type> tables;
-    dd::Stringstream_type t_list;
 
-    if (mdl_handler.ensure_locked(schema) ||
-        thd->dd_client()->acquire(schema, &sch) ||
-        thd->dd_client()->fetch_schema_component_names<Abstract_table>(
-            sch, &tables)) {
+    std::vector<String_type> schema_table_names;
+    if (mdl_handler.ensure_locked(schema_name.c_str()) ||
+        thd->dd_client()->acquire(schema_name, &sch) ||
+        thd->dd_client()->fetch_schema_base_table_names_not_hidden_by_se(
+            sch, &schema_table_names)) {
       LogErr(ERROR_LEVEL, ER_DD_UPGRADE_FAILED_TO_FETCH_TABLES);
-      return (true);
+      return true;
+    }
+    if (schema_table_names.empty()) {
+      return false;
     }
 
-    char schema_name_buf[NAME_LEN + 1];
-    const char *converted_schema_name = sch->name().c_str();
-    if (lower_case_table_names == 2) {
-      my_stpcpy(schema_name_buf, converted_schema_name);
-      my_casedn_str(system_charset_info, schema_name_buf);
-      converted_schema_name = schema_name_buf;
+    append_escaped(tables_list, sch->name()).append(1, '.');
+    append_escaped(tables_list, schema_table_names.front());
+
+    for (const dd::String_type &table_name :
+         schema_table_names | std::ranges::views::drop(1)) {
+      tables_list.append(", ");
+      append_escaped(tables_list, sch->name()).append(1, '.');
+      append_escaped(tables_list, table_name);
     }
 
-    bool first = true;
-    for (const dd::String_type &table : tables) {
-      char table_name_buf[NAME_LEN + 1];
-      const char *converted_table_name = table.c_str();
-      if (lower_case_table_names == 2) {
-        my_stpcpy(table_name_buf, converted_table_name);
-        my_casedn_str(system_charset_info, table_name_buf);
-        converted_table_name = table_name_buf;
-      }
-
-      MDL_request table_request;
-      MDL_REQUEST_INIT(&table_request, MDL_key::TABLE, converted_schema_name,
-                       converted_table_name, MDL_SHARED, MDL_EXPLICIT);
-
-      if (thd->mdl_context.acquire_lock(&table_request,
-                                        thd->variables.lock_wait_timeout)) {
-        return true;
-      }
-      dd::cache::Dictionary_client::Auto_releaser table_releaser(
-          thd->dd_client());
-      const dd::Abstract_table *table_obj = nullptr;
-      if (thd->dd_client()->acquire(converted_schema_name, converted_table_name,
-                                    &table_obj))
-        return true;
-
-      if (table_obj->type() != dd::enum_table_type::BASE_TABLE ||
-          table_obj->hidden() != dd::Abstract_table::HT_VISIBLE) {
-        thd->mdl_context.release_lock(table_request.ticket);
-        continue;
-      }
-      if (!first)
-        t_list << ", ";
-      else
-        first = false;
-      t_list << escape_str(sch->name()) << "." << escape_str(table_obj->name());
-      thd->mdl_context.release_lock(table_request.ticket);
-    }
-
-    tables_list = t_list.str();
     return false;
   }
 
@@ -419,59 +377,87 @@ class MySQL_check {
     Returns true if something went wrong while retrieving the table list or
     executing CHECK TABLE statements.
   */
-  bool check_tables(THD *thd, const char *schema) {
+  bool check_tables(THD *thd, const dd::String_type &schema_name) {
+    LogErr(INFORMATION_LEVEL, ER_SERVER_UPGRADE_CHECKING_DB,
+           schema_name.c_str());
+
+    dd::String_type &check_statement = m_ddstrbuf;
+    check_statement = "CHECK TABLE ";
+    std::size_t initial_size = check_statement.size();
+    if (get_schema_tables(thd, schema_name, check_statement)) {
+      return true;
+    }
+    if (check_statement.size() == initial_size) {
+      return false;
+    }
+    check_statement.append(" FOR UPGRADE");
+
     Ed_connection con(thd);
-    dd::String_type tables;
-    LEX_STRING str;
-
-    LogErr(INFORMATION_LEVEL, ER_SERVER_UPGRADE_CHECKING_DB, schema);
-    if (get_schema_tables(thd, schema, tables)) return true;
-    if (tables.size() == 0) return false;
-
-    dd::String_type query = "CHECK TABLE " + tables + " FOR UPGRADE";
-    lex_string_strmake(thd->mem_root, &str, query.c_str(), query.size());
-    if (con.execute_direct(str)) return true;
+    if (con.execute_direct(
+            {check_statement.data(), check_statement.length()})) {
+      return true;
+    }
 
     needs_repair |= verify_response(*con.get_result_sets(), false);
     return false;
   }
 
  public:
-  MySQL_check() : needs_repair(false) {}
+  /**
+    Delete the overload taking the schema name as a const char*, to avoid
+    creating unintended temporary dd::String_type objects.
+  */
+  bool check_tables(THD *thd, const char *schema_name) = delete;
 
   bool check_all_schemas(THD *thd) {
-    std::vector<dd::String_type> schemas;
-    if (thd->dd_client()->fetch_global_component_names<dd::Schema>(&schemas))
+    std::vector<dd::String_type> schema_names;
+    if (thd->dd_client()->fetch_global_component_names<dd::Schema>(
+            &schema_names)) {
       return true;
-    for (dd::String_type &schema : schemas) {
-      if (schema.compare("information_schema") == 0 ||
-          schema.compare("performance_schema") == 0)
+    }
+
+    for (dd::String_type &schema_name : schema_names) {
+      if (schema_name.compare("information_schema") == 0 ||
+          schema_name.compare("performance_schema") == 0)
         continue;
-      if (check_tables(thd, schema.c_str())) return true;
+      if (check_tables(thd, schema_name)) {
+        return true;
+      }
     }
     return false;
   }
 
   bool check_system_schemas(THD *thd) {
-    return check_tables(thd, "mysql") || check_tables(thd, "sys");
+    return check_tables(thd, MYSQL_SCHEMA_NAME) ||
+           check_tables(thd, SYS_SCHEMA_NAME);
   }
 
   bool repair_tables(THD *thd) {
-    if (!needs_repair) return false;
+    if (!needs_repair) {
+      return false;
+    }
 
-    for (auto &alter : alter_cmds)
-      if (dd::execute_query(thd, alter)) return true;
+    for (auto &alter : alter_cmds) {
+      if (dd::execute_query(thd, alter)) {
+        return true;
+      }
+    }
     alter_cmds.clear();
 
-    if (repairs.size() == 0) return false;
-    dd::String_type tables;
-    comma_separated_join(repairs, tables);
+    if (repairs.size() == 0) {
+      return false;
+    }
+
+    dd::String_type &repair_statement = m_ddstrbuf;
+    repair_statement = "REPAIR TABLE ";
+
+    comma_separated_join(repairs, repair_statement);
 
     Ed_connection con(thd);
-    LEX_STRING str;
-    dd::String_type query = "REPAIR TABLE " + tables;
-    lex_string_strmake(thd->mem_root, &str, query.c_str(), query.size());
-    if (con.execute_direct(str)) return true;
+    if (con.execute_direct(
+            {repair_statement.data(), repair_statement.length()})) {
+      return true;
+    }
     repairs.clear();
     needs_repair = false;
     (void)verify_response(*con.get_result_sets(), true);
@@ -665,6 +651,13 @@ bool fix_sys_schema(THD *thd) {
              : ER_SERVER_UPGRADE_SYS_SCHEMA);
   for (query_ptr = &mysql_sys_schema[0]; *query_ptr != nullptr; query_ptr++)
     if (ignore_error_and_execute(thd, *query_ptr)) return true;
+  DBUG_EXECUTE_IF(
+      "try_event_in_fix_sys_schema",
+      ignore_error_and_execute(
+          thd,
+          "CREATE DEFINER = 'mysql.sys'@'localhost' EVENT sys_test_event ON "
+          "SCHEDULE EVERY 1 MINUTE ENABLE DO SELECT 1");
+      ignore_error_and_execute(thd, "DROP EVENT sys_test_event"););
   thd->mem_root->Clear();
   return false;
 }
@@ -811,11 +804,13 @@ class Sql_fun_error_handler : public Internal_error_handler {
       : m_error_count(error_count) {}
 
  public:
-  bool handle_condition(THD *, uint, const char *,
+  bool handle_condition(THD *, uint sql_errno, const char *,
                         Sql_condition::enum_severity_level *sl,
-                        const char *) override {
+                        const char *msg) override {
     if (*sl == Sql_condition::SL_ERROR) {
       (*m_error_count)++;
+      LogErr(WARNING_LEVEL, ER_CHECK_TABLE_FUNCTIONS_DOWNGRADED, sql_errno,
+             msg);
       return true;
     }
     return false;
@@ -895,7 +890,7 @@ void reset_thd(THD *thd) {
       // On higher log levels, create a detailed description of the table.
       dd::String_type debug_info;
       dd::uses_functions(table, sn.c_str(), &debug_info);
-      LogErr(INFORMATION_LEVEL, ER_CHECK_TABLE_FUNCTIONS_DETAIL,
+      LogErr(WARNING_LEVEL, ER_CHECK_TABLE_FUNCTIONS_DETAIL,
              debug_info.c_str());
 
       // increase global error count
@@ -958,6 +953,8 @@ void reset_thd(THD *thd) {
     }
   }
 
+    DBUG_EXECUTE_IF("upgrade_failed_during_init", (*error_count)++;);
+
   return error_count->has_too_many_errors();
 }
 
@@ -1003,12 +1000,11 @@ void reset_thd(THD *thd) {
 
   @param thd THD
   @param sni Schema names indexed on schema_id
-  @param error_handler syntax error handler
   @param[out] error_count error counter object
   @return true if too many error encountered
 */
 [[nodiscard("Error handling")]] bool check_all_routines(
-    THD *thd, const Schema_name_index &sni, Syntax_error_handler &error_handler,
+    THD *thd, const Schema_name_index &sni, Syntax_error_handler &,
     Upgrade_error_counter *error_count) {
   LogErr(INFORMATION_LEVEL, ER_SERVER_UPGRADE_CHECK_STATUS_MESSAGE,
          "Checking routines");
@@ -1022,21 +1018,8 @@ void reset_thd(THD *thd) {
     const auto &sn = it->second;
 
     if (invalid_routine(thd, sn, *rtn)) {
-      // This is a corner case in upgrades to 8.4 where old servers contain
-      // routines with unsupported terminology.
-      // TODO: As upgrades to 9.0 only come from 8.4+, this code can be removed
-      // in 9.0
-      if (dd::bootstrap::DD_bootstrap_ctx::instance()
-              .is_server_upgrade_from_before(bootstrap::SERVER_VERSION_80400) &&
-          sn == "sys" && rtn->name() == "diagnostics" &&
-          strstr(Syntax_error_handler::error_message(),
-                 " to use near 'SLAVE STATUS")) {
-        error_handler.reset_last_condition();
-        thd->clear_error();
-      } else {
-        LogErr(ERROR_LEVEL, ER_UPGRADE_PARSE_ERROR, "Routine", sn.c_str(),
-               rtn->name().c_str(), Syntax_error_handler::error_message());
-      }
+      LogErr(ERROR_LEVEL, ER_UPGRADE_PARSE_ERROR, "Routine", sn.c_str(),
+             rtn->name().c_str(), Syntax_error_handler::error_message());
     }
     return error_count->has_too_many_errors();
   });
@@ -1275,7 +1258,7 @@ bool invalid_routine(THD *thd, const dd::String_type &schema_name,
   Routine_event_context_guard recg{thd};
   sp_head *sp = nullptr;
   st_sp_chistics chistics;
-  prepare_sp_chistics_from_dd_routine(&routine, &chistics);
+  prepare_sp_chistics_from_dd_routine(thd, &routine, &chistics);
 
   dd::String_type return_type_str;
   prepare_return_type_string_from_dd_routine(thd, &routine, &return_type_str);
@@ -1470,11 +1453,125 @@ bool upgrade_system_schemas(THD *thd) {
   return dd::end_transaction(thd, err);
 }
 
+#ifdef HAVE_PERCONA_TELEMETRY
+/* 1. We INSERT INTO, because prepared statements do not support
+      INSTALL COMPONENT
+   2. We use stored procedure to be able to do conditional action.
+   3. Percona Telemetry Component creates and uses internal user
+      (locked account) percona.telemetry with the following privileges:
+        1. SELECT
+        2. REPLICATION SLAVE
+        3. REPLICATION CLIENT
+      CREATE USER and GRANT do not work yet as ACL is not initialized yet.
+      Use INSERT and UPDATES.
+      This is the same approach as for creation of mysql.user in
+      mysql_system_tables_fix.sql. First we create the user, then update grants.
+      The reasons for this approach are:
+      1. When the user is created, it is granted SHUTDOWN, SUPER, CREATE ROLE,
+         DROP ROLE privileges. percona.telemetry user do not need them, so we
+         drop
+      2. We grant SELECT, REPLICATION SLAVE, REPLICATION CLIENT explicitly.
+         It is for clarity, but also automatically fixes privileges in case
+         someone manually drops them.
+*/
+static const char *percona_telemetry_install[] = {
+    "USE mysql;\n",
+    "SET @have_percona_telemetry= (SELECT COUNT(*) FROM mysql.component WHERE "
+    "component_urn='file://component_percona_telemetry');\n",
+    "SET @cmd= 'INSERT INTO mysql.component(component_group_id, component_urn) "
+    "VALUES (1, \"file://component_percona_telemetry\");';\n",
+    "SET @str = IF(@have_percona_telemetry = 0, @cmd, 'SET @dummy = 0');\n",
+    "PREPARE stmt FROM @str;\n",
+    "EXECUTE stmt;\n",
+    "DROP PREPARE stmt;\n",
+    "SET @group_id= (SELECT LAST_INSERT_ID());\n",
+    "SET @cmd= 'UPDATE mysql.component SET component_group_id=@group_id WHERE "
+    "component_id=@group_id;';\n",
+    "SET @str = IF(@have_percona_telemetry = 0, @cmd, 'SET @dummy = 0');\n",
+    "PREPARE stmt FROM @str;\n",
+    "EXECUTE stmt;\n",
+    "DROP PREPARE stmt;\n",
+    "INSERT IGNORE INTO mysql.user VALUES "
+    "('localhost','percona.telemetry','N','N','N','N','N','N','"
+    "N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N'"
+    ",'N','N','N','N','','','','',0,0,0,0,'caching_sha2_password','$A$005$"
+    "THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED','N',"
+    "CURRENT_TIMESTAMP,NULL,'Y', 'N', 'N', NULL, NULL, NULL, NULL);\n",
+    "UPDATE mysql.user SET Select_priv = 'Y', Repl_slave_priv = 'Y', "
+    "Repl_client_priv = 'Y' WHERE User = 'percona.telemetry' AND Host = 'localhost';\n",
+    "UPDATE mysql.user SET Shutdown_priv = 'N', Super_priv = 'N', "
+    "Create_role_priv = 'N', Drop_role_priv = 'N' WHERE User = "
+    "'percona.telemetry' AND Host = 'localhost';\n",
+    NULL};
+
+static const char *percona_telemetry_uninstall[] = {
+    "USE mysql;\n",
+    "DELETE FROM mysql.component WHERE "
+    "component_urn=\"file://component_percona_telemetry\"\n;",
+    "DELETE FROM mysql.user WHERE user='percona.telemetry' AND Host = 'localhost';\n",
+    NULL};
+
+/**
+  Always return success, regardless of Percona Telemetry Component setup
+  status.
+*/
+bool setup_percona_telemetry(THD *thd [[maybe_unused]]) {
+  /* Do not call dd::check_if_server_ddse_readonly()
+   * to avoid issuing the warning */
+  handlerton *ddse = ha_resolve_by_legacy_type(thd, DB_TYPE_INNODB);
+  if (ddse->is_dict_readonly && ddse->is_dict_readonly()) {
+    LogErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+           "Percona Telemetry Component not configured due to InnoDB "
+           "in read only mode.");
+    return false;
+  }
+
+  Disable_autocommit_guard autocommit_guard(thd);
+  Bootstrap_error_handler bootstrap_error_handler;
+
+  Server_option_guard<bool> acl_guard(&opt_noacl, true);
+  Server_option_guard<bool> general_log_guard(&opt_general_log, false);
+  Server_option_guard<bool> slow_log_guard(&opt_slow_log, false);
+  Disable_binlog_guard disable_binlog(thd);
+  Disable_sql_log_bin_guard disable_sql_log_bin(thd);
+
+  bool err = false;
+
+  bootstrap_error_handler.set_log_error(false);
+
+  const char **query_ptr = opt_percona_telemetry_disable
+                               ? &percona_telemetry_uninstall[0]
+                               : &percona_telemetry_install[0];
+  for (; *query_ptr != nullptr; query_ptr++)
+    if (ignore_error_and_execute(thd, *query_ptr)) {
+      LogErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+             "Failed during setup Percona Telemetry component. Ignoring.");
+      break;
+    };
+
+  bootstrap_error_handler.set_log_error(true);
+
+  close_thread_tables(thd);
+  close_cached_tables(nullptr, nullptr, false, LONG_TIMEOUT);
+
+  if (dd::end_transaction(thd, err)) {
+    LogErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+           "Failed to setup Percona Telemetry component. Ignoring.");
+  }
+
+  return false;
+}
+#endif /* HAVE_PERCONA_TELEMETRY */
+
 bool no_server_upgrade_required() {
+  // VillageSQL: mysqld also calls this after DD init fails, when the
+  // VillageSQL schema version could not be read. Leave the answer to the
+  // MySQL checks in that case.
   return !(
       dd::bootstrap::DD_bootstrap_ctx::instance().is_server_upgrade() ||
       bootstrap::DD_bootstrap_ctx::instance().is_server_patch_downgrade() ||
-      villagesql::SchemaManager::is_villagesql_upgrade_needed() ||
+      (villagesql::SchemaManager::is_villagesql_upgrade_status_known() &&
+       villagesql::SchemaManager::is_villagesql_upgrade_needed()) ||
       opt_upgrade_mode == UPGRADE_FORCE);
 }
 

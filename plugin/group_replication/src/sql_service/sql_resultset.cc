@@ -127,9 +127,7 @@ void Sql_resultset::clear() {
   m_killed = false;
 }
 
-void Sql_resultset::new_row() {
-  result_value.push_back(std::vector<Field_value *>());
-}
+void Sql_resultset::new_row() { result_value.emplace_back(); }
 
 void Sql_resultset::new_field(Field_value *val) {
   result_value[num_rows].push_back(val);

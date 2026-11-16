@@ -1,3 +1,5 @@
+--source include/elide_costs.inc
+
 #
 # Initialization
 --disable_warnings
@@ -719,7 +721,7 @@ flush status;
 select * from t1, t2, t3 where t3.a=t1.a and t2.a=t1.b;
 explain select * from t1, t2, t3 where t3.a=t1.a and t2.a=t1.b;
 --echo We expect rnd_next=5, and read_key must be 0 because of short-cutting:
---skip_if_hypergraph  # Does not support this access method yet.
+--skip_if_hypergraph # Hypergraph uses hash join instead.
 show status like 'Handler_read%'; 
 drop table t1, t2, t3;
 
@@ -1236,6 +1238,7 @@ insert into parent values (1,1,1,1);
 insert into eq_child select * from parent;
 
 # Need JSON explain format in order to make the where condition visible.
+SET explain_json_format_version = 1;
 --skip_if_hypergraph  # Depends on the query plan.
 explain format=json select straight_join count(*) from parent
  join eq_child as c1 on c1.a = parent.b and c1.b = parent.b
@@ -1243,6 +1246,7 @@ explain format=json select straight_join count(*) from parent
  join eq_child as c3 on c3.a = parent.b and c3.b = parent.b
  join eq_child as c4 on c4.a = parent.b and c4.b = parent.b
 ;
+SET explain_json_format_version = DEFAULT;
 
 drop table parent, eq_child;
 
@@ -1267,7 +1271,7 @@ INSERT INTO t SELECT NULL, NULL FROM t;
 ANALYZE TABLE t;
 
 # Verify that we indeed get a backwards index scan.
---skip_if_hypergraph  # Does not support this access method yet.
+--replace_regex $elide_costs
 EXPLAIN FORMAT=tree SELECT t1.i AS a, (SELECT t2.i FROM t t2 WHERE t1.j = t2.j ORDER BY j DESC, i DESC LIMIT 1) AS b FROM t t1;
 
 FLUSH STATUS;
@@ -1276,10 +1280,20 @@ SELECT t1.i AS a, (SELECT t2.i FROM t t2 WHERE t1.j = t2.j ORDER BY j DESC, i DE
 --enable_result_log
 
 # Check that we skipped nearly all of the key lookups.
---skip_if_hypergraph  # Does not support this access method yet.
 SHOW STATUS LIKE 'Handler_read_key';
 
 DROP TABLE t;
+
+set global default_storage_engine=myisam;
+--echo #
+--echo BUG #99398 / PS-7019: Wrong query results for LEFT JOIN with GROUP BY since 8.0.20
+--echo #
+CREATE TABLE t1 (t1_id INT PRIMARY KEY AUTO_INCREMENT, t2_id INT DEFAULT NULL);
+CREATE TABLE t2 (t2_id INT PRIMARY KEY AUTO_INCREMENT, is_active TINYINT NOT NULL DEFAULT '1');
+INSERT INTO t2 VALUES (2,1),(3,0),(1000,1);
+INSERT INTO t1 VALUES (1,1000),(2,5);
+SELECT t1.t1_id,t1.t2_id,t2.t2_id FROM t1 LEFT JOIN t2 ON (t1.t2_id = t2.t2_id AND t2.is_active=1) GROUP BY t1_id ORDER BY t1_id LIMIT 2;
+DROP TABLE t1,t2;
 
 # New tests needn't use MyISAM
 set global default_storage_engine=innodb;
@@ -1305,6 +1319,7 @@ let query=
                left join t t3 on t3.a>t2.a-t1.a)
  from t t1;
 --skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
 eval explain format=tree $query;
 eval $query;
 
@@ -1316,6 +1331,7 @@ let query=
  from t t1
  group by t1.a;
 --skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
 eval explain format=tree $query;
 eval $query;
 
@@ -1327,6 +1343,7 @@ let query=
                left join t t3 on t3.a>t2.a-v1.a)
  from v1;
 --skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
 eval explain format=tree $query;
 eval $query;
 drop view v1;
@@ -1340,6 +1357,7 @@ let query=
                  left join t t3 on t3.a>t2.a-t1.a) as dt)
  from t t1;
 --skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
 eval explain format=tree $query;
 eval $query;
 
@@ -1364,6 +1382,7 @@ let query=
   from t t2
   left join t t3 on t3.a>t2.a-t1.a) as dt;
 --skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
 eval explain format=tree $query;
 eval $query;
 
@@ -1377,6 +1396,7 @@ let query=
   from t t2
   left join t t3 on t3.a>t2.a-t1.a) as dt;
 --skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
 eval explain format=tree $query;
 eval $query;
 
@@ -1389,6 +1409,7 @@ let query=
   left join t t3 on t3.a>t2.a-t1.a) as dt
  on true;
 --skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
 eval explain format=tree $query;
 eval $query;
 
@@ -1437,6 +1458,7 @@ let query=
                 left join (select * from t t3 where t3.a>t1.a) dt
                 on true);
 --skip_if_hypergraph  # Depends on the query plan.
+--replace_regex $elide_costs
 eval explain format=tree $query;
 eval $query;
 
@@ -2122,7 +2144,7 @@ INSERT INTO t1 VALUES (1);
 --error ER_INVALID_JSON_TEXT_IN_PARAM
 SELECT ra1.k
 FROM t1 AS ra1 LEFT JOIN t1 AS ra2
-     ON CAST(SHA(ra2.k >> 'fixme') AS JSON) = ra2.k
+     ON CAST(SHA2(ra2.k >> 'fixme', 256) AS JSON) = ra2.k
      LEFT JOIN
        t1 AS ra3 LEFT JOIN t1 AS ra4
        ON ra3.k = ra4.k

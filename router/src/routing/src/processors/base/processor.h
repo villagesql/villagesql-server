@@ -95,7 +95,9 @@ class BasicProcessor {
    *
    * @returns stage name or std::nullopt if processor has no explicit stages.
    */
-  virtual std::optional<std::string_view> diagnostic_stage_name() const = 0;
+  virtual std::optional<std::string_view> diagnostic_stage_name() const {
+    return std::nullopt;
+  }
 
  private:
   MysqlRoutingClassicConnectionBase *conn_;

@@ -33,6 +33,7 @@
 #include "mysql/gtid/tsid.h"
 #include "plugin/group_replication/include/certifier.h"
 #include "plugin/group_replication/include/observer_trans.h"
+#include "plugin/group_replication/include/opt_tracker.h"
 #include "plugin/group_replication/include/plugin.h"
 #include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 #include "plugin/group_replication/include/plugin_messages/recovery_metadata_message_compressed_parts.h"
@@ -101,7 +102,9 @@ int Certifier_broadcast_thread::initialize() {
 
   while (broadcast_thd_state.is_alive_not_running()) {
     DBUG_PRINT("sleep", ("Waiting for certifier broadcast thread to start"));
-    mysql_cond_wait(&broadcast_run_cond, &broadcast_run_lock);
+    struct timespec abstime;
+    set_timespec(&abstime, 1);
+    mysql_cond_timedwait(&broadcast_run_cond, &broadcast_run_lock, &abstime);
   }
   mysql_mutex_unlock(&broadcast_run_lock);
 
@@ -129,7 +132,10 @@ void Certifier_broadcast_thread::terminate() {
 
     broadcast_thd->awake(THD::NOT_KILLED);
     mysql_mutex_unlock(&broadcast_thd->LOCK_thd_data);
-    mysql_cond_wait(&broadcast_run_cond, &broadcast_run_lock);
+
+    struct timespec abstime;
+    set_timespec(&abstime, 1);
+    mysql_cond_timedwait(&broadcast_run_cond, &broadcast_run_lock, &abstime);
   }
   mysql_mutex_unlock(&broadcast_run_lock);
 }
@@ -154,6 +160,13 @@ void Certifier_broadcast_thread::dispatcher() {
   LogPluginErr(SYSTEM_LEVEL, ER_GRP_RPL_CERT_BROADCAST_THREAD_STARTED);
 
   while (!aborted) {
+    // Increase Group Replication feature usage every 10 minutes.
+    if (broadcast_counter % 600 == 0 ||
+        DBUG_EVALUATE_IF("rpl_opt_tracker_small_tracking_period", true,
+                         false)) {
+      ++opt_option_tracker_usage_group_replication_plugin;
+    }
+
     // Broadcast Transaction identifiers every 30 seconds
     if (broadcast_counter % 30 == 0) {
       applier_module->get_pipeline_stats_member_collector()
@@ -759,7 +772,7 @@ namespace {
                            added to group_gtid_executed as part of initial
                            try(step 2).
 */
-[[NODISCARD]] Certification_result check_gtid_collision(
+[[nodiscard]] Certification_result check_gtid_collision(
     rpl_sidno gtid_group_sidno, rpl_sidno gtid_global_sidno, rpl_gno gno,
     Gtid_set &group_gtid_executed, const std::string &sid_str) {
   if (group_gtid_executed.contains_gtid(gtid_group_sidno, gno)) {
@@ -842,10 +855,10 @@ void Certifier::update_transaction_dependency_timestamps(
   }
 }
 
+#ifndef NDEBUG
 void debug_print_group_gtid_sets(const Gtid_set &group_gtid_executed,
                                  const Gtid_set &group_gtid_extracted,
                                  bool set_value) {
-#ifndef NDEBUG
   char *group_gtid_executed_string = nullptr;
   char *group_gtid_extracted_string = nullptr;
   group_gtid_executed.to_string(&group_gtid_executed_string, true);
@@ -857,8 +870,8 @@ void debug_print_group_gtid_sets(const Gtid_set &group_gtid_executed,
        set_value, group_gtid_executed_string, group_gtid_extracted_string));
   my_free(group_gtid_executed_string);
   my_free(group_gtid_extracted_string);
-#endif
 }
+#endif  // NDEBUG
 
 Certified_gtid Certifier::certify(Gtid_set *snapshot_version,
                                   std::list<const char *> *write_set,
@@ -922,8 +935,10 @@ Certified_gtid Certifier::certify(Gtid_set *snapshot_version,
       !group_gtid_extracted->is_subset_not_equals(group_gtid_executed)) {
     certifying_already_applied_transactions = false;
 
+#ifndef NDEBUG
     debug_print_group_gtid_sets(*group_gtid_executed, *group_gtid_extracted,
                                 false);
+#endif
   }
 
   mysql::utils::Return_status certification_state;
@@ -1257,8 +1272,11 @@ void Certifier::garbage_collect_internal(Gtid_set *executed_gtid_set,
         precedes them), then "t" is stable and can be removed from
         the certification info.
         */
+
+      /* get the starttime in 1us unit */
+      ulonglong starttime = my_micro_time();
+
       Certification_info::iterator it = certification_info.begin();
-      stable_gtid_set_lock->wrlock();
 
       uint64 garbage_collector_counter =
           metrics_handler->get_certification_garbage_collector_count();
@@ -1268,35 +1286,80 @@ void Certifier::garbage_collect_internal(Gtid_set *executed_gtid_set,
         garbage_collector_counter = 0;
       });
 
+      /*
+        The goal of the following loop is to avoid locking for too long
+        transactions on servers that have a high rate of trx. Processing 1M
+        GTIDs in the original code blocked the transaction processing for about
+        1s.
+      */
       while (it != certification_info.end()) {
+        stable_gtid_set_lock->wrlock();
         uint64 write_set_counter = it->second->get_garbage_collect_counter();
 
-        /*
-           we need to clear gtid_set_ref if marked with UINT64_MAX or
-           subset_not_equals of stable_gtid_set
-        */
-        if (write_set_counter == UINT64_MAX ||
-            (write_set_counter < garbage_collector_counter &&
-             it->second->is_subset_not_equals(stable_gtid_set))) {
-          it->second->set_garbage_collect_counter(UINT64_MAX);
-          if (it->second->unlink() == 0) {
-            /*
-              Claim Gtid_set_ref used memory to
-              `thread/group_rpl/THD_certifier_broadcast` thread, since this is
-              thread that does release the memory.
-            */
-            it->second->claim_memory_ownership(true);
-            delete it->second;
+        /* Needs to increase the rate if it takes too long, add a chunk every 5s
+         */
+        ulonglong rate_multiplier = (my_micro_time() - starttime) / 5000000 + 1;
+
+        bool use_chunks = (get_certification_loop_chunk_size_var() > 0);
+        ulong chunk_size =
+            use_chunks
+                ? get_certification_loop_chunk_size_var() * rate_multiplier
+                : certification_info.size();
+
+        for (ulong i = 0; i < chunk_size; ++i) {
+          if (it == certification_info.end()) {
+            break;
           }
-          certification_info.erase(it++);
-        } else {
-          DBUG_EXECUTE_IF("group_replication_ci_rows_counter_high",
-                          { assert(write_set_counter > 0); });
-          it->second->set_garbage_collect_counter(garbage_collector_counter);
-          ++it;
+
+          /*
+             we need to clear gtid_set_ref if marked with UINT64_MAX or
+             subset_not_equals of stable_gtid_set
+          */
+          if (write_set_counter == UINT64_MAX ||
+              (write_set_counter < garbage_collector_counter &&
+               it->second->is_subset_not_equals(stable_gtid_set))) {
+            it->second->set_garbage_collect_counter(UINT64_MAX);
+            if (it->second->unlink() == 0) {
+              /*
+                Claim Gtid_set_ref used memory to
+                `thread/group_rpl/THD_certifier_broadcast` thread, since this is
+                thread that does release the memory.
+              */
+              it->second->claim_memory_ownership(true);
+              delete it->second;
+            }
+            certification_info.erase(it++);
+          } else {
+            DBUG_EXECUTE_IF("group_replication_ci_rows_counter_high",
+                            { assert(write_set_counter > 0); });
+            it->second->set_garbage_collect_counter(garbage_collector_counter);
+            ++it;
+          }
+        } /* for loop */
+
+        stable_gtid_set_lock->unlock();
+
+        /* Honor certification_loop_sleep_time if it is using chunks. */
+        if (use_chunks && get_certification_loop_sleep_time_var() > 0 &&
+            it != certification_info.end()) {
+          /* Save the key before we unlock and sleep */
+          auto saved_key{it->first};
+          /* Unlock the LOCK_certification_info */
+          mysql_mutex_unlock(&LOCK_certification_info);
+
+          /* Sleep for certification_loop_sleep_time microseconds */
+          my_sleep(get_certification_loop_sleep_time_var());
+
+          /* Re-acquire the locks and check if the saved key is still valid */
+          mysql_mutex_lock(&LOCK_certification_info);
+          if ((it = certification_info.find(saved_key)) ==
+              certification_info.end()) {
+            /* This may have been deleted already by another thread. Let's break
+             * here. */
+            break;
+          }
         }
-      }
-      stable_gtid_set_lock->unlock();
+      } /* while loop */
     }
 
     /*
@@ -2088,8 +2151,10 @@ int Certifier::set_certification_info(
     certifying_already_applied_transactions = true;
     gtid_generator.recompute(*get_group_gtid_set());
 
+#ifndef NDEBUG
     debug_print_group_gtid_sets(*group_gtid_executed, *group_gtid_extracted,
                                 true);
+#endif
   }
 
   return 0;

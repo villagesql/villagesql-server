@@ -88,6 +88,14 @@ struct CHARSET_INFO;
   } while (0)
 #endif
 
+#ifdef HAVE_PSI_STATEMENT_DIGEST_INTERFACE
+#define MYSQL_DIGEST_SET(LOCKER, DIGEST) inline_mysql_digest_set(LOCKER, DIGEST)
+#else
+#define MYSQL_DIGEST_SET(LOCKER, DIGEST) \
+  do {                                   \
+  } while (0)
+#endif
+
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
 #define MYSQL_START_STATEMENT(STATE, K, DB, DB_LEN, CS, SPS)            \
   inline_mysql_start_statement(STATE, K, DB, DB_LEN, CS, SPS, __FILE__, \
@@ -195,6 +203,15 @@ static inline void inline_mysql_digest_end(PSI_digest_locker *locker,
                                            const sql_digest_storage *digest) {
   if (likely(locker != nullptr)) {
     PSI_DIGEST_CALL(digest_end)(locker, digest);
+  }
+}
+#endif
+
+#ifdef HAVE_PSI_STATEMENT_DIGEST_INTERFACE
+static inline void inline_mysql_digest_set(PSI_statement_locker *locker,
+                                           const sql_digest_storage *digest) {
+  if (likely(locker != nullptr)) {
+    PSI_DIGEST_CALL(digest_set)(locker, digest);
   }
 }
 #endif

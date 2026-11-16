@@ -72,8 +72,8 @@ ELSEIF(APPLE)
   CMAKE_MINIMUM_REQUIRED(VERSION 3.19)
 ELSEIF(UNIX)
   # This is currently minimum version on all supported platforms.
-  IF(CMAKE_VERSION VERSION_LESS 3.14.6)
-    # Default cmake is 2.8.12.2 on RedHat
+  IF(CMAKE_VERSION VERSION_LESS 3.17.5)
+    # Default cmake is 2.8.12.2 on RedHat 7
     IF(EXISTS "/etc/redhat-release")
       MESSAGE(WARNING "Please use cmake3 rather than cmake on this platform")
       FIND_PROGRAM(MY_CMAKE3 cmake3 /bin /usr/bin /usr/local/bin)
@@ -88,7 +88,7 @@ ELSEIF(UNIX)
       IF(MY_UNAME)
         EXECUTE_PROCESS(COMMAND uname -s OUTPUT_VARIABLE MY_HOST_SYSTEM_NAME)
         IF(MY_HOST_SYSTEM_NAME MATCHES "SunOS")
-          FIND_PROGRAM(MY_CMAKE cmake /usr/bin
+          FIND_PROGRAM(MY_CMAKE cmake /usr/bin /bin
             NO_CMAKE_ENVIRONMENT_PATH
             NO_SYSTEM_ENVIRONMENT_PATH
             )
@@ -104,10 +104,15 @@ ELSEIF(UNIX)
   ENDIF()
 ENDIF()
 
+IF(CMAKE_GENERATOR MATCHES "Visual Studio" AND CMAKE_GENERATOR MATCHES "2019")
+  # An older version of Visual Studio.
+  SET(VS2019 1)
+ENDIF()
+
 # CMake 3.5 is needed for TARGET_SOURCES(... $<TARGET_OBJECTS:${LIB}_objlib>)
 # CMake 3.7 is needeed for VERSION_GREATER_EQUAL
 # For the set of currently supported platforms, we can bump up to:
-CMAKE_MINIMUM_REQUIRED(VERSION 3.14.6)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.17.5)
 
 # Will set GIT_EXECUTABLE and GIT_FOUND
 FIND_PACKAGE(Git)
@@ -126,6 +131,9 @@ ENDIF()
 OPTION(WITH_DEBUG "Use dbug/safemutex" OFF)
 OPTION(CHECK_ERRMSG_FORMAT "Check printf format for English error messages" OFF)
 
+OPTION(DISABLE_ALL_PSI "DISABLE all calls to the PSI interface" OFF)
+MARK_AS_ADVANCED(DISABLE_ALL_PSI)
+
 # Use a default manufacturer if no manufacturer was identified.
 SET(MANUFACTURER_DOCSTRING
   "Set the entity that appears as the manufacturer of packages that support a manufacturer field.")
@@ -134,6 +142,8 @@ IF(NOT DEFINED MANUFACTURER)
   MARK_AS_ADVANCED(MANUFACTURER)
 ENDIF()
 
+#Caching for BUILD TESTING
+SET(BUILD_TESTING OFF CACHE BOOL "")
 
 # MAX_INDEXES - Set the maximum number of indexes per table, default 64U
 IF (NOT MAX_INDEXES)
@@ -153,6 +163,11 @@ ELSEIF(MAX_INDEXES LESS 64)
   MESSAGE(WARNING "MAX_INDEXES option ignored because it is less than 64.")
   SET(MAX_INDEXES 64U)
 ENDIF()
+
+# PAM build Handling
+OPTION(WITH_PAM "Build with Percona PAM plugin" OFF)
+
+OPTION(WITH_AUTH_OPENID_CONNECT "Build with Percona OpenID Connect authentication plugin" ON)
 
 # We choose to provide WITH_DEBUG as alias to standard CMAKE_BUILD_TYPE=Debug
 # which turns out to be not trivial, as this involves synchronization
@@ -229,8 +244,8 @@ IF(APPLE)
 ENDIF()
 
 # Add all policies *after* CMAKE_MINIMUM_REQUIRED
-# Repeating CMAKE_MINIMUM_REQUIRED here will load defaults for 3.14.6
-CMAKE_MINIMUM_REQUIRED(VERSION 3.14.6)
+# Repeating CMAKE_MINIMUM_REQUIRED here will load defaults for 3.17.5
+CMAKE_MINIMUM_REQUIRED(VERSION 3.17.5)
 INCLUDE(cmake_policies NO_POLICY_SCOPE)
 
 MACRO(STRING_APPEND STRING_VAR INPUT)
@@ -264,6 +279,12 @@ IF(NOT LINUX_RHEL AND MY_HOST_SYSTEM_NAME MATCHES "Linux")
     FILE(READ "/etc/os-release" MY_OS_RELEASE)
     IF(MY_OS_RELEASE MATCHES "Debian")
       SET(LINUX_DEBIAN 1)
+      IF(MY_OS_RELEASE MATCHES "jessie")
+        SET(LINUX_DEBIAN_8 1)
+      ENDIF()
+      IF(MY_OS_RELEASE MATCHES "stretch")
+        SET(LINUX_DEBIAN_9 1)
+      ENDIF()
     ELSEIF(MY_OS_RELEASE MATCHES "Ubuntu")
       SET(LINUX_UBUNTU 1)
       # /etc/os-release contains a line like
@@ -315,14 +336,11 @@ IF(CMAKE_HOST_UNIX AND NOT FORCE_UNSUPPORTED_COMPILER
     IF(LINUX_RHEL AND NOT LINUX_RHEL10)
       MESSAGE(STATUS "Looking for a devtoolset compiler")
       IF(LINUX_RHEL7)
-        # gcc11 not available yet
-        IF(MY_HOST_MACHINE_NAME MATCHES "aarch64")
-          SET(ALTERNATIVE_PATHS "/opt/rh/devtoolset-10")
-        ELSE()
-          SET(ALTERNATIVE_PATHS "/opt/rh/devtoolset-11")
-        ENDIF()
-      ELSEIF(LINUX_RHEL8 OR LINUX_RHEL9)
-        SET(ALTERNATIVE_PATHS "/opt/rh/gcc-toolset-12")
+        SET(ALTERNATIVE_PATHS "/opt/rh/devtoolset-11")
+      ELSEIF(LINUX_RHEL8)
+        SET(ALTERNATIVE_PATHS "/opt/rh/gcc-toolset-14")
+      ELSEIF(LINUX_RHEL9)
+        SET(ALTERNATIVE_PATHS "/opt/rh/gcc-toolset-14")
       ELSEIF(LINUX_RHEL10)
         # Use default /usr/bin/gcc which is 14.2.1
       ENDIF()
@@ -377,18 +395,18 @@ IF(CMAKE_HOST_UNIX AND NOT FORCE_UNSUPPORTED_COMPILER
         MESSAGE(STATUS "Using ${ALTERNATIVE_GPP}")
       ELSE()
         IF(LINUX_RHEL7)
-          IF(MY_HOST_MACHINE_NAME MATCHES "aarch64")
-            SET(DEV_PACKAGES
-              "devtoolset-10-gcc devtoolset-10-gcc-c++ devtoolset-10-binutils")
-          ELSE()
-            SET(DEV_PACKAGES
-              "devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils")
-          ENDIF()
-        ELSEIF(LINUX_RHEL8 OR LINUX_RHEL9)
           SET(DEV_PACKAGES
-            "gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ gcc-toolset-12-binutils")
-          STRING_APPEND(DEV_PACKAGES " gcc-toolset-12-annobin-annocheck")
-          STRING_APPEND(DEV_PACKAGES " gcc-toolset-12-annobin-plugin-gcc")
+            "devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils")
+        ELSEIF(LINUX_RHEL8)
+          SET(DEV_PACKAGES
+            "gcc-toolset-14-gcc gcc-toolset-14-gcc-c++ gcc-toolset-14-binutils")
+          STRING_APPEND(DEV_PACKAGES " gcc-toolset-14-annobin-annocheck")
+          STRING_APPEND(DEV_PACKAGES " gcc-toolset-14-annobin-plugin-gcc")
+        ELSEIF(LINUX_RHEL9)
+          SET(DEV_PACKAGES
+            "gcc-toolset-14-gcc gcc-toolset-14-gcc-c++ gcc-toolset-14-binutils")
+          STRING_APPEND(DEV_PACKAGES " gcc-toolset-14-annobin-annocheck")
+          STRING_APPEND(DEV_PACKAGES " gcc-toolset-14-annobin-plugin-gcc")
         ENDIF()
         MESSAGE(WARNING
           "Could not find devtoolset compiler/linker in ${ALTERNATIVE_PATHS}")
@@ -516,6 +534,7 @@ MESSAGE(STATUS "CMAKE_MODULE_PATH is ${CMAKE_MODULE_PATH}")
 INCLUDE(mysql_version)
 PROJECT(${MYSQL_PROJECT_NAME}
   VERSION ${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION})
+SET(CMAKE_CXX_STANDARD 23)
 
 # Various 3rd party libraries have this option.
 # Some have it ON, other OFF, by default.
@@ -637,6 +656,13 @@ IF(MY_COMPILER_IS_CLANG OR MY_COMPILER_IS_GNU)
   SET(MY_COMPILER_IS_GNU_OR_CLANG 1)
 ENDIF()
 
+SET(BUILD_TESTING ON)
+INCLUDE(CTest)
+# Explicitly disabling BUILD_TESTING since other code is not ready to handle
+# BUILD_TESTING set. If you try to remove the directive and CMake configuration
+# and reconfiguration finishes successfully, remove the hack.
+SET(BUILD_TESTING OFF)
+
 # Maintainer mode is default on only for debug builds using GCC/G++
 IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" OR WITH_DEBUG)
   IF(MY_COMPILER_IS_GNU)
@@ -691,6 +717,9 @@ IF(DEFINED ENV{CPPFLAGS})
   ADD_DEFINITIONS($ENV{CPPFLAGS})
 ENDIF()
 
+# To add c/c++ code specific for MySQL AI release using #ifdef..#endif
+OPTION(WITH_MYSQL_AI "To Add MySQL AI Release C/C++ Code" OFF)
+
 INCLUDE(CheckTypeSize)
 CHECK_TYPE_SIZE("void *" SIZEOF_VOIDP)
 MESSAGE(STATUS "SIZEOF_VOIDP ${SIZEOF_VOIDP}")
@@ -710,6 +739,13 @@ ELSE()
   SET(WITH_SOME_SANITIZER OFF)
 ENDIF()
 
+OPTION(WITH_IWYU "Run include-what-you-use" OFF)
+IF(WITH_IWYU)
+  SET(CMAKE_CXX_INCLUDE_WHAT_YOU_USE
+    include-what-you-use
+    -Xiwyu --mapping_file=${CMAKE_SOURCE_DIR}/iwyu_mappings.imp
+    )
+ENDIF()
 
 # Add RPM or DEB platform flags for STANDALONE build.
 # Not for DEBUG builds, since both platforms use -O2 and _FORTIFY_SOURCE.
@@ -777,7 +813,6 @@ INCLUDE(CMakePushCheckState)
 INCLUDE(add_custom_target)
 INCLUDE(pkg-config)
 INCLUDE(character_sets)
-INCLUDE(link_options)
 INCLUDE(malloc_utils)
 INCLUDE(cpu_info)
 INCLUDE(fileutils)
@@ -800,6 +835,8 @@ INCLUDE(component)
 INCLUDE(install_macros)
 INCLUDE(mysql_add_executable)
 INCLUDE(curl)
+INCLUDE(coredumper)
+INCLUDE(prepend_append_cflags_if_supported)
 INCLUDE(rapidjson)
 INCLUDE(fido2)
 INCLUDE(win_jemalloc)
@@ -848,7 +885,12 @@ ENDIF()
 
 OPTION(ENABLED_PROFILING "Enable profiling" ON)
 OPTION(WITHOUT_SERVER OFF)
-
+IF(UNIX)
+  OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
+  IF (WITH_VALGRIND)
+    ADD_DEFINITIONS(-DUSE_VALGRIND)
+  ENDIF()
+ENDIF()
 IF(WIN32)
   OPTION(WITH_MSCRT_DEBUG "MS Visual Studio Debug CRT instrumentation" OFF)
 ENDIF()
@@ -873,7 +915,7 @@ IF(NOT DEFINED WITH_INTERNAL)
 ENDIF()
 
 # On windows we need a non-standard package for SASL.
-IF(WITH_INTERNAL AND (NOT WIN32 OR WITH_SASL))
+IF(NOT WIN32 OR WITH_SASL)
   SET(WITH_AUTHENTICATION_LDAP_DEFAULT ON)
 ELSE()
   SET(WITH_AUTHENTICATION_LDAP_DEFAULT OFF)
@@ -919,6 +961,7 @@ ENDIF()
 
 IF(WITH_INTERNAL)
   SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/internal/cmake)
+  INCLUDE(mysql_internal_options)
 ENDIF()
 
 OPTION(WITH_AUTHENTICATION_WEBAUTHN
@@ -955,14 +998,10 @@ IF(NOT WITH_AUTHENTICATION_WEBAUTHN AND
   SET(WITH_FIDO "none" CACHE STRING "fido2 is disabled")
 ENDIF()
 
-IF(WITH_INTERNAL)
-  IF(UNIX)
-    SET(WITH_CURL_DEFAULT "system")
-  ELSE()
-    SET(WITH_CURL_DEFAULT "bundled")
-  ENDIF()
+IF(UNIX)
+  SET(WITH_CURL_DEFAULT "system")
 ELSE()
-  SET(WITH_CURL_DEFAULT "none")
+  SET(WITH_CURL_DEFAULT "bundled")
 ENDIF()
 
 OPTION(WITH_LOCK_ORDER
@@ -1138,6 +1177,29 @@ IF(WITH_ASAN)
     SET(ASAN_LIB_DIR
       "${ASAN_LIB_DIR}/../lib/clang/${CMAKE_CXX_COMPILER_VERSION}/lib/windows")
     GET_FILENAME_COMPONENT(ASAN_LIB_DIR ${ASAN_LIB_DIR} REALPATH)
+  ELSEIF(WIN32_VS)
+    SET(HAVE_ASAN 1)
+    GET_FILENAME_COMPONENT(ASAN_DLL_DIR ${CMAKE_CXX_COMPILER} DIRECTORY)
+    # /GS  (Buffer Security Check)  is on by default
+    # 5072 ASAN enabled without debug information emission.
+    STRING_APPEND(CMAKE_C_FLAGS   " -fsanitize=address /GS- /wd5072 ")
+    STRING_APPEND(CMAKE_CXX_FLAGS " -fsanitize=address /GS- /wd5072 ")
+    STRING_APPEND(CMAKE_EXE_LINKER_FLAGS " /InferASanLibs")
+    STRING_APPEND(CMAKE_MODULE_LINKER_FLAGS " /InferASanLibs")
+    STRING_APPEND(CMAKE_SHARED_LINKER_FLAGS " /InferASanLibs")
+    # /InferASanLibs is incompatible with /INCREMENTAL used by feature checks.
+    SET(CMAKE_REQUIRED_LINK_OPTIONS "/INCREMENTAL:NO")
+
+    FIND_FILE(ASAN_DYNAMIC_LIB
+      NAMES clang_rt.asan_dynamic-x86_64.dll
+      PATHS ${ASAN_DLL_DIR}
+      NO_DEFAULT_PATH
+      )
+    IF(ASAN_DYNAMIC_LIB)
+      COPY_CUSTOM_DLL("${ASAN_DYNAMIC_LIB}" COPY_ASAN_LIB_TARGET)
+      ADD_CUSTOM_TARGET(copy_asan_lib_target ALL)
+      ADD_DEPENDENCIES(copy_asan_lib_target ${COPY_ASAN_LIB_TARGET})
+    ENDIF()
   ELSE()
     MY_SANITIZER_CHECK("-fsanitize=address" TRUE WITH_ASAN_OK)
     IF(WITH_ASAN_OK)
@@ -1170,8 +1232,8 @@ ENDIF()
 
 OPTION(WITH_MSAN "Enable memory sanitizer" OFF)
 IF(WITH_MSAN)
-  MY_SANITIZER_CHECK("-fsanitize=memory -fsanitize-memory-track-origins"
-    TRUE WITH_MSAN_OK)
+  MY_SANITIZER_CHECK("-fsanitize=memory -fsanitize-memory-track-origins -fsanitize-blacklist=${CMAKE_CURRENT_SOURCE_DIR}/cmake/msan-blacklist.txt"
+                     TRUE WITH_MSAN_OK)
   IF(NOT WITH_MSAN_OK)
     MESSAGE(FATAL_ERROR "Do not know how to enable memory sanitizer")
   ELSE()
@@ -1405,8 +1467,10 @@ IF(CMAKE_C_LINK_FLAGS MATCHES "-fuse-ld=gold" OR
     "-fuse-ld=gold" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 ENDIF()
 
-# Fedora 34, RHEL9: undefined reference to symbol 'crc32_z@@ZLIB_1.2.9'
-IF(LINUX_FEDORA_34 OR LINUX_RHEL9)
+# Linker/binutils bug in Fedora 28, Ubuntu 16.04, Debian 8 and Debian 9,
+# undefined reference to symbol '__bss_start'
+# Fedora 34: undefined reference to symbol 'crc32_z@@ZLIB_1.2.9'
+IF(LINUX_FEDORA_34 OR LINUX_RHEL9 OR LINUX_DEBIAN_8 OR LINUX_DEBIAN_9)
   IF(NOT USING_LD_LLD AND NOT USING_LD_MOLD)
     STRING_APPEND(CMAKE_CXX_LINK_FLAGS " -Wl,--copy-dt-needed-entries")
   ENDIF()
@@ -1496,6 +1560,8 @@ OPTION(ENABLED_LOCAL_INFILE
  "If we should enable LOAD DATA LOCAL by default" OFF)
 MARK_AS_ADVANCED(ENABLED_LOCAL_INFILE)
 
+OPTION (WITH_COREDUMPER "Enable support for coredumper library" ON)
+
 #
 # Options related to client-side protocol tracing
 #
@@ -1519,6 +1585,13 @@ IF(WITH_TEST_TRACE_PLUGIN AND NOT CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG")
      debug binaries. Set WITH_TEST_TRACE_PLUGIN to OFF or WITH_DEBUG to ON.")
 ENDIF()
 
+# Set NDEBUG, and FORTIFY_SOURCE for non-debug project types.
+FOREACH(BUILD_TYPE RELEASE RELWITHDEBINFO MINSIZEREL)
+  FOREACH(LANG C CXX)
+    STRING_PREPEND(CMAKE_${LANG}_FLAGS_${BUILD_TYPE} "-DNDEBUG -D_FORTIFY_SOURCE=2 ")
+  ENDFOREACH()
+ENDFOREACH()
+
 # Add safemutex for debug configurations
 # Enable debug sync for debug builds.
 FOREACH(LANG C CXX)
@@ -1537,6 +1610,10 @@ ELSE()
 ENDIF()
 
 SET(DEFAULT_BASEDIR "${DEFAULT_MYSQL_HOME}")
+
+# Set default engine values for external tables
+SET(DEFAULT_EXTERNAL_TABLE_ENGINE "" CACHE STRING "Default engine for external tables")
+SET(DEFAULT_EXTERNAL_TABLE_SECONDARY_ENGINE "" CACHE STRING "Default secondary engine for external tables")
 
 IF(IS_ABSOLUTE ${INSTALL_MYSQLDATADIR})
   SET(MYSQL_DATADIR ${INSTALL_MYSQLDATADIR} CACHE PATH
@@ -1595,6 +1672,11 @@ ELSE()
   IF (WITH_SYSTEMD_DEBUG)
     MESSAGE(FATAL_ERROR "systemd-debugging requires systemd, and systemd requires linux")
   ENDIF()
+ENDIF()
+
+IF(APPLE)
+  # Get access to memset_s
+  ADD_DEFINITIONS(-D__STDC_WANT_LIB_EXT1__=1)
 ENDIF()
 
 # Run platform tests
@@ -1740,7 +1822,6 @@ ADD_CUSTOM_TARGET(executable_all)
 # To get all the Homebrew libraries, do 'brew install' <name of lib>.
 SET(SYSTEM_LIBRARIES
   CURL      # Xcode
-  EDITLINE  # Xcode
   ICU       # Homebrew  icu4c
   LZ4       # Homebrew  lz4
   PROTOBUF  # Homebrew  protobuf
@@ -1794,6 +1875,10 @@ IF(LINUX_UBUNTU)
   # Ubuntu 22.04 has 1.2.11 which is too old.
   IF(LINUX_UBUNTU_VERSION_ID VERSION_LESS "23.04")
     LIST(REMOVE_ITEM SYSTEM_LIBRARIES ZLIB)
+  ENDIF()
+  # Ubuntu 22.04 has too old grpc
+  IF(WITH_INTERNAL AND LINUX_UBUNTU_VERSION_ID VERSION_LESS "24.04")
+    LIST(REMOVE_ITEM SYSTEM_LIBRARIES PROTOBUF)
   ENDIF()
 ENDIF()
 # Do not change it back to "system"
@@ -1922,6 +2007,15 @@ MYSQL_CHECK_SASL_DLLS()
 MYSQL_CHECK_LDAP()
 MYSQL_CHECK_LDAP_DLLS()
 
+# Percona LDAP Simple / LDAP SASL authentication plugins
+# Problem with  MacOS system libraries and complains for compilation error ldap_set_urllist_proc
+IF(APPLE)
+  SET(WITH_PERCONA_AUTHENTICATION_LDAP_DEFAULT OFF)
+ELSE()
+  SET(WITH_PERCONA_AUTHENTICATION_LDAP_DEFAULT ON)
+ENDIF()
+OPTION(WITH_PERCONA_AUTHENTICATION_LDAP "Build with Percona LDAP Simple / LDAP SASL authentication plugins" ${WITH_PERCONA_AUTHENTICATION_LDAP_DEFAULT})
+
 # Add Windows specific jemalloc DLL
 IF(WIN32)
   MYSQL_CHECK_WIN_JEMALLOC()
@@ -2043,6 +2137,8 @@ IF(CURL_WARN_GIVEN)
 ENDIF()
 # Add RapidJSON library.
 MYSQL_CHECK_RAPIDJSON()
+# Add coredumper
+MYSQL_CHECK_COREDUMPER()
 
 # Look for fido2 library
 MYSQL_CHECK_FIDO()
@@ -2154,6 +2250,14 @@ IF(HAVE_ASAN AND MY_COMPILER_IS_CLANG AND WITH_PROTOBUF STREQUAL "bundled")
   ADD_COMPILE_OPTIONS(-mllvm -asan-use-private-alias=1)
 ENDIF()
 
+# Are we using "bundled" ICU? Shared libs currently only used on Linux.
+IF(TARGET icuuc)
+  GET_TARGET_PROPERTY(type icuuc TYPE)
+  IF(type MATCHES "SHARED_LIBRARY")
+    SET(ADD_INSTALL_RPATH_FOR_ICU 1)
+  ENDIF()
+ENDIF()
+
 IF(WITH_PROTOBUF STREQUAL "bundled" OR WITH_FIDO STREQUAL "bundled")
   # Protobuf library is a target, installed to <root>/${INSTALL_PRIV_LIBDIR}
   # INSTALL_RPATH must be set for all binaries linking with libprotobuf.
@@ -2194,6 +2298,11 @@ IF(WITH_PROTOBUF STREQUAL "bundled" OR WITH_FIDO STREQUAL "bundled")
   ENDIF()
 ENDIF()
 
+IF(NOT DEFINED WITH_COMPONENT_KEYRING_KMIP AND NOT DEFINED WITHOUT_COMPONENT_KEYRING_KMIP
+   OR WITH_COMPONENT_KEYRING_KMIP)
+  ADD_SUBDIRECTORY(extra/libkmip)
+ENDIF()
+
 #
 # Setup maintainer mode options by the end. Platform checks are
 # not run with the warning options as to not perturb fragile checks
@@ -2208,6 +2317,25 @@ OPTION(MYSQL_MAINTAINER_MODE
 INCLUDE(maintainer)
 INCLUDE(msvc_cppcheck)
 DO_MSVC_CPPCHECK()
+
+# Silence some warnings for unused performance schema stuff.
+IF(DISABLE_ALL_PSI AND MY_COMPILER_IS_GNU_OR_CLANG)
+  STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-unused-parameter")
+  STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-unused-variable")
+  MY_CHECK_CXX_COMPILER_WARNING("-Wunused-but-set-variable" HAS_WARN_FLAG)
+  IF(HAS_WARN_FLAG)
+    STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
+  ENDIF()
+  MY_CHECK_CXX_COMPILER_WARNING("-Wdocumentation" HAS_WARN_FLAG)
+  IF(HAS_WARN_FLAG)
+    STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
+  ENDIF()
+ENDIF()
+
+# We know that 3.12 generates extra-semi, and that 3.19 does not:
+IF(WITH_PROTOBUF STREQUAL "system" AND "${PROTOBUF_VERSION}" VERSION_LESS 3.19)
+  STRING(REPLACE "-Wextra-semi" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+ENDIF()
 
 OPTION(VILLAGESQL_WERROR "Turn compiler warnings into errors" ON)
 IF(VILLAGESQL_WERROR AND MY_COMPILER_IS_GNU_OR_CLANG)
@@ -2243,27 +2371,37 @@ IF(WITH_ICU STREQUAL "bundled")
   FILE(WRITE "${CMAKE_BINARY_DIR}/${ICUDT_DIR}.lnk" "${ICU_DATA_SOURCE_DIR}")
 ENDIF()
 
-# The hypergraph optimizer is default on only for debug builds.
-IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" OR WITH_DEBUG)
-  SET(WITH_HYPERGRAPH_OPTIMIZER_DEFAULT ON)
-ELSE()
-  SET(WITH_HYPERGRAPH_OPTIMIZER_DEFAULT OFF)
-ENDIF()
+# The inclusion of the hypergraph optimizer is controlled by two flags:
+
+# - WITH_HYPERGRAPH_OPTIMIZER (default ON) controls if the hypergraph
+#   optimizer is available.
+# - ENABLE_HYPERGRAPH_OPTIMIZER (default OFF) controls if the hypergraph
+#   optimizer is the default optimizer enabled in sessions.
 OPTION(WITH_HYPERGRAPH_OPTIMIZER
-  "Allow use of the hypergraph join optimizer"
-  ${WITH_HYPERGRAPH_OPTIMIZER_DEFAULT}
+  "Allow use of the hypergraph join optimizer" ON)
+OPTION(ENABLE_HYPERGRAPH_OPTIMIZER
+  "Enable hypergraph optimizer in OPTIMIZER_SWITCH_DEFAULT" OFF
   )
+IF(ENABLE_HYPERGRAPH_OPTIMIZER)
+  SET(WITH_HYPERGRAPH_OPTIMIZER ON)
+  SET(WITH_HYPERGRAPH_OPTIMIZER ON CACHE BOOL "" FORCE)
+ENDIF()
 
 # Allow SHOW PARSE_TREE on debug build by default.
 IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" OR WITH_DEBUG)
-  SET(WITH_SHOW_PARSE_TREE_DEFAULT ON)
+  OPTION(WITH_SHOW_PARSE_TREE "Allow showing the parse tree" ON)
+ELSEIF(BUILD_IS_SINGLE_CONFIG)
+  OPTION(WITH_SHOW_PARSE_TREE "Allow showing the parse tree" OFF)
 ELSE()
-  SET(WITH_SHOW_PARSE_TREE_DEFAULT OFF)
+  SET(WITH_SHOW_PARSE_TREE_DEFAULT "default")
 ENDIF()
-OPTION(WITH_SHOW_PARSE_TREE
-  "Allow showing the parse tree"
-  ${WITH_SHOW_PARSE_TREE_DEFAULT}
-  )
+
+OPTION(WITH_ENCRYPTION_UDF "Build Encryption UDF plugin" ON)
+IF(WITH_ENCRYPTION_UDF)
+  ADD_SUBDIRECTORY(extra/opensslpp)
+ENDIF()
+
+option(WITH_PERCONA_TELEMETRY "Build Percona Telemetry component" OFF)
 
 # We may run clang-tidy on individual .h files. Tell clang to treat them as C++.
 # To generate entries for header files in compile_commands.json:
@@ -2320,7 +2458,16 @@ ADD_SUBDIRECTORY(mysys)
 ADD_SUBDIRECTORY(libmysql)
 # Directory for MySQL Database libraries (Client/Server)
 ADD_SUBDIRECTORY(libs/mysql)
-ADD_SUBDIRECTORY(libchangestreams)
+IF(VS2019 AND WITHOUT_SERVER)
+  # MSVC 19.29 (VS16.11) has bugs, apparently, which make it incapable of
+  # building libs/mysql/sets. We don't need to build server, mysqlbinlog, or
+  # libchangestreams with that version, so in regression runs with this compiler
+  # we enable WITHOUT_SERVER and rely on the condition above to not build
+  # libchangestreams. The condition can be removed when we remove support for
+  # the platform. See also [**] in client/CMakeLists.txt
+ELSE()
+  ADD_SUBDIRECTORY(libchangestreams)
+ENDIF()
 ADD_SUBDIRECTORY(sql-common/oci)
 
 # VillageSQL subdirectories managed by sql/CMakeLists.txt to avoid
@@ -2414,7 +2561,7 @@ IF(NOT WITHOUT_SERVER AND WITH_UNIT_TESTS)
       # and several other boost files.
       MY_CHECK_CXX_COMPILER_WARNING("error=maybe-uninitialized" HAS_WARN_FLAG)
       IF(HAS_WARN_FLAG)
-        MY_TARGET_LINK_OPTIONS(server_unittest_library "${HAS_WARN_FLAG}")
+        TARGET_LINK_OPTIONS(server_unittest_library PRIVATE ${HAS_WARN_FLAG})
       ENDIF()
       # The mold linker and RelWithDebInfo build complains about
       # the new expression in Rpl_info_values::init()
@@ -2441,11 +2588,11 @@ IF(NOT WITHOUT_SERVER AND WITH_UNIT_TESTS)
     ENDIF()
     ADD_LIBRARY(server_unittest_library STATIC
       ${DUMMY_SOURCE_FILE} ${MYSQLD_EXTRA_SOURCES})
-    TARGET_LINK_LIBRARIES(server_unittest_library perfschema)
-    TARGET_LINK_LIBRARIES(server_unittest_library sql_main)
-    TARGET_LINK_LIBRARIES(server_unittest_library minchassis)
-    TARGET_LINK_LIBRARIES(server_unittest_library ext::icu)
-    TARGET_LINK_LIBRARIES(server_unittest_library binlog)
+    TARGET_LINK_LIBRARIES(server_unittest_library PUBLIC perfschema)
+    TARGET_LINK_LIBRARIES(server_unittest_library PUBLIC sql_main)
+    TARGET_LINK_LIBRARIES(server_unittest_library PUBLIC minchassis)
+    TARGET_LINK_LIBRARIES(server_unittest_library PUBLIC ext::icu)
+    TARGET_LINK_LIBRARIES(server_unittest_library PUBLIC binlog)
   ENDIF()
 ENDIF()
 
@@ -2482,6 +2629,31 @@ IF(NOT WITHOUT_SERVER AND WITH_ROUTER)
 ELSE()
   # Define harness_net_ts target and public include directories.
   ADD_SUBDIRECTORY(router/src/harness/include)
+  # In case we switch from ON to OFF, we do not want mtr
+  # to pick up any obsolete executables.
+  IF(WIN32)
+    SET(MYSQLROUTER_EXE "mysqlrouter.exe")
+  ELSE()
+    SET(MYSQLROUTER_EXE "mysqlrouter")
+  ENDIF()
+  SET(EXE_DIR ${CMAKE_BINARY_DIR}/runtime_output_directory)
+  IF(BUILD_IS_SINGLE_CONFIG)
+    FILE(REMOVE ${EXE_DIR}/${MYSQLROUTER_EXE})
+  ELSE()
+    FILE(REMOVE
+      ${EXE_DIR}/Debug/${MYSQLROUTER_EXE}
+      ${EXE_DIR}/RelWithDebInfo/${MYSQLROUTER_EXE}
+      ${EXE_DIR}/Release/${MYSQLROUTER_EXE}
+      ${EXE_DIR}/MinSizeRel/${MYSQLROUTER_EXE}
+      )
+  ENDIF()
+  # We do not want ctest to pick up obsolete tests.
+  # See similar code for WITH_UNIT_TESTS above.
+  IF(EXISTS "${CMAKE_BINARY_DIR}/router/CTestTestfile.cmake")
+    FILE(GLOB_RECURSE CTEST_TESTFILES
+      "${CMAKE_BINARY_DIR}/router/CTestTestfile.cmake")
+    FILE(REMOVE ${CTEST_TESTFILES})
+  ENDIF()
 ENDIF()
 
 IF(ENABLE_GCOV)
@@ -2668,7 +2840,7 @@ ENDIF()
 #
 IF(NOT INSTALL_LAYOUT MATCHES "RPM")
   INSTALL(FILES
-    README
+    README.md
     LICENSE
     DESTINATION ${INSTALL_DOCREADMEDIR} COMPONENT Readme)
   INSTALL(FILES
@@ -2866,3 +3038,4 @@ IF(HAVE_WITH_NDBCLUSTER)
   SET(WITH_NDBCLUSTER ${WITH_NDB} CACHE BOOL
     "Deprecated legacy option for MySQL Cluster")
 ENDIF()
+

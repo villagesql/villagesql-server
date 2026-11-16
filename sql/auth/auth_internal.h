@@ -31,7 +31,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "mysql_time.h" /* MYSQL_TIME */
+#include "my_temporal.h" /* Datetime_val */
 #include "sql/auth/auth_common.h"
 #include "sql/auth/dynamic_privilege_table.h"
 #include "sql/auth/partitioned_rwlock.h"
@@ -53,8 +53,6 @@ struct TABLE;
 class Rewrite_params;
 
 typedef struct user_resources USER_RESOURCES;
-void append_identifier(const THD *thd, String *packet, const char *name,
-                       size_t length);
 typedef std::map<std::string, Access_bitmask> Column_map;
 struct Grant_table_aggregate {
   Grant_table_aggregate() : table_access(0l), cols(0l) {}
@@ -137,7 +135,7 @@ void acl_update_user(const char *user, const char *host, enum SSL_type ssl_type,
                      const char *x509_subject, USER_RESOURCES *mqh,
                      Access_bitmask privileges, const LEX_CSTRING &plugin,
                      const LEX_CSTRING &auth, const std::string &second_auth,
-                     const MYSQL_TIME &password_change_time,
+                     const Datetime_val &password_change_time,
                      const LEX_ALTER &password_life, Restrictions &restrictions,
                      acl_table::Pod_user_what_to_update &what_to_update,
                      uint failed_login_attempts, int password_lock_time,
@@ -148,7 +146,7 @@ void acl_users_add_one(const char *user, const char *host,
                        USER_RESOURCES *mqh, Access_bitmask privileges,
                        const LEX_CSTRING &plugin, const LEX_CSTRING &auth,
                        const LEX_CSTRING &second_auth,
-                       const MYSQL_TIME &password_change_time,
+                       const Datetime_val &password_change_time,
                        const LEX_ALTER &password_life, bool add_role_vertex,
                        Restrictions &restrictions, uint failed_login_attempts,
                        int password_lock_time, const I_multi_factor_auth *mfa,
@@ -158,7 +156,7 @@ void acl_insert_user(THD *thd, const char *user, const char *host,
                      const char *x509_issuer, const char *x509_subject,
                      USER_RESOURCES *mqh, Access_bitmask privileges,
                      const LEX_CSTRING &plugin, const LEX_CSTRING &auth,
-                     const MYSQL_TIME &password_change_time,
+                     const Datetime_val &password_change_time,
                      const LEX_ALTER &password_life, Restrictions &restrictions,
                      uint failed_login_attempts, int password_lock_time,
                      const I_multi_factor_auth *mfa);
@@ -203,7 +201,7 @@ int replace_table_table(THD *thd, GRANT_TABLE *grant_table,
                         bool all_current_privileges);
 int replace_routine_table(THD *thd, GRANT_NAME *grant_name, TABLE *table,
                           const LEX_USER &combo, const char *db,
-                          const char *routine_name, bool is_proc,
+                          const char *routine_name, Acl_type routine_acl_type,
                           Access_bitmask rights, bool revoke_grant,
                           bool all_current_privileges);
 int open_grant_tables(THD *thd, Table_ref *tables, bool *transactional_tables);
@@ -264,7 +262,6 @@ bool operator==(const Role_id &a, const Auth_id_ref &b);
 bool operator==(const Auth_id_ref &a, const Role_id &b);
 bool operator==(const std::pair<const Role_id, Role_id> &a,
                 const Auth_id_ref &b);
-bool operator==(const Role_id &a, const Role_id &b);
 bool operator==(std::pair<const Role_id, std::pair<std::string, bool>> &a,
                 const std::string &b);
 typedef std::vector<std::pair<Role_id, bool>> List_of_granted_roles;
@@ -285,8 +282,9 @@ void get_privilege_access_maps(
     ACL_USER *acl_user, const List_of_auth_id_refs *using_roles,
     Access_bitmask *access, Db_access_map *db_map, Db_access_map *db_wild_map,
     Table_access_map *table_map, SP_access_map *sp_map, SP_access_map *func_map,
-    List_of_granted_roles *granted_roles, Grant_acl_set *with_admin_acl,
-    Dynamic_privileges *dynamic_acl, Restrictions &restrictions);
+    SP_access_map *lib_map, List_of_granted_roles *granted_roles,
+    Grant_acl_set *with_admin_acl, Dynamic_privileges *dynamic_acl,
+    Restrictions &restrictions, bool effective_grants);
 bool clear_default_roles(THD *thd, TABLE *table,
                          const Auth_id_ref &user_auth_id,
                          std::vector<Role_id> *default_roles);
@@ -303,7 +301,6 @@ bool modify_role_edges_in_table(THD *thd, TABLE *table,
                                 const Auth_id_ref &from_user,
                                 const Auth_id_ref &to_user,
                                 bool with_admin_option, bool delete_option);
-Auth_id_ref create_authid_from(const Role_id &user);
 Auth_id_ref create_authid_from(const LEX_CSTRING &user,
                                const LEX_CSTRING &host);
 bool roles_rename_authid(THD *thd, TABLE *edge_table, TABLE *defaults_table,
@@ -328,6 +325,7 @@ void activate_all_granted_roles(const ACL_USER *acl_user,
                                 Security_context *sctx);
 void activate_all_granted_and_mandatory_roles(const ACL_USER *acl_user,
                                               Security_context *sctx);
+extern void activate_all_mandatory_roles(Security_context *sctx);
 
 bool alter_user_set_default_roles(THD *thd, TABLE *table, LEX_USER *user,
                                   const List_of_auth_id_refs &new_auth_ids);

@@ -21,11 +21,11 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <float.h>
 #include <gtest/gtest.h>
-#include <math.h>
-#include <stddef.h>
-#include <stdint.h>
+#include <cfloat>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
 
 #include "m_string.h"
@@ -65,6 +65,7 @@ TEST(MString, HumanReadableSize) {
   data_size *= 1000;
   EXPECT_EQ("1025000Y", HumanReadable(data_size));
   data_size *= 1000;
+
   EXPECT_EQ("1025000000Y", HumanReadable(data_size));
   data_size *=
       static_cast<double>(std::numeric_limits<unsigned long long>::max());
@@ -76,7 +77,7 @@ TEST(MString, HumanReadableSize) {
   EXPECT_EQ("1023", HumanReadable(nextafter(1024.0, -DBL_MAX)));
   EXPECT_EQ("1K", HumanReadable(nextafter(1024.0, DBL_MAX)));
 
-  double yotta = pow(1024.0, 8.0);
+  double const yotta = pow(1024.0, 8.0);
   EXPECT_EQ("9223372036854774784Y",
             HumanReadable(
                 nextafter(static_cast<double>(LLONG_MAX) * yotta, -DBL_MAX)));

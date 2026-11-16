@@ -52,13 +52,13 @@ class my_rcu_lock_test : public ::testing::Test {
 
   void TearDown() override {}
 
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     lock = new MyRcuLockTest(new payload_s("a", "b", "c"));
     reads = 0;
     writes = 0;
   }
 
-  static void TearDownTestCase() { delete lock; }
+  static void TearDownTestSuite() { delete lock; }
 
   static void rcu_reader(size_t reps) {
     for (size_t i = 0; i < reps; i++) {
@@ -74,9 +74,9 @@ class my_rcu_lock_test : public ::testing::Test {
 
   static void rcu_writer(size_t reps, time_t waitms) {
     for (size_t i = 0; i < reps; i++) {
-      payload_s *newp = new payload_s("a", "b", "c");
+      auto *newp = new payload_s("a", "b", "c");
 
-      bool ret = lock->write_wait_and_delete(newp);
+      bool const ret = lock->write_wait_and_delete(newp);
       EXPECT_EQ(ret, false);
       /*
         RCU works best with relatively infrequent writes compared to reads.

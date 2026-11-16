@@ -472,6 +472,8 @@ bool Encryption::fill_encryption_info(
           0);
   }
 
+  default_master_key_used = (master_key_id == DEFAULT_MASTER_KEY_ID);
+
   /* Encryption info to be filled in following format
     --------------------------------------------------------------------------
    | Magic bytes | master key id | server uuid | tablespace key|iv | checksum |
@@ -493,6 +495,12 @@ bool Encryption::fill_encryption_info(
   /* Write server uuid. */
   memcpy(reinterpret_cast<char *>(ptr), s_uuid, sizeof(s_uuid));
   ptr += sizeof(s_uuid) - 1;
+
+  /* We should never write empty UUID. Only exemption is for
+  tablespaces when InnoDB is initializing (like system, temp, etc).
+  These tablespaces UUID will be fixed by handlerton API after server
+  generates uuid */
+  ut_ad(!srv_is_uuid_ready || strlen(s_uuid) != 0);
 
   /* Write (and encrypt if needed) key and iv */
   byte key_info[KEY_LEN * 2];

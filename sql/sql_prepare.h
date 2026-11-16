@@ -27,29 +27,27 @@
 #include <assert.h>
 #include <stddef.h>
 #include <sys/types.h>
-#include <new>
 
 #include "lex_string.h"
 #include "my_alloc.h"
 #include "my_command.h"
-
+#include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_psi_config.h"
 #include "mysql/components/services/bits/psi_statement_bits.h"
 #include "mysql_com.h"
 #include "sql/sql_class.h"  // Query_arena
-#include "sql/sql_error.h"
-#include "sql/sql_list.h"
-#include "sql/statement/statement_runnable.h"
 
-class Item;
 class Item_param;
 class Prepared_statement;
-class Query_result_send;
+class Protocol;
+class Query_result;
+class Server_runnable;
 class String;
 struct LEX;
 struct PS_PARAM;
-class Table_ref;
+template <class T>
+class List;
 union COM_DATA;
 
 /**
@@ -181,6 +179,9 @@ class Prepared_statement final {
   /// The query string associated with this statement.
   LEX_CSTRING m_query_string{NULL_CSTR};
 
+  /// The query display string associated with this statement.
+  LEX_CSTRING m_display_query_string{NULL_CSTR};
+
   /// Performance Schema interface for a prepared statement.
   PSI_prepared_stmt *m_prepared_stmt{nullptr};
 
@@ -229,11 +230,38 @@ class Prepared_statement final {
   */
   MEM_ROOT m_mem_root;
 
+  /** DIGEST and DIGEST_TEXT of the EXECUTE statement. */
+  sql_digest_storage m_execute_digest{};
+  /** DIGEST and DIGEST_TEXT of the DEALLOCATE statement. */
+  sql_digest_storage m_deallocate_digest{};
+
+  /** Token array used to store DIGEST and DIGEST_TEXT (EXECUTE). */
+  unsigned char *m_execute_token_array{nullptr};
+  /** Token array used to store DIGEST and DIGEST_TEXT (DEALLOCATE). */
+  unsigned char *m_deallocate_token_array{nullptr};
+
+  /** Length of m_execute_token_array. */
+  size_t m_execute_token_array_length{0};
+  /** Length of m_deallocate_token_array. */
+  size_t m_deallocate_token_array_length{0};
+
   bool prepare_query(THD *thd);
 
  public:
-  Prepared_statement(THD *thd_arg);
+  explicit Prepared_statement(THD *thd_arg);
   ~Prepared_statement();
+
+  /** Performance schema instrumentation for execute. */
+  void psi_execute_instrumentation(THD *thd);
+  /** Performance schema instrumentation for deallocate. */
+  void psi_deallocate_instrumentation(THD *thd);
+
+  void set_display_query_string(const char *display_query_string,
+                                size_t display_query_string_length);
+  void get_display_query_string(const char **display_query_string_ptr,
+                                size_t *display_query_string_length_ptr) const;
+
+  void set_digest(const sql_digest_storage *digest);
 
   bool set_name(const LEX_CSTRING &name);
   const LEX_CSTRING &name() const { return m_name; }

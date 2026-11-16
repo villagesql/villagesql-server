@@ -193,7 +193,7 @@ int MultiNdbWakeupHandler::waitForInput(Ndb **_objs, int _cnt, int min_req,
         ignore_wakeups();
         break;
       }
-    } while (1);
+    } while (true);
   }
   finalize_wait(nready);
   return ret;
@@ -237,7 +237,6 @@ void MultiNdbWakeupHandler::notifyTransactionCompleted(Ndb *from
   if (!is_wakeups_ignored() && num_completed_trans >= minNdbsToWake) {
     wakeNdb->theImpl->theWaiter.signal(NO_WAIT);  // wakeup client thread
   }
-  return;
 }
 
 void MultiNdbWakeupHandler::notifyWakeup() {

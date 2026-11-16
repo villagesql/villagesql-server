@@ -28,8 +28,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "log_service_imp.h"
 
-#include <assert.h>
 #include <mysqld_error.h>  // ER_*
+#include <cassert>
 #include "my_compiler.h"
 
 #include <mysql/components/services/log_builtins.h>
@@ -671,7 +671,7 @@ static void banner() {
   {
     const int wellknown = log_bi->wellknown_by_type(LOG_ITEM_LOG_LABEL);
     const char *label_key = log_bi->wellknown_get_name(wellknown);
-    const int wellagain =
+    const int wellagain [[maybe_unused]] =
         log_bi->wellknown_by_name(label_key, log_bs->length(label_key));
 
     assert(wellknown == wellagain);

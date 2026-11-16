@@ -31,8 +31,8 @@
 using std::string;
 
 class Load {
-  Load(const Load &);
-  Load &operator=(const Load &);
+  Load(const Load &) = delete;
+  Load &operator=(const Load &) = delete;
 
  protected:
   // short name of load

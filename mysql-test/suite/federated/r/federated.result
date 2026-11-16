@@ -720,7 +720,7 @@ OR (col2 = 'three Three' AND col3 = 33);
 id	col1	col2	col3	col4
 3	3	three Three	33	33333
 5	5	five 5 five five 5	5	55555
-SELECT /*+ INDEX_MERGE(t1 PRIMARY,col3) */* FROM federated.t1 WHERE (id = 5 AND col2 = 'Two two')
+SELECT * FROM federated.t1 WHERE (id = 5 AND col2 = 'Two two')
 OR (col2 = 444 AND col3 = 4444444);
 id	col1	col2	col3	col4
 SELECT * FROM federated.t1 WHERE id = 1 
@@ -2245,6 +2245,9 @@ INSERT INTO  t1 VALUES ('text1'),('text2'),('text3'),('text4');
 CREATE TABLE t1(id VARCHAR(20) NOT NULL, PRIMARY KEY(id)) ENGINE=FEDERATED 
 CONNECTION='mysql://root@127.0.0.1:SLAVE_PORT/test/t1';
 # Dump table t1 using mysqldump tool
+SET @MYSQLDUMP_TEMP_LOG_BIN = @@SESSION.SQL_LOG_BIN;
+SET @@SESSION.SQL_LOG_BIN= 0;
+SET @@GLOBAL.GTID_PURGED=/*!80000 '+'*/ 'GTID_SET';
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `t1` (
@@ -2252,6 +2255,7 @@ CREATE TABLE `t1` (
   PRIMARY KEY (`id`)
 ) ENGINE=FEDERATED DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci CONNECTION='mysql://root@127.0.0.1:SLAVE_PORT/test/t1';
 /*!40101 SET character_set_client = @saved_cs_client */;
+SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 DROP TABLE t1;
 #Switch to Connection Slave
 DROP TABLE t1;
@@ -2444,6 +2448,33 @@ SELECT a, b FROM federated.t1;
 a	b
 DROP TABLE federated.t1;
 DROP TABLE federated.t1;
+#
+# Bug#105878: PS-7999: FEDERATED engine not reconnecting on wait_timeout exceeded
+#
+SET @OLD_SLAVE_WAIT_TIMEOUT= @@GLOBAL.WAIT_TIMEOUT;
+SET @@GLOBAL.WAIT_TIMEOUT= 4;
+CREATE TABLE test.t1 (id int PRIMARY KEY);
+INSERT INTO test.t1 VALUES(1);
+CREATE SERVER test FOREIGN DATA WRAPPER test1 OPTIONS(
+user 'root',
+password '',
+host '127.0.0.1',
+port SLAVE_PORT,
+database 'test');
+CREATE TABLE test.t1 (id int PRIMARY KEY) ENGINE=FEDERATED CONNECTION='test';
+SELECT * FROM test.t1;
+id
+1
+SELECT sleep(5);
+sleep(5)
+0
+SELECT * from test.t1;
+id
+1
+DROP TABLE test.t1;
+DROP SERVER test;
+DROP TABLE test.t1;
+SET @@GLOBAL.WAIT_TIMEOUT= @OLD_SLAVE_WAIT_TIMEOUT;
 SET @@GLOBAL.CONCURRENT_INSERT= @OLD_MASTER_CONCURRENT_INSERT;
 SET @@GLOBAL.CONCURRENT_INSERT= @OLD_SLAVE_CONCURRENT_INSERT;
 DROP TABLE IF EXISTS federated.t1;

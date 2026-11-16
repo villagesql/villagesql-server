@@ -47,7 +47,7 @@ const std::error_category &destinations_error_category() noexcept {
     }
   };
 
-  static destinations_category_impl instance;
+  static destinations_category_impl const instance;
   return instance;
 }
 

@@ -8,6 +8,14 @@ INSERT INTO t1 VALUES (1,1,5),(1,1,2),(1,2,5),(2,1,4),(2,1,1),(2,2,2),(2,2,3),
 ANALYZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+EXPLAIN FORMAT=TREE SELECT a, b, c, ROW_NUMBER() OVER (PARTITION BY a ORDER BY a,b,c) AS rnk
+FROM t1 QUALIFY rnk>1;
+EXPLAIN
+-> Filter: (rnk > 1)  (rows=15)
+    -> Window aggregate: row_number() OVER (PARTITION BY t1.a ORDER BY t1.a,t1.b,t1.c )   (rows=15)
+        -> Sort: t1.a, t1.b, t1.c  (rows=15)
+            -> Table scan on t1  (rows=15)
+
 SELECT a, b, c, ROW_NUMBER() OVER (PARTITION BY a ORDER BY a,b,c) AS rnk
 FROM t1 QUALIFY rnk>1;
 a	b	c	rnk
@@ -432,8 +440,6 @@ v2	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VI
 SELECT * FROM v2;
 ERROR HY000: 'QUALIFY clause' can be used only if the hypergraph optimizer is enabled.
 SET @@optimizer_switch = @start_value_optimizer_switch;
-Warnings:
-Warning	1287	The hypergraph optimizer is highly experimental and is meant for testing only. Do not enable it unless you are a MySQL developer.
 SHOW CREATE VIEW v2;
 View	Create View	character_set_client	collation_connection
 v2	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v2` AS select sum(`sales`.`sale_amount`) AS `total_sales`,rank() OVER (ORDER BY sum(`sales`.`sale_amount`) desc )  AS `sales_rank` from `sales` group by `sales`.`salesperson_id` qualify (sum(`sales`.`sale_amount`) > 3000)	utf8mb4	utf8mb4_0900_ai_ci
@@ -562,3 +568,27 @@ CREATE TABLE t1 (f1 INTEGER);
 SELECT NTILE(1) OVER() FROM (SELECT * FROM t1) as dt QUALIFY f1 AND FALSE;
 NTILE(1) OVER()
 DROP TABLE t1;
+#
+# Bug#37293786: Wrong result with QUALIFY in table-less query
+#
+SELECT 1 AS res QUALIFY ROW_NUMBER() OVER () > 10;
+res
+SELECT (SELECT 1 QUALIFY ROW_NUMBER() OVER () > 10) AS res;
+res
+NULL
+SELECT 1 AS res QUALIFY ROW_NUMBER() OVER () < 10;
+res
+1
+SELECT (SELECT 1 QUALIFY ROW_NUMBER() OVER () < 10) AS res;
+res
+1
+SELECT 1 AS res QUALIFY FALSE AND ROW_NUMBER() OVER () < 10;
+res
+SELECT (SELECT 1 QUALIFY FALSE AND ROW_NUMBER() OVER () < 10) AS res;
+res
+NULL
+SELECT 1 AS res WHERE 1 IN (SELECT 1 QUALIFY ROW_NUMBER() OVER () > 10);
+res
+SELECT 1 AS res
+WHERE 1 IN (SELECT 1 QUALIFY FALSE AND ROW_NUMBER() OVER () > 10);
+res

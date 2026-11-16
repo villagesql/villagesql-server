@@ -112,14 +112,15 @@ static bool populate_table(THD *thd, LEX *lex) {
 
   if (lock_tables(thd, lex->query_tables, lex->table_count, 0)) return true;
 
-  if (unit->optimize(thd, nullptr, true, /*finalize_access_paths=*/true))
-    return true;
+  if (unit->optimize(thd, nullptr, /*finalize_access_paths=*/true)) return true;
 
-  // Calculate the current statement cost.
-  accumulate_statement_cost(lex);
+  DBUG_EXECUTE_IF("ast", { unit->DebugPrintQueryPlan(thd, "ast"); });
 
   // Perform secondary engine optimizations, if needed.
   if (optimize_secondary_engine(thd)) return true;
+
+  // Create iterators for the chosen query plan before execution.
+  if (unit->create_iterators(thd)) return true;
 
   if (unit->execute(thd)) return true;
 
@@ -174,10 +175,11 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     If no engine type was given, work out the default now
     rather than at parse-time.
   */
-  if (!(create_info.used_fields & HA_CREATE_USED_ENGINE))
-    create_info.db_type = create_info.options & HA_LEX_CREATE_TMP_TABLE
-                              ? ha_default_temp_handlerton(thd)
-                              : ha_default_handlerton(thd);
+  if ((create_info.used_fields & HA_CREATE_USED_ENGINE) == 0U) {
+    if (create_info.set_db_type(thd)) {
+      return true;
+    }
+  }
 
   assert(create_info.db_type != nullptr);
   if ((m_alter_info->flags & Alter_info::ANY_ENGINE_ATTRIBUTE) != 0 &&
@@ -185,6 +187,10 @@ bool Sql_cmd_create_table::execute(THD *thd) {
        DBUG_EVALUATE_IF("simulate_engine_attribute_support", false, true))) {
     my_error(ER_ENGINE_ATTRIBUTE_NOT_SUPPORTED, MYF(0),
              ha_resolve_storage_engine_name(create_info.db_type));
+    return true;
+  }
+
+  if (validate_secondary_engine_temporary_table(thd, &create_info)) {
     return true;
   }
 
@@ -319,9 +325,23 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     if (query_expression->is_prepared()) {
       cleanup(thd);
     }
+
+    const bool prepared_for_secondary_engine =
+        query_expression->is_prepared() && lex->using_secondary_engine();
+
     auto cleanup_se_guard = create_scope_guard(
         [lex] { lex->set_secondary_engine_execution_context(nullptr); });
     if (open_tables_for_query(thd, lex->query_tables, false)) return true;
+
+    // If the query was prepared for execution on a different engine than the
+    // engine chosen at execution, it must be reprepared.
+    if (is_prepared() &&
+        (prepared_for_secondary_engine != lex->using_secondary_engine()) &&
+        ask_to_reprepare(thd)) {
+      return true;
+    }
+    assert(!is_prepared() ||
+           prepared_for_secondary_engine == lex->using_secondary_engine());
 
     // Use the hypergraph optimizer for the SELECT statement, if enabled.
     const bool need_hypergraph_optimizer =
@@ -557,7 +577,7 @@ bool Sql_cmd_create_or_drop_index_base::execute(THD *thd) {
     and thus classify as slow administrative statements just like
     ALTER TABLE.
   */
-  thd->enable_slow_log = opt_log_slow_admin_statements;
+  thd->set_slow_log_for_admin_command();
 
   create_info.db_type = nullptr;
   create_info.row_type = ROW_TYPE_NOT_USED;

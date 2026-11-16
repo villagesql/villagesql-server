@@ -142,7 +142,7 @@ FLUSH LOGS;
 include/assert.inc [Did not save gtid Source_UUID:7 into mysql.gtid_executed table]
 SET SESSION GTID_NEXT='MASTER_UUID:7';
 DROP USER u1@h, u2@h;
-ERROR HY000: Operation DROP USER failed for 'u2'@'h'
+ERROR HY000: Operation DROP USER failed for 'u2'@'h' (User account does not exist)
 #
 # The u1 is not removed from mysql.user which means that DROP USER
 # can not fail partially.
@@ -190,6 +190,7 @@ SET SESSION GTID_NEXT='MASTER_UUID:7';
 OPTIMIZE TABLE t1, t_non_existent;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	Table is already up to date
+test.t_non_existent	optimize	Warning	Combining the storage engines InnoDB and MyISAM is deprecated, but the statement or transaction updates both the InnoDB table mysql.gtid_executed and the MyISAM table test.t1.
 test.t_non_existent	optimize	Error	Table 'test.t_non_existent' doesn't exist
 test.t_non_existent	optimize	status	Operation failed
 #
@@ -230,6 +231,7 @@ SET SESSION GTID_NEXT='MASTER_UUID:9';
 REPAIR TABLE t1, t_non_existent;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t_non_existent	repair	Warning	Combining the storage engines InnoDB and MyISAM is deprecated, but the statement or transaction updates both the InnoDB table mysql.gtid_executed and the MyISAM table test.t1.
 test.t_non_existent	repair	Error	Table 'test.t_non_existent' doesn't exist
 test.t_non_existent	repair	status	Operation failed
 #
@@ -287,7 +289,7 @@ password_expired
 N
 SET SESSION GTID_NEXT='MASTER_UUID:13';
 ALTER USER u1@h, u3@h PASSWORD EXPIRE;
-ERROR HY000: Operation ALTER USER failed for 'u3'@'h'
+ERROR HY000: Operation ALTER USER failed for 'u3'@'h' (User account does not exist)
 #
 # The u1 is not altered on mysql.user which means that ALTER USER
 # cannot be failed partially.

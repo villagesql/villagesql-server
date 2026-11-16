@@ -39,6 +39,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+// ----------------------------------------------------------------------------
 namespace lob {
 
 /** A BLOB field reference has all the bits set to zero, except the "being
@@ -664,7 +665,6 @@ byte *btr_rec_copy_externally_stored_field_func(
   const byte *field_ref = data + local_len - BTR_EXTERN_FIELD_REF_SIZE;
 
   lob::ref_t ref(const_cast<byte *>(field_ref));
-
   ut_a(local_len >= BTR_EXTERN_FIELD_REF_SIZE);
 
   /* Verify if the LOB reference is sane. */

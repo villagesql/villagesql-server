@@ -37,6 +37,7 @@
 #include "classic_auth_caching_sha2.h"
 #include "classic_auth_cleartext.h"
 #include "classic_auth_native.h"
+#include "classic_auth_openid_connect.h"
 #include "classic_auth_sha256_password.h"
 #include "classic_connection_base.h"
 #include "classic_frame.h"
@@ -67,10 +68,11 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 static constexpr const std::array supported_authentication_methods{
-    AuthCachingSha2Password::kName,
-    AuthNativePassword::kName,
-    AuthCleartextPassword::kName,
-    AuthSha256Password::kName,
+    AuthCachingSha2Password::kName,  //
+    AuthNativePassword::kName,       //
+    AuthCleartextPassword::kName,    //
+    AuthSha256Password::kName,       //
+    AuthOpenidConnect::kName,        //
 };
 
 static constexpr const bool kCapturePlaintextPassword{true};
@@ -462,7 +464,7 @@ ClientGreetor::client_greeting() {
         (msg.auth_method_data() == "\x00"sv ||
          msg.auth_method_data().empty())) {
       // password is empty.
-      src_protocol.password("");
+      src_protocol.credentials().emplace(src_protocol.auth_method_name(), "");
     } else if (connection()->source_ssl_mode() != SslMode::kPassthrough) {
       const bool client_conn_is_secure =
           connection()->client_conn().is_secure_transport();
@@ -732,7 +734,7 @@ ClientGreetor::client_greeting_after_tls() {
     //
     // - php sends no trailing '\0'
     // - libmysqlclient sends a trailing '\0'
-    src_protocol.password("");
+    src_protocol.credentials().emplace(src_protocol.auth_method_name(), "");
 
     stage(Stage::Accepted);
     return Result::Again;
@@ -741,6 +743,11 @@ ClientGreetor::client_greeting_after_tls() {
     stage(Stage::RequestPlaintextPassword);
     return Result::Again;
   } else {
+    if (msg.auth_method_name() == AuthOpenidConnect::kName) {
+      src_protocol.credentials().emplace(msg.auth_method_name(),
+                                         msg.auth_method_data());
+    }
+
     stage(Stage::Accepted);
     return Result::Again;
   }
@@ -801,7 +808,7 @@ ClientGreetor::plaintext_password() {
 
     if (auto pwd =
             password_from_auth_method_data(msg_res->auth_method_data())) {
-      src_protocol.password(std::string(*pwd));
+      src_protocol.credentials().emplace(src_protocol.auth_method_name(), *pwd);
     }
     // discard the current frame.
     discard_current_msg(src_conn);
@@ -890,7 +897,8 @@ ClientGreetor::decrypt_password() {
     return recv_client_failed(recv_res.error());
   }
 
-  src_protocol.password(*recv_res);
+  src_protocol.credentials().emplace(src_protocol.auth_method_name(),
+                                     *recv_res);
 
   // discard the current frame.
   discard_current_msg(src_conn);
@@ -929,19 +937,26 @@ stdx::expected<Processor::Result, std::error_code> ClientGreetor::accepted() {
 
     // if a connection is taken from the pool, make sure it matches the TLS
     // requirements.
-    connection()->requires_tls(dest_ssl_mode == SslMode::kRequired ||
-                               dest_ssl_mode == SslMode::kPreferred ||
-                               (dest_ssl_mode == SslMode::kAsClient &&
-                                (source_ssl_mode == SslMode::kPreferred ||
-                                 source_ssl_mode == SslMode::kRequired)));
+    using TC = TransportConstraints::Constraint;
+    const bool has_dest_ssl_cert =
+        !connection()->context().dest_ssl_cert().empty();
 
-    if (connection()->requires_tls() &&
-        !connection()->context().dest_ssl_cert().empty()) {
-      connection()->requires_client_cert(true);
+    if (dest_ssl_mode == SslMode::kRequired ||
+        (dest_ssl_mode == SslMode::kAsClient &&
+         source_ssl_mode == SslMode::kRequired)) {
+      connection()->expected_server_transport_constraints(
+          has_dest_ssl_cert ? TC::kHasClientCert : TC::kEncrypted);
+    } else if (dest_ssl_mode == SslMode::kPreferred ||
+               (dest_ssl_mode == SslMode::kAsClient &&
+                source_ssl_mode == SslMode::kRequired)) {
+      connection()->expected_server_transport_constraints(
+          has_dest_ssl_cert ? TC::kHasClientCert : TC::kSecure);
+    } else {
+      connection()->expected_server_transport_constraints(TC::kPlaintext);
     }
 
     if (connection()->context().access_mode() == routing::AccessMode::kAuto &&
-        !src_protocol.password().has_value()) {
+        !src_protocol.credentials().get(AuthCachingSha2Password::kName)) {
       // by default, authentication can be done on any server if rw-splitting is
       // enabled.
       //

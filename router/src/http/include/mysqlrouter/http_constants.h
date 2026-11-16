@@ -38,5 +38,6 @@ constexpr const std::string_view kHttpDefaultAuthMethod{"basic"};
 
 constexpr const uint16_t kHttpPluginDefaultPortBootstrap{8443};
 constexpr const unsigned kHttpPluginDefaultSslBootstrap{1};
+constexpr const uint16_t kDefaultHttpPort{8081};
 
 #endif  // MYSQLROUTER_HTTP_CONSTANTS_INCLUDED

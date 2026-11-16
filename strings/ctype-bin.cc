@@ -44,7 +44,6 @@
 #include <cstring>
 
 #include "m_string.h"
-#include "my_compiler.h"
 #include "mysql/strings/m_ctype.h"
 #include "strings/m_ctype_internals.h"
 #include "template_utils.h"
@@ -101,7 +100,7 @@ static bool my_coll_init_8bit_bin(CHARSET_INFO *cs, MY_CHARSET_LOADER *,
 static int my_strnncoll_binary(const CHARSET_INFO *cs [[maybe_unused]],
                                const uint8_t *s, size_t slen, const uint8_t *t,
                                size_t tlen, bool t_is_prefix) {
-  size_t len = std::min(slen, tlen);
+  size_t const len = std::min(slen, tlen);
   const int cmp = len == 0 ? 0 : memcmp(s, t, len);  // memcmp(a, b, 0) == 0
   return cmp ? cmp : (int)((t_is_prefix ? len : slen) - tlen);
 }
@@ -145,8 +144,8 @@ static int my_strnncoll_8bit_bin(const CHARSET_INFO *cs [[maybe_unused]],
                                  const uint8_t *s, size_t slen,
                                  const uint8_t *t, size_t tlen,
                                  bool t_is_prefix) {
-  size_t len = std::min(slen, tlen);
-  int cmp = memcmp(s, t, len);
+  size_t const len = std::min(slen, tlen);
+  int const cmp = memcmp(s, t, len);
   return cmp ? cmp : (int)((t_is_prefix ? len : slen) - tlen);
 }
 
@@ -175,7 +174,7 @@ static int my_strnncoll_8bit_bin(const CHARSET_INFO *cs [[maybe_unused]],
 static int my_strnncollsp_8bit_bin(const CHARSET_INFO *cs [[maybe_unused]],
                                    const uint8_t *a, size_t a_length,
                                    const uint8_t *b, size_t b_length) {
-  size_t length = std::min(a_length, b_length);
+  size_t const length = std::min(a_length, b_length);
   const uint8_t *end = a + length;
   while (a < end) {
     if (*a++ != *b++) return ((int)a[-1] - (int)b[-1]);
@@ -350,7 +349,7 @@ static int my_wildcmp_bin_impl(const CHARSET_INFO *cs, const char *str,
         while (str != str_end && (uint8_t)likeconv(cs, *str) != cmp) str++;
         if (str++ == str_end) return (-1);
         {
-          int tmp =
+          int const tmp =
               my_wildcmp_bin_impl(cs, str, str_end, wildstr, wildend, escape,
                                   w_one, w_many, recurse_level + 1);
           if (tmp <= 0) return (tmp);
@@ -397,23 +396,21 @@ static size_t my_strnxfrm_8bit_bin_no_pad(const CHARSET_INFO *cs, uint8_t *dst,
   return srclen;
 }
 
-static unsigned my_instr_bin(const CHARSET_INFO *cs [[maybe_unused]],
-                             const char *b, size_t b_length, const char *s,
-                             size_t s_length, my_match_t *match,
-                             unsigned nmatch) {
+static bool my_instr_bin(const CHARSET_INFO *cs [[maybe_unused]], const char *b,
+                         size_t b_length, const char *s, size_t s_length,
+                         my_match_t *match) {
   const uint8_t *str = nullptr;
   const uint8_t *search = nullptr;
   const uint8_t *end = nullptr;
   const uint8_t *search_end = nullptr;
 
   if (s_length <= b_length) {
-    if (!s_length) {
-      if (nmatch) {
-        match->beg = 0;
+    if (s_length == 0) {
+      if (match != nullptr) {
         match->end = 0;
         match->mb_len = 0;
       }
-      return 1; /* Empty string is always found */
+      return true; /* Empty string is always found */
     }
 
     str = pointer_cast<const uint8_t *>(b);
@@ -430,22 +427,15 @@ static unsigned my_instr_bin(const CHARSET_INFO *cs [[maybe_unused]],
         while (j != search_end)
           if ((*i++) != (*j++)) goto skip;
 
-        if (nmatch > 0) {
-          match[0].beg = 0;
-          match[0].end = (unsigned)(str - pointer_cast<const uint8_t *>(b) - 1);
-          match[0].mb_len = match[0].end;
-
-          if (nmatch > 1) {
-            match[1].beg = match[0].end;
-            match[1].end = (unsigned)(match[0].end + s_length);
-            match[1].mb_len = match[1].end - match[1].beg;
-          }
+        if (match != nullptr) {
+          match->end = (unsigned)(str - pointer_cast<const uint8_t *>(b) - 1);
+          match->mb_len = match->end;
         }
-        return 2;
+        return true;
       }
     }
   }
-  return 0;
+  return false;
 }
 }  // extern "C"
 

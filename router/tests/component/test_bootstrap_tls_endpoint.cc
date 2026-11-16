@@ -47,11 +47,16 @@ struct BootstrapTlsEndpointFailParams {
   const std::vector<std::string> cmdline_args;
 
   stdx::expected<void, std::string> expected_result;
+  bool new_executable{false};
 };
 
 class BootstrapTlsEndpointFail
     : public RouterComponentBootstrapTest,
-      public ::testing::WithParamInterface<BootstrapTlsEndpointFailParams> {};
+      public ::testing::WithParamInterface<BootstrapTlsEndpointFailParams> {
+ public:
+  BootstrapTlsEndpointFail()
+      : RouterComponentBootstrapTest(GetParam().new_executable) {}
+};
 
 TEST_P(BootstrapTlsEndpointFail, check) {
   // launch the router in bootstrap mode
@@ -219,7 +224,11 @@ INSTANTIATE_TEST_SUITE_P(
 
 class BootstrapTlsEndpointWithoutBootstrapFail
     : public RouterComponentBootstrapTest,
-      public ::testing::WithParamInterface<BootstrapTlsEndpointFailParams> {};
+      public ::testing::WithParamInterface<BootstrapTlsEndpointFailParams> {
+ public:
+  BootstrapTlsEndpointWithoutBootstrapFail()
+      : RouterComponentBootstrapTest(false) {}
+};
 
 TEST_P(BootstrapTlsEndpointWithoutBootstrapFail, check) {
   // don't set the --bootstrap option.
@@ -319,7 +328,11 @@ struct BootstrapTlsEndpointParams {
 
 class BootstrapTlsEndpointWithoutCertGeneration
     : public RouterComponentBootstrapTest,
-      public ::testing::WithParamInterface<BootstrapTlsEndpointParams> {};
+      public ::testing::WithParamInterface<BootstrapTlsEndpointParams> {
+ public:
+  BootstrapTlsEndpointWithoutCertGeneration()
+      : RouterComponentBootstrapTest(false) {}
+};
 
 TEST_P(BootstrapTlsEndpointWithoutCertGeneration, succeeds) {
   auto cmdline_args = GetParam().cmdline_args;
@@ -338,11 +351,12 @@ TEST_P(BootstrapTlsEndpointWithoutCertGeneration, succeeds) {
   cmdline_args.emplace_back(server_key_pem);
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
-      {
-          Config{"127.0.0.1", port_pool_.get_next_available(),
-                 port_pool_.get_next_available(),
-                 get_data_dir().join("bootstrap_gr.js").str()},
-      },
+      {Config{
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_gr.js",
+      }},
       mysqlrouter::ClusterType::GR_V2, {}, EXIT_SUCCESS,
       {"# MySQL Router configured"}, 5s, {2, 0, 3}, cmdline_args));
 
@@ -671,16 +685,22 @@ INSTANTIATE_TEST_SUITE_P(
 
 class BootstrapTlsEndpoint
     : public RouterComponentBootstrapTest,
-      public ::testing::WithParamInterface<BootstrapTlsEndpointParams> {};
+      public ::testing::WithParamInterface<BootstrapTlsEndpointParams> {
+ public:
+  BootstrapTlsEndpoint() : RouterComponentBootstrapTest(false) {}
+};
 
 TEST_P(BootstrapTlsEndpoint, succeeds) {
   auto cmdline_args = GetParam().cmdline_args;
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
       {
-          Config{"127.0.0.1", port_pool_.get_next_available(),
-                 port_pool_.get_next_available(),
-                 get_data_dir().join("bootstrap_gr.js").str()},
+          Config{
+              "127.0.0.1",
+              port_pool_.get_next_available(),
+              port_pool_.get_next_available(),
+              "bootstrap_gr.js",
+          },
       },
       mysqlrouter::ClusterType::GR_V2, {}, EXIT_SUCCESS,
       {"# MySQL Router configured"},
@@ -721,9 +741,12 @@ TEST_P(BootstrapTlsEndpoint, existing_config) {
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
       {
-          Config{"127.0.0.1", port_pool_.get_next_available(),
-                 port_pool_.get_next_available(),
-                 get_data_dir().join("bootstrap_gr.js").str()},
+          Config{
+              "127.0.0.1",
+              port_pool_.get_next_available(),
+              port_pool_.get_next_available(),
+              "bootstrap_gr.js",
+          },
       },
       mysqlrouter::ClusterType::GR_V2, {}, EXIT_SUCCESS,
       {"# MySQL Router configured"},
@@ -771,9 +794,12 @@ TEST_P(BootstrapTlsEndpoint, existing_config_with_client_ssl_cert) {
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
       {
-          Config{"127.0.0.1", port_pool_.get_next_available(),
-                 port_pool_.get_next_available(),
-                 get_data_dir().join("bootstrap_gr.js").str()},
+          Config{
+              "127.0.0.1",
+              port_pool_.get_next_available(),
+              port_pool_.get_next_available(),
+              "bootstrap_gr.js",
+          },
       },
       mysqlrouter::ClusterType::GR_V2, {}, EXIT_SUCCESS,
       {"# MySQL Router configured"},
@@ -821,9 +847,12 @@ TEST_P(BootstrapTlsEndpoint, existing_config_with_client_ssl_key) {
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
       {
-          Config{"127.0.0.1", port_pool_.get_next_available(),
-                 port_pool_.get_next_available(),
-                 get_data_dir().join("bootstrap_gr.js").str()},
+          Config{
+              "127.0.0.1",
+              port_pool_.get_next_available(),
+              port_pool_.get_next_available(),
+              "bootstrap_gr.js",
+          },
       },
       mysqlrouter::ClusterType::GR_V2, {}, EXIT_SUCCESS,
       {"# MySQL Router configured"},
@@ -873,9 +902,12 @@ TEST_P(BootstrapTlsEndpoint, existing_config_with_client_ssl_cert_and_key) {
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
       {
-          Config{"127.0.0.1", port_pool_.get_next_available(),
-                 port_pool_.get_next_available(),
-                 get_data_dir().join("bootstrap_gr.js").str()},
+          Config{
+              "127.0.0.1",
+              port_pool_.get_next_available(),
+              port_pool_.get_next_available(),
+              "bootstrap_gr.js",
+          },
       },
       mysqlrouter::ClusterType::GR_V2, {}, EXIT_SUCCESS,
       {"# MySQL Router configured"},
@@ -1150,14 +1182,19 @@ struct BootstrapTlsEndpointFailMockParams {
 class BootstrapTlsEndpointFailMock
     : public RouterComponentBootstrapTest,
       public ::testing::WithParamInterface<BootstrapTlsEndpointFailMockParams> {
+ public:
+  BootstrapTlsEndpointFailMock() : RouterComponentBootstrapTest(false) {}
 };
 
 TEST_P(BootstrapTlsEndpointFailMock, fails) {
   bootstrap_failover(
       {
-          Config{"127.0.0.1", port_pool_.get_next_available(),
-                 port_pool_.get_next_available(),
-                 get_data_dir().join("bootstrap_gr.js").str()},
+          Config{
+              "127.0.0.1",
+              port_pool_.get_next_available(),
+              port_pool_.get_next_available(),
+              "bootstrap_gr.js",
+          },
       },
       mysqlrouter::ClusterType::GR_V2, {}, EXIT_FAILURE,
       GetParam().expected_output_lines, 1s, {2, 0, 3}, GetParam().cmdline_args);

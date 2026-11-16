@@ -384,7 +384,7 @@ int table_events_waits_common::make_metadata_lock_object_columns(
 
   if (safe_metadata_lock->get_version() == wait->m_weak_version) {
     // TODO: remove code duplication with PFS_column_row::make_row()
-    static_assert(MDL_key::NAMESPACE_END == 19,
+    static_assert(MDL_key::NAMESPACE_END == 21,
                   "Adjust performance schema when changing enum_mdl_namespace");
 
     const MDL_key *mdl = &safe_metadata_lock->m_mdl_key;
@@ -435,6 +435,13 @@ int table_events_waits_common::make_metadata_lock_object_columns(
       case MDL_key::PROCEDURE:
         m_row.m_object_type = "PROCEDURE";
         m_row.m_object_type_length = 9;
+        set_schema_name(&m_row.m_object_schema, mdl);
+        m_row.m_object_name_length = mdl->name_length();
+        m_row.m_index_name_length = 0;
+        break;
+      case MDL_key::LIBRARY:
+        m_row.m_object_type = "LIBRARY";
+        m_row.m_object_type_length = 7;
         set_schema_name(&m_row.m_object_schema, mdl);
         m_row.m_object_name_length = mdl->name_length();
         m_row.m_index_name_length = 0;
@@ -521,6 +528,13 @@ int table_events_waits_common::make_metadata_lock_object_columns(
         m_row.m_object_type_length = 16;
         set_schema_name(&m_row.m_object_schema, mdl);
         m_row.m_object_name_length = mdl->name_length();
+        break;
+      case MDL_key::BACKUP_TABLES:
+        m_row.m_object_type = "BACKUP TABLES";
+        m_row.m_object_type_length = sizeof("BACKUP TABLES") - 1;
+        m_row.m_object_schema.reset();
+        m_row.m_object_name_length = 0;
+        m_row.m_index_name_length = 0;
         break;
       case MDL_key::NAMESPACE_END:
       default:

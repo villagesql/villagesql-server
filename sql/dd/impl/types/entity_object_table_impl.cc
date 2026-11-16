@@ -23,7 +23,7 @@
 
 #include "sql/dd/impl/types/entity_object_table_impl.h"
 
-#include <stddef.h>
+#include <cstddef>
 #include <memory>
 
 #include "my_dbug.h"

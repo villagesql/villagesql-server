@@ -1,4 +1,4 @@
-\page PageLibsMysqlSerialization MySQL Serialization Library
+\page PageLibsMysqlSerialization Library: Serialization
 
 <!---
 Copyright (c) 2023, 2026, Oracle and/or its affiliates.
@@ -8,27 +8,30 @@ it under the terms of the GNU General Public License, version 2.0,
 as published by the Free Software Foundation.
 //
 This program is designed to work with certain software (including
-but not limited to OpenSSL) that is licensed under separate terms,
-as designated in a particular file or component or in included license
-documentation.  The authors of MySQL hereby grant you an additional
+but not limited to OpenSSL) that is licensed under separate terms, as
+designated in a particular file or component or in included license
+documentation. The authors of MySQL hereby grant you an additional
 permission to link the program and your derivative works with the
 separately licensed software that they have either included with
 the program or referenced in the documentation.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License, version 2.0, for more details.
+//
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+the GNU General Public License, version 2.0, for more details.
 //
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+along with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 -->
 
-MySQL Serialization Library
-===========================
 
-For code documentation, please refer to @ref GroupLibsMysqlSerialization.
+<!--
+MySQL Library: Serialization
+============================
+-->
+
+Code documentation: @ref GroupLibsMysqlSerialization.
 
 ## High-level description
 
@@ -48,7 +51,7 @@ Field definition considers definition of:
   include the field in the packet. Default behavior of the encoder is to
   always include the field in the packet.
 - An "unknown field policy" - action that should be taken by decoder in case
-  the field is encoded in the packet but its definition is unknown to the 
+  the field is encoded in the packet but its definition is unknown to the
   decoder (considers decoders of version older than version of the software
   which introduced field into the packet)
 
@@ -142,8 +145,6 @@ field_data can be one of:
 
 - fixlen_integer_format - fixed-length integer, encoded using a fixed number of
   bytes, signed or unsigned
-- varlen_integer_format - variable-length integer field, encoded using 1-9 bytes,
-  depending on the field value
 - floating_point_integer_format - floating point number field:
   - sp_floating_point_integer_format - single precision floating point number
   - dp_floating_point_integer_format - double precision floating point number
@@ -154,7 +155,7 @@ field_data can be one of:
 - message_format - nested message
 - varlen_integer_format - format used to encode signed/unsigned integers using
   1-9 bytes, depending on the integer value. Format is described in detail
-  in the [Variable-length integers](#variable-length-integers).
+  in the [Variable-length integers](#variable-length-integers) section.
 
 ```
 {
@@ -195,7 +196,7 @@ String format consists of:
 - string_length - the number of 1 byte elements in the string
 - string characters, 1 byte unsigned integers
 
-#### Variable-length integers
+#### <a id="variable-length-integers"></a> Variable-length integers
 
 Variable-length integers are encoded using 1-9 bytes, depending on the
 value of a particular field. Bytes are always stored using in LE byte order.
@@ -205,7 +206,7 @@ consecutive bytes.
 
 For each number, rightmost contains encoded information about how many
 consecutive bytes represent the number - it is equal to the number of
-encoded trailing ones + 1. 
+encoded trailing ones + 1.
 When the number itself uses at most 56 bits, then the trailing ones are
 followed by a bit equal to "0"; otherwise it is followed by the full number.
 The special case for 57..64 bits allows us to use only 9 bytes to store numbers

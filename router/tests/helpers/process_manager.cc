@@ -83,6 +83,7 @@ Path ProcessManager::origin_dir_;
 Path ProcessManager::data_dir_;
 Path ProcessManager::plugin_dir_;
 Path ProcessManager::mysqlrouter_exec_;
+Path ProcessManager::mysqlrouter_bootstrap_exec_;
 Path ProcessManager::mysqlserver_mock_exec_;
 
 using namespace std::chrono_literals;
@@ -251,6 +252,35 @@ ProcessWrapper &ProcessManager::Spawner::launch_command(
 
   processes_.emplace_back(std::move(pw), expected_exit_status_);
 
+#ifdef _WIN32
+  // add the process to the job-object.
+
+  if (!job_object_.is_open()) {
+    auto create_res = mysql_harness::win32::JobObject::create();
+    if (!create_res) {
+      throw std::system_error(create_res.error());
+    }
+    job_object_ = std::move(*create_res);
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_limit{};
+    job_limit.BasicLimitInformation.LimitFlags =
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+    auto set_info_res = job_object_.set_information(
+        JobObjectExtendedLimitInformation, &job_limit, sizeof(job_limit));
+    if (!set_info_res) {
+      throw std::system_error(set_info_res.error());
+    }
+  }
+
+  auto process_handle = std::get<0>(processes_.back())->process_handle();
+
+  auto assign_res = job_object_.assign_process(process_handle);
+  if (!assign_res) {
+    throw std::system_error(assign_res.error());
+  }
+#endif
+
   return *std::get<0>(processes_.back()).get();
 }
 
@@ -357,8 +387,16 @@ ProcessWrapper &ProcessManager::Spawner::spawn(
 
 ProcessManager::Spawner ProcessManager::spawner(std::string executable,
                                                 std::string logging_file) {
-  return {executable, logging_dir_.name(), logging_file,
-          generate_notify_socket_path(get_test_temp_dir_name()), processes_};
+  return {
+      std::move(executable),
+      logging_dir_.name(),
+      std::move(logging_file),
+      generate_notify_socket_path(get_test_temp_dir_name()),
+      processes_,
+#ifdef _WIN32
+      job_object_,
+#endif
+  };
 }
 
 stdx::expected<void, std::error_code> ProcessManager::wait_for_notified(
@@ -431,84 +469,35 @@ ProcessWrapper &ProcessManager::launch_router(
       .spawn(params);
 }
 
+ProcessWrapper &ProcessManager::launch_router_bootstrap(
+    const std::vector<std::string> &params, int expected_exit_code /*= 0*/,
+    bool catch_stderr /*= true*/, bool with_sudo /*= false*/,
+    std::chrono::milliseconds wait_for_notify_ready /*= 30s*/,
+    OutputResponder output_resp) {
+  return router_bootstrap_spawner()
+      .with_sudo(with_sudo)
+      .catch_stderr(catch_stderr)
+      .expected_exit_code(expected_exit_code)
+      .wait_for_notify_ready(wait_for_notify_ready)
+      .output_responder(std::move(output_resp))
+      .spawn(params);
+}
+
 std::vector<std::string> ProcessManager::mysql_server_mock_cmdline_args(
     const std::string &json_file, uint16_t port, uint16_t http_port,
     uint16_t x_port, const std::string &module_prefix /* = "" */,
     const std::string &bind_address /*= "127.0.0.1"*/,
     bool enable_ssl /* = false */) {
-  std::vector<std::string> server_params{
-      "--filename",       json_file,             //
-      "--port",           std::to_string(port),  //
-      "--bind-address",   bind_address,
-      "--logging-folder", get_test_temp_dir_name(),
-  };
-
-  server_params.emplace_back("--module-prefix");
-  if (module_prefix.empty()) {
-    server_params.emplace_back(get_data_dir().str());
-  } else {
-    server_params.emplace_back(module_prefix);
-  }
-
-  if (http_port > 0) {
-    server_params.emplace_back("--http-port");
-    server_params.emplace_back(std::to_string(http_port));
-  }
-
-  if (x_port > 0) {
-    server_params.emplace_back("--xport");
-    server_params.emplace_back(std::to_string(x_port));
-  }
-
-  if (enable_ssl) {
-    server_params.emplace_back("--ssl-mode");
-    server_params.emplace_back("PREFERRED");
-    server_params.emplace_back("--ssl-key");
-    server_params.emplace_back(SSL_TEST_DATA_DIR "server-key.pem");
-    server_params.emplace_back("--ssl-cert");
-    server_params.emplace_back(SSL_TEST_DATA_DIR "server-cert.pem");
-  }
-
-  return server_params;
-}
-
-ProcessWrapper &ProcessManager::launch_mysql_server_mock(
-    const std::vector<std::string> &server_params, unsigned port,
-    int expected_exit_code,
-    std::chrono::milliseconds wait_for_notify_ready /*= 30s*/) {
-  auto &result = spawner(mysqlserver_mock_exec_.str())
-                     .expected_exit_code(expected_exit_code)
-                     .wait_for_notify_ready(wait_for_notify_ready)
-                     .catch_stderr(true)
-                     .with_core_dump(true)
-                     .spawn(server_params);
-
-  result.set_logging_path(get_test_temp_dir_name(),
-                          "mock_server_" + std::to_string(port) + ".log");
-
-  return result;
-}
-
-ProcessWrapper &ProcessManager::launch_mysql_server_mock(
-    const std::string &json_file, unsigned port, int expected_exit_code,
-    bool debug_mode, uint16_t http_port, uint16_t x_port,
-    const std::string &module_prefix /* = "" */,
-    const std::string &bind_address /*= "127.0.0.1"*/,
-    std::chrono::milliseconds wait_for_notify_ready /*= 30s*/,
-    bool enable_ssl /* = false */) {
-  if (mysqlserver_mock_exec_.str().empty())
-    throw std::logic_error("path to mysql-server-mock must not be empty");
-
-  auto server_params =
-      mysql_server_mock_cmdline_args(json_file, port, http_port, x_port,
-                                     module_prefix, bind_address, enable_ssl);
-
-  if (debug_mode) {
-    server_params.emplace_back("--verbose");
-  }
-
-  return launch_mysql_server_mock(server_params, port, expected_exit_code,
-                                  wait_for_notify_ready);
+  return MockServerCmdline()
+      .logging_folder(get_test_temp_dir_name())
+      .absolute_filename(json_file)
+      .port(port)
+      .http_port(http_port)
+      .x_port(x_port)
+      .module_prefix(module_prefix)
+      .bind_address(bind_address)
+      .enable_ssl(enable_ssl)
+      .args();
 }
 
 std::map<std::string, std::string> ProcessManager::get_DEFAULT_defaults()
@@ -827,6 +816,7 @@ void ProcessManager::set_origin(const Path &dir) {
   };
 
   mysqlrouter_exec_ = get_exe_path("mysqlrouter");
+  mysqlrouter_bootstrap_exec_ = get_exe_path("mysqlrouter_bootstrap");
   mysqlserver_mock_exec_ = get_exe_path("mysql_server_mock");
 
   data_dir_ = COMPONENT_TEST_DATA_DIR;

@@ -26,7 +26,7 @@
 #define NdbQueryBuilder_H
 
 #include <ndb_types.h>
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "storage/ndb/include/ndbapi/NdbDictionary.hpp"
 

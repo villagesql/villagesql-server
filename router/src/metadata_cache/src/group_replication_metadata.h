@@ -26,14 +26,14 @@
 #ifndef GROUP_REPLICATION_METADATA_INCLUDED
 #define GROUP_REPLICATION_METADATA_INCLUDED
 
-#include <cstdint>
 #include <map>
 #include <string>
-#include <vector>
+
+#include "mysql/harness/destination.h"
 
 namespace mysqlrouter {
 class MySQLSession;
-}
+}  // namespace mysqlrouter
 
 struct GroupReplicationMember {
   enum class State {
@@ -49,10 +49,11 @@ struct GroupReplicationMember {
     Secondary,
   };
   std::string member_id;
-  std::string host;
-  uint16_t port;
+
+  mysql_harness::TcpDestination dest;
   State state;
   Role role;
+  std::string version;
 };
 
 /** Fetches the list of group replication members known to the instance of the

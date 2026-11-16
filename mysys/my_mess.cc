@@ -30,11 +30,9 @@
   @file mysys/my_mess.cc
 */
 
-#include <stdio.h>
-#include <string.h>
 #include <sys/types.h>
+#include <cstdio>
 
-#include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_io.h"

@@ -176,6 +176,7 @@ table_status_by_thread.h
 table_status_by_user.h
 table_sync_instances.h
 table_table_handles.h
+table_temporary_account_locks.h
 table_threads.h
 table_tiws_by_index_usage.h
 table_tiws_by_table.h
@@ -186,6 +187,8 @@ table_users.h
 table_uvar_by_thread.h
 table_variables_by_thread.h
 table_variables_info.h
+table_variables_metadata.h
+table_global_variable_attributes.h
 cursor_by_thread_connect_attr.h
 table_session_connect.h
 table_session_connect_attrs.h
@@ -351,6 +354,7 @@ table_status_by_thread.cc
 table_status_by_user.cc
 table_sync_instances.cc
 table_table_handles.cc
+table_temporary_account_locks.cc
 table_threads.cc
 table_tiws_by_index_usage.cc
 table_tiws_by_table.cc
@@ -361,6 +365,8 @@ table_users.cc
 table_uvar_by_thread.cc
 table_variables_by_thread.cc
 table_variables_info.cc
+table_variables_metadata.cc
+table_global_variable_attributes.cc
 cursor_by_thread_connect_attr.cc
 table_session_connect.cc
 table_session_connect_attrs.cc
@@ -381,10 +387,13 @@ table_replication_applier_filters.cc
 table_replication_applier_global_filters.cc
 table_binary_log_transaction_compression_stats.cc
 telemetry_pfs_metrics.cc
+table_malloc_stats.cc
+table_malloc_stats.h
 )
 MYSQL_ADD_PLUGIN(perfschema ${PERFSCHEMA_SOURCES}
   STORAGE_ENGINE MANDATORY STATIC_ONLY
-  LINK_LIBRARIES extra::rapidjson ext::zlib mysql_gtid extra::unordered_dense
+  LINK_LIBRARIES extra::rapidjson extra::boost
+    ext::zlib mysql_gtid extra::unordered_dense
   )
 IF(WITH_UNIT_TESTS)
   ADD_SUBDIRECTORY(unittest)

@@ -68,7 +68,7 @@ class udf_list {
   bool unregister() {
     udf_list_t delete_set;
     /* try to unregister all of the udfs */
-    for (auto udf : set) {
+    for (const auto &udf : set) {
       int was_present = 0;
       if (!mysql_service_udf_registration->udf_unregister(udf.c_str(),
                                                           &was_present) ||
@@ -77,7 +77,7 @@ class udf_list {
     }
 
     /* remove the unregistered ones from the list */
-    for (auto udf : delete_set) set.remove(udf);
+    for (const auto &udf : delete_set) set.remove(udf);
 
     /* success: empty set */
     if (set.empty()) return false;
@@ -113,7 +113,7 @@ static char *test_get_status_var(UDF_INIT *initid, UDF_ARGS *args,
                                  char * /* result */, unsigned long *length,
                                  unsigned char *is_null, unsigned char *error) {
   my_h_string str = nullptr;
-  bool get_global = *(reinterpret_cast<long long *>(args->args[1])) == 0;
+  bool const get_global = *(reinterpret_cast<long long *>(args->args[1])) == 0;
   MYSQL_THD thd = nullptr;
 
   if (!get_global && mysql_service_mysql_current_thread_reader->get(&thd)) {

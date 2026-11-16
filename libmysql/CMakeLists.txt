@@ -208,12 +208,6 @@ IF (WIN32 AND OPENSSL_APPLINK_C)
   )
 ENDIF()
 
-IF ((NOT WITHOUT_MYSQL_NATIVE_PASSWORD)
-  OR (WITHOUT_MYSQL_NATIVE_PASSWORD EQUAL 0))
-  LIST(APPEND CLIENT_SOURCES
-    ../sql-common/mysql_native_authentication_client.cc)
-ENDIF()
-
 #
 # Include protocol tracing infrastructure and the test
 # trace plugin if enabled by build options.
@@ -307,15 +301,21 @@ ADD_SUBDIRECTORY(authentication_oci_client)
 # Fido and Webauthn clients
 ADD_SUBDIRECTORY(fido_client)
 
-# Merge several convenience libraries into one big mysqlclient
-MERGE_CONVENIENCE_LIBRARIES(mysqlclient ${LIBS_TO_MERGE}
+# authentication mysql_native_password client plug-in
+ADD_SUBDIRECTORY(authentication_native_password)
+
+# authentication openid connect client plug-in
+ADD_SUBDIRECTORY(authentication_openid_connect_client)
+
+# Merge several convenience libraries into one big perconaserverclient
+MERGE_CONVENIENCE_LIBRARIES(perconaserverclient ${LIBS_TO_MERGE}
   COMPONENT Development
   LINK_LIBRARIES ${LIBS_TO_LINK}
   )
 
 # Visual Studio users need debug  static library for debug projects
 IF(MSVC)
-  INSTALL_DEBUG_TARGET(mysqlclient DESTINATION ${INSTALL_LIBDIR}/debug)
+  INSTALL_DEBUG_TARGET(perconaserverclient DESTINATION ${INSTALL_LIBDIR}/debug)
 
   INSTALL_DEBUG_TARGET(auth_win_client DESTINATION ${INSTALL_LIBDIR}/debug)
   INSTALL_DEBUG_TARGET(clientlib DESTINATION ${INSTALL_LIBDIR}/debug)
@@ -350,13 +350,13 @@ IF(UNIX)
     STRING_APPEND(OS_SHARED_LIB_VERSION
       ".${SHARED_LIB_MINOR_VERSION}.${SHARED_LIB_PATCH_VERSION}")
   ENDIF()
-  # Name of shared library is libmysqlclient on Unix
-  SET(UNIX_OUTPUT_NAME OUTPUT_NAME mysqlclient)
+  # Name of shared library is libperconaserverclient on Unix
+  SET(UNIX_OUTPUT_NAME OUTPUT_NAME perconaserverclient)
   SET(UNIX_VERSION     VERSION     "${OS_SHARED_LIB_VERSION}")
   SET(UNIX_SOVERSION   SOVERSION   "${SHARED_LIB_MAJOR_VERSION}")
 ENDIF()
 
-# Merge several convenience libraries into one big mysqlclient
+# Merge several convenience libraries into one big perconaserverclient
 # and link them together into shared library.
 MERGE_LIBRARIES_SHARED(libmysql ${LIBS_TO_MERGE}
   EXPORTS
@@ -372,28 +372,28 @@ MERGE_LIBRARIES_SHARED(libmysql ${LIBS_TO_MERGE}
 
 # Downgrade warning for strncat in my_crypt_genhash.
 IF((WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO) AND MY_COMPILER_IS_GNU)
-  MY_TARGET_LINK_OPTIONS(libmysql "-Wno-error=stringop-truncation")
+  TARGET_LINK_OPTIONS(libmysql PRIVATE -Wno-error=stringop-truncation)
 ENDIF()
 
 IF(LINUX_STANDALONE AND KERBEROS_CUSTOM_LIBRARY)
   ADD_DEPENDENCIES(libmysql ${kerberos_target})
-  ADD_DEPENDENCIES(mysqlclient ${kerberos_target})
+  ADD_DEPENDENCIES(perconaserverclient ${kerberos_target})
 ENDIF()
 
 IF(UNIX)
   IF(LINK_FLAG_Z_DEFS)
-    MY_TARGET_LINK_OPTIONS(libmysql "LINKER:${LINK_FLAG_Z_DEFS}")
+    TARGET_LINK_OPTIONS(libmysql PRIVATE LINKER:${LINK_FLAG_Z_DEFS})
   ENDIF()
 
   IF(LINUX)
     CONFIGURE_FILE(libmysql.ver.in ${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver)
-    MY_TARGET_LINK_OPTIONS(libmysql
-      "LINKER:--version-script=${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver")
+    TARGET_LINK_OPTIONS(libmysql PRIVATE
+      LINKER:--version-script=${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver)
   ENDIF()
 
   # clean direct output needs to be set several targets have the same name
-  #(mysqlclient in this case)
-  SET_TARGET_PROPERTIES(mysqlclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+  #(perconaserverclient in this case)
+  SET_TARGET_PROPERTIES(perconaserverclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
   SET_TARGET_PROPERTIES(libmysql PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 ENDIF()
 

@@ -116,6 +116,7 @@ class udf_handler {
  protected:
   udf_func *u_d;
   String *buffers{nullptr};
+  String *arg_buffers{nullptr};
   UDF_ARGS f_args;
   UDF_INIT initid;
   char *num_buffer{nullptr};
@@ -197,13 +198,13 @@ class udf_handler {
   my_decimal *val_decimal(bool *null_value, my_decimal *dec_buf);
   String *val_str(String *str, String *save_str);
   void clear();
-  void add(bool *null_value);
+  bool add(bool *null_value);
 
  private:
   bool get_arguments();
   String *result_string(const char *res, size_t res_length, String *str,
                         String *save_str);
-  void get_string(uint index);
+  bool get_string(uint index);
   bool get_and_convert_string(uint index);
 };
 

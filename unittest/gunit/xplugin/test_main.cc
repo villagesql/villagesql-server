@@ -24,7 +24,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <stdio.h>
+#include <cstdio>
 
 #include "my_sys.h"
 #include "mysql/strings/m_ctype.h"

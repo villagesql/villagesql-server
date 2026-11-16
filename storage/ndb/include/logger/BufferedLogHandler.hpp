@@ -26,7 +26,7 @@
 #ifndef STORAGE_NDB_INCLUDE_LOGGER_BUFFEREDLOGHANDLER_HPP_
 #define STORAGE_NDB_INCLUDE_LOGGER_BUFFEREDLOGHANDLER_HPP_
 
-#include <time.h>
+#include <ctime>
 
 #include <NdbThread.h>
 #include <LogBuffer.hpp>

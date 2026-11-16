@@ -173,29 +173,6 @@ bool set_thread_priority(int priority, my_thread_os_id_t thread_id) {
   return res == FALSE;
 }
 
-uint32_t num_vcpus_using_affinity() {
-  uint32_t num_vcpus = 0;
-
-  DWORD_PTR process_affinity_mask;
-  DWORD_PTR system_affinity_mask;
-
-  if (GetProcessAffinityMask(GetCurrentProcess(), &process_affinity_mask,
-                             &system_affinity_mask)) {
-    for (num_vcpus = 0; process_affinity_mask != 0; process_affinity_mask >>= 1)
-      if (process_affinity_mask & 1) num_vcpus++;
-  }
-  return num_vcpus;
-}  // namespace platform
-
-uint32_t num_vcpus_using_config() {
-  cpu_id_t num_vcpus = 0;
-
-  SYSTEM_INFO si;
-  GetSystemInfo(&si);
-  num_vcpus = si.dwNumberOfProcessors;
-  return num_vcpus;
-}
-
 bool can_thread_priority_be_set() { return true; }
 }  // namespace platform
 }  // namespace resourcegroups

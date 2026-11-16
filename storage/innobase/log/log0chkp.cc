@@ -56,7 +56,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 /* dict_persist_to_dd_table_buffer */
 #include "dict0dict.h"
 
-/* log_buffer_dirty_pages_added_up_to_lsn */
+/* log_buffer_ready_for_write_lsn */
 #include "log0buf.h"
 
 #include "log0chkp.h"
@@ -72,6 +72,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 /* recv_recovery_is_on() */
 #include "log0recv.h"
+
+#include "mysqld.h"
 
 /* log_t::X */
 #include "log0sys.h"
@@ -170,15 +172,16 @@ and we don't want to spend time on traversing the whole flush lists here.
 Note that some flush lists could be empty, and some additions of dirty pages
 could be pending (threads have written data to the log buffer and became
 scheduled out just before adding the dirty pages). That's why the calculated
-value cannot be larger than the log.buf_dirty_pages_added_up_to_lsn (only up
-to this lsn value we are sure, that all the dirty pages have been added).
+value cannot be larger than the buf_flush_list_added->smallest_not_added_lsn()
+(only up to this lsn value we are sure, that all the dirty pages have been
+added).
 
 It is guaranteed, that the returned value will not be smaller than
 the log.last_checkpoint_lsn.
 
 @return lsn for which we might write the checkpoint */
 static lsn_t log_compute_available_for_checkpoint_lsn(const log_t &log) {
-  /* The log_buffer_dirty_pages_added_up_to_lsn() can only increase,
+  /* The buf_flush_list_added->smallest_not_added_lsn() can only increase,
   and that happens only after all related dirty pages have been added
   to the flush lists.
 
@@ -196,7 +199,7 @@ static lsn_t log_compute_available_for_checkpoint_lsn(const log_t &log) {
 
   log_sync_point("log_get_available_for_chkp_lsn_before_dpa");
 
-  const lsn_t dpa_lsn = log_buffer_dirty_pages_added_up_to_lsn(log);
+  const lsn_t dpa_lsn = buf_flush_list_added->smallest_not_added_lsn();
 
   ut_ad(dpa_lsn >= log.last_checkpoint_lsn.load() ||
         !log_checkpointer_mutex_own(log));
@@ -277,14 +280,14 @@ static void log_update_available_for_checkpoint_lsn(log_t &log) {
   }
 
   /* Update lsn available for checkpoint. */
-  log.recent_closed.advance_tail();
   const lsn_t oldest_lsn = log_compute_available_for_checkpoint_lsn(log);
 
   log_limits_mutex_enter(log);
 
   /* 1. The oldest_lsn can decrease in case previously buffer pool flush
         lists were empty and now a new dirty page appeared, which causes
-        a maximum delay of log.recent_closed_size being suddenly subtracted.
+        a maximum delay of buf_flush_list_added->order_lag() being suddenly
+        subtracted.
 
      2. Race between concurrent log_update_available_for_checkpoint_lsn is
         also possible. */
@@ -449,7 +452,7 @@ static void log_checkpoint(log_t &log) {
   /* Read the comment from log_should_checkpoint() from just before
   acquiring the limits mutex. It is ok if available_for_checkpoint_lsn
   is advanced just after we released limits_mutex here. It can only be
-  increaed. Also, if the value for which we will write checkpoint is
+  increased. Also, if the value for which we will write checkpoint is
   higher than the value for which we decided that it is worth to write
   checkpoint (in log_should_checkpoint) - it is even better for us. */
 
@@ -469,7 +472,7 @@ static void log_checkpoint(log_t &log) {
 
   ut_a(checkpoint_lsn >= log.last_checkpoint_lsn.load());
 
-  ut_a(checkpoint_lsn <= log_buffer_dirty_pages_added_up_to_lsn(log));
+  ut_a(checkpoint_lsn <= buf_flush_list_added->smallest_not_added_lsn());
 
 #ifdef UNIV_DEBUG
   if (checkpoint_lsn > log.flushed_to_disk_lsn.load()) {
@@ -751,7 +754,7 @@ lsn_t log_sync_flush_lsn(log_t &log) {
   }
 
   if (flush_up_to > oldest_lsn) {
-    flush_up_to += log_buffer_flush_order_lag(log);
+    flush_up_to += buf_flush_list_added->order_lag();
 
     return flush_up_to;
   }
@@ -845,9 +848,9 @@ static bool log_should_checkpoint(log_t &log) {
   checkpoint_age = current_lsn + margin - last_checkpoint_lsn;
 
   /* Update checkpoint_lsn stored in header of log files if:
-          a) periodical checkpoints are enabled and either more than 1s
-             elapsed since the last checkpoint or checkpoint could be
-             written in the next redo log file,
+
+          a) periodical checkpoints are enabled and more than 1s
+             elapsed since the last checkpoint,
           b) or checkpoint age is greater than aggressive_checkpoint_min_age,
           c) or it was requested to have greater checkpoint_lsn,
              and oldest_lsn allows to satisfy the request. */
@@ -865,19 +868,7 @@ static bool log_should_checkpoint(log_t &log) {
     return false;
   }
 
-  /* Below is the check if a periodical checkpoint should be written. */
-  IB_mutex_guard files_lock{&log.m_files_mutex, UT_LOCATION_HERE};
-
-  const auto checkpoint_file = log.m_files.find(last_checkpoint_lsn);
-  ut_a(checkpoint_file != log.m_files.end());
-  ut_a(!checkpoint_file->m_consumed);
-
-  const auto checkpoint_time_elapsed = log_checkpoint_time_elapsed(log);
-
-  ut_a(last_checkpoint_lsn < checkpoint_file->m_end_lsn);
-
-  return checkpoint_time_elapsed >= get_srv_log_checkpoint_every() ||
-         checkpoint_file->m_end_lsn < oldest_lsn;
+  return get_srv_log_checkpoint_every() <= log_checkpoint_time_elapsed(log);
 }
 
 static void log_consider_checkpoint(log_t &log) {
@@ -973,9 +964,9 @@ void log_checkpointer(log_t *log_ptr) {
         ut_a(end_lsn == log.flushed_to_disk_lsn.load());
         ut_a(end_lsn == log_buffer_ready_for_write_lsn(log));
 
-        ut_a(end_lsn >= log_buffer_dirty_pages_added_up_to_lsn(log));
+        ut_a(end_lsn >= buf_flush_list_added->smallest_not_added_lsn());
 
-        if (log_buffer_dirty_pages_added_up_to_lsn(log) == end_lsn) {
+        if (buf_flush_list_added->smallest_not_added_lsn() == end_lsn) {
           /* All confirmed reservations have been written
           to redo and all dirty pages related to those
           writes have been added to flush lists.
@@ -995,7 +986,7 @@ void log_checkpointer(log_t *log_ptr) {
 
           if (current_lsn > ready_lsn) {
             log.recent_written.validate_no_links(ready_lsn, current_lsn);
-            log.recent_closed.validate_no_links(ready_lsn, current_lsn);
+            buf_flush_list_added->validate_not_added(ready_lsn, current_lsn);
           }
 
           break;

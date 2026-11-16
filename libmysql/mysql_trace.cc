@@ -55,7 +55,7 @@
 */
 
 #include "mysql_trace.h"
-#include <assert.h>
+#include <cassert>
 
 #include "my_inttypes.h"
 #include "my_sys.h"

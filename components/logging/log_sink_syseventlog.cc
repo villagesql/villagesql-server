@@ -21,22 +21,19 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <mysql/components/services/log_builtins.h>
-
 #include "log_service_imp.h"
 #include "m_string.h"  // native_strncasecmp()/native_strcasecmp()
 #include "my_compiler.h"
-#include "my_io.h"
-#include "my_sys.h"
 #include "mysqld_error.h"  // so we can throw ER_LOG_SYSLOG_*
 
 #include <mysql/components/component_implementation.h>
 #include <mysql/components/service_implementation.h>
+#include <mysql/components/services/log_builtins.h>
 
+#include <mysql/components/services/bits/my_io_bits.h>
+#include <mysql/components/services/bits/my_syslog_bits.h>
 #include <mysql/components/services/component_sys_var_service.h>
-#include <mysql/plugin.h>
-
-#include "../sql/set_var.h"
+#include <mysql/components/services/mysql_system_variable.h>
 
 #ifndef _WIN32
 #include <syslog.h>  // LOG_DAEMON etc. -- facility names
@@ -91,11 +88,18 @@ static SYSLOG_FACILITY syslog_facility[] = {
 #endif
 #define OPT_TAG "tag"
 
+#ifdef _WIN32
+#define OS_PATH_SEPARATOR '\\'
+#else
+#define OS_PATH_SEPARATOR '/'
+#endif /* _WIN32 */
+
 static bool inited = false; /**< component initialized */
 
 // components we'll be using
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_register);
 REQUIRES_SERVICE_PLACEHOLDER(component_sys_variable_unregister);
+REQUIRES_SERVICE_PLACEHOLDER(mysql_system_variable_reader);
 
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
@@ -246,7 +250,7 @@ static void log_syslog_reopen() {
 /**
   Stop using syslog / EventLog. Call as late as possible.
 */
-void log_syslog_exit(void) {
+void log_syslog_exit() {
   log_syslog_close();
 
   // free ident.
@@ -294,7 +298,8 @@ static int var_update_tag(const char *tag) {
   bool ident_changed = false;
 
   // tag must not contain directory separators
-  if ((tag != nullptr) && (strchr(tag, FN_LIBCHAR) != nullptr)) return -1;
+  if ((tag != nullptr) && (strchr(tag, OS_PATH_SEPARATOR) != nullptr))
+    return -1;
 
   /*
     make ident
@@ -344,10 +349,8 @@ static int var_update_tag(const char *tag) {
 static int var_check_fac(const char *fac) {
   SYSLOG_FACILITY rsf;
 
-  if (log_syslog_find_facility(fac, &rsf))
-    return -1;
-  else if (log_bs->length(fac) >= MAX_FAC_LEN)
-    return -2; /* purecov: inspected */
+  if (log_syslog_find_facility(fac, &rsf)) return -1;
+  if (log_bs->length(fac) >= MAX_FAC_LEN) return -2; /* purecov: inspected */
   return 0;
 }
 
@@ -468,7 +471,7 @@ static void sysvar_update_tag(MYSQL_THD thd [[maybe_unused]],
   @retval 0   success
   @retval -1  failure
 */
-static int sysvar_install_tag(void) {
+static int sysvar_install_tag() {
   char *var_value;
   char *new_value;
   size_t var_len = MAX_TAG_LEN;
@@ -491,8 +494,8 @@ static int sysvar_install_tag(void) {
           "default ident of '" PREFIX "', connected by a hyphen.",
           sysvar_check_tag, sysvar_update_tag, (void *)&values_tag,
           (void *)&buffer_tag) ||
-      mysql_service_component_sys_variable_register->get_variable(
-          MY_NAME, OPT_TAG, (void **)&var_value, &var_len))
+      mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", MY_NAME, OPT_TAG, (void **)&var_value, &var_len))
     goto done; /* purecov: inspected */
 
   /*
@@ -602,7 +605,7 @@ static void sysvar_update_fac(MYSQL_THD thd [[maybe_unused]],
   @retval 0   success
   @retval -1  failure
 */
-static int sysvar_install_fac(void) {
+static int sysvar_install_fac() {
   char *var_value;
   char *new_value;
   size_t var_len = MAX_FAC_LEN;
@@ -620,8 +623,8 @@ static int sysvar_install_fac(void) {
           "identify as a facility of the given type (to aid in log filtering).",
           sysvar_check_fac, sysvar_update_fac, (void *)&values_fac,
           (void *)&buffer_fac) ||
-      mysql_service_component_sys_variable_register->get_variable(
-          MY_NAME, OPT_FAC, (void **)&var_value, &var_len))
+      mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", MY_NAME, OPT_FAC, (void **)&var_value, &var_len))
     goto done; /* purecov: inspected */
 
   /*
@@ -690,7 +693,7 @@ static void sysvar_update_pid(MYSQL_THD thd [[maybe_unused]],
   @retval 0   success
   @retval -1  failure
 */
-static int sysvar_install_pid(void) {
+static int sysvar_install_pid() {
   char *var_value = nullptr;
   size_t var_len = 15;
   bool var_bool;
@@ -710,8 +713,8 @@ static int sysvar_install_pid(void) {
           (void *)&log_syslog_include_pid) ||
 
       // get variable in case it was PERSISTed
-      mysql_service_component_sys_variable_register->get_variable(
-          MY_NAME, OPT_PID, (void **)&var_value, &var_len))
+      mysql_service_mysql_system_variable_reader->get(
+          nullptr, "GLOBAL", MY_NAME, OPT_PID, (void **)&var_value, &var_len))
     goto done; /* purecov: inspected */
 
   // set the (possibly PERSISTed) value we received from the server
@@ -959,6 +962,7 @@ PROVIDES_SERVICE(log_sink_syseventlog, log_service), END_COMPONENT_PROVIDES();
 BEGIN_COMPONENT_REQUIRES(log_sink_syseventlog)
 REQUIRES_SERVICE(component_sys_variable_register),
     REQUIRES_SERVICE(component_sys_variable_unregister),
+    REQUIRES_SERVICE(mysql_system_variable_reader),
     REQUIRES_SERVICE(log_builtins), REQUIRES_SERVICE(log_builtins_string),
     REQUIRES_SERVICE(log_builtins_syseventlog),
 #ifdef _WIN32

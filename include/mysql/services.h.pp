@@ -107,7 +107,6 @@ typedef uint64_t uint64;
 typedef intptr_t intptr;
 typedef ulonglong my_off_t;
 typedef int myf;
-#include "my_macros.h"
 typedef enum {
   TRUNCATE = 0,
   HALF_EVEN,
@@ -117,7 +116,9 @@ typedef enum {
 } decimal_round_mode;
 typedef int32 decimal_digit_t;
 struct decimal_t {
-  int intg, frac, len;
+  int intg;
+  int frac;
+  int len;
   bool sign;
   decimal_digit_t *buf;
 };

@@ -62,13 +62,57 @@
 #include "sql/window.h"
 #include "template_utils.h"
 
+namespace {
+
+// Convenience functions.
+bool IsMaterializePathForDeduplication(AccessPath *path) {
+  return path->type == AccessPath::MATERIALIZE &&
+         path->materialize().param->deduplication_reason !=
+             MaterializePathParameters::NO_DEDUP;
+}
+bool IsMaterializePathForDistinct(AccessPath *path) {
+  return path->type == AccessPath::MATERIALIZE &&
+         path->materialize().param->deduplication_reason ==
+             MaterializePathParameters::DEDUP_FOR_DISTINCT;
+}
+bool IsMaterializePathForGroupBy(AccessPath *path) {
+  return path->type == AccessPath::MATERIALIZE &&
+         path->materialize().param->deduplication_reason ==
+             MaterializePathParameters::DEDUP_FOR_GROUP_BY;
+}
+
+/**
+  Search for visible BIT items, and return true if found. Used specifically for
+  avoiding bit-to-long type conversion of visible join fields.
+ */
+bool HasVisibleBitItems(bool is_distinct,
+                        mem_root_deque<Item *> *distinct_items,
+                        bool is_group_by, ORDER *group) {
+  if (is_distinct && std::any_of(distinct_items->cbegin(),
+                                 distinct_items->cend(), [](const Item *item) {
+                                   return !item->hidden &&
+                                          item->data_type() == MYSQL_TYPE_BIT;
+                                 })) {
+    return true;
+  }
+  // It may happen that a GROUP BY item points to a visible join field. This
+  // also will cause the join field to change its type.
+  if (is_group_by) {
+    for (ORDER *tmp = group; tmp; tmp = tmp->next) {
+      if (!(*tmp->item)->hidden && (*tmp->item)->data_type() == MYSQL_TYPE_BIT)
+        return true;
+    }
+  }
+  return false;
+}
+
 /**
   Replaces field references in an ON DUPLICATE KEY UPDATE clause with references
   to corresponding fields in a temporary table. The changes will be rolled back
   at the end of execution and will have to be redone during optimization in the
   next execution.
  */
-static void ReplaceUpdateValuesWithTempTableFields(
+void ReplaceUpdateValuesWithTempTableFields(
     Sql_cmd_insert_select *sql_cmd, Query_block *query_block,
     const mem_root_deque<Item *> &original_fields,
     const mem_root_deque<Item *> &temp_table_fields) {
@@ -112,8 +156,7 @@ static void ReplaceUpdateValuesWithTempTableFields(
   @param items A collection of items. We add items that satisfy the search
                criteria to this collection.
  */
-static void CollectItemsWithoutRollup(Item *root,
-                                      mem_root_deque<Item *> *items) {
+void CollectItemsWithoutRollup(Item *root, mem_root_deque<Item *> *items) {
   CompileItem(
       root,
       [items](Item *item) {
@@ -145,12 +188,20 @@ static void CollectItemsWithoutRollup(Item *root,
   again later with after_aggregation = false, as count_field_types() will
   remove item->has_aggregation() once called. Thus, we need to set up all
   these temporary tables in FinalizePlanForQueryBlock(), in the right order.
+  'is_group_by'=true indicates that the temp table is to be created with rows
+  grouped using GROUP BY items.
+  'is_distinct'=true indicates that the temp table is to be created with
+  distinct rows. (corresponds to SELECT DISTINCT ...)
  */
-static TABLE *CreateTemporaryTableFromSelectList(
+TABLE *CreateTemporaryTableFromSelectList(
     THD *thd, Query_block *query_block, Window *window,
-    Temp_table_param **temp_table_param_arg, bool after_aggregation) {
+    Temp_table_param **temp_table_param_arg, bool after_aggregation,
+    bool is_group_by = false, bool is_distinct = false) {
   JOIN *join = query_block->join;
+  ORDER *group = (is_group_by ? join->group_list.order : nullptr);
   mem_root_deque<Item *> *items_to_materialize = join->fields;
+
+  assert(!(is_group_by && is_distinct));  // Both cannot be true.
 
   // We always materialize the items in join->fields. In the pre-aggregation
   // case where we have rollup items in join->fields we additionally add the
@@ -172,7 +223,17 @@ static TABLE *CreateTemporaryTableFromSelectList(
     }
   }
 
-  Temp_table_param *temp_table_param = new (thd->mem_root) Temp_table_param;
+  Temp_table_param *temp_table_param =
+      new (thd->mem_root) Temp_table_param(thd->mem_root);
+
+  // This is for setting group_parts.
+  if (group != nullptr) calc_group_buffer(join, group, temp_table_param);
+
+  // For BIT fields we use hashing as the deduplication method since indexing
+  // on bit fields doesn't always work
+  if (HasVisibleBitItems(is_distinct, items_to_materialize, is_group_by, group))
+    temp_table_param->force_hash_field_for_unique = true;
+
   *temp_table_param_arg = temp_table_param;
   assert(!temp_table_param->precomputed_group_by);
   assert(!temp_table_param->skip_create_table);
@@ -180,12 +241,14 @@ static TABLE *CreateTemporaryTableFromSelectList(
   count_field_types(query_block, temp_table_param, *items_to_materialize,
                     /*reset_with_sum_func=*/after_aggregation,
                     /*save_sum_fields=*/after_aggregation);
+  temp_table_param->hidden_field_count =
+      CountHiddenFields(*items_to_materialize);
 
   TABLE *temp_table = create_tmp_table(
-      thd, temp_table_param, *items_to_materialize,
-      /*group=*/nullptr, /*distinct=*/false,
+      thd, temp_table_param, *items_to_materialize, group, is_distinct,
       /*save_sum_fields=*/after_aggregation, query_block->active_options(),
       /*rows_limit=*/HA_POS_ERROR, "<temporary>");
+  if (temp_table == nullptr) return nullptr;
 
   if (after_aggregation) {
     // Most items have been added to items_to_copy in create_tmp_field(), but
@@ -246,17 +309,73 @@ static TABLE *CreateTemporaryTableFromSelectList(
 /**
   Replaces the items in the SELECT list with items that point to fields in a
   temporary table. See FinalizePlanForQueryBlock() for more information.
+  Also creates a new items_to_copy list made up of aggregate items that were
+  not found while finding replacement. These items need to be added in
+  'applied_replacements' so that further items get a direct match for subsequent
+  occurences of these items, rather than generating a new replacement.
+  Without this, the replacement does not propagate from the bottom to
+  the top plan node.
  */
-static void ReplaceSelectListWithTempTableFields(
-    THD *thd, JOIN *join, const Func_ptr_array &items_to_copy) {
+void ReplaceSelectListWithTempTableFields(
+    THD *thd, JOIN *join, const Func_ptr_array &items_to_copy,
+    Mem_root_array<const Func_ptr_array *> *applied_replacements) {
   auto fields = new (thd->mem_root) mem_root_deque<Item *>(thd->mem_root);
+  Func_ptr_array *agg_items_to_copy =
+      new (thd->mem_root) Func_ptr_array(thd->mem_root);
+
   for (Item *item : *join->fields) {
-    fields->push_back(
-        FindReplacementOrReplaceMaterializedItems(thd, item, items_to_copy,
-                                                  /*need_exact_match=*/true));
+    fields->push_back(FindReplacementOrReplaceMaterializedItems(
+        thd, item, items_to_copy,
+        /*need_exact_match=*/true, agg_items_to_copy));
   }
   join->fields = fields;
+  if (!agg_items_to_copy->empty())
+    applied_replacements->push_back(agg_items_to_copy);
 }
+
+/**
+  In hypergraph optimizer, slices are currently used only for temp tables
+  created for GROUP BY; i.e. temp table aggregation and materialization with
+  deduplication (not for DISTINCT deduplication or UNION deduplication).
+
+  For GROUP BY, we require slices to handle subqueries in HAVING clause.
+
+  For DISTINCT, we don't require slices. ORDER BY clause is the only clause
+  that is appled after DISTINCT. And the ORDER BY expression is always added as
+  a hidden select item, and the temp table always has this item as one of its
+  columns.  This means that the expression is already evaluated and
+  materialized in the temp table; there is no further evaluation. If it were
+  not materialized, any Item refs (e.g. if the expression is a subquery) would
+  have required a temp table slice for evaluation, but because it is already
+  materialized, we don't require slices.
+
+  (Note: The temp-table item replacement infrastructure doesn't support items
+  inside subqueries, hence slices).
+*/
+bool InitTmpTableSliceRefs(THD *thd, AccessPath *path, JOIN *join) {
+  // These are the only scenarios that use temp table for GROUP BY.
+  if (path->type != AccessPath::TEMPTABLE_AGGREGATE &&
+      !IsMaterializePathForGroupBy(path))
+    return false;
+
+  // There can only be *one* temp table slice required, because there is only
+  // *one* group-by clause in a query block.
+  assert(join->ref_items[REF_SLICE_TMP1].is_null());
+
+  // Create the tmp table slice from the updated join fields.
+  if (join->alloc_ref_item_slice(thd, REF_SLICE_TMP1)) return true;
+  join->assign_fields_to_slice(REF_SLICE_TMP1);
+
+  // Create a slot for backing up a slice, and set that slot as the current
+  // slice.
+  if (join->alloc_ref_item_slice(thd, REF_SLICE_SAVED_BASE)) return true;
+  join->copy_ref_item_slice(REF_SLICE_SAVED_BASE, REF_SLICE_ACTIVE);
+  join->current_ref_item_slice = REF_SLICE_SAVED_BASE;
+
+  return false;
+}
+
+}  // namespace
 
 void ReplaceOrderItemsWithTempTableFields(THD *thd, ORDER *order,
                                           const Func_ptr_array &items_to_copy) {
@@ -280,8 +399,8 @@ void ReplaceOrderItemsWithTempTableFields(THD *thd, ORDER *order,
   }
 }
 
-#ifndef NDEBUG
 namespace {
+#ifndef NDEBUG
 /// @return The tables used by the order items.
 table_map GetUsedTableMap(const ORDER *order) {
   table_map tables = 0;
@@ -315,6 +434,32 @@ table_map GetUsedTableMap(const ORDER *order) {
  */
 bool OrderItemsReferenceUnavailableTables(
     const AccessPath *sort_path, table_map used_tables_before_replacement) {
+  bool has_temptable_aggregation = false;
+
+  // Do not attempt this if there are temp table aggregation plans. The ORDER
+  // BY (and HAVING) items sometimes rely on the ref slices and so avoid the
+  // temp-table replacement. One such case is when they are of the form "ORDER
+  // BY <expression using column_alias>" where column_alias is a SELECT
+  // aggregate expression that does not have a corresponding temp table field.
+  // In such cases, when there is no direct replacement of the
+  // Item_aggregate_refs or Item_refs in the temp table fields, the replacement
+  // logic does not go down into the items they refer to to replace the inner
+  // fields. Instead, the ref slices take care of it: the ref items start
+  // referring to the appropriate temp table slice during SORT execution. So
+  // the WalkItem() logic below will traverse through the Item_ref items and
+  // incorrectly find the base tables.
+  WalkAccessPaths(
+      const_cast<AccessPath *>(sort_path), /*join=*/nullptr,
+      WalkAccessPathPolicy::STOP_AT_MATERIALIZATION,
+      [&has_temptable_aggregation](AccessPath *subpath, const JOIN *) {
+        if (subpath->type == AccessPath::TEMPTABLE_AGGREGATE) {
+          has_temptable_aggregation = true;
+          return true;
+        }
+        return false;
+      });
+  if (has_temptable_aggregation) return false;
+
   // Find which of the base tables referenced from the order items are
   // materialized below the sort path.
   const table_map materialized_base_tables =
@@ -337,9 +482,9 @@ bool OrderItemsReferenceUnavailableTables(
                  [materialized_base_tables](Item *item) {
                    if (item->type() == Item::FIELD_ITEM) {
                      Item_field *item_field = down_cast<Item_field *>(item);
-                     return item_field->table_ref != nullptr &&
+                     return item_field->m_table_ref != nullptr &&
                             !item_field->is_outer_reference() &&
-                            Overlaps(item_field->table_ref->map(),
+                            Overlaps(item_field->m_table_ref->map(),
                                      materialized_base_tables);
                    }
                    return false;
@@ -350,14 +495,13 @@ bool OrderItemsReferenceUnavailableTables(
 
   return false;
 }
-}  // namespace
 #endif
 
 // If the AccessPath is an operation that copies items into a temporary
 // table (MATERIALIZE, STREAM or WINDOW) within the same query block,
 // returns the items it's copying (in the form of temporary table parameters).
 // If not, return nullptr.
-static Temp_table_param *GetItemsToCopy(AccessPath *path) {
+Temp_table_param *GetItemsToCopy(AccessPath *path) {
   if (path->type == AccessPath::STREAM) {
     if (path->stream().table->pos_in_table_list != nullptr) {
       // Materializes a different query block.
@@ -377,6 +521,9 @@ static Temp_table_param *GetItemsToCopy(AccessPath *path) {
     }
     return param->m_operands[0].temp_table_param;
   }
+  if (path->type == AccessPath::TEMPTABLE_AGGREGATE) {
+    return path->temptable_aggregate().temp_table_param;
+  }
   if (path->type == AccessPath::WINDOW) {
     return path->window().temp_table_param;
   }
@@ -384,7 +531,7 @@ static Temp_table_param *GetItemsToCopy(AccessPath *path) {
 }
 
 /// See FinalizePlanForQueryBlock().
-static void UpdateReferencesToMaterializedItems(
+bool UpdateReferencesToMaterializedItems(
     THD *thd, Query_block *query_block, AccessPath *path,
     bool after_aggregation,
     Mem_root_array<const Func_ptr_array *> *applied_replacements) {
@@ -403,8 +550,12 @@ static void UpdateReferencesToMaterializedItems(
     applied_replacements->push_back(temp_table_param->items_to_copy);
 
     // Update SELECT list and IODKU references.
-    ReplaceSelectListWithTempTableFields(thd, join,
-                                         *temp_table_param->items_to_copy);
+    ReplaceSelectListWithTempTableFields(
+        thd, join, *temp_table_param->items_to_copy, applied_replacements);
+
+    // Now that the SELECT list is updated, build tmp table slice out of it.
+    if (InitTmpTableSliceRefs(thd, path, join)) return true;
+
     if (thd->lex->sql_command == SQLCOM_INSERT_SELECT) {
       ReplaceUpdateValuesWithTempTableFields(
           down_cast<Sql_cmd_insert_select *>(thd->lex->m_sql_cmd), query_block,
@@ -420,8 +571,7 @@ static void UpdateReferencesToMaterializedItems(
       // rollup functions, so we get inconsistency.
       //
       // Thus, unwrap the remaining layer here.
-      const auto replace_functor = [](Item *sub_item, Item *,
-                                      unsigned) -> ReplaceResult {
+      const auto replace_functor = [](Item *sub_item) -> ReplaceResult {
         if (is_rollup_group_wrapper(sub_item)) {
           return {ReplaceResult::REPLACE, unwrap_rollup_group(sub_item)};
         } else {
@@ -447,17 +597,6 @@ static void UpdateReferencesToMaterializedItems(
 
     assert(!OrderItemsReferenceUnavailableTables(
         path, used_tables_before_replacement));
-
-    // Set up a Filesort object for this sort.
-    path->sort().filesort = new (thd->mem_root)
-        Filesort(thd, CollectTables(thd, path),
-                 /*keep_buffers=*/false, path->sort().order, path->sort().limit,
-                 path->sort().remove_duplicates, path->sort().force_sort_rowids,
-                 path->sort().unwrap_rollup);
-    join->filesorts_to_cleanup.push_back(path->sort().filesort);
-    if (!path->sort().filesort->using_addon_fields()) {
-      FindTablesToGetRowidFor(path);
-    }
   } else if (path->type == AccessPath::FILTER) {
     // Only really relevant for in2exists filters that run after windowing, and
     // for some cases of HAVING clauses.
@@ -471,15 +610,16 @@ static void UpdateReferencesToMaterializedItems(
           need_exact_match);
     }
   } else if (path->type == AccessPath::REMOVE_DUPLICATES) {
-    Item **group_items = path->remove_duplicates().group_items;
-    for (int i = 0; i < path->remove_duplicates().group_items_size; ++i) {
+    for (Item *&group_item : path->remove_duplicates().group_items()) {
       for (const Func_ptr_array *earlier_replacement : *applied_replacements) {
-        group_items[i] = FindReplacementOrReplaceMaterializedItems(
-            thd, group_items[i], *earlier_replacement,
+        group_item = FindReplacementOrReplaceMaterializedItems(
+            thd, group_item, *earlier_replacement,
             /*need_exact_match=*/true);
       }
     }
   }
+
+  return false;
 }
 
 /**
@@ -490,11 +630,10 @@ static void UpdateReferencesToMaterializedItems(
   materialization access path coming right after this window, if any,
   so it uses last_window_temp_table as a buffer to hold this.
  */
-static void DelayedCreateTemporaryTable(THD *thd, Query_block *query_block,
-                                        AccessPath *path,
-                                        bool after_aggregation,
-                                        TABLE **last_window_temp_table,
-                                        unsigned *num_windows_seen) {
+bool DelayedCreateTemporaryTable(THD *thd, Query_block *query_block,
+                                 AccessPath *path, bool after_aggregation,
+                                 TABLE **last_window_temp_table,
+                                 unsigned *num_windows_seen) {
   if (path->type == AccessPath::WINDOW) {
     // Create the temporary table and parameters.
     Window *window = path->window().window;
@@ -503,28 +642,34 @@ static void DelayedCreateTemporaryTable(THD *thd, Query_block *query_block,
     ++*num_windows_seen;
     window->set_is_last(*num_windows_seen ==
                         query_block->join->m_windows.size());
-    path->window().temp_table = CreateTemporaryTableFromSelectList(
-        thd, query_block, window, &path->window().temp_table_param,
-        /*after_aggregation=*/true);
+    if ((path->window().temp_table = CreateTemporaryTableFromSelectList(
+             thd, query_block, window, &path->window().temp_table_param,
+             /*after_aggregation=*/true)) == nullptr)
+      return true;
     path->window().temp_table_param->m_window = window;
     *last_window_temp_table = path->window().temp_table;
   } else if (path->type == AccessPath::MATERIALIZE) {
-    if (path->materialize().param->table == nullptr) {
-      if (*last_window_temp_table != nullptr) {
-        // A materialization that comes directly after a window;
-        // it's intended to materialize the output of that window.
-        path->materialize().param->table =
-            path->materialize().table_path->table_scan().table =
+    const auto &materialized_info = path->materialize();
+    if (materialized_info.param->table == nullptr) {
+      // A materialization that comes directly after a window is intended to
+      // materialize the output of that window, unless it is meant for
+      // deduplication.
+      if (*last_window_temp_table != nullptr &&
+          !IsMaterializePathForDeduplication(path)) {
+        materialized_info.param->table =
+            materialized_info.table_path->table_scan().table =
                 *last_window_temp_table;
       } else {
         // All other materializations are of the SELECT list.
-        assert(path->materialize().param->m_operands.size() == 1);
+        assert(materialized_info.param->m_operands.size() == 1);
         TABLE *table = CreateTemporaryTableFromSelectList(
             thd, query_block, nullptr,
-            &path->materialize().param->m_operands[0].temp_table_param,
-            after_aggregation);
-        path->materialize().param->table =
-            path->materialize().table_path->table_scan().table = table;
+            &materialized_info.param->m_operands[0].temp_table_param,
+            after_aggregation, IsMaterializePathForGroupBy(path),
+            IsMaterializePathForDistinct(path));
+        if (table == nullptr) return true;
+        materialized_info.param->table =
+            materialized_info.table_path->table_scan().table = table;
       }
 
       EstimateMaterializeCost(thd, path);
@@ -532,18 +677,31 @@ static void DelayedCreateTemporaryTable(THD *thd, Query_block *query_block,
     *last_window_temp_table = nullptr;
   } else if (path->type == AccessPath::STREAM) {
     if (path->stream().table == nullptr) {
-      path->stream().table = CreateTemporaryTableFromSelectList(
-          thd, query_block, nullptr, &path->stream().temp_table_param,
-          after_aggregation);
+      if ((path->stream().table = CreateTemporaryTableFromSelectList(
+               thd, query_block, nullptr, &path->stream().temp_table_param,
+               after_aggregation)) == nullptr)
+        return true;
+    }
+    *last_window_temp_table = nullptr;
+  } else if (path->type == AccessPath::TEMPTABLE_AGGREGATE) {
+    if (path->temptable_aggregate().table == nullptr) {
+      TABLE *table = CreateTemporaryTableFromSelectList(
+          thd, query_block, nullptr,
+          &path->temptable_aggregate().temp_table_param, after_aggregation,
+          /*is_group_by=*/true);
+      if (table == nullptr) return true;
+      path->temptable_aggregate().table =
+          path->temptable_aggregate().table_path->table_scan().table = table;
     }
     *last_window_temp_table = nullptr;
   } else {
     *last_window_temp_table = nullptr;
   }
+  return false;
 }
 
 /// See FinalizePlanForQueryBlock().
-static void FinalizeWindowPath(
+void FinalizeWindowPath(
     THD *thd, Query_block *query_block,
     const mem_root_deque<Item *> &original_fields,
     const Mem_root_array<const Func_ptr_array *> &applied_replacements,
@@ -582,7 +740,7 @@ static void FinalizeWindowPath(
   window->make_special_rows_cache(thd, path->window().temp_table);
 }
 
-static Item *AddCachesAroundConstantConditions(Item *item) {
+Item *AddCachesAroundConstantConditions(Item *item) {
   cache_const_expr_arg cache_arg;
   cache_const_expr_arg *analyzer_arg = &cache_arg;
   return item->compile(
@@ -590,8 +748,7 @@ static Item *AddCachesAroundConstantConditions(Item *item) {
       &Item::cache_const_expr_transformer, pointer_cast<uchar *>(&cache_arg));
 }
 
-[[nodiscard]] static bool AddCachesAroundConstantConditionsInPath(
-    AccessPath *path) {
+[[nodiscard]] bool AddCachesAroundConstantConditionsInPath(AccessPath *path) {
   // TODO(sgunders): We could probably also add on sort and GROUP BY
   // expressions, even though most of them should have been removed by the
   // interesting order framework. The same with the SELECT list and
@@ -614,6 +771,59 @@ static Item *AddCachesAroundConstantConditions(Item *item) {
       return false;
   }
 }
+
+/// Perform finalization specific to UPDATE and DELETE access paths. Make sure
+/// that rows in the target tables can be deleted using the information that
+/// comes up through the access paths. In particular, paths that potentially
+/// reorder the rows returned by the underlying scans, specifically SORT and
+/// HASH_JOIN, must be told to preserve row IDs, so that the correct row can be
+/// updated or deleted.
+void FinalizeUpdateOrDelete(AccessPath *root_path, table_map target_tables) {
+  WalkAccessPaths(
+      root_path, /*join=*/nullptr,
+      WalkAccessPathPolicy::STOP_AT_MATERIALIZATION,
+      [target_tables](AccessPath *path, const JOIN *) {
+        if ((path->type == AccessPath::SORT ||
+             path->type == AccessPath::HASH_JOIN) &&
+            Overlaps(target_tables,
+                     GetUsedTableMap(path, /*include_pruned_tables=*/true))) {
+          FindTablesToGetRowidFor(path);
+          return true;
+        }
+        return false;
+      });
+}
+
+/// Create Filesort objects for all SORT access paths in a query block. This is
+/// done in a top-down fashion, in contrast to the bottom-up processing in
+/// FinalizePlanForQueryBlock(). It is done top-down because a Filesort that
+/// requires row IDs may need to enable row IDs on SORT paths further down in
+/// the tree, so it is not known whether a SORT path should use row IDs or not
+/// until the SORT paths above it has had their Filesort objects created.
+void FinalizeSortPaths(THD *thd, AccessPath *root_path, JOIN *join) {
+  WalkAccessPaths(
+      root_path, join, WalkAccessPathPolicy::ENTIRE_QUERY_BLOCK,
+      [&](AccessPath *path, JOIN *) {
+        if (path->type == AccessPath::SORT) {
+          assert(path->sort().filesort == nullptr);
+          path->sort().filesort = new (thd->mem_root) Filesort(
+              thd, CollectTables(thd, path),
+              /*keep_buffers=*/false, path->sort().order, path->sort().limit,
+              path->sort().remove_duplicates, path->sort().force_sort_rowids,
+              path->sort().unwrap_rollup);
+          join->filesorts_to_cleanup.push_back(path->sort().filesort);
+          if (!path->sort().filesort->using_addon_fields()) {
+            // This Filesort uses row IDs. Make sure row IDs are made available
+            // in the paths below.
+            FindTablesToGetRowidFor(path);
+          }
+        }
+        return false;
+      },
+      /*post_order_traversal=*/false);
+}
+
+}  // namespace
 
 /*
   Do the final touchups of the access path tree, once we have selected a final
@@ -661,15 +871,28 @@ static Item *AddCachesAroundConstantConditions(Item *item) {
     - Join conditions.
  */
 bool FinalizePlanForQueryBlock(THD *thd, Query_block *query_block) {
-  assert(query_block->join->needs_finalize);
-  query_block->join->needs_finalize = false;
+  JOIN *const join = query_block->join;
+  assert(join->needs_finalize);
+  join->needs_finalize = false;
 
-  AccessPath *const root_path = query_block->join->root_access_path();
+  AccessPath *const root_path = join->root_access_path();
   assert(root_path != nullptr);
-  if (root_path->type == AccessPath::EQ_REF) {
-    // None of the finalization below is relevant to point selects, so just
-    // return immediately.
-    return false;
+
+  switch (root_path->type) {
+    case AccessPath::EQ_REF:
+      // None of the finalization below is relevant to point selects, so just
+      // return immediately.
+      return false;
+    case AccessPath::DELETE_ROWS:
+      FinalizeUpdateOrDelete(root_path,
+                             root_path->delete_rows().tables_to_delete_from);
+      break;
+    case AccessPath::UPDATE_ROWS:
+      FinalizeUpdateOrDelete(root_path,
+                             root_path->update_rows().tables_to_update);
+      break;
+    default:
+      break;
   }
 
   // If the query is offloaded to an external executor, we don't need to create
@@ -679,14 +902,14 @@ bool FinalizePlanForQueryBlock(THD *thd, Query_block *query_block) {
     return false;
   }
 
-  Query_block *old_query_block = thd->lex->current_query_block();
+  const Change_current_query_block saved_query_block{thd};
   thd->lex->set_current_query_block(query_block);
 
   // We might have stacked multiple FILTERs on top of each other.
   // Combine these into a single FILTER:
   WalkAccessPaths(
-      root_path, query_block->join, WalkAccessPathPolicy::ENTIRE_QUERY_BLOCK,
-      [](AccessPath *path, JOIN *join [[maybe_unused]]) {
+      root_path, join, WalkAccessPathPolicy::ENTIRE_QUERY_BLOCK,
+      [](AccessPath *path, const JOIN *) {
         if (path->type == AccessPath::FILTER) {
           AccessPath *child = path->filter().child;
           if (child->type == AccessPath::FILTER &&
@@ -706,28 +929,38 @@ bool FinalizePlanForQueryBlock(THD *thd, Query_block *query_block) {
       },
       /*post_order_traversal=*/true);
 
+  // Finalize materializations. Create temporary tables and rewrite items so
+  // that they reference the columns in the temporary tables.
   Mem_root_array<const Func_ptr_array *> applied_replacements(thd->mem_root);
   TABLE *last_window_temp_table = nullptr;
   unsigned num_windows_seen = 0;
   bool error = false;
   bool after_aggregation = false;
   WalkAccessPaths(
-      root_path, query_block->join, WalkAccessPathPolicy::ENTIRE_QUERY_BLOCK,
-      [thd, query_block, &applied_replacements, &last_window_temp_table,
+      root_path, join, WalkAccessPathPolicy::ENTIRE_QUERY_BLOCK,
+      [thd, query_block, join, &applied_replacements, &last_window_temp_table,
        &num_windows_seen, &error,
-       &after_aggregation](AccessPath *path, JOIN *join) {
+       &after_aggregation](AccessPath *path, const JOIN *) {
         if (error) return true;
-        DelayedCreateTemporaryTable(thd, query_block, path, after_aggregation,
-                                    &last_window_temp_table, &num_windows_seen);
-
+        if (DelayedCreateTemporaryTable(
+                thd, query_block, path, after_aggregation,
+                &last_window_temp_table, &num_windows_seen)) {
+          error = true;
+          return true;
+        }
         const mem_root_deque<Item *> *original_fields = join->fields;
-        UpdateReferencesToMaterializedItems(
-            thd, query_block, path, after_aggregation, &applied_replacements);
+        if (UpdateReferencesToMaterializedItems(thd, query_block, path,
+                                                after_aggregation,
+                                                &applied_replacements)) {
+          error = true;
+          return true;
+        }
         if (path->type == AccessPath::WINDOW) {
           FinalizeWindowPath(thd, query_block, *original_fields,
                              applied_replacements, path);
         } else if (path->type == AccessPath::AGGREGATE ||
-                   path->type == AccessPath::GROUP_INDEX_SKIP_SCAN) {
+                   path->type == AccessPath::GROUP_INDEX_SKIP_SCAN ||
+                   path->type == AccessPath::TEMPTABLE_AGGREGATE) {
           for (Cached_item &ci : join->group_fields) {
             for (const Func_ptr_array *earlier_replacement :
                  applied_replacements) {
@@ -762,8 +995,9 @@ bool FinalizePlanForQueryBlock(THD *thd, Query_block *query_block) {
       },
       /*post_order_traversal=*/true);
 
-  if (query_block->join->push_to_engines()) return true;
+  if (error) return true;
 
-  thd->lex->set_current_query_block(old_query_block);
-  return error;
+  FinalizeSortPaths(thd, root_path, join);
+
+  return join->push_to_engines();
 }

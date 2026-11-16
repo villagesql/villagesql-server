@@ -41,6 +41,7 @@
 #include <string_view>
 #include <vector>
 
+#include <map>
 #include "lex_string.h"
 #include "my_getopt.h"    // get_opt_arg_type
 #include "my_hostname.h"  // HOSTNAME_LENGTH
@@ -55,7 +56,8 @@
 #include "prealloced_array.h"    // Prealloced_array
 #include "sql/sql_const.h"       // SHOW_COMP_OPTION
 #include "sql/sql_plugin_ref.h"  // plugin_ref
-#include "typelib.h"             // TYPELIB
+#include "sql_string.h"
+#include "typelib.h"  // TYPELIB
 
 class Item;
 class Item_func_set_user_var;
@@ -161,6 +163,9 @@ class sys_var {
     VARIABLE_NOT_IN_BINLOG,
     SESSION_VARIABLE_IN_BINLOG
   } binlog_status;
+
+  ///< Global system variable attributes.
+  std::map<std::string, std::string> m_global_attributes;
 
  protected:
   typedef bool (*on_check_function)(sys_var *self, THD *thd, set_var *var);
@@ -279,13 +284,14 @@ class sys_var {
   bool is_persist_readonly() const { return flags & PERSIST_AS_READ_ONLY; }
   bool is_parse_early() const { return (m_parse_flag == PARSE_EARLY); }
   bool is_sensitive() const { return flags & SENSITIVE; }
+
   /**
     Check if the variable can be set using SET_VAR hint.
 
     @return true if the variable can be set using SET_VAR hint,
             false otherwise.
   */
-  bool is_hint_updateable() const { return flags & HINT_UPDATEABLE; }
+  virtual bool is_hint_updateable() const { return flags & HINT_UPDATEABLE; }
   /**
     the following is only true for keycache variables,
     that support the syntax @@keycache_name.variable_name
@@ -338,17 +344,18 @@ class sys_var {
   }
   void do_deprecated_warning(THD *thd);
   /**
-    Create item from system variable value.
+    Create item from system variable session value.
 
     @param  thd  pointer to THD object
 
     @return pointer to Item object or NULL if it's
             impossible to obtain the value.
   */
-  Item *copy_value(THD *thd);
+  virtual Item *copy_value(THD *thd);
 
   void save_default(THD *thd, set_var *var) { global_save_default(thd, var); }
 
+  virtual void persist_only_to_string(THD *thd, set_var *var, String *dest) = 0;
   bool check_if_sensitive_in_context(THD *, bool suppress_errors = true) const;
 
  private:
@@ -686,8 +693,20 @@ class System_variable_tracker final {
     @returns true if the underlying variable can be referenced in the
              SET_VAR optimizer hint syntax, otherwise false.
   */
-  bool is_hint_updateable() const {
-    return m_tag == STATIC && m_static.m_static_var->is_hint_updateable();
+  bool is_hint_updateable(THD *thd) const {
+    if (m_tag == STATIC && m_static.m_static_var->is_hint_updateable())
+      return true;
+
+    if (m_tag == PLUGIN) {
+      auto f = [](const System_variable_tracker &, sys_var *var) {
+        return var->is_hint_updateable();
+      };
+
+      return access_system_variable<bool>(thd, f, Suppress_not_found_error::YES)
+          .value_or(false);
+    }
+
+    return false;
   }
 
   /**
@@ -1095,6 +1114,9 @@ extern SHOW_COMP_OPTION have_query_cache;
 extern SHOW_COMP_OPTION have_geometry, have_rtree_keys;
 extern SHOW_COMP_OPTION have_compress;
 extern SHOW_COMP_OPTION have_statement_timeout;
+extern SHOW_COMP_OPTION have_backup_locks;
+extern SHOW_COMP_OPTION have_backup_safe_binlog_info;
+extern SHOW_COMP_OPTION have_snapshot_cloning;
 
 /*
   Helper functions
@@ -1106,9 +1128,27 @@ collation_unordered_map<std::string, sys_var *>
 collation_unordered_map<std::string, sys_var *>
     *get_dynamic_system_variable_hash(void);
 
+bool get_global_variable_attributes(
+    const char *variable_base, const char *variable_name,
+    std::vector<std::pair<std::string, std::string>> &attributes);
+bool get_global_variable_attribute(const char *variable_base,
+                                   const char *variable_name,
+                                   const char *attribute_name,
+                                   std::string &value);
+bool set_global_variable_attribute(const char *variable_base,
+                                   const char *variable_name,
+                                   const char *attribute_name,
+                                   const char *attribute_value);
+bool set_global_variable_attribute(
+    const System_variable_tracker &var_tracker, const char *attribute_name,
+    const char *attribute_value,
+    Suppress_not_found_error suppress_not_found_error =
+        Suppress_not_found_error::NO);
+
 extern bool get_sysvar_source(const char *name, uint length,
                               enum enum_variable_source *source);
 
+[[nodiscard]]
 int sql_set_variables(THD *thd, List<set_var_base> *var_list, bool opened);
 bool keyring_access_test();
 bool fix_delay_key_write(sys_var *self, THD *thd, enum_var_type type);
@@ -1138,5 +1178,9 @@ bool check_priv(THD *thd, bool static_variable);
 #define PERSIST_ONLY_ADMIN_X509_SUBJECT "persist_only_admin_x509_subject"
 #define PERSISTED_GLOBALS_LOAD "persisted_globals_load"
 extern char *sys_var_persist_only_admin_x509_subject;
+
+extern void init_log_slow_verbosity() noexcept;
+extern void init_slow_query_log_use_global_control() noexcept;
+extern void init_log_slow_sp_statements() noexcept;
 
 #endif

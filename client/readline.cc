@@ -25,8 +25,8 @@
 
 /* readline for batch mode */
 
-#include <stdio.h>
 #include <sys/types.h>
+#include <cstdio>
 
 #include "client/my_readline.h"
 #include "m_string.h"

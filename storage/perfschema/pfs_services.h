@@ -79,6 +79,8 @@ extern SERVICE_TYPE(psi_stage_v1)
     SERVICE_IMPLEMENTATION(performance_schema, psi_stage_v1);
 extern SERVICE_TYPE(psi_statement_v5)
     SERVICE_IMPLEMENTATION(performance_schema, psi_statement_v5);
+extern SERVICE_TYPE(psi_statement_v6)
+    SERVICE_IMPLEMENTATION(performance_schema, psi_statement_v6);
 extern SERVICE_TYPE(psi_system_v1)
     SERVICE_IMPLEMENTATION(performance_schema, psi_system_v1);
 extern SERVICE_TYPE(psi_table_v1)

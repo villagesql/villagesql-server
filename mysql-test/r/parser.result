@@ -2512,7 +2512,7 @@ ERROR 42000: Multiple COLLATE clauses near 'COLLATE ascii_bin
 CREATE VIEW v1 AS (SELECT 1 ORDER BY 1) UNION (SELECT 3 ORDER BY 1) ORDER BY 1;
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select 1 AS `1` union select 3 AS `3` order by `1`	utf8mb4	utf8mb4_0900_ai_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS (select 1 AS `1` order by '') union (select 3 AS `3` order by '') order by `1`	utf8mb4	utf8mb4_0900_ai_ci
 DROP VIEW v1;
 #
 # Bug#29871803: REQUIRED PARENTHESES NO LONGER PRINTED FOR CERTAIN UNION
@@ -2892,6 +2892,34 @@ DROP TABLE source_tls_ciphersuites;
 DROP TABLE source_tls_version;
 DROP TABLE source_user;
 DROP TABLE source_zstd_compression_level;
+#
+# Bug#22574003: Non-reserved "BINLOG" keyword costs 22 shift/reduce
+#               conflicts to MySQL grammar
+#
+CREATE TABLE binlog(binlog INTEGER);
+DROP TABLE binlog;
+CREATE ROLE binlog;
+DROP ROLE binlog;
+CREATE PROCEDURE p()
+BEGIN
+DECLARE x INTEGER DEFAULT 3;
+binlog:
+LOOP
+IF x = 0 THEN
+LEAVE binlog;
+END IF;
+SET x = x - 1;
+END LOOP binlog;
+END;
+//
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ':
+LOOP
+IF x = 0 THEN
+LEAVE binlog;
+END IF;
+SET x = x - 1;
+END LOOP binlog;
+END' at line 4
 #
 #
 #

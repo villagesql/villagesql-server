@@ -82,14 +82,12 @@ INSERT INTO t1 VALUES(1, NULL),(2, 2), (3, NULL), (4, 4), (5, NULL), (6, 6);
 
 --source include/rpl/sync_to_replica.inc
 --source include/rpl/stop_applier.inc
-SET @saved_replica_parallel_type = @@GLOBAL.replica_parallel_type;
 SET @saved_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
 SET @saved_replica_preserve_commit_order = @@GLOBAL.replica_preserve_commit_order;
 SET @saved_innodb_lock_wait_timeout = @@GLOBAL.innodb_lock_wait_timeout;
 SET @saved_replica_transaction_retries = @@GLOBAL.replica_transaction_retries;
 
 SET GLOBAL replica_transaction_retries = 0;
-SET GLOBAL replica_parallel_type = "LOGICAL_CLOCK";
 SET GLOBAL replica_parallel_workers = 8;
 SET GLOBAL replica_preserve_commit_order = ON;
 # Set it to a long time to guarantee it doesn't report timeout error.
@@ -111,11 +109,11 @@ INSERT INTO t1 VALUES(10, 10);
 
 --let $debug_point = set_commit_parent_100
 --source include/add_debug_point.inc
-INSERT INTO t1 VALUES(11, NULL); # Transaction 1
-DELETE FROM t1 WHERE c2 <= 3;    # Transaction 2
-INSERT INTO t1 VALUES(21, 21);   # Transaction 3
-INSERT INTO t1 VALUES(22, 22);   # Transaction 4
-INSERT INTO t1 VALUES(23, 23);   # Transaction 5
+INSERT INTO t1 VALUES(11, NULL);                  # Transaction 1
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 3; # Transaction 2
+INSERT INTO t1 VALUES(21, 21);                    # Transaction 3
+INSERT INTO t1 VALUES(22, 22);                    # Transaction 4
+INSERT INTO t1 VALUES(23, 23);                    # Transaction 5
 --source include/remove_debug_point.inc
 
 # Start a local Transaction 6 on replica to block the INSERT statement coming
@@ -187,7 +185,7 @@ INSERT INTO t1 VALUES(21, NULL);  # Transaction 1
 
 BEGIN;                            # Transaction 2
 INSERT INTO t1 VALUES(22, 22);
-DELETE FROM t1 WHERE c2 <= 3;
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 3;
 INSERT INTO t1 VALUES(23, 23);
 INSERT INTO t1 VALUES(24, NULL);
 INSERT INTO t1 VALUES(25, 25);
@@ -260,8 +258,6 @@ CALL mtr.add_suppression("The replica coordinator and worker threads are stopped
 
 --source include/rpl/stop_replica.inc
 SET GLOBAL replica_transaction_retries = @saved_replica_transaction_retries;
-SET GLOBAL replica_parallel_type = @saved_replica_parallel_type;
---disable_warnings
 SET GLOBAL replica_parallel_workers = @saved_replica_parallel_workers;
 --enable_warnings
 SET GLOBAL replica_preserve_commit_order = @saved_replica_preserve_commit_order;

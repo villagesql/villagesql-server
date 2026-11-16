@@ -26,7 +26,7 @@
   visible. See the accompanying cmake rules.
   Instantiated Value objects are bad, running this executable will fail.
  */
-#include <stdlib.h>
+#include <cstdlib>
 
 #include <string>
 
@@ -43,7 +43,7 @@ int main() {
   const json_binary::Value elt1 = value.element(1);
   const json_binary::Value key1 = value.key(1);
 
-  const size_t sz1 = value.lookup_index("foo", 3);
+  const size_t sz1 = value.lookup_index("foo");
   const size_t sz2 = value.lookup_index(std::string("foo"));
 
   const bool has_space = value.has_space(0, 0, nullptr);

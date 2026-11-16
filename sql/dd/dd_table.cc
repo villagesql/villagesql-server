@@ -28,6 +28,7 @@
 #include <string.h>
 #include <algorithm>
 #include <memory>  // unique_ptr
+#include <unordered_map>
 
 #include "lex_string.h"
 #include "m_string.h"
@@ -99,6 +100,7 @@
 #include "sql/sql_gipk.h"  // table_def_has_generated_invisible_primary_key
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
+#include "sql/sql_masking_policy.h"
 #include "sql/sql_parse.h"
 #include "sql/sql_partition.h"  // expr_to_string
 #include "sql/sql_plugin_ref.h"
@@ -203,6 +205,9 @@ dd::enum_column_types get_new_field_type(enum_field_types type) {
 
     case MYSQL_TYPE_LONG_BLOB:
       return dd::enum_column_types::LONG_BLOB;
+
+    case MYSQL_TYPE_VECTOR:
+      return dd::enum_column_types::VECTOR;
 
     case MYSQL_TYPE_BLOB:
       return dd::enum_column_types::BLOB;
@@ -688,6 +693,13 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
 
     dd::Properties *col_options = &col_obj->options();
 
+    // Persist masking policy (if any) inside column options.
+    if (field.m_masking_policy_name.length > 0) {
+      col_options->set("masking_policy",
+                       dd::String_type{field.m_masking_policy_name.str,
+                                       field.m_masking_policy_name.length});
+    }
+
     /*
       Store flag indicating whether BIT type storage optimized or not.
       We need to store this flag in DD to correctly handle the case
@@ -714,6 +726,14 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
     // NOT SECONDARY column option.
     if (field.flags & NOT_SECONDARY_FLAG)
       col_options->set("not_secondary", true);
+
+    if (field.zip_dict_id != 0) {
+      DBUG_LOG("zip_dict", "Table: " << tab_obj->name()
+                                     << " setting field_name "
+                                     << field.field_name
+                                     << " to id: " << field.zip_dict_id);
+      col_options->set("zip_dict_id", field.zip_dict_id);
+    }
 
     if (field.is_array) {
       col_options->set("is_array", true);
@@ -782,6 +802,11 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
           dd::String_type(def_val.ptr(), def_val.length()));
     col_obj->set_engine_attribute(field.m_engine_attribute);
     col_obj->set_secondary_engine_attribute(field.m_secondary_engine_attribute);
+
+    if (validate_masking_policy_for_create_alter_table(thd, buf, &table,
+                                                       field)) {
+      return true;
+    }
   }
 
   return false;
@@ -1627,6 +1652,76 @@ static bool fill_dd_partition_from_create_info(
       String part_desc_res(buff, sizeof(buff), cs);
       String part_desc_str;
 
+      auto have_attr_changed = [thd](bool ci_list_of_fields,
+                                     bool pi_list_of_fields,
+                                     List<char> &ci_field_list,
+                                     List<char> &pi_field_list,
+                                     const char *ci_func_string,
+                                     const char *pi_func_string,
+                                     size_t pi_func_len) {
+        bool retval = false;
+        if (pi_list_of_fields) {
+          retval =
+              !ci_list_of_fields ||
+              ci_field_list.size() != pi_field_list.size() ||
+              !std::ranges::all_of(
+                  ci_field_list, [&pi_field_list](char &create_info_attr_cstr) {
+                    return std::ranges::any_of(
+                        pi_field_list,
+                        [&create_info_attr_cstr](char &attr_cstr) {
+                          return strcmp(&create_info_attr_cstr, &attr_cstr) ==
+                                 0;
+                        });
+                  });
+        } else {
+          retval =
+              (ci_func_string == nullptr)
+                  ? true
+                  : [&ci_func_string, &pi_func_string, pi_func_len, thd]() {
+                      auto normalize_name = [thd](std::string_view attr_name) {
+                        const std::string_view delim =
+                            (thd->variables.sql_mode & MODE_ANSI_QUOTES) ? "\""
+                                                                         : "`";
+                        size_t first_delim_pos = attr_name.find(delim);
+                        const unsigned end_pos_of_first_delim =
+                            first_delim_pos + delim.length();
+                        size_t last_delim_pos =
+                            attr_name.find(delim, end_pos_of_first_delim);
+                        return attr_name.substr(
+                            end_pos_of_first_delim,
+                            last_delim_pos - end_pos_of_first_delim);
+                      };
+                      std::string_view cinfo_attr_sv{ci_func_string,
+                                                     strlen(ci_func_string)};
+                      std::string_view attr_sv{pi_func_string, pi_func_len};
+                      return normalize_name(cinfo_attr_sv) !=
+                             normalize_name(attr_sv);
+                    }();
+        }
+        return retval;
+      };
+
+      bool partition_attr_changed = false;
+      bool subpartition_attr_changed = false;
+      bool loaded_part_exists = false;
+      if (create_info->part_info != nullptr) {
+        auto *ci_pinfo = create_info->part_info;
+        partition_attr_changed = have_attr_changed(
+            ci_pinfo->list_of_part_fields, part_info->list_of_part_fields,
+            ci_pinfo->part_field_list, part_info->part_field_list,
+            ci_pinfo->part_func_string, part_info->part_func_string,
+            part_info->part_func_len);
+        subpartition_attr_changed = have_attr_changed(
+            ci_pinfo->list_of_subpart_fields, part_info->list_of_subpart_fields,
+            ci_pinfo->subpart_field_list, part_info->subpart_field_list,
+            ci_pinfo->subpart_func_string, part_info->subpart_func_string,
+            part_info->subpart_func_len);
+        loaded_part_exists = std::ranges::any_of(
+            create_info->part_info->partitions,
+            [](bool is_loaded) { return is_loaded; },
+            &partition_element::secondary_load);
+      }
+
       while ((part_elem = part_it++)) {
         if (part_elem->part_state == PART_TO_BE_DROPPED ||
             part_elem->part_state == PART_REORGED_DROPPED) {
@@ -1642,7 +1737,87 @@ static bool fill_dd_partition_from_create_info(
           part_obj->set_comment(part_elem->part_comment);
         part_obj->set_number(part_num);
         dd::Properties *part_options = &part_obj->options();
+        /* After a DDL, we should appropriately set the partitions/subpartitions
+         * secondary_load flag in DD based on the info that exists in
+         * create_info. */
         set_partition_options(part_elem, part_options);
+        /* subpart_name --> loading state in create_info  */
+        std::unordered_map<std::string_view, bool> subpart_index;
+        /* part_name --> whether at least 1 subpart was previously loaded */
+        std::unordered_map<std::string_view, bool> partially_loaded_parts;
+
+        /* Check if there is an existing partitioning scheme on the table (i.e.,
+         * prior to this DDL)*/
+
+        if (create_info->part_info != nullptr) {
+          assert(create_info->part_info->part_type != partition_type::NONE);
+
+          if (part_info->part_type != create_info->part_info->part_type ||
+              part_info->part_type == partition_type::HASH ||
+              partition_attr_changed) {
+            /* No association can be made between old and new partitions: Mark
+             * all partitions as loaded if at least one partition was loaded.
+             * Otherwise, mark all as not loaded*/
+            part_options->set("secondary_load", loaded_part_exists);
+          } else {
+            /* At this point, both the old and the new partitioning must be
+             * RANGE-RANGE or LIST-LIST.
+             */
+            auto create_info_part = std::ranges::find_if(
+                create_info->part_info->partitions,
+                [&part_elem](const char *pname) {
+                  return strcmp(part_elem->partition_name, pname) == 0;
+                },
+                &partition_element::partition_name);
+
+            if (create_info_part != create_info->part_info->partitions.end()) {
+              part_options->set("secondary_load",
+                                create_info_part->secondary_load);
+              /* When removing subpartitioning, we need to mark a partition as
+               * loaded if all of its subpartitions were previously loaded*/
+              if (create_info->part_info->is_sub_partitioned()) {
+                if (std::ranges::all_of(
+                        create_info_part->subpartitions,
+                        [&subpart_index](partition_element &subpart) {
+                          subpart_index.emplace(subpart.partition_name,
+                                                subpart.secondary_load);
+                          return subpart.secondary_load;
+                        })) {
+                  part_options->set("secondary_load", true);
+                  partially_loaded_parts.emplace(part_elem->partition_name,
+                                                 true);
+                } else if (std::ranges::all_of(
+                               create_info_part->subpartitions,
+                               [&subpart_index](partition_element &subpart) {
+                                 subpart_index.emplace(subpart.partition_name,
+                                                       subpart.secondary_load);
+                                 return !subpart.secondary_load;
+                               })) {
+                  part_options->set("secondary_load", false);
+                  partially_loaded_parts.emplace(part_elem->partition_name,
+                                                 false);
+                } else {
+                  partially_loaded_parts.emplace(
+                      part_elem->partition_name,
+                      std::ranges::any_of(create_info_part->subpartitions,
+                                          [](partition_element &subpart) {
+                                            return subpart.secondary_load;
+                                          }));
+                }
+              }
+            } else {
+              part_options->set("secondary_load", false);
+            }
+          }
+        } else {
+          /* i) No partitioning prior to this DDL or ii) this is a ALTER TABLE
+           * SECONDARY_ENGINE=NULL DDL that has removed partitioning info from
+           * create_info:
+           * If the table was loaded, all partitions that will be
+           * created should be loaded. Otherwise, all partitions should appear
+           * as not loaded*/
+          part_options->set("secondary_load", create_info->secondary_load);
+        }
 
         // Set partition tablespace
         if (fill_dd_tablespace_id_or_name<dd::Partition>(
@@ -1764,6 +1939,34 @@ static bool fill_dd_partition_from_create_info(
             sub_obj->set_number(sub_part_num);
             dd::Properties *sub_options = &sub_obj->options();
             set_partition_options(sub_elem, sub_options);
+            /* If subpartition expression is the same, use the existing flag.
+             * Otherwise, reload the subpartition if at least one subpartition
+             * was previously loaded*/
+            if (part_options->exists("secondary_load")) {
+              bool part_secondary_load = false;
+              part_options->get("secondary_load", &part_secondary_load);
+              if (part_secondary_load) {
+                sub_options->set("secondary_load", true);
+              } else if (create_info->part_info != nullptr &&
+                         part_info->num_subparts ==
+                             create_info->part_info->num_subparts &&
+                         !partition_attr_changed &&
+                         !subpartition_attr_changed) {
+                sub_options->set(
+                    "secondary_load",
+                    subpart_index.contains(sub_elem->partition_name) &&
+                        subpart_index[sub_elem->partition_name]);
+              } else {
+                sub_options->set(
+                    "secondary_load",
+                    partition_attr_changed ||
+                        (partially_loaded_parts.contains(
+                             part_elem->partition_name) &&
+                         partially_loaded_parts[part_elem->partition_name]));
+              }
+            } else {
+              sub_options->set("secondary_load", false);
+            }
 
             // Set partition tablespace
             if (fill_dd_tablespace_id_or_name<dd::Partition>(
@@ -2025,12 +2228,12 @@ static bool fill_dd_table_from_create_info(
   //
 
   /* We should not get any unexpected flags which are not handled below. */
-  assert(
-      !(create_info->table_options &
-        ~(HA_OPTION_PACK_RECORD | HA_OPTION_PACK_KEYS | HA_OPTION_NO_PACK_KEYS |
-          HA_OPTION_CHECKSUM | HA_OPTION_NO_CHECKSUM |
-          HA_OPTION_DELAY_KEY_WRITE | HA_OPTION_NO_DELAY_KEY_WRITE |
-          HA_OPTION_STATS_PERSISTENT | HA_OPTION_NO_STATS_PERSISTENT)));
+  assert(!(create_info->table_options &
+           ~(HA_OPTION_PACK_RECORD | HA_OPTION_PACK_KEYS |
+             HA_OPTION_NO_PACK_KEYS | HA_OPTION_CHECKSUM |
+             HA_OPTION_NO_CHECKSUM | HA_OPTION_DELAY_KEY_WRITE |
+             HA_OPTION_NO_DELAY_KEY_WRITE | HA_OPTION_STATS_PERSISTENT |
+             HA_OPTION_NO_STATS_PERSISTENT | HA_OPTION_CREATE_EXTERNAL_TABLE)));
 
   /*
     Even though we calculate HA_OPTION_PACK_RECORD flag from the value of
@@ -2090,6 +2293,14 @@ static bool fill_dd_table_from_create_info(
                                             HA_OPTION_STATS_PERSISTENT));
   }
 
+  /*
+    Store whether table was created with CREATE EXTERNAL TABLE syntax.
+    This is used to preserve the EXTERNAL keyword for SHOW CREATE TABLE.
+  */
+  if (create_info->table_options & HA_OPTION_CREATE_EXTERNAL_TABLE) {
+    table_options->set("create_external_table", true);
+  }
+
   //
   // Set other table options.
   //
@@ -2137,6 +2348,22 @@ static bool fill_dd_table_from_create_info(
                           create_info->encrypt_type.length);
     }
     table_options->set("encrypt_type", encrypt_type);
+  }
+
+  // assign explicit encryption. explict_encryption can come from ENCRYPTION
+  // clause usage (used_fields) or from DD (create_info->explicit_encryption -
+  // this means table originally was created with explicit_encryption
+  // (ENCRYPTION clause was used with CREATE)).
+  if ((create_info->used_fields & HA_CREATE_USED_ENCRYPT) ||
+      create_info->explicit_encryption) {
+    // clear explicit encryption if SE does not support encryption
+    if (!(hton->flags & HTON_SUPPORTS_TABLE_ENCRYPTION)) {
+      table_options->set("explicit_encryption", false);
+    } else {
+      table_options->set("explicit_encryption", true);
+    }
+  } else {
+    table_options->set("explicit_encryption", false);
   }
 
   // Storage media
@@ -2663,8 +2890,8 @@ bool recreate_table(THD *thd, const char *schema_name, const char *table_name) {
   build_table_filename(path, sizeof(path) - 1, schema_name, table_name, "", 0);
 
   // Attempt to reconstruct the table
-  return ha_create_table(thd, path, schema_name, table_name, &create_info, true,
-                         false, table_def);
+  return ha_create_table(thd, path, schema_name, table_name, &create_info,
+                         nullptr, true, false, table_def);
 }
 
 /**
@@ -2718,6 +2945,35 @@ inline void report_error_as_tablespace_missing(Object_id id) {
 
 inline void report_error_as_tablespace_missing(const String_type name) {
   my_error(ER_TABLESPACE_MISSING_WITH_NAME, MYF(0), name.c_str());
+}
+
+Encrypt_result is_system_tablespace_encrypted(THD *thd) {
+  MDL_request system_mdl_request;
+  MDL_REQUEST_INIT(&system_mdl_request, MDL_key::TABLESPACE, "",
+                   "innodb_system", MDL_INTENTION_EXCLUSIVE, MDL_STATEMENT);
+
+  cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+
+  if (thd->mdl_context.acquire_lock(&system_mdl_request,
+                                    thd->variables.lock_wait_timeout)) {
+    return {true, false};
+  }
+
+  // Acquire the tablespace object.
+  const Tablespace *tsp = nullptr;
+  if (thd->dd_client()->acquire("innodb_system", &tsp)) {
+    return {true, false};
+  }
+  assert(tsp);
+
+  if (tsp->options().exists("encryption")) {
+    String_type e;
+    (void)tsp->options().get("encryption", &e);
+    assert(!e.empty());
+    return {false, is_encrypted(e)};
+  }
+
+  return {false, false};
 }
 
 /*
@@ -3310,6 +3566,8 @@ bool uses_functions(const Table *table_def, const char *schema_name,
       }
       ss << "}; ";
     }
+
+    ss << "ENGINE = \"" << table_def->engine() << "\"; ";
 
     ss << "};";
 

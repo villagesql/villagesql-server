@@ -32,9 +32,9 @@
 
 #include "my_config.h"
 
-#include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
+#include <cstdlib>
+#include <cstring>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif

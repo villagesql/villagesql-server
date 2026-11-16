@@ -314,7 +314,7 @@ void vdf_handler::clear() {
   m_udf->vdf_func_desc->clear(&m_context, &m_vdf_args);
 }
 
-void vdf_handler::accumulate(bool *null_value) {
+bool vdf_handler::accumulate(bool *null_value) {
   marshal_args();
   vef_vdf_result_t result{};
   result.type = VEF_RESULT_VALUE;
@@ -324,23 +324,23 @@ void vdf_handler::accumulate(bool *null_value) {
   switch (result.type) {
     case VEF_RESULT_VALUE:
       *null_value = false;
-      return;
+      return false;
     case VEF_RESULT_WARNING:
       push_warning_printf(
           current_thd, Sql_condition::SL_WARNING, ER_UDF_ERROR,
           "VDF error in function '%s': %s", m_udf->name.str,
           m_error_msg[0] != '\0' ? m_error_msg : "unknown error");
       *null_value = true;
-      return;
+      return false;
     case VEF_RESULT_ERROR:
       my_printf_error(ER_UDF_ERROR, "VDF error in function '%s': %s", MYF(0),
                       m_udf->name.str,
                       m_error_msg[0] != '\0' ? m_error_msg : "unknown error");
       *null_value = true;
-      return;
+      return true;
     default:
       *null_value = false;
-      return;
+      return false;
   }
 }
 

@@ -88,6 +88,7 @@
 #include "sql/sql_error.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
+#include "sql/sql_plugin_var.h"
 #include "sql/sql_show.h"
 #include "sql/sys_vars_shared.h"
 #include "sql/thr_malloc.h"
@@ -448,18 +449,9 @@ bool Persisted_variables_cache::set_variable(THD *thd, set_var *setvar) {
       uint dummy_err;
       String bool_str;
       if (setvar->value) {
-        res = setvar->value->val_str(&str);
         if (setvar->value->is_null()) is_null = true;
-        if (system_var->get_var_type() == GET_BOOL) {
-          if (res == nullptr ||
-              check_boolean_value(res->c_ptr_quick(), bool_str)) {
-            my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), var_name.c_str(),
-                     (res ? res->c_ptr_quick() : "null"));
-            return true;
-          } else {
-            res = &bool_str;
-          }
-        }
+        system_var->persist_only_to_string(thd, setvar, &str);
+        res = &str;
         if (res && res->length()) {
           /*
             value held by Item class can be of different charset,
@@ -483,6 +475,10 @@ bool Persisted_variables_cache::set_variable(THD *thd, set_var *setvar) {
         var_value = utf8_str.c_ptr_quick();
       }
     } else {
+      // Persist default value. Need to use this approach to set default value
+      // for persist_only variable. The save_default() does nothing for
+      // plugin variable. As a result persist_only_to_string()
+      // cannot be used here.
       Persisted_variables_cache::get_variable_value(thd, system_var, &utf8_str,
                                                     &is_null);
       var_value = utf8_str.c_ptr_quick();
@@ -986,7 +982,7 @@ bool Persisted_variables_cache::set_persisted_options(
   const std::vector<std::string> priv_list = {
       "ENCRYPTION_KEY_ADMIN", "ROLE_ADMIN",          "SYSTEM_VARIABLES_ADMIN",
       "AUDIT_ADMIN",          "TELEMETRY_LOG_ADMIN", "CONNECTION_ADMIN"};
-  const ulong static_priv_list = (SUPER_ACL | FILE_ACL);
+  const Access_bitmask static_priv_list = (SUPER_ACL | FILE_ACL);
   Sctx_ptr<Security_context> ctx;
   /*
     if persisted_globals_load is set to false or --no-defaults is set
@@ -2113,8 +2109,11 @@ bool Persisted_variables_cache::append_read_only_variables(
 
   auto result = decrypt_sensitive_variables();
   if (result == return_status::ERROR) {
-    LogErr(ERROR_LEVEL, ER_CANNOT_INTERPRET_PERSISTED_SENSITIVE_VARIABLES);
-    return true;
+    if (!opt_persist_sensitive_variables_in_plaintext) {
+      LogErr(ERROR_LEVEL, ER_CANNOT_INTERPRET_PERSISTED_SENSITIVE_VARIABLES);
+      return true;
+    }
+    LogErr(WARNING_LEVEL, ER_CANNOT_INTERPRET_PERSISTED_SENSITIVE_VARIABLES);
   }
 
   /* create a set of values sorted by timestamp */

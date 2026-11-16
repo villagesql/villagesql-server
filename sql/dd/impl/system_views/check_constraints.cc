@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/check_constraints.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Check_constraints &Check_constraints::instance() {
-  static Check_constraints *s_instance = new Check_constraints();
+  static auto *s_instance = new Check_constraints();
   return *s_instance;
 }
 
@@ -51,5 +50,4 @@ Check_constraints::Check_constraints() {
   m_target_def.add_where("AND IS_VISIBLE_DD_OBJECT(tbl.hidden)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

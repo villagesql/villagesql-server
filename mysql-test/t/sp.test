@@ -1,4 +1,6 @@
-# ER_STACK_OVERRUN_NEED_MORE does not currenly work well with TSan
+# ER_STACK_OVERRUN_NEED_MORE does not currently work well with neither TSan
+# nor ASan (when ASAN_OPTIONS include 'detect_stack_use_after_return=true')
+--source include/not_asan.inc
 --source include/not_tsan.inc
 
 --source include/no_valgrind_without_big.inc
@@ -7955,7 +7957,7 @@ DROP FUNCTION f1;
 --disable_warnings ER_SP_DOES_NOT_EXIST ONCE
 drop procedure if exists p;
 set @old_mode= @@sql_mode;
-set @@sql_mode= cast(pow(2,33)-1 as unsigned integer) & ~0x1003ff00;
+set @@sql_mode= cast(pow(2,34)-1 as unsigned integer) & ~0x1003ff00;
 select @@sql_mode into @full_mode;
 create procedure p() begin end;
 call p();

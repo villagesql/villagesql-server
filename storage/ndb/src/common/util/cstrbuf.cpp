@@ -43,7 +43,6 @@ int cstrbuf_vsnprintf_noerr(char str[], size_t size, const char fmt[],
 
 #ifdef TEST_CSTRBUF
 
-#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>

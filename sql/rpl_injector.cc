@@ -39,7 +39,7 @@ injector::transaction::transaction(THD *thd, bool calc_writeset_hash)
       m_thd(thd),
       m_calc_writeset_hash(calc_writeset_hash) {
   // Remember position where transaction started
-  LOG_INFO log_info;
+  Log_info log_info;
   mysql_bin_log.get_current_log(&log_info);
   strmake(m_start_name_buf, log_info.log_file_name,
           sizeof(m_start_name_buf) - 1);
@@ -264,7 +264,7 @@ int injector::record_incident(THD *thd, std::string_view message) {
 }
 
 void injector::get_current_binlog_filename(char (&filename)[FN_REFLEN]) {
-  LOG_INFO log_info;
+  Log_info log_info;
   mysql_bin_log.get_current_log(&log_info);
   strmake(filename, log_info.log_file_name, FN_REFLEN - 1);
 }

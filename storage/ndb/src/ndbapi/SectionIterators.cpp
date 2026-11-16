@@ -241,7 +241,6 @@ const Uint32 *FragmentedSectionIterator::getNextWords(Uint32 &sz) {
 
 #include <random.h>
 #include <util/NdbTap.hpp>
-#include "NdbApiSignal.hpp"
 
 #define VERIFY(x)                                            \
   if ((x) == 0) {                                            \
@@ -398,7 +397,7 @@ int testSignalSectionIterator() {
 
   /* Allocate some signals */
   for (int i = 0; i < totalNumSignals; i++) {
-    NdbApiSignal *sig = new NdbApiSignal((BlockReference)0);
+    auto *sig = new NdbApiSignal((BlockReference)0);
 
     if (poolHead == nullptr) {
       poolHead = sig;

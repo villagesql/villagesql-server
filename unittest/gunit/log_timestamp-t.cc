@@ -36,7 +36,8 @@
 #include "test_utils.h"
 
 #include <mysql/components/services/log_shared.h>
-#include "../sql/log.h"
+#include "sql/log.h"
+#include "sql/server_component/mysql_timestamp_imp.h"
 
 // CET: 32 bytes
 //   date (10), 'T', time (8), '.', microseconds (6), timezone offset (6)
@@ -90,7 +91,12 @@ TEST_F(LogTimestampTest, iso8601) {
   }
   char tz[] = "TZ=CET-1CES";
 #else
-  char tz[] = "TZ=CET";
+  // Use a fully-specified POSIX TZ string (CET in winter, CEST in summer with
+  // the EU DST rule) instead of relying on the system timezone database.
+  // Minimal build/CI containers may not ship the 'CET' zoneinfo file, in which
+  // case glibc parses bare "CET" as a POSIX zone with a zero offset (UTC) and
+  // the expected +01:00 / +02:00 offsets would never be produced.
+  char tz[] = "TZ=CET-1CEST,M3.5.0,M10.5.0/3";
 #endif
   int time_buff_len;
 
@@ -105,33 +111,35 @@ TEST_F(LogTimestampTest, iso8601) {
   /// 1970/01/01 .000001  (1)
 
   // UTC (winter)
-  time_buff_len = make_iso8601_timestamp(time_buff, 1, iso8601_utc);
+  time_buff_len =
+      Mysql_timestamp_imp::make_iso8601_timestamp(time_buff, 1, iso8601_utc);
   EXPECT_EQ(LEN_MS_UTC, time_buff_len);
   EXPECT_STREQ("1970-01-01T00:00:00.000001Z", time_buff);
 
   // CET (winter) +1h
-  time_buff_len = make_iso8601_timestamp(time_buff, 1, iso8601_system_time);
+  time_buff_len = Mysql_timestamp_imp::make_iso8601_timestamp(
+      time_buff, 1, iso8601_system_time);
   EXPECT_EQ(LEN_MS_CET, time_buff_len);
   EXPECT_STREQ("1970-01-01T01:00:00.000001+01:00", time_buff);
 
   /// 2011-07-07  (1309996800)
 
   // UTC (summer)
-  time_buff_len =
-      make_iso8601_timestamp(time_buff, MICRO_FAC * 1309996800, iso8601_utc);
+  time_buff_len = Mysql_timestamp_imp::make_iso8601_timestamp(
+      time_buff, MICRO_FAC * 1309996800, iso8601_utc);
   EXPECT_EQ(LEN_MS_UTC, time_buff_len);
   EXPECT_STREQ("2011-07-07T00:00:00.000000Z", time_buff);
 
   // CET (summer) +2h
-  time_buff_len = make_iso8601_timestamp(time_buff, MICRO_FAC * 1309996800,
-                                         iso8601_system_time);
+  time_buff_len = Mysql_timestamp_imp::make_iso8601_timestamp(
+      time_buff, MICRO_FAC * 1309996800, iso8601_system_time);
   EXPECT_EQ(LEN_MS_CET, time_buff_len);
   EXPECT_STREQ("2011-07-07T02:00:00.000000+02:00", time_buff);
 
   /// 1987-06-05 04:03:02.123456
 
   // UTC
-  time_buff_len = make_iso8601_timestamp(
+  time_buff_len = Mysql_timestamp_imp::make_iso8601_timestamp(
       time_buff, (MICRO_FAC * 549864182) + 123456, iso8601_utc);
   EXPECT_EQ(LEN_MS_UTC, time_buff_len);
   EXPECT_STREQ("1987-06-05T04:03:02.123456Z", time_buff);

@@ -208,7 +208,7 @@ int NdbBlob::getBlobTable(NdbTableImpl &bt, const NdbTableImpl *t,
     // in V2 changes to Longvar* regardless of size
     {
       NdbDictionary::Column bc("NDB$DATA");
-      const Uint32 storageType = (Uint32)c->getStorageType();
+      const auto storageType = (Uint32)c->getStorageType();
       switch (c->m_type) {
         case NdbDictionary::Column::Blob:
           if (storageType == NDB_STORAGETYPE_MEMORY)
@@ -397,7 +397,7 @@ void NdbBlob::Buf::alloc(unsigned n) {
 }
 
 void NdbBlob::Buf::release() {
-  if (data) delete[] data;
+  delete[] data;
   data = nullptr;
   size = 0;
   maxsize = 0;
@@ -455,9 +455,9 @@ inline bool NdbBlob::isScanOp() {
 }
 
 inline bool NdbBlob::isReadOnlyOp() {
-  return !(theNdbOp->theOperationType == NdbOperation::InsertRequest ||
-           theNdbOp->theOperationType == NdbOperation::UpdateRequest ||
-           theNdbOp->theOperationType == NdbOperation::WriteRequest);
+  return theNdbOp->theOperationType != NdbOperation::InsertRequest &&
+         theNdbOp->theOperationType != NdbOperation::UpdateRequest &&
+         theNdbOp->theOperationType != NdbOperation::WriteRequest;
 }
 
 inline bool NdbBlob::isTakeOverOp() {
@@ -537,9 +537,9 @@ inline int NdbBlob::setAnyValue(NdbOperation *anOp) const {
 
 int NdbBlob::packKeyValue(const NdbTableImpl *aTable, const Buf &srcBuf) {
   DBUG_ENTER("NdbBlob::packKeyValue");
-  const Uint32 *data = (const Uint32 *)srcBuf.data;
+  const auto *data = (const Uint32 *)srcBuf.data;
   unsigned pos = 0;
-  Uint32 *pack_data = (Uint32 *)thePackKeyBuf.data;
+  auto *pack_data = (Uint32 *)thePackKeyBuf.data;
   unsigned pack_pos = 0;
   for (unsigned i = 0; i < aTable->m_columns.size(); i++) {
     NdbColumnImpl *c = aTable->m_columns[i];
@@ -570,9 +570,9 @@ int NdbBlob::packKeyValue(const NdbTableImpl *aTable, const Buf &srcBuf) {
 
 int NdbBlob::unpackKeyValue(const NdbTableImpl *aTable, Buf &dstBuf) {
   DBUG_ENTER("NdbBlob::unpackKeyValue");
-  Uint32 *data = (Uint32 *)dstBuf.data;
+  auto *data = (Uint32 *)dstBuf.data;
   unsigned pos = 0;
-  const Uint32 *pack_data = (const Uint32 *)thePackKeyBuf.data;
+  const auto *pack_data = (const Uint32 *)thePackKeyBuf.data;
   unsigned pack_pos = 0;
   for (unsigned i = 0; i < aTable->m_columns.size(); i++) {
     NdbColumnImpl *c = aTable->m_columns[i];
@@ -716,7 +716,7 @@ void NdbBlob::packBlobHead(const Head &head, char *buf, int blobVersion) {
     // native
     memcpy(buf, &head.length, sizeof(head.length));
   } else {
-    unsigned char *p = (unsigned char *)buf;
+    auto *p = (unsigned char *)buf;
     // all little-endian
     uint i, n;
     for (i = 0, n = 0; i < 2; i++, n += 8) *p++ = (head.varsize >> n) & 0xff;
@@ -744,7 +744,7 @@ void NdbBlob::unpackBlobHead(Head &head, const char *buf, int blobVersion) {
     memcpy(&head.length, buf, sizeof(head.length));
     head.headsize = (NDB_BLOB_V1_HEAD_SIZE << 2);
   } else {
-    const unsigned char *p = (const unsigned char *)buf;
+    const auto *p = (const unsigned char *)buf;
     // all little-endian
     uint i, n;
     for (i = 0, n = 0; i < 2; i++, n += 8) head.varsize |= ((Uint16)*p++ << n);
@@ -771,7 +771,7 @@ inline void NdbBlob::unpackBlobHead() {
 
 int NdbBlob::getTableKeyValue(NdbOperation *anOp) {
   DBUG_ENTER("NdbBlob::getTableKeyValue");
-  Uint32 *data = (Uint32 *)theKeyBuf.data;
+  auto *data = (Uint32 *)theKeyBuf.data;
   unsigned pos = 0;
   for (unsigned i = 0; i < theTable->m_columns.size(); i++) {
     NdbColumnImpl *c = theTable->m_columns[i];
@@ -817,7 +817,7 @@ Uint32 NdbBlob::getBlobKeyHash() {
     const Uint32 numKeyCols = cmpTab->m_noOfKeys;
     uint64 nr1 = 0;
     uint64 nr2 = 4;
-    const uchar *dataPtr = (const uchar *)keyBuf.data;
+    const auto *dataPtr = (const uchar *)keyBuf.data;
 
     Uint32 n = 0;
     for (unsigned i = 0; n < numKeyCols; i++) {
@@ -839,7 +839,7 @@ Uint32 NdbBlob::getBlobKeyHash() {
     }
 
     /* nr1 is key hash, mix with tableId */
-    const Uint64 lnr1 = (Uint64)nr1;
+    const auto lnr1 = (Uint64)nr1;
     m_keyHash = theTable->m_id ^ lnr1 ^ (lnr1 >> 32);
     m_keyHashSet = true;
     DBUG_PRINT("info", ("table id %u, nr1 %llu", theTable->m_id, (Uint64)nr1));
@@ -876,8 +876,8 @@ int NdbBlob::getBlobKeysEqual(NdbBlob *other) {
   const NdbTableImpl *cmpTab = (accessKey ? theAccessTable : theTable);
   const Uint32 numKeyCols = cmpTab->m_noOfKeys;
 
-  const uchar *dataPtrA = (const uchar *)bufA.data;
-  const uchar *dataPtrB = (const uchar *)bufB.data;
+  const auto *dataPtrA = (const uchar *)bufA.data;
+  const auto *dataPtrB = (const uchar *)bufB.data;
 
   bool equal = true;
 
@@ -930,7 +930,7 @@ int NdbBlob::setTableKeyValue(NdbOperation *anOp) {
   DBUG_ENTER("NdbBlob::setTableKeyValue");
   DBUG_DUMP("info", (uchar *)theKeyBuf.data, 4 * theTable->m_keyLenInWords);
   const bool isBlobPartOp = (anOp->m_currentTable == theBlobTable);
-  const Uint32 *data = (const Uint32 *)theKeyBuf.data;
+  const auto *data = (const Uint32 *)theKeyBuf.data;
   uint n = 0;
   const uint noOfKeys = theTable->m_noOfKeys;
   unsigned pos = 0;
@@ -960,7 +960,7 @@ int NdbBlob::setAccessKeyValue(NdbOperation *anOp) {
   DBUG_ENTER("NdbBlob::setAccessKeyValue");
   DBUG_DUMP("info", (uchar *)theAccessKeyBuf.data,
             4 * theAccessTable->m_keyLenInWords);
-  const Uint32 *data = (const Uint32 *)theAccessKeyBuf.data;
+  const auto *data = (const Uint32 *)theAccessKeyBuf.data;
   const unsigned columns = theAccessTable->m_columns.size();
   unsigned pos = 0;
   for (unsigned i = 0; i < columns; i++) {
@@ -1493,7 +1493,7 @@ int NdbBlob::readDataPrivate(char *buf, Uint32 &bytes) {
         part += partsThisTrip;
         count -= partsThisTrip;
         // skip last op batch execute if partial last block remains
-        if (!(count == 0 && len > 0)) {
+        if (count != 0 || len <= 0) {
           /* Execute this batch before defining next */
           if (executePendingBlobReads() == -1) {
             /* If any part read failed with "Not found" error, blob is
@@ -2024,7 +2024,7 @@ int NdbBlob::atPrepare(NdbTransaction *aCon, NdbOperation *anOp,
   if (isKeyOp()) {
     if (isTableOp()) {
       // get table key
-      Uint32 *data = (Uint32 *)thePackKeyBuf.data;
+      auto *data = (Uint32 *)thePackKeyBuf.data;
       Uint32 size = theTable->m_keyLenInWords;  // in-out
       if (theNdbOp->getKeyFromTCREQ(data, size) == -1) {
         setErrorCode(NdbBlobImpl::ErrUsage);
@@ -2036,7 +2036,7 @@ int NdbBlob::atPrepare(NdbTransaction *aCon, NdbOperation *anOp,
     }
     if (isIndexOp()) {
       // get index key
-      Uint32 *data = (Uint32 *)thePackKeyBuf.data;
+      auto *data = (Uint32 *)thePackKeyBuf.data;
       Uint32 size = theAccessTable->m_keyLenInWords;  // in-out
       if (theNdbOp->getKeyFromTCREQ(data, size) == -1) {
         setErrorCode(NdbBlobImpl::ErrUsage);
@@ -2147,7 +2147,7 @@ int NdbBlob::atPrepareCommon(NdbTransaction *aCon, NdbOperation *anOp,
      * Unfortunately, this is a bit messy, depending on which
      * type of underlying scan we have
      */
-    NdbScanOperation *sop = reinterpret_cast<NdbScanOperation *>(theNdbOp);
+    auto *sop = reinterpret_cast<NdbScanOperation *>(theNdbOp);
 
     if (sop->m_scanUsingOldApi) {
       /* Old Api scans only have saved lockmode state at this pre-finalisation
@@ -2404,7 +2404,7 @@ int NdbBlob::prepareColumn() {
     theBtColumnNo[BtColumnPart] = 2;
     theBtColumnNo[BtColumnData] = 3;
   } else if (theBlobVersion == NDB_BLOB_V2) {
-    const Uint32 storageType = (Uint32)theColumn->getStorageType();
+    const auto storageType = (Uint32)theColumn->getStorageType();
     theFixedDataFlag = (storageType != NDB_STORAGETYPE_MEMORY);
     theHeadSize = (NDB_BLOB_V2_HEAD_SIZE << 2);
     theVarsizeBytes = 2;
@@ -3421,8 +3421,8 @@ int NdbBlob::atNextResult() {
   assert(isScanOp());
   // get primary key
   {
-    NdbScanOperation *tScanOp = (NdbScanOperation *)theNdbOp;
-    Uint32 *data = (Uint32 *)thePackKeyBuf.data;
+    auto *tScanOp = (NdbScanOperation *)theNdbOp;
+    auto *data = (Uint32 *)thePackKeyBuf.data;
     unsigned size = theTable->m_keyLenInWords;  // in-out
     if (tScanOp->getKeyFromKEYINFO20(data, size) == -1) {
       setErrorCode(NdbBlobImpl::ErrUsage);

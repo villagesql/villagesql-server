@@ -25,8 +25,8 @@
 
 #include "plugin/keyring/common/keyring_key.h"
 
-#include <assert.h>
-#include <stddef.h>
+#include <cassert>
+#include <cstddef>
 
 namespace keyring {
 
@@ -190,12 +190,16 @@ size_t Key::get_key_pod_size() const {
   return key_pod_size_aligned;
 }
 
+void Key::xor_data(uchar *data, size_t data_len) {
+  static const char *obfuscate_str = "*305=Ljt0*!@$Hnm(*-9-w;:";
+  for (size_t i = 0, l = 0; i < data_len;
+       ++i, l = ((l + 1) % strlen(obfuscate_str)))
+    data[i] ^= obfuscate_str[l];
+}
+
 void Key::xor_data() {
   if (key == nullptr) return;
-  static const char *obfuscate_str = "*305=Ljt0*!@$Hnm(*-9-w;:";
-  for (size_t i = 0, l = 0; i < key_len;
-       ++i, l = ((l + 1) % strlen(obfuscate_str)))
-    key.get()[i] ^= obfuscate_str[l];
+  xor_data(key.get(), key_len);
 }
 
 bool Key::is_key_id_valid() { return key_id.length() > 0; }
@@ -205,7 +209,7 @@ bool Key::is_key_type_valid() { return key_type_enum != Key_type::unknown; }
 bool Key::is_key_valid() { return is_key_id_valid() || is_key_type_valid(); }
 
 bool Key::is_key_length_valid() {
-  bool valid = false;
+  bool valid;
   switch (key_type_enum) {
     case Key_type::aes: {
       valid = (key_len == 16 || key_len == 24 || key_len == 32);
@@ -268,7 +272,7 @@ void Key::create_key_signature() const {
 }
 
 std::string *Key::get_key_signature() const {
-  if (key_signature.empty() == true) create_key_signature();
+  if (key_signature.empty()) create_key_signature();
   return &key_signature;
 }
 

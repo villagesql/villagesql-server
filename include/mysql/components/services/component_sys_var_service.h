@@ -205,7 +205,8 @@ BEGIN_SERVICE_DEFINITION(component_sys_variable_register)
 
   @warning: Make sure to unregister the system variable when you no longer
   intend to have it or when your component deinitializes. Failure to do so will
-  lead to resource leaks and crashes.
+  lead to resource leaks and crashes. This doesn't apply to @ref
+  PLUGIN_VAR_NOSYSVAR variables! No need to unregister these.
 
   Typical use
   @code
@@ -317,6 +318,9 @@ DECLARE_BOOL_METHOD(register_variable,
   @retval true    failure
   @retval false   success
 */
+#if defined(__cplusplus) && (__cplusplus >= 201402L)
+[[deprecated("Use mysql_service_mysql_system_variable_reader->get() instead.")]]
+#endif
 DECLARE_BOOL_METHOD(get_variable, (const char *component_name, const char *name,
                                    void **val, size_t *out_length_of_val));
 

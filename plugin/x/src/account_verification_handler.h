@@ -28,7 +28,9 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+
 #include "plugin/x/src/interface/account_verification.h"
 #include "plugin/x/src/interface/account_verification_handler.h"
 #include "plugin/x/src/interface/authentication.h"
@@ -72,6 +74,12 @@ class Account_verification_handler
       const iface::Account_verification::Account_type account_type)
       const override;
 
+  static bool parse_sasl_message(
+      const std::string &sasl_message,
+      iface::Authentication_info *out_authentication_info,
+      std::string *out_schema, std::string *out_account,
+      std::string *out_passwd);
+
  private:
   using Account_verificator_list =
       std::map<iface::Account_verification::Account_type,
@@ -85,20 +93,23 @@ class Account_verification_handler
     bool is_password_expired{true};
     bool disconnect_on_expired_password{true};
     bool is_offline_mode_and_not_super_user{true};
+    std::optional<std::string> cache2_enforced_format;
     Sql_user_require user_required;
   };
 
-  bool extract_sub_message(const std::string &message,
-                           std::size_t &element_position,
-                           std::string &sub_message) const;
+  static bool extract_sub_message(const std::string &message,
+                                  std::size_t &element_position,
+                                  std::string &sub_message);
 
-  bool extract_last_sub_message(const std::string &message,
-                                std::size_t &element_position,
-                                std::string &sub_message) const;
+  static bool extract_last_sub_message(const std::string &message,
+                                       std::size_t &element_position,
+                                       std::string &sub_message);
 
   iface::Account_verification::Account_type get_account_verificator_id(
       const std::string &plugin_name) const;
+  bool is_caching_sha2_password(const std::string &plugin_name) const;
 
+  ngs::Error_code get_offline_mode_error() const;
   ngs::Error_code get_account_record(const std::string &user,
                                      const std::string &host,
                                      Account_record &record) const;

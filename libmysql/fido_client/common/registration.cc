@@ -66,7 +66,7 @@ bool registration::make_credentials(const char *challenge) {
 
   @param [in] user   buffer holding user name
 */
-void registration::set_user(std::string user) {
+void registration::set_user(const std::string &user) {
   /*
     1, 2 parameters refer to user ID/len, which should be unique for
     a given user, else same credentials is re used in authenticator.
@@ -81,7 +81,7 @@ void registration::set_user(std::string user) {
 
   @param [in] rp_id   buffer holding relying party name
 */
-void registration::set_rp_id(std::string rp_id) {
+void registration::set_rp_id(const std::string &rp_id) {
   fido_cred_set_rp(m_cred, rp_id.c_str(), nullptr);
 }
 
@@ -120,6 +120,21 @@ const unsigned char *registration::get_sig_ptr() {
 }
 
 /**
+  Gets the full attestation statement blob
+*/
+const unsigned char *registration::get_attestation_statement_ptr() {
+  return fido_cred_attstmt_ptr(m_cred);
+}
+
+/**
+  Gets the length of the full attestation statement blob
+*/
+size_t registration::get_attestation_statement_length() {
+  return fido_cred_attstmt_len(m_cred);
+}
+
+const char *registration::get_fmt() { return fido_cred_fmt(m_cred); }
+/**
   Method to get length of x509 certificate
 
   @retval length of x509 certificate
@@ -154,34 +169,32 @@ bool registration::is_fido2() { return m_is_fido2; }
 /**
   Discover available devices
 
-  Caller should always free num_devices + 1.
-
   @param [in] num_devices Number of devices to open
 
   @returns handle to fido_dev_info_t array on success. null otherwise.
 */
 fido_dev_info_t *registration::discover_fido2_devices(size_t num_devices) {
-  fido_dev_info_t *dev_infos = fido_dev_info_new(num_devices + 1);
+  fido_dev_info_t *dev_infos = fido_dev_info_new(num_devices);
   if (!dev_infos) {
     get_plugin_messages("Failed to allocate memory for fido_dev_info_t",
                         message_type::ERROR);
     return nullptr;
   }
-  auto cleanup_guard = create_scope_guard(
-      [&] { fido_dev_info_free(&dev_infos, num_devices + 1); });
+  auto cleanup_guard =
+      create_scope_guard([&] { fido_dev_info_free(&dev_infos, num_devices); });
   size_t olen = 0;
-  (void)fido_dev_info_manifest(dev_infos, num_devices + 1, &olen);
+  (void)fido_dev_info_manifest(dev_infos, num_devices, &olen);
   if (olen == 0) {
     get_plugin_messages("No FIDO device available on client host.",
                         message_type::ERROR);
     return nullptr;
   }
 
-  if (num_devices < olen) {
+  if (num_devices > olen) {
     std::stringstream error;
-    error
-        << "Expected maximum of '" << num_devices
-        << "' FIDO device(s). Please unplug some of the devices and try again.";
+    error << "Requested FIDO device '" << num_devices - 1
+          << "' not present. Please correct the device id supplied or make "
+             "sure the device is present.";
     get_plugin_messages(error.str(), message_type::ERROR);
     return nullptr;
   }

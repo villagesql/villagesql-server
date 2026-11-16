@@ -149,7 +149,7 @@ TEST_P(TestProducerConsumerQueueP, mpmc) {
   std::vector<std::thread> producers;
 
   for (unsigned int i = 0; i < num_consumers; i++) {
-    unsigned int rounds_this_consumer =
+    unsigned int const rounds_this_consumer =
         std::min(rounds_per_consumer, rounds_for_consumers);
 
     consumers.emplace_back(
@@ -164,7 +164,7 @@ TEST_P(TestProducerConsumerQueueP, mpmc) {
   }
 
   for (unsigned int i = 0; i < num_producers; i++) {
-    unsigned int rounds_this_producer =
+    unsigned int const rounds_this_producer =
         std::min(rounds_per_producer, rounds_for_producers);
 
     producers.emplace_back(
@@ -237,7 +237,7 @@ TEST_P(TestProducerConsumerQueueSCP, mpsc) {
   std::vector<std::thread> producers;
 
   for (unsigned int i = 0; i < num_consumers; i++) {
-    unsigned int rounds_this_consumer =
+    unsigned int const rounds_this_consumer =
         std::min(rounds_per_consumer, rounds_for_consumers);
 
     consumers.emplace_back(
@@ -252,7 +252,7 @@ TEST_P(TestProducerConsumerQueueSCP, mpsc) {
   }
 
   for (unsigned int i = 0; i < num_producers; i++) {
-    unsigned int rounds_this_producer =
+    unsigned int const rounds_this_producer =
         std::min(rounds_per_producer, rounds_for_producers);
 
     producers.emplace_back(

@@ -30,9 +30,9 @@
 
 #include "sql/sql_manager.h"
 
-#include <errno.h>
 #include <sys/types.h>
-#include <time.h>
+#include <cerrno>
+#include <ctime>
 
 #include "my_compiler.h"
 #include "my_dbug.h"

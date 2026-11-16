@@ -124,7 +124,7 @@ TEST_F(XcomStatisticsStorageImplTest, AddMessageTest) {
 }
 
 TEST_F(XcomStatisticsStorageImplTest, AddBytesReceivedTest) {
-  uint64_t received_bytes = 23456;
+  uint64_t const received_bytes = 23456;
 
   EXPECT_CALL(stats_mgr_mock,
               set_sum_var_value(kMessageBytesReceived, received_bytes))
@@ -134,7 +134,7 @@ TEST_F(XcomStatisticsStorageImplTest, AddBytesReceivedTest) {
 }
 
 TEST_F(XcomStatisticsStorageImplTest, SetLastProposalTimeTest) {
-  long long set_time = 22334455;
+  long long const set_time = 22334455;
 
   EXPECT_CALL(stats_mgr_mock,
               set_timestamp_var_value(kLastProposalRoundTime, set_time))

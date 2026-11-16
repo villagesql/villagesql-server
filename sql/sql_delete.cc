@@ -46,6 +46,8 @@
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_table_access
 #include "sql/binlog.h"            // mysql_bin_log
+#include "sql/dd/cache/dictionary_client.h"
+#include "sql/dd/types/table.h"
 #include "sql/debug_sync.h"        // DEBUG_SYNC
 #include "sql/filesort.h"          // Filesort
 #include "sql/handler.h"
@@ -55,6 +57,7 @@
 #include "sql/join_optimizer/access_path.h"
 #include "sql/join_optimizer/bit_utils.h"
 #include "sql/join_optimizer/walk_access_paths.h"
+#include "sql/json_duality_view/dml.h"  // jdv_delete
 #include "sql/key_spec.h"
 #include "sql/mem_root_array.h"
 #include "sql/mysqld.h"       // stage_...
@@ -73,6 +76,7 @@
 #include "sql/sql_const.h"
 #include "sql/sql_error.h"
 #include "sql/sql_executor.h"
+#include "sql/sql_foreign_key_constraint.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_opt_exec_shared.h"
@@ -89,7 +93,7 @@
 #include "sql/trigger_def.h"
 #include "sql/uniques.h"  // Unique
 
-class COND_EQUAL;
+struct COND_EQUAL;
 class Item_exists_subselect;
 class Opt_trace_context;
 class Select_lex_visitor;
@@ -118,6 +122,12 @@ bool DeleteCurrentRowAndProcessTriggers(THD *thd, TABLE *table,
                                           TRG_ACTION_BEFORE,
                                           /*old_row_is_record1=*/false)) {
       return true;
+    }
+  }
+
+  if (use_sql_fk_checks_for_table(thd, table)) {
+    if (check_all_child_fk_ref(thd, table, enum_fk_dml_type::FK_DELETE)) {
+      return thd->is_error();
     }
   }
 
@@ -245,6 +255,8 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
       table->triggers->has_triggers(TRG_EVENT_DELETE, TRG_ACTION_AFTER);
   unit->set_limit(thd, query_block);
 
+  ulonglong jdv_affected_rows = 0;
+
   AccessPath *range_scan = nullptr;
   join_type type = JT_UNKNOWN;
 
@@ -300,7 +312,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
     IGNORE keyword within federated storage engine. If federated engine is
     removed in the future, use of HA_EXTRA_IGNORE_DUP_KEY and
     HA_EXTRA_NO_IGNORE_DUP_KEY flag should be removed from
-    delete_from_single_table(), DeleteRowsIterator::Init() and
+    delete_from_single_table(), DeleteRowsIterator::DoInit() and
     handler::ha_reset().
   */
   if (lex->is_ignore()) table->file->ha_extra(HA_EXTRA_IGNORE_DUP_KEY);
@@ -612,13 +624,34 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
 
       assert(!thd->is_error());
 
-      if (DeleteCurrentRowAndProcessTriggers(thd, table, has_before_triggers,
-                                             has_after_triggers,
-                                             &deleted_rows)) {
-        error = 1;
-        break;
-      }
+      if (table_list->is_json_duality_view()) {
+        if (deleted_rows != 0 ||
+            table_list->field_translation->item == nullptr) {
+          my_error(ER_JDV_OPERATION_NOT_SUPPORTED, MYF(0),
+                   "Multiple object delete");
+          error = 1;
+          break;
+        }
 
+        DBUG_LOG("jdv_dml", "DML-DELETE: "
+                                << " table_list->field_translation->name: "
+                                << table_list->field_translation->name
+                                << " ->type():"
+                                << table_list->field_translation->item->type());
+        if (jdv::jdv_delete(thd, table_list, &jdv_affected_rows)) {
+          assert(thd->is_error());
+          error = 1;
+          break;
+        }
+        deleted_rows++;
+      } else {
+        if (DeleteCurrentRowAndProcessTriggers(thd, table, has_before_triggers,
+                                               has_after_triggers,
+                                               &deleted_rows)) {
+          error = 1;
+          break;
+        }
+      }
       if (!--limit && using_limit) {
         error = -1;
         break;
@@ -650,6 +683,14 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
 
 cleanup:
   assert(!lex->is_explain());
+
+  if (table_list->is_json_duality_view()) {
+    if (error < 0) {
+      my_ok(thd, jdv_affected_rows);
+    }
+    // For JSON duality view, event is already written to binlog.
+    return error > 0;
+  }
 
   if (!transactional_table && deleted_rows > 0)
     thd->get_transaction()->mark_modified_non_trans_table(
@@ -686,6 +727,9 @@ cleanup:
     my_ok(thd, deleted_rows);
     DBUG_PRINT("info", ("%ld records deleted", (long)deleted_rows));
   }
+
+  thd->updated_row_count += deleted_rows;
+
   return error > 0;
 }
 
@@ -723,6 +767,11 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
     if (select->resolve_placeholder_tables(thd, apply_semijoin)) return true;
 
     if (select->check_view_privileges(thd, DELETE_ACL, SELECT_ACL)) return true;
+  }
+
+  if (table_list->is_json_duality_view() &&
+      jdv::jdv_prepare_delete(thd, table_list, is_single_table_plan())) {
+    return true;
   }
 
   /*
@@ -782,6 +831,12 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
   // flattening even if features specific to single-table DELETE (that is, ORDER
   // BY and LIMIT) are used.
   if (lex->using_hypergraph_optimizer()) {
+    if (!multitable) {
+      Table_ref *const delete_table_ref = table_list->updatable_base_table();
+      TABLE *const table = delete_table_ref->table;
+      if (select->active_options() & OPTION_QUICK)
+        (void)table->file->ha_extra(HA_EXTRA_QUICK);
+    }
     multitable = true;
   }
 
@@ -908,8 +963,10 @@ bool Sql_cmd_delete::execute_inner(THD *thd) {
     my_ok(thd);
     return false;
   }
-  return multitable ? Sql_cmd_dml::execute_inner(thd)
-                    : delete_from_single_table(thd);
+  return (multitable &&
+          !lex->query_block->get_table_list()->is_json_duality_view())
+             ? Sql_cmd_dml::execute_inner(thd)
+             : delete_from_single_table(thd);
 }
 
 /***************************************************************************
@@ -972,6 +1029,58 @@ void SetUpTablesForDelete(THD *thd, JOIN *join) {
   THD_STAGE_INFO(thd, stage_deleting_from_main_table);
 }
 
+/**
+  Test that the two strings are equal, accoding to the lower_case_table_names
+  setting.
+
+  @param  a     A table or database name
+  @param  b     A table or database name
+  @retval bool  True if the two names are equal
+*/
+static bool db_or_table_name_equals(const char *a, dd::String_type const &b) {
+  return lower_case_table_names
+             ? my_strcasecmp(files_charset_info, a, b.c_str()) == 0
+             : strcmp(a, b.c_str()) == 0;
+}
+
+/**
+  Test that the subject table (of DELETE) has a cascade foreign key
+  parent present in the query.
+
+  @param  thd        thread handle
+  @param  table      table to be checked (must be updatable base table)
+  @param  table_list List of tables to check against
+
+  @retval bool       True if cascade parent found.
+*/
+static bool has_cascade_dependency(THD *thd, Table_ref &table,
+                                   Table_ref *table_list) {
+  assert(&table == const_cast<Table_ref &>(table).updatable_base_table());
+
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  const dd::Table *table_obj = nullptr;
+  if (table.table->s->tmp_table)
+    table_obj = table.table->s->tmp_table_def;
+  else {
+    if (thd->dd_client()->acquire(
+            dd::String_type(table.table->s->db.str),
+            dd::String_type(table.table->s->table_name.str), &table_obj))
+      return true;
+  }
+  for (const dd::Foreign_key_parent *fk_p : table_obj->foreign_key_parents()) {
+    for (Table_ref *curr = table_list; curr; curr = curr->next_local) {
+      const bool same_table_name =
+          db_or_table_name_equals(curr->table_name, fk_p->child_table_name());
+      const bool same_db_name =
+          db_or_table_name_equals(curr->db, fk_p->child_schema_name());
+      if (same_table_name && same_db_name) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool CheckSqlSafeUpdate(THD *thd, const JOIN *join) {
   if (!Overlaps(thd->variables.option_bits, OPTION_SAFE_UPDATES)) {
     return false;
@@ -1004,7 +1113,7 @@ bool CheckSqlSafeUpdate(THD *thd, const JOIN *join) {
   return false;
 }
 
-bool DeleteRowsIterator::Init() {
+bool DeleteRowsIterator::DoInit() {
   if (CheckSqlSafeUpdate(thd(), m_join)) {
     return true;
   }
@@ -1192,7 +1301,7 @@ bool DeleteRowsIterator::DoDelayedDeletesFromTable(TABLE *table) {
   return local_error;
 }
 
-int DeleteRowsIterator::Read() {
+int DeleteRowsIterator::DoRead() {
   bool local_error = false;
 
   // First process all the rows returned by the join. Delete immediately from
@@ -1254,6 +1363,8 @@ int DeleteRowsIterator::Read() {
     }
   }
 
+  thd()->updated_row_count += m_deleted_rows;
+
   if (local_error) {
     return 1;
   } else {
@@ -1281,7 +1392,8 @@ table_map GetImmediateDeleteTables(const JOIN *join, table_map delete_tables) {
        tr = tr->next_leaf) {
     if (!tr->is_deleted()) continue;
 
-    if (unique_table(tr, join->tables_list, false) != nullptr) {
+    if (unique_table(tr, join->tables_list, false) != nullptr ||
+        has_cascade_dependency(join->thd, *tr, join->tables_list)) {
       /*
         If the table being deleted from is also referenced in the query,
         defer delete so that the delete doesn't interfere with reading of this

@@ -3,7 +3,7 @@
 # BUG#13979418: SHOW BINLOG EVENTS MAY CRASH THE SERVER
 #
 # The function mysql_show_binlog_events has a local stack variable
-# 'LOG_INFO linfo;', which is assigned to thd->current_linfo, however
+# 'Log_info linfo;', which is assigned to thd->current_linfo, however
 # this variable goes out of scope and is destroyed before clean
 # thd->current_linfo.
 #
@@ -14,8 +14,7 @@
 --source include/have_debug_sync.inc
 --source include/rpl/init_source_replica.inc
 
---echo [connection slave]
---connection slave
+--source include/rpl/connection_replica.inc
 SET DEBUG_SYNC= 'after_show_binlog_events SIGNAL on_show_binlog_events WAIT_FOR end';
 --send SHOW BINLOG EVENTS
 

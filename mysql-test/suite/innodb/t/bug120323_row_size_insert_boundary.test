@@ -1,5 +1,4 @@
-# Bug#39249507 Regression : "Row size too large (> 8126)" error with table 
-#              using InnoDb DYNAMIC row format
+# Bug#120323: Row size too large regression - INSERT boundary test
 #
 # This test documents the known trade-off of the fix: CREATE TABLE succeeds
 # for schemas with many varchar(41-255) columns, but INSERT will fail with
@@ -9,7 +8,11 @@
 # expected because the record format cannot flag columns with col->len <= 255
 # for external storage (1-byte length encoding has no external storage bit).
 
---source include/have_innodb_16k.inc
+--disable_warnings
+DROP DATABASE IF EXISTS bug120323;
+--enable_warnings
+CREATE DATABASE bug120323;
+USE bug120323;
 
 --echo #
 --echo # Create a table with 100 x varchar(200) latin1 DYNAMIC.
@@ -60,4 +63,4 @@ while ($i <= 100)
 --eval INSERT INTO t1 VALUES ($insert_vals)
 
 # cleanup
-DROP TABLE t1;
+DROP DATABASE bug120323;

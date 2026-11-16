@@ -388,6 +388,7 @@ class ha_innopart : public ha_innobase,
 
   int discard_or_import_tablespace(bool discard, dd::Table *table_def) override;
 
+
   /** Compare key and rowid.
   Helper function for sorting records in the priority queue.
   a/b points to table->record[0] rows which must have the
@@ -534,6 +535,8 @@ class ha_innopart : public ha_innobase,
     return (Partition_helper::ph_read_range_next());
   }
 
+  bool has_gap_locks() const noexcept override { return true; }
+
   uint32_t calculate_key_hash_value(Field **field_array) override {
     return (Partition_helper::ph_calculate_key_hash_value(field_array));
   }
@@ -630,6 +633,9 @@ class ha_innopart : public ha_innobase,
     /** saved m_prebuilt->blob_heap */
     mem_heap_t *m_blob_heap;
 
+    /** saved prebuilt->compress_heap  */
+    mem_heap_t *m_compress_heap;
+
     /** saved m_prebuilt->trx_id (which in turn reflects table->def_trx_id) */
     trx_id_t m_trx_id;
 
@@ -681,6 +687,9 @@ class ha_innopart : public ha_innobase,
 
   /** Clear the blob heaps for all partitions */
   void clear_blob_heaps();
+
+  /** Clear the compress heaps for all partitions */
+  void clear_compress_heaps();
 
   /** Reset state of file to after 'open'. This function is called
   after every statement for all tables used by that statement. */
@@ -1163,6 +1172,13 @@ class ha_innopart : public ha_innobase,
   Returns statistics information of the table to the MySQL interpreter,
   in various fields of the handle object.
   @param[in]    flag            Flags for what to update and return.
+                                HA_STATUS_NO_LOCK is supported only for:
+                                ha_statistics::delete_length
+                                it is not supported for others like:
+                                ha_statistics::records
+                                But it will not lock for the duration of stats
+                                calculation. Only during copy to make sure
+                                stats are consistent.
   @param[in]    is_analyze      True if called from "::analyze()".
   @return       HA_ERR_* error code or 0. */
   int info_low(uint flag, bool is_analyze) override;
@@ -1170,5 +1186,11 @@ class ha_innopart : public ha_innobase,
   bool can_reuse_mysql_template() const override {
     return m_reuse_mysql_template;
   }
+  void info_low_table_stats(const dict_table_t *ib_table,
+                            ulint &stat_clustered_index_size,
+                            ulint &stat_sum_of_other_index_sizes,
+                            uint64_t &stat_n_rows) const;
+  void info_low_rec_per_key(const dict_table_t *ib_table, uint64_t max_rows,
+                            uint biggest_partition);
 };
 #endif /* ha_innopart_h */

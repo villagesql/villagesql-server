@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
-  @file debug_vars.h
+  @file
 
   @brief This header file contains the status of variables used by MySQL tests
   for debug operations. The variables are set to true by the MySQL server if
@@ -36,6 +36,7 @@ namespace mysql::binlog::event::debug {
 extern bool debug_checksum_test;
 extern bool debug_query_mts_corrupt_db_names;
 extern bool debug_simulate_invalid_address;
+extern bool debug_expect_unknown_event;
 
 // TODO(WL#7546):Add variables here as we move methods into libbinlogevent
 // from the server while implementing the WL#7546(Moving binlog event

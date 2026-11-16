@@ -24,10 +24,11 @@
 
 #include "sql/mdl.h"
 
-#include <time.h>
 #include <algorithm>
 #include <atomic>
+#include <ctime>
 #include <functional>
+#include <memory>
 
 #include "lf.h"
 #include "my_dbug.h"
@@ -52,12 +53,15 @@
 #include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
+#include "sql/current_thd.h"
 #include "sql/debug_sync.h"
+#include "sql/mysqld.h"
 #include "sql/thr_malloc.h"
 
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *system_charset_info;
 
 static PSI_memory_key key_memory_MDL_context_acquire_locks;
+static PSI_memory_key key_memory_MDL_context_upgrade_shared_locks;
 
 #ifdef HAVE_PSI_INTERFACE
 static PSI_mutex_key key_MDL_wait_LOCK_wait_status;
@@ -83,13 +87,16 @@ static PSI_cond_info all_mdl_conds[] = {{&key_MDL_wait_COND_wait_status,
 
 static PSI_memory_info all_mdl_memory[] = {
     {&key_memory_MDL_context_acquire_locks, "MDL_context::acquire_locks", 0, 0,
+     "Buffer for sorting lock requests."},
+    {&key_memory_MDL_context_upgrade_shared_locks,
+     "MDL_context::upgrade_shared_locks", 0, 0,
      "Buffer for sorting lock requests."}};
 
 /**
   Initialise all the performance schema instrumentation points
   used by the MDL subsystem.
 */
-static void init_mdl_psi_keys(void) {
+static void init_mdl_psi_keys() {
   int count;
 
   count = static_cast<int>(array_elements(all_mdl_mutexes));
@@ -132,7 +139,10 @@ PSI_stage_info MDL_key::m_namespace_to_wait_state_name[NAMESPACE_END] = {
     {0, "Waiting for column statistics lock", 0, PSI_DOCUMENT_ME},
     {0, "Waiting for resource groups metadata lock", 0, PSI_DOCUMENT_ME},
     {0, "Waiting for foreign key metadata lock", 0, PSI_DOCUMENT_ME},
-    {0, "Waiting for check constraint metadata lock", 0, PSI_DOCUMENT_ME}};
+    {0, "Waiting for check constraint metadata lock", 0, PSI_DOCUMENT_ME},
+    {0, "Waiting for library metadata lock", 0, PSI_DOCUMENT_ME},
+    {0, "Waiting for table backup lock", 0, PSI_DOCUMENT_ME},
+};
 
 #ifdef HAVE_PSI_INTERFACE
 void MDL_key::init_psi_keys() {
@@ -239,7 +249,8 @@ class MDL_map {
     return (mdl_key->mdl_namespace() == MDL_key::GLOBAL ||
             mdl_key->mdl_namespace() == MDL_key::COMMIT ||
             mdl_key->mdl_namespace() == MDL_key::ACL_CACHE ||
-            mdl_key->mdl_namespace() == MDL_key::BACKUP_LOCK);
+            mdl_key->mdl_namespace() == MDL_key::BACKUP_LOCK ||
+            mdl_key->mdl_namespace() == MDL_key::BACKUP_TABLES);
   }
 
  private:
@@ -271,6 +282,8 @@ class MDL_map {
     this into account.
   */
   std::atomic<int32> m_unused_lock_objects;
+  /** Pre-allocated MDL_lock object for Percona BACKUP TABLES namespace. */
+  MDL_lock *m_backup_tables_lock;
 };
 
 /**
@@ -829,6 +842,7 @@ class MDL_lock {
       case MDL_key::RESOURCE_GROUPS:
       case MDL_key::FOREIGN_KEY:
       case MDL_key::CHECK_CONSTRAINT:
+      case MDL_key::BACKUP_TABLES:
         return &m_scoped_lock_strategy;
       default:
         return &m_object_lock_strategy;
@@ -961,7 +975,7 @@ class MDL_lock {
     */
     mysql_prlock_assert_write_owner(&m_rwlock);
 
-    fast_path_state_t old_state = m_fast_path_state.fetch_add(value);
+    fast_path_state_t const old_state = m_fast_path_state.fetch_add(value);
 
     /*
       We should not change state of destroyed object
@@ -1020,7 +1034,7 @@ class MDL_lock {
   */
   static bitmap_t object_lock_fast_path_granted_bitmap(const MDL_lock &lock) {
     bitmap_t result = 0;
-    fast_path_state_t fps = lock.m_fast_path_state;
+    fast_path_state_t const fps = lock.m_fast_path_state;
     if (fps & 0xFFFFFULL) result |= MDL_BIT(MDL_SHARED);
     if (fps & (0xFFFFFULL << 20)) result |= MDL_BIT(MDL_SHARED_READ);
     if (fps & (0xFFFFFULL << 40)) result |= MDL_BIT(MDL_SHARED_WRITE);
@@ -1056,7 +1070,7 @@ class MDL_lock {
 static MDL_map mdl_locks;
 
 static const uchar *mdl_locks_key(const uchar *record, size_t *length) {
-  const MDL_lock *lock = pointer_cast<const MDL_lock *>(record);
+  const auto *lock = pointer_cast<const MDL_lock *>(record);
   *length = lock->key.length();
   return lock->key.ptr();
 }
@@ -1112,13 +1126,13 @@ static void mdl_lock_cons(uchar *arg) {
 }
 
 static void mdl_lock_dtor(uchar *arg) {
-  MDL_lock *lock = (MDL_lock *)(arg + LF_HASH_OVERHEAD);
+  auto *lock = (MDL_lock *)(arg + LF_HASH_OVERHEAD);
   lock->~MDL_lock();
 }
 
 static void mdl_lock_reinit(uchar *dst_arg, const uchar *src_arg) {
-  MDL_lock *dst = (MDL_lock *)dst_arg;
-  const MDL_key *src = (const MDL_key *)src_arg;
+  auto *dst = (MDL_lock *)dst_arg;
+  const auto *src = (const MDL_key *)src_arg;
   dst->reinit(src);
 }
 
@@ -1145,6 +1159,9 @@ void MDL_map::init() {
   m_acl_cache_lock = MDL_lock::create(&acl_cache_lock_key);
   m_backup_lock = MDL_lock::create(&backup_lock_key);
 
+  const MDL_key percona_backup_lock_key(MDL_key::BACKUP_TABLES, "", "");
+  m_backup_tables_lock = MDL_lock::create(&percona_backup_lock_key);
+
   m_unused_lock_objects = 0;
 
   lf_hash_init2(&m_locks, sizeof(MDL_lock), LF_HASH_UNIQUE, 0, 0, mdl_locks_key,
@@ -1158,6 +1175,7 @@ void MDL_map::init() {
 */
 
 void MDL_map::destroy() {
+  MDL_lock::destroy(m_backup_tables_lock);
   MDL_lock::destroy(m_global_lock);
   MDL_lock::destroy(m_commit_lock);
   MDL_lock::destroy(m_acl_cache_lock);
@@ -1210,6 +1228,9 @@ MDL_lock *MDL_map::find(LF_PINS *pins, const MDL_key *mdl_key, bool *pinned) {
       case MDL_key::BACKUP_LOCK:
         lock = m_backup_lock;
         break;
+      case MDL_key::BACKUP_TABLES:
+        lock = m_backup_tables_lock;
+        break;
       default:
         assert(false);
     }
@@ -1259,10 +1280,10 @@ MDL_lock *MDL_map::find_or_insert(LF_PINS *pins, const MDL_key *mdl_key,
       MDL_lock for key isn't present in hash, try to insert new object.
       This can fail due to concurrent inserts.
     */
-    int rc = lf_hash_insert(&m_locks, pins, mdl_key);
+    int const rc = lf_hash_insert(&m_locks, pins, mdl_key);
     if (rc == -1) /* If OOM. */
       return nullptr;
-    else if (rc == 0) {
+    if (rc == 0) {
       /*
         New MDL_lock object is not used yet. So we need to
         increment number of unused lock objects.
@@ -1286,7 +1307,7 @@ extern "C" {
 */
 static int mdl_lock_match_unused(const uchar *arg,
                                  void *match_arg [[maybe_unused]]) {
-  const MDL_lock *lock = (const MDL_lock *)arg;
+  const auto *lock = (const MDL_lock *)arg;
   /*
     It is OK to check MDL_lock::m_fast_path_state non-atomically here
     since the fact that MDL_lock object is unused will be properly
@@ -1323,7 +1344,7 @@ void MDL_map::remove_random_unused(MDL_context *ctx, LF_PINS *pins,
     Since this method is called only when unused/total lock objects ratio is
     high enough, there is a good chance for this technique to succeed.
   */
-  MDL_lock *lock = static_cast<MDL_lock *>(lf_hash_random_match(
+  auto *lock = static_cast<MDL_lock *>(lf_hash_random_match(
       &m_locks, pins, &mdl_lock_match_unused, ctx->get_random(), nullptr));
 
   if (lock == nullptr || lock == MY_LF_ERRPTR) {
@@ -1391,7 +1412,7 @@ void MDL_map::remove_random_unused(MDL_context *ctx, LF_PINS *pins,
       first step and keeps pins until its end it is safe to use MDL_lock::key
       as parameter to lf_hash_delete().
     */
-    int rc =
+    int const rc =
         lf_hash_delete(&m_locks, pins, lock->key.ptr(), lock->key.length());
 
     /* The MDL_lock object must be present in the hash. */
@@ -1586,7 +1607,7 @@ void MDL_request::init_by_part_key_with_source(
 */
 
 inline MDL_lock *MDL_lock::create(const MDL_key *mdl_key) {
-  MDL_lock *result = new (std::nothrow) MDL_lock();
+  auto *result = new (std::nothrow) MDL_lock();
   if (result) result->reinit(mdl_key);
   return result;
 }
@@ -2494,6 +2515,7 @@ void MDL_lock::remove_ticket(MDL_context *ctx, LF_PINS *pins,
   const bool is_singleton = mdl_locks.is_lock_object_singleton(&key);
 
   mysql_prlock_wrlock(&m_rwlock);
+
   (this->*list).remove_ticket(ticket);
 
   /*
@@ -2508,7 +2530,7 @@ void MDL_lock::remove_ticket(MDL_context *ctx, LF_PINS *pins,
     If both m_granted and m_waiting lists become empty as result we also
     need to clear HAS_SLOW_PATH flag in m_fast_path_state.
   */
-  bool last_slow_path = m_granted.is_empty() && m_waiting.is_empty();
+  bool const last_slow_path = m_granted.is_empty() && m_waiting.is_empty();
   bool last_use = false;
 
   if (last_slow_path || last_obtrusive) {
@@ -2725,7 +2747,7 @@ bool MDL_context::try_acquire_lock(MDL_request *mdl_request) {
     const bool last_obtrusive =
         lock->is_obtrusive_lock(mdl_request->type) &&
         ((--lock->m_obtrusive_locks_granted_waiting_count) == 0);
-    bool last_slow_path =
+    bool const last_slow_path =
         lock->m_granted.is_empty() && lock->m_waiting.is_empty();
 
     if (last_slow_path || last_obtrusive) {
@@ -3655,20 +3677,15 @@ bool MDL_context::acquire_locks(MDL_request_list *mdl_requests,
     any new such locks taken if acquisition fails.
   */
   MDL_ticket *explicit_front = m_ticket_store.front(MDL_EXPLICIT);
-  const size_t req_count = mdl_requests->elements();
-
-  if (req_count == 0) return false;
 
   /* Sort requests according to MDL_key. */
   Prealloced_array<MDL_request *, 16> sort_buf(
       key_memory_MDL_context_acquire_locks);
-  if (sort_buf.reserve(req_count)) return true;
 
-  for (size_t ii = 0; ii < req_count; ++ii) {
-    sort_buf.push_back(it++);
-  }
-
-  std::sort(sort_buf.begin(), sort_buf.end(), MDL_request_cmp());
+  if (filter_and_sort_requests_by_mdl_key(
+          &sort_buf, mdl_requests,
+          nullptr /* No filter, process whole array. */))
+    return true;
 
   size_t num_acquired = 0;
   for (p_req = sort_buf.begin(); p_req != sort_buf.end(); p_req++) {
@@ -3859,6 +3876,42 @@ bool MDL_context::upgrade_shared_lock(MDL_ticket *mdl_ticket,
   return false;
 }
 
+bool MDL_context::filter_and_sort_requests_by_mdl_key(
+    Prealloced_array<MDL_request *, 16> *sort_buf,
+    MDL_request_list *mdl_requests, bool (*filter_func)(MDL_request *)) {
+  const size_t req_count = mdl_requests->elements();
+  if (req_count == 0) return false;
+  if (sort_buf->reserve(req_count)) return true;
+  MDL_request_list::Iterator it(*mdl_requests);
+  for (size_t ii = 0; ii < req_count; ++ii) {
+    MDL_request *r = it++;
+    if (filter_func == nullptr || filter_func(r)) sort_buf->push_back(r);
+  }
+  std::sort(sort_buf->begin(), sort_buf->end(), MDL_request_cmp());
+  return false;
+}
+
+bool MDL_context::upgrade_shared_locks(MDL_request_list *mdl_requests,
+                                       enum_mdl_type new_type,
+                                       Timeout_type lock_wait_timeout,
+                                       bool (*filter_func)(MDL_request *)) {
+  const size_t req_count = mdl_requests->elements();
+  if (req_count == 0) return false;
+
+  /* Sort requests according to MDL_key. */
+  Prealloced_array<MDL_request *, 16> sort_buf(
+      key_memory_MDL_context_upgrade_shared_locks);
+
+  if (filter_and_sort_requests_by_mdl_key(&sort_buf, mdl_requests, filter_func))
+    return true;
+
+  for (MDL_request *r : sort_buf) {
+    if (upgrade_shared_lock(r->ticket, new_type, lock_wait_timeout))
+      return true;
+  }
+  return false;
+}
+
 /**
   A fragment of recursive traversal of the wait-for graph
   in search for deadlocks. Direct the deadlock visitor to all
@@ -3875,6 +3928,20 @@ bool MDL_lock::visit_subgraph(MDL_ticket *waiting_ticket,
   bool result = true;
 
   mysql_prlock_rdlock(&m_rwlock);
+
+#if defined(ENABLED_DEBUG_SYNC)
+  /*
+    Fire the sync point only when the visited ticket belongs to the thread
+    running this deadlock detection (i.e. the initial node of the graph
+    walk). At recursion depth >= 2 src_ctx belongs to another connection,
+    and debug_sync() would then manipulate that connection's
+    debug_sync_control without any synchronization, racing with the owner
+    thread (and with other concurrent deadlock detectors) executing the
+    same action.
+  */
+  if (src_ctx->get_thd() == current_thd)
+    DEBUG_SYNC(current_thd, "acl_mdl_dead_lock");
+#endif
 
   /*
     Iterators must be initialized after taking a read lock.
@@ -4107,7 +4174,10 @@ void MDL_context::release_lock(enum_mdl_duration duration, MDL_ticket *ticket) {
   MDL_key key_for_hton;
   DBUG_TRACE;
   DBUG_PRINT("enter", ("db=%s name=%s", lock->key.db_name(), lock->key.name()));
-
+  DBUG_LOG("dd_release_lock", "Releasing MDL("
+                                  << (int)ticket->get_key()->mdl_namespace()
+                                  << "," << ticket->get_key()->db_name() << "."
+                                  << ticket->get_key()->name() << ")");
   assert(this == ticket->get_ctx());
   mysql_mutex_assert_not_owner(&LOCK_open);
 
@@ -4564,7 +4634,7 @@ bool MDL_context::has_locks(MDL_key::enum_mdl_namespace mdl_namespace) const {
   MDL_ticket *ticket;
 
   for (int i = 0; i < MDL_DURATION_END; i++) {
-    const enum_mdl_duration duration = static_cast<enum_mdl_duration>(i);
+    const auto duration = static_cast<enum_mdl_duration>(i);
 
     MDL_ticket_store::List_iterator it = m_ticket_store.list_iterator(duration);
     while ((ticket = it++)) {
@@ -4589,7 +4659,7 @@ bool MDL_context::has_locks_waited_for() const {
   MDL_ticket *ticket;
 
   for (int i = 0; i < MDL_DURATION_END; i++) {
-    const enum_mdl_duration duration = static_cast<enum_mdl_duration>(i);
+    const auto duration = static_cast<enum_mdl_duration>(i);
 
     MDL_ticket_store::List_iterator it = m_ticket_store.list_iterator(duration);
     while ((ticket = it++)) {
@@ -4680,7 +4750,7 @@ MDL_ticket_store::MDL_ticket_handle MDL_ticket_store::find_in_hash(
   // VS tags std::find_if with 'nodiscard'.
   (void)std::find_if(foundrng.first, foundrng.second,
                      [&](const Ticket_map::value_type &vt) {
-                       auto &th = vt.second;
+                       const auto &th = vt.second;
                        if (!th.m_ticket->has_stronger_or_equal_type(req.type)) {
                          return false;
                        }
@@ -4731,7 +4801,8 @@ void MDL_ticket_store::push_front(enum_mdl_duration dur, MDL_ticket *ticket) {
     // If this is the first time we cross the threshold, the map must
     // be allocated
     if (m_map == nullptr) {
-      m_map.reset(new Ticket_map{INITIAL_BUCKET_COUNT, Hash{}, Key_equal{}});
+      m_map = std::make_unique<Ticket_map>(INITIAL_BUCKET_COUNT, Hash{},
+                                           Key_equal{});
     }
     // In any event, it should now be empty
     assert(m_map->empty());
@@ -4778,7 +4849,7 @@ void MDL_ticket_store::remove(enum_mdl_duration dur, MDL_ticket *ticket) {
 
   auto foundit = std::find_if(
       foundrng.first, foundrng.second, [&](const Ticket_map::value_type &vt) {
-        auto &th = vt.second;
+        const auto &th = vt.second;
         assert(th.m_ticket != ticket || th.m_dur == dur);
         return (th.m_ticket == ticket);
       });

@@ -23,14 +23,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/x/src/services/services.h"
 
+#include <memory>
+
 #include "plugin/x/src/services/service_audit_api_connection.h"
 #include "plugin/x/src/services/service_sys_variables.h"
 
 namespace xpl {
 
 Services::Services() {
-  m_system_variable_register.reset(new Service_sys_variables(&m_registry));
-  m_audit_api.reset(new Service_audit_api_connection(&m_registry));
+  m_system_variable_register =
+      std::make_unique<Service_sys_variables>(&m_registry);
+  m_audit_api = std::make_unique<Service_audit_api_connection>(&m_registry);
 }
 
 }  // namespace xpl

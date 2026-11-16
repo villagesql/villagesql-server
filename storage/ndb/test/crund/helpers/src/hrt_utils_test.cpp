@@ -28,8 +28,8 @@
  *
  */
 
-#include <assert.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
 
 #include "hrt_utils.h"
 
@@ -81,14 +81,14 @@ static void hrt_tprint(const hrt_tstamp *x) {
   hrt_ctprint(&x->ctstamp);
 }
 
-static void do_something(void) {
+static void do_something() {
   const unsigned long loop = 1000000000L;
   unsigned long i;
   static volatile unsigned long dummy;
   for (i = 0; i < loop; i++) dummy = i;
 }
 
-int main(int argc, const char *argv[]) {
+int main(int /*argc*/, const char * /*argv*/[]) {
   printf("--> main()\n");
   do_something();
 

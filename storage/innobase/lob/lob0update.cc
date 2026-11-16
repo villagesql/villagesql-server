@@ -100,6 +100,7 @@ dberr_t update(InsertContext &ctx, trx_t *trx, dict_index_t *index,
   dberr_t err = DB_SUCCESS;
   mtr_t *mtr = ctx.get_mtr();
   const undo_no_t undo_no = (trx == nullptr ? 0 : trx->undo_no - 1);
+  const trx_id_t trxid = (trx == nullptr ? 0 : trx->id);
 
   const Binary_diff_vector *bdiff_vector =
       upd->get_binary_diff_by_field_no(field_no);
@@ -107,8 +108,7 @@ dberr_t update(InsertContext &ctx, trx_t *trx, dict_index_t *index,
   const ulint bytes_changed = upd_t::get_total_modified_bytes(*bdiff_vector);
 
   /* Whether the update to the LOB can be considered as a small change. */
-  const bool small_change =
-      (bytes_changed <= ref_t::LOB_SMALL_CHANGE_THRESHOLD);
+  const bool small_change = ref_t::is_small_change(bytes_changed, blobref);
 
   const upd_field_t *const uf = upd->get_field_by_field_no(field_no, index);
 
@@ -127,7 +127,7 @@ dberr_t update(InsertContext &ctx, trx_t *trx, dict_index_t *index,
 
   first_page_t first_page(mtr, index);
   first_page.load_x(first_page_id, page_size);
-  first_page.set_last_trx_id(trx->id);
+  first_page.set_last_trx_id(trxid);
   first_page.set_last_trx_undo_no(undo_no);
   uint32_t lob_version = 0;
 

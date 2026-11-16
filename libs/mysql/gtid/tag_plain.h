@@ -30,8 +30,7 @@
 #include <string>
 #include <type_traits>
 
-#include "mysql/gtid/gtid_format.h"
-#include "mysql/gtid/tag.h"
+#include "mysql/gtid/gtid_constants.h"  // tag_max_length
 
 /// @addtogroup GroupLibsMysqlGtid
 /// @{

@@ -57,6 +57,11 @@ plugin_messages_callback_get_uint mc_get_uint = nullptr;
 plugin_messages_callback_get_password mc_get_password = nullptr;
 
 /**
+ The libfido "device" to use.
+*/
+unsigned int libfido_device_id = 0;
+
+/**
   authentication_webauthn_client plugin API to initialize
 */
 static int webauthn_auth_client_plugin_init(char *, size_t, int, va_list) {
@@ -99,8 +104,7 @@ static int webauthn_auth_client_plugin_option(const char *option,
     return 0;
   }
   if (strcmp(option, "registration_challenge") == 0) {
-    unsigned char *p =
-        reinterpret_cast<unsigned char *>(const_cast<void *>(val));
+    auto *p = reinterpret_cast<unsigned char *>(const_cast<void *>(val));
     memcpy(registration_challenge, p, strlen(reinterpret_cast<char *>(p)));
     /* finish registration */
     if (do_registration()) return 1;
@@ -108,6 +112,17 @@ static int webauthn_auth_client_plugin_option(const char *option,
   }
   if (strcmp(option, "authentication_webauthn_client_preserve_privacy") == 0) {
     preserve_privacy = *static_cast<const bool *>(val);
+    return 0;
+  }
+  if (0 == strcmp(option, "device")) {
+    /*
+      An artifical limit on the number of devices supported to avoid
+      excessive memory consumption
+    */
+    static const int MAX_FIDO_DEVICE_ID = 15;
+
+    libfido_device_id = *static_cast<const uint *>(val);
+    if (libfido_device_id > MAX_FIDO_DEVICE_ID) return 1;
     return 0;
   }
   return 1;
@@ -161,8 +176,8 @@ static int webauthn_auth_client(MYSQL_PLUGIN_VIO *vio, MYSQL *) {
   webauthn_assertion *wa = nullptr;
   size_t length = 0;
   auto cleanup = create_scope_guard([&] {
-    if (buff) delete[] buff;
-    if (wa) delete wa;
+    delete[] buff;
+    delete wa;
   });
 
 #ifndef NDEBUG
@@ -223,7 +238,7 @@ static bool do_registration() {
 #ifndef NDEBUG
   if (is_fido_testing) {
     const char *dummy = "\nSIGNATURE \nAUTHDATA \nCERT      ";
-    size_t sz = strlen(dummy);
+    size_t const sz = strlen(dummy);
     memcpy(registration_challenge, dummy, sz);
     /* dummy challenge response for testing */
     registration_challenge_response = new unsigned char[sz + 1];
@@ -233,7 +248,7 @@ static bool do_registration() {
   } else
 #endif
   {
-    webauthn_registration *fr = new webauthn_registration();
+    auto *fr = new webauthn_registration();
     if (fr->make_credentials(const_cast<const char *>(
             reinterpret_cast<char *>(registration_challenge)))) {
       delete fr;

@@ -25,8 +25,8 @@
 
 #include "processors/session/classic_flow.h"
 
-#include "classic_command.h"
 #include "classic_connection_base.h"
+#include "processors/session/classic_command.h"
 #include "processors/session/classic_greeting_receiver.h"
 
 stdx::expected<Processor::Result, std::error_code> FlowProcessor::process() {

@@ -21,11 +21,11 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <assert.h>
 #include <mysql/components/component_implementation.h>
 #include <mysql/components/services/my_host_application_signal.h>
 #include <mysql/components/services/udf_registration.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
 
 REQUIRES_SERVICE_PLACEHOLDER(host_application_signal);
 REQUIRES_SERVICE_PLACEHOLDER(udf_registration);

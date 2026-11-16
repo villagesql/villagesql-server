@@ -78,6 +78,7 @@ PSI_memory_key key_memory_applier;
 PSI_memory_key key_memory_recovery;
 PSI_memory_key key_memory_show_binlog_events;
 PSI_memory_key key_memory_relaylog_recovery;
+PSI_memory_key key_memory_applier_metric_service;
 PSI_memory_key key_memory_REPLICA_INFO;
 PSI_memory_key key_memory_ST_SCHEMA_TABLE;
 PSI_memory_key key_memory_Slave_applier_json_diff_vector;
@@ -149,6 +150,14 @@ PSI_memory_key key_memory_user_var_entry;
 PSI_memory_key key_memory_user_var_entry_value;
 PSI_memory_key key_memory_sp_cache;
 PSI_memory_key key_memory_write_set_extraction;
+
+// Percona Server PSI memory keys
+PSI_memory_key key_memory_userstat_table_stats;
+PSI_memory_key key_memory_userstat_index_stats;
+PSI_memory_key key_memory_userstat_user_stats;
+PSI_memory_key key_memory_userstat_thread_stats;
+PSI_memory_key key_memory_userstat_client_stats;
+PSI_memory_key key_memory_thread_pool_connection;
 
 #ifdef HAVE_PSI_INTERFACE
 
@@ -375,6 +384,20 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_histograms, "histograms", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_hash_op, "hashed_operation", PSI_FLAG_MEM_COLLECT, 0,
      PSI_DOCUMENT_ME},
+
+    {&key_memory_userstat_table_stats, "userstat_table_stats",
+     PSI_FLAG_ONLY_GLOBAL_STAT, 0, PSI_DOCUMENT_ME},
+    {&key_memory_userstat_index_stats, "userstat_index_stats",
+     PSI_FLAG_ONLY_GLOBAL_STAT, 0, PSI_DOCUMENT_ME},
+    {&key_memory_userstat_user_stats, "userstat_user_stats",
+     PSI_FLAG_ONLY_GLOBAL_STAT, 0, PSI_DOCUMENT_ME},
+    {&key_memory_userstat_thread_stats, "userstat_thread_stats",
+     PSI_FLAG_ONLY_GLOBAL_STAT, 0, PSI_DOCUMENT_ME},
+    {&key_memory_userstat_client_stats, "userstat_client_stats",
+     PSI_FLAG_ONLY_GLOBAL_STAT, 0, PSI_DOCUMENT_ME},
+    {&key_memory_thread_pool_connection, "thread_pool_connection", 0, 0,
+     PSI_DOCUMENT_ME},
+
     {&key_memory_rm_table_foreach_root, "rm_table::foreach_root",
      PSI_FLAG_THREAD, 0,
      "Mem root for temporary objects allocated while dropping tables or the "
@@ -399,7 +422,9 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_show_binlog_events, "show_binlog_events", 0, 0,
      PSI_DOCUMENT_ME},
     {&key_memory_relaylog_recovery, "Relay_log_sanitizer::analyze_logs", 0, 0,
-     PSI_DOCUMENT_ME}};
+     PSI_DOCUMENT_ME},
+    {&key_memory_applier_metric_service, "Applier_metrics_service_handler", 0,
+     0, PSI_DOCUMENT_ME}};
 
 void register_server_memory_keys() {
   const char *category = "sql";

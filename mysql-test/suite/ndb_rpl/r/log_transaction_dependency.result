@@ -7,14 +7,8 @@ Note	####	Storing MySQL user name or password information in the connection meta
 call mtr.add_suppression("Transaction is tagged with inconsistent logical timestamps");
 call mtr.add_suppression("Cannot execute the current event group in the parallel mode.");
 include/rpl/stop_replica.inc
-SET @save_replica_parallel_type = @@GLOBAL.replica_parallel_type;
-Warnings:
-Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET @save_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
 SET @save_replica_transaction_retries = @@GLOBAL.replica_transaction_retries;
-SET GLOBAL replica_parallel_type = LOGICAL_CLOCK;
-Warnings:
-Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET GLOBAL replica_parallel_workers = 3;
 SET GLOBAL replica_transaction_retries = 0;
 SET @save_binlog_transaction_dependency_history_size = @@GLOBAL.binlog_transaction_dependency_history_size;
@@ -35,7 +29,7 @@ SET GLOBAL binlog_transaction_dependency_history_size= DEFAULT;
 #### STEP 1.1 TEST Writeset ####
 SELECT @@binlog_transaction_dependency_history_size;
 @@binlog_transaction_dependency_history_size
-25000
+10000000
 CREATE TABLE `t1` (`id` int NOT NULL, `val` int NOT NULL,
 PRIMARY KEY (`id`)) ENGINE=NDB;
 #TRX2 (session A, independent)
@@ -93,7 +87,7 @@ include/include/rpl/assert_logical_timestamps.inc [0 1;1 2;1 3;1 4;3 5;3 6;4 7;7
 #### STEP 1.2 TEST Writeset+DDL ####
 SELECT @@binlog_transaction_dependency_history_size;
 @@binlog_transaction_dependency_history_size
-25000
+10000000
 CREATE TABLE `t1` (`id` int NOT NULL, `val` int NOT NULL,
 PRIMARY KEY (`id`)) ENGINE=NDB;
 #TRX2 (session A, independent)
@@ -155,7 +149,7 @@ include/include/rpl/assert_logical_timestamps.inc [0 1;1 2;1 3;1 4;4 5;5 6;6 7;7
 #### STEP 1.3 TEST Writeset+rotation ####
 SELECT @@binlog_transaction_dependency_history_size;
 @@binlog_transaction_dependency_history_size
-25000
+10000000
 CREATE TABLE `t1` (`id` int NOT NULL, `val` int NOT NULL,
 PRIMARY KEY (`id`)) ENGINE=NDB;
 #TRX2 (session A, independent)
@@ -537,9 +531,9 @@ DROP TABLE t1;
 FLUSH LOGS;
 
 #### Bug#26277771, PART2 ####
-CREATE TABLE t1 (c1 VARCHAR(20) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL PRIMARY KEY) ENGINE=NDB;
+CREATE TABLE t1 (c1 VARCHAR(20) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL PRIMARY KEY) ENGINE=NDB;
 Warnings:
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 INSERT INTO t1 VALUES ('a');
 # Wait for ndb_binlog thread...
@@ -577,9 +571,9 @@ FLUSH LOGS;
 
 #### Bug#26277771, PART4 ####
 CREATE TABLE t1 (c1 varchar(20) NOT NULL PRIMARY KEY)
-ENGINE=NDB CHARACTER SET utf8 COLLATE utf8_bin;
+ENGINE=NDB CHARACTER SET utf8mb3 COLLATE utf8mb3_bin;
 Warnings:
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
 INSERT INTO t1 VALUES ('a');
 # Wait for ndb_binlog thread...
@@ -593,9 +587,6 @@ FLUSH LOGS;
 #### CLEANUP ####
 include/rpl/sync_to_replica.inc
 include/rpl/stop_replica.inc
-SET @@GLOBAL.replica_parallel_type= @save_replica_parallel_type;
-Warnings:
-Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET @@GLOBAL.replica_parallel_workers= @save_replica_parallel_workers;
 SET @@GLOBAL.replica_transaction_retries= @save_replica_transaction_retries;
 include/rpl/start_replica.inc

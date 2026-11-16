@@ -100,7 +100,7 @@ struct Compare_key {
       }
 
       if (report) {
-        m_dups->report(lhs);
+        m_dups->save_duplicate(lhs);
       }
     }
 

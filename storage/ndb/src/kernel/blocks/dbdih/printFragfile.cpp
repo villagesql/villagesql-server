@@ -214,15 +214,15 @@ int main(int argc, char **argv) {
     }
     const Uint32 bytes = sbuf.st_size;
 
-    Uint32 *buf = new Uint32[bytes / 4 + 1];
+    auto *buf = new Uint32[bytes / 4 + 1];
 
     FILE *f = fopen(filename, "rb");
-    if (f == 0) {
+    if (f == nullptr) {
       ndbout << "Failed to open file" << endl;
       delete[] buf;
       continue;
     }
-    Uint32 sz = (Uint32)fread(buf, 1, bytes, f);
+    auto sz = (Uint32)fread(buf, 1, bytes, f);
     fclose(f);
     if (sz != bytes) {
       ndbout << "Failure while reading file" << endl;
@@ -237,7 +237,6 @@ int main(int argc, char **argv) {
 
     print(filename, buf, sz);
     delete[] buf;
-    continue;
   }
   ndb_end_and_exit(0);
 }

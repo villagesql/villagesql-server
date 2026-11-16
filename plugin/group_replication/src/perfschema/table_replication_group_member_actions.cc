@@ -110,9 +110,7 @@ int Pfs_table_replication_group_member_actions::read_column_value(
   DBUG_EXECUTE_IF(
       "group_replication_wait_before_group_member_actions_read_column_value", {
         const char act[] =
-            "now signal "
-            "signal.after_group_member_actions_read_column_value_waiting "
-            "wait_for "
+            "now wait_for "
             "signal.after_group_member_actions_read_column_value_continue";
         assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
       };);
@@ -190,20 +188,20 @@ PSI_table_handle *Pfs_table_replication_group_member_actions::open_table(
       struct Replication_group_member_actions row;
 
       table->field[0]->val_str(&string);
-      row.name.assign(string.c_ptr_safe(), string.length());
+      row.name.assign(to_string_view(string));
 
       table->field[1]->val_str(&string);
-      row.event.assign(string.c_ptr_safe(), string.length());
+      row.event.assign(to_string_view(string));
 
       row.enabled = table->field[2]->val_int();
 
       table->field[3]->val_str(&string);
-      row.type.assign(string.c_ptr_safe(), string.length());
+      row.type.assign(to_string_view(string));
 
       row.priority = table->field[4]->val_int();
 
       table->field[5]->val_str(&string);
-      row.error_handling.assign(string.c_ptr_safe(), string.length());
+      row.error_handling.assign(to_string_view(string));
 
       t->rows.push_back(row);
     } while (!key_access.next());

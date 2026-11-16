@@ -55,8 +55,7 @@ struct Is_simple : Gis_test<T_typeset> {
          gis::Coordinate_system::kGeographic) &&
         (g.coordinate_system() == gis::Coordinate_system::kCartesian))
       return is_simple(gis_project_on_pole(g));
-    else
-      return is_simple(g);
+    return is_simple(g);
   }
 };
 

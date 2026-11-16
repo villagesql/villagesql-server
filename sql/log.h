@@ -38,6 +38,7 @@
 #ifndef LOG_H
 #define LOG_H
 
+#include <mysql/components/common/iso8601_tzmode.h>
 #include <mysql/components/services/log_shared.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -94,6 +95,10 @@ class Table_ref;
   log_queries_not_using_indexes (--log-queries-not-using-indexes)
     Values: ON, OFF
     Control slow query logging of queries that do not use indexes.
+
+  --log-query-errors
+    Values: ALL, comma separated list of code errors
+    Control slow query logging of queries failed with the specified error code.
 
   --log-raw
     Values: ON, OFF
@@ -465,7 +470,7 @@ bool is_valid_log_name(const char *name, size_t len);
   @retval
     false             statement does not need to be logged
 */
-bool log_slow_applicable(THD *thd);
+bool log_slow_applicable(THD *thd, int sp_sql_command = -1);
 
 /**
   Unconditionally writes the current statement (or its rewritten version if it
@@ -834,8 +839,9 @@ bool init_error_log();
 
   @param filename        Name of error log file
   @param get_lock        Should we acquire LOCK_error_log?
+  @param log_type        Error log, diagnostic log or both.
 */
-bool open_error_log(const char *filename, bool get_lock);
+bool open_error_log(const char *filename, bool get_lock, uint log_type);
 
 /**
   Free any error log resources.
@@ -1442,31 +1448,6 @@ void log_line_set_flag(log_line *ll, log_line_flags_mask mask,
                        log_line_flags_mask value);
 
 /**
-  Whether to generate a UTC timestamp, or one following system-time.
-  These values are not arbitrary; they must correspond to the range
-  and meaning of opt_log_timestamps.
-*/
-enum enum_iso8601_tzmode {
-  iso8601_sysvar_logtimestamps = -1, /**< use value of opt_log_timestamps */
-  iso8601_utc = 0,                   /**< create UTC timestamp */
-  iso8601_system_time = 1            /**< use system time */
-};
-
-/**
-  Make and return an ISO 8601 / RFC 3339 compliant timestamp.
-  Accepts the log_timestamps global variable in its third parameter.
-
-  @param buf       A buffer of at least iso8601_size bytes to store
-                   the timestamp in. The timestamp will be \0 terminated.
-  @param utime     Microseconds since the epoch
-  @param mode      if 0, use UTC; if 1, use local time
-
-  @retval          length of timestamp (excluding \0)
-*/
-int make_iso8601_timestamp(char *buf, ulonglong utime,
-                           enum enum_iso8601_tzmode mode);
-
-/**
   Parse a ISO8601 timestamp and return the number of microseconds
   since the epoch. Heeds +/- timezone info if present.
 
@@ -1618,7 +1599,9 @@ int log_builtins_exit();
 
   @param         buffer       buffer containing serialized error message
   @param         length       number of bytes in buffer
+  @param         log_type     type of log, e.g. error or diagnostic log
 */
-void log_write_errstream(const char *buffer, size_t length);
+void log_write_errstream(const char *buffer, size_t length,
+                         enum enum_log_type log_type);
 
 #endif /* LOG_H */

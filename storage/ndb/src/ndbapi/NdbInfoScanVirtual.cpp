@@ -89,8 +89,8 @@ class VirtualTable {
     Row(class NdbInfoScanVirtual *owner, const NdbInfo::Table *table,
         char *buffer, size_t buf_size);
 
-    Row(const Row &);             // Prevent
-    Row &operator=(const Row &);  // Prevent
+    Row(const Row &) = delete;
+    Row &operator=(const Row &) = delete;
 
     const class NdbInfoScanVirtual *const m_owner;
     const NdbInfo::Table *const m_table;
@@ -177,7 +177,7 @@ int index_seek(const std::map<int, int> &index,
   if (iter == index.cend()) return -1;
 
   /* Check for exact match */
-  if (!(seek.inclusive() && (iter->first == key))) {
+  if (!seek.inclusive() || (iter->first != key)) {
     /* Exact match failed. Check for bounded ranges */
     if (seek.high() || seek.low()) {
       if (seek.high() && iter->first == key) {
@@ -390,14 +390,12 @@ class VirtualScanContext {
 
   bool create_ndb(const char *dbname = "sys") {
     m_ndb = new Ndb(m_connection, dbname);
-    if (m_ndb->init() != 0) return false;
-    return true;
+    return m_ndb->init() == 0;
   }
 
   bool openTable(const char *tabname) {
     m_ndbtab = m_ndb->getDictionary()->getTableGlobal(tabname);
-    if (!m_ndbtab) return false;
-    return true;
+    return m_ndbtab != nullptr;
   }
 
   NdbDictionary::Dictionary *getDictionary() const {
@@ -463,8 +461,7 @@ class VirtualScanContext {
 
   bool startTrans() {
     m_trans = m_ndb->startTransaction();
-    if (!m_trans) return false;
-    return true;
+    return m_trans != nullptr;
   }
   NdbTransaction *getTrans() { return m_trans; }
 
@@ -681,7 +678,7 @@ class BlocksTable : public VirtualTable {
   }
 
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table("blocks", this, NO_OF_BLOCK_NAMES);
+    auto *tab = new NdbInfo::Table("blocks", this, NO_OF_BLOCK_NAMES);
     if (!tab) return nullptr;
     if (!tab->addColumn(
             NdbInfo::Column("block_number", 0, NdbInfo::Column::Number)) ||
@@ -746,7 +743,7 @@ class DictObjTypesTable : public VirtualTable {
   }
 
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab =
+    auto *tab =
         new NdbInfo::Table("dict_obj_types", this, OBJ_TYPES_TABLE_SIZE);
     if (!tab) return nullptr;
     if (!tab->addColumn(
@@ -865,7 +862,7 @@ class ErrorCodesTable : public VirtualTable {
   }
 
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab =
+    auto *tab =
         new NdbInfo::Table("error_messages", this, m_error_messages.size());
     if (!tab) return nullptr;
     if (!tab->addColumn(
@@ -1030,7 +1027,7 @@ class ConfigParamsTable : public VirtualTable {
   }
 
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab =
+    auto *tab =
         new NdbInfo::Table("config_params", this, m_config_params.size());
     if (!tab) return nullptr;
     if (!tab->addColumn(
@@ -1097,7 +1094,7 @@ class NdbkernelStateDescTable : public VirtualTable {
   }
 
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table(m_table_name, this, m_array_count);
+    auto *tab = new NdbInfo::Table(m_table_name, this, m_array_count);
 
     if (!tab) return nullptr;
     if (!tab->addColumn(
@@ -1195,7 +1192,7 @@ class BackupIdTable : public VirtualTable {
   }
 
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table("backup_id", this, 1);
+    auto *tab = new NdbInfo::Table("backup_id", this, 1);
 
     if (!tab) return nullptr;
     if (!tab->addColumn(NdbInfo::Column("id", 0, NdbInfo::Column::Number64)))
@@ -1273,10 +1270,7 @@ class IndexStatsTable : public VirtualTable {
                                      (1 << sample_version_col->getColumnNo()) |
                                      (1 << load_time_col->getColumnNo()) |
                                      (1 << sample_count_col->getColumnNo()));
-    if (!ctx->scanTable(ctx->getRecord(), NdbOperation::LM_Read, &attr_mask)) {
-      return false;
-    }
-    return true;
+    return ctx->scanTable(ctx->getRecord(), NdbOperation::LM_Read, &attr_mask);
   }
 
   int read_row(VirtualScanContext *ctx, VirtualTable::Row &w,
@@ -1302,9 +1296,9 @@ class IndexStatsTable : public VirtualTable {
   }
 
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table("index_stats", this,
-                                             64,  // Hard-coded estimate
-                                             false);
+    auto *tab = new NdbInfo::Table("index_stats", this,
+                                   64,  // Hard-coded estimate
+                                   false);
     if (!tab) return nullptr;
     if (!tab->addColumn(
             NdbInfo::Column("index_id", 0, NdbInfo::Column::Number)))
@@ -1328,7 +1322,7 @@ class IndexStatsTable : public VirtualTable {
 /* If a column name contains a dot, backtick, or comma, then quote it in
    backticks, and escape ` within the name as ``.
 */
-static BaseString quoteColumnName(BaseString name) {
+static BaseString quoteColumnName(const BaseString &name) {
   Vector<BaseString> check(2);
   int split = name.split(check, "`,.", 2);
   if (likely(split == 1)) return name;
@@ -1349,8 +1343,8 @@ static BaseString quoteColumnName(BaseString name) {
 class DictionaryTablesTable : public VirtualTable {
  public:
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table(
-        "dictionary_tables", this, 40, false, NdbInfo::TableName::NoPrefix);
+    auto *tab = new NdbInfo::Table("dictionary_tables", this, 40, false,
+                                   NdbInfo::TableName::NoPrefix);
     if (!tab) return nullptr;
     if (!tab->addColumn(
             NdbInfo::Column("database_name", 0, NdbInfo::Column::String)) ||
@@ -1511,8 +1505,8 @@ class DictionaryTablesTable : public VirtualTable {
 class BlobsTable : public VirtualTable {
  public:
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table("blobs", this, 10, false,
-                                             NdbInfo::TableName::NoPrefix);
+    auto *tab = new NdbInfo::Table("blobs", this, 10, false,
+                                   NdbInfo::TableName::NoPrefix);
     if (!tab) return nullptr;
     if (!tab->addColumn(
             NdbInfo::Column("table_id", 0, NdbInfo::Column::Number)) ||
@@ -1575,8 +1569,8 @@ class BlobsTable : public VirtualTable {
 class EventsTable : public VirtualTable {
  public:
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table("events", this, 40, false,
-                                             NdbInfo::TableName::NoPrefix);
+    auto *tab = new NdbInfo::Table("events", this, 40, false,
+                                   NdbInfo::TableName::NoPrefix);
     if (!tab) return nullptr;
     if (!tab->addColumn(
             NdbInfo::Column("event_id", 0, NdbInfo::Column::Number)) ||
@@ -1667,8 +1661,8 @@ class EventsTable : public VirtualTable {
 class IndexColumnsTable : public VirtualTable {
  public:
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table("index_columns", this, 20, false,
-                                             NdbInfo::TableName::NoPrefix);
+    auto *tab = new NdbInfo::Table("index_columns", this, 20, false,
+                                   NdbInfo::TableName::NoPrefix);
     if (!tab) return nullptr;
     if (!tab->addColumn(
             NdbInfo::Column("table_id", 0, NdbInfo::Column::Number)) ||
@@ -1730,8 +1724,8 @@ class IndexColumnsTable : public VirtualTable {
 class ForeignKeysTable : public VirtualTable {
  public:
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table("foreign_keys", this, 10, false,
-                                             NdbInfo::TableName::NoPrefix);
+    auto *tab = new NdbInfo::Table("foreign_keys", this, 10, false,
+                                   NdbInfo::TableName::NoPrefix);
 
     if (!tab->addColumn(
             NdbInfo::Column("object_id", 0, NdbInfo::Column::Number)) ||
@@ -1809,9 +1803,9 @@ class ForeignKeysTable : public VirtualTable {
 class ColumnsTable : public VirtualTable {
  public:
   NdbInfo::Table *get_instance() const override {
-    NdbInfo::Table *tab = new NdbInfo::Table("dictionary_columns", this, 200,
-                                             false, /* estimate */
-                                             NdbInfo::TableName::NoPrefix);
+    auto *tab = new NdbInfo::Table("dictionary_columns", this, 200,
+                                   false, /* estimate */
+                                   NdbInfo::TableName::NoPrefix);
 
     if (!tab->addColumn(
             NdbInfo::Column("table_id", 0, NdbInfo::Column::Number)) ||

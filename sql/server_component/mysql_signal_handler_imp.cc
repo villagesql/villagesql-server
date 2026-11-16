@@ -23,7 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysql_signal_handler_imp.h"
 
-#include <signal.h>
+#include <csignal>
 #include "mysql/components/minimal_chassis.h"  // mysql_components_handle_std_exception
 #include "mysql/components/service_implementation.h"
 #include "sql/signal_handler.h"

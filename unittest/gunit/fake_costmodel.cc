@@ -27,8 +27,8 @@
 
 #include "unittest/gunit/fake_costmodel.h"
 
-#include <assert.h>
 #include <sys/types.h>
+#include <cassert>
 
 #include "lex_string.h"
 #include "m_string.h"

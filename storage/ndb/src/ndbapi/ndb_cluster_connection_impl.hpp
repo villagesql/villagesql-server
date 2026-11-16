@@ -164,7 +164,7 @@ class Ndb_cluster_connection_impl : public Ndb_cluster_connection {
   TransporterFacade *m_transporter_facade;
   ConfigRetriever *m_config_retriever;
   NdbThread *m_connect_thread;
-  int (*m_connect_callback)(void);
+  int (*m_connect_callback)();
 
   int m_conn_default_optimized_node_selection;
   int m_run_connect_thread;

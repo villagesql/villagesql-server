@@ -24,7 +24,7 @@
 
 #include "sql/opt_costmodel.h"
 
-#include <assert.h>
+#include <cassert>
 
 #include "sql/handler.h"
 #include "sql/opt_costconstantcache.h"  // Cost_constant_cache

@@ -61,7 +61,7 @@ typedef rapidjson::PrettyWriter<dd::RJ_StringBuffer, dd::RJ_Encoding,
   @return minified JSON string or empty string on failure.
 */
 
-static dd::sdi_t minify(dd::sdi_t sdi) {
+static dd::sdi_t minify(const dd::sdi_t &sdi) {
   dd::RJ_Document doc;
   doc.Parse<0>(sdi.c_str());
 
@@ -79,7 +79,7 @@ static dd::sdi_t minify(dd::sdi_t sdi) {
 }
 #endif
 
-dd::sdi_t ndb_dd_sdi_prettify(dd::sdi_t sdi) {
+dd::sdi_t ndb_dd_sdi_prettify(const dd::sdi_t &sdi) {
   dd::RJ_Document doc;
   doc.Parse<0>(sdi.c_str());
 

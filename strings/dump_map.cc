@@ -21,8 +21,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 static void print_short_array(unsigned short *a, size_t width) {
   int i;
@@ -35,7 +35,7 @@ static void print_short_array(unsigned short *a, size_t width) {
   printf("};\n");
 }
 
-int main(void) {
+int main() {
   char str[160];
   unsigned short touni[256];
   unsigned short fromuni[65536];

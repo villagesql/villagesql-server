@@ -30,7 +30,7 @@
   @file mysys/mf_same.cc
 */
 
-#include <string.h>
+#include <cstring>
 
 #include "my_dbug.h"
 #include "my_io.h"

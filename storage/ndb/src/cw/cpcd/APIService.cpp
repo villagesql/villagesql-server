@@ -143,20 +143,20 @@ CPCDAPISession::CPCDAPISession(FILE *f, CPCD &cpcd)
       m_protocol_version(1) {
   m_input = new FileInputStream(f);
   m_parser = new Parser<CPCDAPISession>(commands, *m_input);
-  m_output = 0;
+  m_output = nullptr;
 }
 
 CPCDAPISession::~CPCDAPISession() {
   delete m_input;
   delete m_parser;
-  if (m_output) delete m_output;
+  delete m_output;
 }
 
 void CPCDAPISession::runSession() {
   Parser_t::Context ctx;
   while (!m_stop) {
     m_parser->run(ctx, *this);
-    if (ctx.m_currentToken == 0) break;
+    if (ctx.m_currentToken == nullptr) break;
 
     m_input->reset_timeout();
     m_output->reset_timeout();
@@ -190,7 +190,7 @@ void CPCDAPISession::loadFile() {
   Parser_t::Context ctx;
   while (!m_stop) {
     m_parser->run(ctx, *this);
-    if (ctx.m_currentToken == 0) break;
+    if (ctx.m_currentToken == nullptr) break;
 
     switch (ctx.m_status) {
       case Parser_t::Ok:
@@ -215,7 +215,7 @@ void CPCDAPISession::defineProcess(Parser_t::Context & /* unused */,
   if (!m_cpcd.loadingProcessList) {
     m_output->println("define process");
     m_output->println("status: %d", rs.getStatus());
-    if (ret == true) {
+    if (ret) {
       m_output->println("id: %d", id);
 
       BaseString procType;
@@ -289,7 +289,7 @@ void CPCDAPISession::stopProcess(Parser_t::Context & /* unused */,
 
 static const char *propToString(Properties *prop, const char *key) {
   static char buf[32];
-  const char *retval = NULL;
+  const char *retval = nullptr;
   PropertiesType pt;
 
   prop->getTypeOf(key, &pt);

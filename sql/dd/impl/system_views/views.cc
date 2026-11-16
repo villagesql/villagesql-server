@@ -27,11 +27,10 @@
 
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Views &Views::instance() {
-  static Views *s_instance = new Views();
+  static auto *s_instance = new Views();
   return *s_instance;
 }
 
@@ -78,5 +77,4 @@ Views::Views() {
   m_target_def.add_where("AND vw.type = 'VIEW'");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

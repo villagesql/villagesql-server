@@ -42,26 +42,30 @@
 #include "mysql_time.h"
 #include "prealloced_array.h"  // Prealloced_array
 #include "sql-common/json_error_handler.h"
-#include "sql-common/json_path.h"  // Json_path
+#include "sql-common/json_path.h"    // Json_path
+#include "sql-common/json_schema.h"  //Json_schema_validator_holder
+#include "sql/current_thd.h"         // current_thd
 #include "sql/enum_query_type.h"
 #include "sql/field.h"
 #include "sql/item.h"
 #include "sql/item_cmpfunc.h"
 #include "sql/item_func.h"
-#include "sql/item_strfunc.h"    // Item_str_func
+#include "sql/item_strfunc.h"  // Item_str_func
+#include "sql/json_duality_view/content_tree.h"
 #include "sql/mem_root_array.h"  // Mem_root_array
 #include "sql/parse_location.h"  // POS
 #include "sql/psi_memory_key.h"  // key_memory_JSON
 #include "sql_string.h"
 
-class Json_schema_validator;
 class Json_array;
 class Json_diff_vector;
 class Json_dom;
 class Json_object;
 class Json_scalar_holder;
+class Json_schema_validator;
 class Json_wrapper;
 class PT_item_list;
+class PT_jdv_name_value_list;
 class THD;
 class my_decimal;
 enum Cast_target : unsigned char;
@@ -189,13 +193,15 @@ class Item_json_func : public Item_func {
   }
 
   bool resolve_type(THD *) override {
+    if (reject_vector_args()) return true;
     set_nullable(true);
     return false;
   }
   enum Item_result result_type() const override { return STRING_RESULT; }
   String *val_str(String *arg) override;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_date(Date_val *date, my_time_flags_t flags) override;
+  bool val_time(Time_val *time) override;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) override;
   longlong val_int() override;
   double val_real() override;
   my_decimal *val_decimal(my_decimal *decimal_value) override;
@@ -321,12 +327,14 @@ class Item_func_json_valid final : public Item_int_func {
   Item_func_json_valid(const POS &pos, Item *a) : Item_int_func(pos, a) {}
 
   const char *func_name() const override { return "json_valid"; }
+  enum Functype functype() const override { return JSON_VALID_FUNC; }
 
   bool is_bool_func() const override { return true; }
 
   longlong val_int() override;
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
     set_nullable(true);
     return false;
@@ -342,6 +350,7 @@ class Item_func_json_schema_valid final : public Item_bool_func {
   ~Item_func_json_schema_valid() override;
 
   const char *func_name() const override { return "json_schema_valid"; }
+  enum Functype functype() const override { return JSON_SCHEMA_VALID_FUNC; }
 
   bool val_bool() override;
 
@@ -352,10 +361,7 @@ class Item_func_json_schema_valid final : public Item_bool_func {
   void cleanup() override;
 
  private:
-  // Wrap the object in a unique_ptr so that the relevant rapidjson destructors
-  // are called.
-  unique_ptr_destroy_only<const Json_schema_validator>
-      m_cached_schema_validator;
+  Json_schema_validator m_cached_schema_validator;
 };
 
 /**
@@ -372,9 +378,14 @@ class Item_func_json_schema_validation_report final : public Item_json_func {
     return "json_schema_validation_report";
   }
 
+  enum Functype functype() const override {
+    return JSON_SCHEMA_VALIDATION_REPORT_FUNC;
+  }
+
   bool val_json(Json_wrapper *wr) override;
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
     set_nullable(true);
     return false;
@@ -385,10 +396,7 @@ class Item_func_json_schema_validation_report final : public Item_json_func {
   void cleanup() override;
 
  private:
-  // Wrap the object in a unique_ptr so that the relevant rapidjson destructors
-  // are called.
-  unique_ptr_destroy_only<const Json_schema_validator>
-      m_cached_schema_validator;
+  Json_schema_validator m_cached_schema_validator;
 };
 
 /**
@@ -412,6 +420,7 @@ class Item_func_json_contains final : public Item_int_func {
   longlong val_int() override;
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
     if (param_type_is_default(thd, 1, 3)) return true;
     set_nullable(true);
@@ -443,12 +452,14 @@ class Item_func_json_contains_path final : public Item_int_func {
         m_path_cache(thd, arg_count) {}
 
   const char *func_name() const override { return "json_contains_path"; }
+  enum Functype functype() const override { return JSON_CONTAINS_PATH_FUNC; }
 
   bool is_bool_func() const override { return true; }
 
   longlong val_int() override;
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
     if (param_type_is_default(thd, 1, -1)) return true;
     set_nullable(true);
@@ -473,6 +484,7 @@ class Item_func_json_type : public Item_str_func {
   Item_func_json_type(const POS &pos, Item *a) : Item_str_func(pos, a) {}
 
   const char *func_name() const override { return "json_type"; }
+  enum Functype functype() const override { return JSON_TYPE_FUNC; }
 
   bool resolve_type(THD *) override;
 
@@ -490,6 +502,7 @@ class Item_typecast_json final : public Item_json_func {
       : Item_json_func(thd, pos, a) {}
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (Item_json_func::resolve_type(thd)) return true;
     return args[0]->propagate_type(thd, MYSQL_TYPE_JSON, false, true);
   }
@@ -511,6 +524,7 @@ class Item_func_json_length final : public Item_int_func {
   Item_func_json_length(const POS &pos, Item *doc) : Item_int_func(pos, doc) {}
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
     if (param_type_is_default(thd, 1, 2)) return true;
     set_nullable(true);
@@ -536,6 +550,7 @@ class Item_func_json_depth final : public Item_int_func {
   enum Functype functype() const override { return JSON_DEPTH_FUNC; }
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
     set_nullable(true);
     return false;
@@ -560,6 +575,7 @@ class Item_func_json_keys : public Item_json_func {
   const char *func_name() const override { return "json_keys"; }
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (Item_json_func::resolve_type(thd)) return true;
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
     if (param_type_is_default(thd, 1, 2)) return true;
@@ -586,6 +602,7 @@ class Item_func_json_extract final : public Item_json_func {
   enum Functype functype() const override { return JSON_EXTRACT_FUNC; }
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (Item_json_func::resolve_type(thd)) return true;
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
     if (param_type_is_default(thd, 1, -1)) return true;
@@ -594,7 +611,7 @@ class Item_func_json_extract final : public Item_json_func {
 
   bool val_json(Json_wrapper *wr) override;
 
-  bool eq(const Item *item, bool binary_cmp) const override;
+  bool eq(const Item *item) const override;
 };
 
 /// Base class for all the functions that take a JSON document as the first
@@ -735,12 +752,20 @@ class Item_func_json_array final : public Item_json_func {
 /**
   Represents the JSON function JSON_OBJECT()
 */
-class Item_func_json_row_object final : public Item_json_func {
+class Item_func_json_row_object : public Item_json_func {
   String tmp_key_value;
 
  public:
   Item_func_json_row_object(THD *thd, const POS &pos, PT_item_list *a)
       : Item_json_func(thd, pos, a) {
+    // Does not return NULL on NULL input. If a key argument is NULL, an error
+    // is raised. If a value argument is NULL, it is interpreted as the JSON
+    // null literal.
+    null_on_null = false;
+  }
+
+  Item_func_json_row_object(THD *thd, mem_root_deque<Item *> *list)
+      : Item_json_func(thd, list) {
     // Does not return NULL on NULL input. If a key argument is NULL, an error
     // is raised. If a value argument is NULL, it is interpreted as the JSON
     // null literal.
@@ -757,6 +782,42 @@ class Item_func_json_row_object final : public Item_json_func {
   }
 
   bool val_json(Json_wrapper *wr) override;
+};
+
+/**
+ * @brief Represents the JSON function JSON_DUALITY_OBJECT()
+ */
+class Item_func_json_duality_object final : public Item_func_json_row_object {
+  typedef Item_func_json_row_object super;
+
+  jdv::Duality_view_tags m_table_tags{0};
+  PT_jdv_name_value_list *m_jdv_name_value_list{nullptr};
+  bool m_inject_object_hash{false};
+  std::unordered_set<std::string> m_json_arrayagg_keys;
+  bool get_inject_object_hash() const { return m_inject_object_hash; }
+
+ public:
+  Item_func_json_duality_object(THD *thd, const POS &pos, int table_tags,
+                                PT_jdv_name_value_list *jdv_name_value_list);
+
+  const char *func_name() const override { return "json_duality_object"; }
+  enum Functype functype() const override { return JSON_DUALITY_OBJECT_FUNC; }
+
+  bool resolve_type(THD *thd) override;
+  bool val_json(Json_wrapper *wr) override;
+
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override;
+
+  bool set_json_arrayagg_keys(THD *thd);
+
+  jdv::Duality_view_tags table_tags() const { return m_table_tags; }
+  Mem_root_array<LEX_STRING> *name_list();
+  Mem_root_array<uint> *col_tags_list();
+
+  std::unordered_set<std::string> get_json_arrayagg_keys() {
+    return m_json_arrayagg_keys;
+  }
 };
 
 /**
@@ -782,6 +843,8 @@ class Item_func_json_search : public Item_json_func {
         m_cached_ooa(ooa_uninitialized) {}
 
   const char *func_name() const override { return "json_search"; }
+
+  enum Functype functype() const override { return JSON_SEARCH_FUNC; }
 
   bool val_json(Json_wrapper *wr) override;
 
@@ -885,7 +948,10 @@ class Item_func_json_quote : public Item_str_func {
 
   const char *func_name() const override { return "json_quote"; }
 
+  enum Functype functype() const override { return JSON_QUOTE_FUNC; }
+
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, -1)) return true;
     set_nullable(true);
 
@@ -919,6 +985,7 @@ class Item_func_json_unquote : public Item_str_func {
   enum Functype functype() const override { return JSON_UNQUOTE_FUNC; }
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, -1)) return true;
     set_nullable(true);
     set_data_type_string(args[0]->max_char_length(), &my_charset_utf8mb4_bin);
@@ -937,7 +1004,10 @@ class Item_func_json_pretty final : public Item_str_func {
 
   const char *func_name() const override { return "json_pretty"; }
 
+  enum Functype functype() const override { return JSON_PRETTY_FUNC; }
+
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, -1, MYSQL_TYPE_JSON)) return true;
     set_data_type_string(MAX_BLOB_WIDTH, &my_charset_utf8mb4_bin);
     return false;
@@ -954,8 +1024,10 @@ class Item_func_json_storage_size final : public Item_int_func {
   Item_func_json_storage_size(const POS &pos, Item *a)
       : Item_int_func(pos, a) {}
   const char *func_name() const override { return "json_storage_size"; }
+  enum Functype functype() const override { return JSON_STORAGE_SIZE_FUNC; }
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, -1, MYSQL_TYPE_JSON)) return true;
     if (Item_int_func::resolve_type(thd)) return true;
     set_nullable(true);
@@ -973,8 +1045,10 @@ class Item_func_json_storage_free final : public Item_int_func {
   Item_func_json_storage_free(const POS &pos, Item *a)
       : Item_int_func(pos, a) {}
   const char *func_name() const override { return "json_storage_free"; }
+  enum Functype functype() const override { return JSON_STORAGE_FREE_FUNC; }
 
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, -1, MYSQL_TYPE_JSON)) return true;
     return false;
   }
@@ -1044,11 +1118,15 @@ class Item_func_array_cast final : public Item_func {
     assert(false);
     return 0;
   }
-  bool get_date(MYSQL_TIME *, my_time_flags_t) override {
+  bool val_date(Date_val *, my_time_flags_t) override {
     assert(false);
     return true;
   }
-  bool get_time(MYSQL_TIME *) override {
+  bool val_time(Time_val *) override {
+    assert(false);
+    return true;
+  }
+  bool val_datetime(Datetime_val *, my_time_flags_t) override {
     assert(false);
     return true;
   }
@@ -1077,6 +1155,7 @@ class Item_func_member_of : public Item_bool_func {
   const char *func_name() const override { return "member of"; }
   enum Functype functype() const override { return MEMBER_OF_FUNC; }
   bool resolve_type(THD *thd) override {
+    if (reject_vector_args()) return true;
     if (param_type_is_default(thd, 0, 2, MYSQL_TYPE_JSON)) return true;
     args[0]->mark_json_as_scalar();
     return false;
@@ -1110,19 +1189,23 @@ class Item_func_json_value final : public Item_func {
                        Item *on_error_default);
   ~Item_func_json_value() override;
   const char *func_name() const override { return "json_value"; }
+  enum Functype functype() const override { return JSON_VALUE_FUNC; }
   enum Item_result result_type() const override;
   bool resolve_type(THD *) override;
   bool fix_fields(THD *thd, Item **ref) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
-  bool eq(const Item *item, bool binary_cmp) const override;
+  bool eq_specific(const Item *item) const override;
   bool val_json(Json_wrapper *wr) override;
   String *val_str(String *buffer) override;
   double val_real() override;
   longlong val_int() override;
   my_decimal *val_decimal(my_decimal *value) override;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t flags) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_date(Date_val *date, my_time_flags_t flags) override;
+  bool val_time(Time_val *time) override;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) override;
+  Json_on_response_type on_empty_response_type() const;
+  Json_on_response_type on_error_response_type() const;
 
  private:
   /// Represents a default value given in JSON_VALUE's DEFAULT xxx ON EMPTY or
@@ -1170,12 +1253,12 @@ class Item_func_json_value final : public Item_func {
   int64_t extract_integer_value();
   /// Implements val_int() for RETURNING YEAR
   int64_t extract_year_value();
-  /// Implements get_date() for RETURNING DATE.
-  bool extract_date_value(MYSQL_TIME *ltime);
-  /// Implements get_time() for RETURNING TIME.
-  bool extract_time_value(MYSQL_TIME *ltime);
-  /// Implements get_date() for RETURNING DATETIME.
-  bool extract_datetime_value(MYSQL_TIME *ltime);
+  /// Implements val_date() for RETURNING DATE.
+  bool extract_date_value(Date_val *date);
+  /// Implements val_time() for RETURNING TIME.
+  bool extract_time_value(Time_val *time);
+  /// Implements val_datetime() for RETURNING DATETIME.
+  bool extract_datetime_value(Datetime_val *dt);
   /// Implements val_decimal() for RETURNING DECIMAL.
   my_decimal *extract_decimal_value(my_decimal *value);
   /// Implements val_str() for RETURNING CHAR and RETURNING BINARY.

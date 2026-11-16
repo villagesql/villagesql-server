@@ -55,9 +55,9 @@ void Vio_wrapper::set_timeout_in_ms(const Direction direction,
   // To get the millisecond resolution, we need to duplicate the logic
   // from "vio_timeout".
 
-  bool old_mode = m_vio->write_timeout < 0 && m_vio->read_timeout < 0;
+  bool const old_mode = m_vio->write_timeout < 0 && m_vio->read_timeout < 0;
 
-  int which = direction == Direction::k_write ? 1 : 0;
+  int const which = direction == Direction::k_write ? 1 : 0;
 
   if (which)
     m_vio->write_timeout = timeout_ms;
@@ -87,7 +87,7 @@ xpl::Connection_type Vio_wrapper::get_type() const {
 
 sockaddr_storage *Vio_wrapper::peer_addr(std::string *address, uint16_t *port) {
   address->resize(256);
-  char *buffer = &(*address)[0];
+  char *buffer = address->data();
 
   buffer[0] = 0;
 
@@ -100,7 +100,7 @@ sockaddr_storage *Vio_wrapper::peer_addr(std::string *address, uint16_t *port) {
 
 int Vio_wrapper::shutdown() {
   MUTEX_LOCK(lock, m_shutdown_mutex);
-  return vio_shutdown(m_vio);
+  return vio_shutdown(m_vio, SHUT_RDWR);
 }
 
 Vio_wrapper::~Vio_wrapper() {

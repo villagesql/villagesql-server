@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 set binlog_format=mixed;
 Warnings:
 Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
@@ -103,6 +104,8 @@ SELECT * FROM t1;
 a	b
 1	init+con1
 # Switch to connection con2
+Warnings:
+Warning	6414	Combining the storage engines MyISAM and InnoDB is deprecated, but the statement or transaction updates both the MyISAM table test.t2 and the InnoDB table test.t1.
 SELECT * FROM t1;
 a	b
 1	init+con1+con2
@@ -130,8 +133,11 @@ SELECT * FROM t1;
 a	b
 2	init+con1
 # Switch to connection con2
+Warnings:
+Warning	6414	Combining the storage engines MyISAM and InnoDB is deprecated, but the statement or transaction updates both the MyISAM table test.t2 and the InnoDB table test.t1.
 SELECT * FROM t1;
 a	b
 2	init+con1
 DROP PROCEDURE p1;
 DROP TABLE t1, t2;
+include/rpl/set_gtid_mode_on.inc

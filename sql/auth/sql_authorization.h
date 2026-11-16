@@ -43,9 +43,8 @@ bool find_if_granted_role(Role_vertex_descriptor v, LEX_CSTRING role,
                           LEX_CSTRING role_host,
                           Role_vertex_descriptor *found_vertex = nullptr);
 std::pair<std::string, std::string> get_authid_from_quoted_string(
-    std::string str);
-void iterate_comma_separated_quoted_string(
-    std::string str, const std::function<bool(const std::string)> &f);
+    std::string_view str);
+
 void get_granted_roles(Role_vertex_descriptor &v,
                        List_of_granted_roles *granted_roles);
 void get_granted_roles(Role_vertex_descriptor &v,

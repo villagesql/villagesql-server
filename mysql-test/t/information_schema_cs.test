@@ -91,7 +91,7 @@ analyze table t2, t3, t5;
 show table status;
 show full columns from t3 like "a%";
 show full columns from mysql.db like "Insert%";
---replace_result utf8mb3_tolower_ci utf8_bin
+--replace_result utf8mb3_tolower_ci utf8mb3_bin
 show full columns from v1;
 select * from information_schema.COLUMNS where table_name="t1"
 and column_name= "a" order by table_name;
@@ -575,6 +575,7 @@ flush privileges;
 # Bug#9404 information_schema: Weird error messages
 # with SELECT SUM() ... GROUP BY queries
 #
+--sorted_result
 SELECT table_schema, count(*) FROM information_schema.TABLES WHERE
 table_schema IN ('mysql', 'information_schema', 'test', 'mysqltest')
 AND table_name not like 'ndb%' AND table_name COLLATE utf8mb3_general_ci not like 'innodb_%'
@@ -900,6 +901,7 @@ sql security definer view v2 as select 1;
 connect (con16681,localhost,mysqltest_1,,test);
 connection con16681;
 
+--sorted_result
 select * from information_schema.views
 where table_name='v1' or table_name='v2';
 connection default;
@@ -1476,6 +1478,14 @@ SELECT length(CAST(b AS CHAR)) FROM ubig;
 
 DROP TABLE ubig;
 
+#Bug 1083377
+create user mysqltest_1@localhost identified by 'password';
+connect (con1, localhost, mysqltest_1,password,);
+connection con1;
+select 1 from information_schema.tables where table_schema=repeat('a', 2000);
+connection default;
+disconnect con1;
+drop user mysqltest_1@localhost;
 
 --echo End of 5.1 tests.
 
@@ -2274,7 +2284,6 @@ DROP TABLE t1;
 --echo # Bug#18925: subqueries with MIN/MAX functions on INFORMARTION_SCHEMA 
 --echo #
 
---skip_if_hypergraph  # Chooses an extremely slow plan due to lack of indexes, causing the test to time out.
 SELECT t.table_name, c1.column_name
   FROM information_schema.tables t
        INNER JOIN
@@ -2293,7 +2302,7 @@ SELECT t.table_name, c1.column_name
   AND t.table_name NOT LIKE 'INNODB%'
   ORDER BY t.table_name COLLATE utf8mb3_general_ci,
            c1.column_name COLLATE utf8mb3_general_ci;
---skip_if_hypergraph  # Chooses an extremely slow plan due to lack of indexes, causing the test to time out.
+
 SELECT t.table_name, c1.column_name
   FROM information_schema.tables t
        INNER JOIN

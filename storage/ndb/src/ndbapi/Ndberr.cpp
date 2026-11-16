@@ -26,7 +26,7 @@
 #include "API.hpp"
 
 static void update(NdbError &error) {
-  ndberror_struct ndberror = (ndberror_struct)error;
+  auto ndberror = (ndberror_struct)error;
   ndberror_update(&ndberror);
   error = NdbError(ndberror);
 }

@@ -96,9 +96,10 @@ LIST(APPEND STRINGS_SOURCES ${JA_HANS_DST_FILE} ${ZH_HANS_DST_FILE})
 # Avoid dependencies on perschema data defined in mysys
 ADD_DEFINITIONS(-DDISABLE_MYSQL_THREAD_H)
 
-IF(NOT WIN32)
-  SET(STRINGS_COMPILE_OPTIONS COMPILE_OPTIONS "-fvisibility=hidden")
-ENDIF()
+# RocksDB needs some internal symbols visible
+#IF(NOT WIN32)
+#  SET(STRINGS_COMPILE_OPTIONS COMPILE_OPTIONS "-fvisibility=hidden")
+#ENDIF()
 
 ADD_CONVENIENCE_LIBRARY(strings ${STRINGS_SOURCES}
   ${STRINGS_COMPILE_OPTIONS}
@@ -128,6 +129,10 @@ ELSEIF(WIN32)
     PUBLIC MYSQL_LIBSTRINGS_DLL
     PRIVATE MYSQL_LIBSTRINGS_EXPORT
     )
+  IF(WIN32_VS)
+    # m_normalized ... needs to have dll-interface to be used by client ...
+    TARGET_COMPILE_OPTIONS(strings_shared PUBLIC /wd4251)
+  ENDIF()
 ELSE()
   ADD_SHARED_LIBRARY(strings_shared
     $<TARGET_OBJECTS:strings_objlib>

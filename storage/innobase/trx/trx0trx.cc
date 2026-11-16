@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sql_thd_internal_api.h>
 
 #include "btr0sea.h"
+#include "btr0types.h"
 #include "clone0clone.h"
 #include "current_thd.h"
 #include "dict0dd.h"
@@ -158,6 +159,8 @@ static void trx_init(trx_t *trx) {
 
   trx->id = 0;
 
+  trx->preallocated_id = 0;
+
   trx->no = TRX_ID_MAX;
 
   trx->persists_gtid = false;
@@ -181,6 +184,9 @@ static void trx_init(trx_t *trx) {
   trx->dict_operation = TRX_DICT_OP_NONE;
 
   trx->ddl_operation = false;
+
+  trx->idle_start = 0;
+  trx->last_stmt_start = 0;
 
   trx->error_state = DB_SUCCESS;
 
@@ -226,6 +232,8 @@ static void trx_init(trx_t *trx) {
   trx->lock.table_cached = 0;
 
   trx->error_index = nullptr;
+
+  trx->stats.set(false);
 
   /* During asynchronous rollback, we should reset forced rollback flag
   only after rollback is complete to avoid race with the thread owning
@@ -528,6 +536,8 @@ trx_t *trx_allocate_for_background(void) {
 
   trx->sess = trx_dummy_sess;
 
+  trx->stats.set(false);
+
   return (trx);
 }
 
@@ -629,6 +639,7 @@ void trx_free_prepared_or_active_recovered(trx_t *trx) {
   trx->will_lock = 0;
 
   trx_validate_state_before_free(trx);
+  trx_init(trx);
   trx_free(trx);
 }
 
@@ -831,11 +842,12 @@ void trx_clear_resurrected_table_ids() { resurrected_trx_tables.clear(); }
 
 /** Resurrect the transactions that were doing inserts at the time of the
  crash, they need to be undone.
+ @param[in]  undo           entry to UNDO
+ @param[in]  rseg           rollback segment
+ @param[out] trxs_committed vector of already committed transactions
  @return trx_t instance */
-static trx_t *trx_resurrect_insert(
-    trx_undo_t *undo, /*!< in: entry to UNDO */
-    trx_rseg_t *rseg) /*!< in: rollback segment */
-{
+static trx_t *trx_resurrect_insert(trx_undo_t *undo, trx_rseg_t *rseg,
+                                   ut::vector<trx_t *> &trxs_committed) {
   trx_t *trx;
 
   trx = trx_allocate_for_background();
@@ -847,7 +859,6 @@ static trx_t *trx_resurrect_insert(
   trx->rsegs.m_redo.rseg = rseg;
   *trx->xid = undo->xid;
   trx->id = undo->trx_id;
-  trx_sys_rw_trx_add(trx);
   trx->rsegs.m_redo.insert_undo = undo;
   trx->is_recovered = true;
 
@@ -862,15 +873,8 @@ static trx_t *trx_resurrect_insert(
       ib::info(ER_IB_MSG_1204) << "Transaction " << trx_get_id_for_print(trx)
                                << " was in the XA prepared state.";
 
-      if (srv_force_recovery == 0) {
-        trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
-        ++trx_sys->n_prepared_trx;
-      } else {
-        ib::info(ER_IB_MSG_1205) << "Since innodb_force_recovery"
-                                    " > 0, we will force a rollback.";
-
-        trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
-      }
+      trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
+      ++trx_sys->n_prepared_trx;
     } else {
       trx->state.store(TRX_STATE_COMMITTED_IN_MEMORY,
                        std::memory_order_relaxed);
@@ -901,6 +905,17 @@ static trx_t *trx_resurrect_insert(
                           std::memory_order_relaxed);
   }
 
+  /* Don't add already commited transactions to list of active ones in
+  active_rw_trxs. Store them in trxs_committed. They will be added to
+  trx_sys->rw_trx_list to be later taken care of in
+  trx_rollback_or_clean_recovered. */
+  if (trx->state.load(std::memory_order_relaxed) !=
+      TRX_STATE_COMMITTED_IN_MEMORY) {
+    trx_sys_rw_trx_add(trx);
+  } else {
+    trxs_committed.push_back(trx);
+  }
+
   trx->ddl_operation = undo->dict_operation;
 
   if (undo->dict_operation) {
@@ -916,31 +931,40 @@ static trx_t *trx_resurrect_insert(
 }
 
 /** Prepared transactions are left in the prepared state waiting for a
- commit or abort decision from MySQL */
-static void trx_resurrect_update_in_prepared_state(
-    trx_t *trx,             /*!< in,out: transaction */
-    const trx_undo_t *undo) /*!< in: update UNDO record */
-{
+ commit or abort decision from MySQL
+ @param[in,out] trx     transaction
+ @param[in]     undo    update UNDO record */
+static void trx_resurrect_update_in_prepared_state(trx_t *trx,
+                                                   const trx_undo_t *undo) {
   /* This is single-threaded startup code, we do not need the
   protection of trx->mutex or trx_sys->mutex here. */
 
-  if (undo->is_prepared()) {
-    ib::info(ER_IB_MSG_1206) << "Transaction " << trx_get_id_for_print(trx)
-                             << " was in the XA prepared state.";
+  /* UNDO record has to be in one of the prepared states. Explanation is
+  following. It cannot be:
+  TRX_UNDO_ACTIVE - It is managed separately in trx_resurrect_update.
+  TRX_UNDO_CACHED - Update UNDO records with this state are stored in
+  update_undo_cached and are not resurrected by trx_resurrect.
+  TRX_UNDO_TO_FREE - It is used only for insert undo log. See
+  trx_undo_set_state_at_finish.
+  TRX_UNDO_TO_PURGE - Cannot happen because it is immediately cleaned up in
+  trx_undo_update_cleanup after trx_undo_set_state_at_finish in
+  trx_write_serialisation_history for an UNDO record. All happens in one mtr.
+  Thus, it should not end up in update_undo_list. */
+  ut_ad(undo->is_prepared());
 
-    ut_ad(trx->state.load(std::memory_order_relaxed) !=
-          TRX_STATE_FORCED_ROLLBACK);
+  ib::info(ER_IB_MSG_1206) << "Transaction " << trx_get_id_for_print(trx)
+                           << " was in the XA prepared state.";
 
-    if (trx_state_eq(trx, TRX_STATE_NOT_STARTED)) {
-      ++trx_sys->n_prepared_trx;
-    } else {
-      ut_ad(trx_state_eq(trx, TRX_STATE_PREPARED));
-    }
+  ut_ad(trx->state.load(std::memory_order_relaxed) !=
+        TRX_STATE_FORCED_ROLLBACK);
 
-    trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
+  if (trx_state_eq(trx, TRX_STATE_NOT_STARTED)) {
+    ++trx_sys->n_prepared_trx;
   } else {
-    trx->state.store(TRX_STATE_COMMITTED_IN_MEMORY, std::memory_order_relaxed);
+    ut_ad(trx_state_eq(trx, TRX_STATE_PREPARED));
   }
+
+  trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
 }
 
 /** Resurrect the transactions that were doing updates the time of the
@@ -1016,14 +1040,17 @@ static void trx_resurrect_update(
 
 /** Resurrect the transactions that were doing inserts and updates at
 the time of a crash, they need to be undone.
-@param[in]      rseg    rollback segment */
-static void trx_resurrect(trx_rseg_t *rseg) {
+@param[in]      rseg             rollback segment
+@param[out]     trxs_committed   vector of already commited transactions that
+                                 were found during resurrection */
+static void trx_resurrect(trx_rseg_t *rseg,
+                          ut::vector<trx_t *> &trxs_committed) {
   ut_ad(rseg != nullptr);
   ulong ins_trx_count = 0;
   ulong upd_trx_count = 0;
   /* Resurrect transactions that were doing inserts. */
   for (auto undo : rseg->insert_undo_list) {
-    auto trx = trx_resurrect_insert(undo, rseg);
+    auto trx = trx_resurrect_insert(undo, rseg, trxs_committed);
     ins_trx_count++;
     ib::info(ER_IB_RESURRECT_TRX_INSERT, ulong(trx->id));
     trx_resurrect_table_ids(trx, &trx->rsegs.m_redo, undo);
@@ -1031,7 +1058,7 @@ static void trx_resurrect(trx_rseg_t *rseg) {
   if (ins_trx_count > 0) {
     ib::info(ER_IB_RESURRECT_TRX_INSERT_COMPLETE, ins_trx_count);
   }
-  /* Ressurrect transactions that were doing updates. */
+  /* Resurrect transactions that were doing updates. */
   for (auto undo : rseg->update_undo_list) {
     /* Check the active_rw_trxs.by_id first. */
 
@@ -1062,7 +1089,27 @@ Requires trx_sys->mutex, unless called in the single threaded startup code.
 static inline void trx_add_to_rw_trx_list(trx_t *trx) {
   ut_ad(srv_is_being_started || trx_sys_mutex_own());
   ut_ad(!trx->in_rw_trx_list);
-  UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
+  /* rw_trx_list is kept ordered by descending trx->id. For freshly
+  allocated ids that is guaranteed because the id is the greatest, so a
+  simple prepend keeps the order. A preallocated id (used by the
+  consistent snapshot clone-view feature), however, might not be received
+  in ascending order, so prepending it could break the ordering invariant
+  validated by trx_sys_validate_trx_list(). Mirror the rw_trx_ids handling
+  in trx_assign_id_for_rw() and insert it at its proper position. */
+  if (trx->preallocated_id != 0) {
+    trx_t *prev = nullptr;
+    for (auto cur : trx_sys->rw_trx_list) {
+      if (cur->id < trx->id) break;
+      prev = cur;
+    }
+    if (prev == nullptr) {
+      UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
+    } else {
+      UT_LIST_INSERT_AFTER(trx_sys->rw_trx_list, prev, trx);
+    }
+  } else {
+    UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
+  }
   ut_d(trx->in_rw_trx_list = true);
 }
 
@@ -1085,29 +1132,27 @@ static inline void trx_remove_from_rw_trx_list(trx_t *trx) {
 void trx_lists_init_at_db_start(void) {
   ut_a(srv_is_being_started);
 
-  /* Look through the rollback segments in the TRX_SYS for
-  transaction undo logs. */
-  for (auto rseg : trx_sys->rsegs) {
-    trx_resurrect(rseg);
-  }
-
   /* Look through the rollback segments in each RSEG_ARRAY for
   transaction undo logs. */
+  ut::vector<trx_t *> trxs;
   undo::spaces->s_lock();
   for (auto undo_space : undo::spaces->m_spaces) {
     undo_space->rsegs()->s_lock();
     for (auto rseg : *undo_space->rsegs()) {
-      trx_resurrect(rseg);
+      trx_resurrect(rseg, trxs);
     }
     undo_space->rsegs()->s_unlock();
   }
   undo::spaces->s_unlock();
 
-  ut::vector<trx_t *> trxs;
   for (auto &shard : trx_sys->shards) {
     shard.active_rw_trxs.latch_and_execute(
         [&](const Trx_by_id_with_min &trx_by_id_with_min) {
           for (const auto &trx_track : trx_by_id_with_min.by_id()) {
+            /* There should be no already committed transactions in
+            active_rw_trxs. */
+            ut_ad_ne(trx_track.second->state.load(std::memory_order_relaxed),
+                     TRX_STATE_COMMITTED_IN_MEMORY);
             trxs.emplace_back(trx_track.second);
           }
         },
@@ -1126,15 +1171,18 @@ void trx_lists_init_at_db_start(void) {
 }
 
 /** Get next redo rollback segment in round-robin fashion.
+We assume that the assigned slots are not contiguous and have gaps.
+
 While InnoDB is running in multi-threaded mode, the vectors of undo
 tablespaces and rsegs do not shrink.  So they do not need protection
 to get a pointer to an rseg.
+
 If an rseg is not marked for undo tablespace truncation, we assign
 it to a transaction. We increment trx_ref_count to keep the purge
 thread from truncating the undo tablespace that contains this rseg
 until the transaction is done with it.
 @return assigned rollback segment instance */
-static trx_rseg_t *get_next_redo_rseg_from_undo_spaces() {
+static trx_rseg_t *get_next_redo_rseg() {
   undo::Tablespace *undo_space;
 
   /* The number of undo tablespaces cannot be changed while
@@ -1187,9 +1235,6 @@ static trx_rseg_t *get_next_redo_rseg_from_undo_spaces() {
 
     /* Check again with a shared lock. */
     rseg = undo_space->get_active(rseg_slot);
-    if (rseg == nullptr) {
-      continue;
-    }
   }
 
   undo::spaces->s_unlock();
@@ -1197,55 +1242,6 @@ static trx_rseg_t *get_next_redo_rseg_from_undo_spaces() {
   ut_ad(rseg->trx_ref_count > 0);
 
   return (rseg);
-}
-
-/** Get the next redo rollback segment in round-robin fashion.
-The assigned slots may have gaps but the vector does not.
-@return assigned rollback segment instance */
-static trx_rseg_t *get_next_redo_rseg_from_trx_sys() {
-  static std::atomic<ulint> rseg_counter{0};
-  ulong n_rollback_segments = srv_rollback_segments;
-
-  /* Versions 5.6 and 5.7 of InnoDB would allow 128 as the max for
-  innodb_rollback_segments but would only use 96 since 32 slots were
-  used for temporary rsegs. Now those rsegs are in trx_sys_t::tmp_rsegs
-  and trx_sys_t::rsegs which each can hold all 128.  As a result,
-  an existing system tablespace might have gaps in the slot assignment.
-  The Rsegs vector only contains the rsegs that exist. Since
-  srv_rollback_segments can be set to a smaller number at runtime,
-  it might be smaller than Rsegs::size().  But srv_rollback_segments
-  can never be larger than Rsegs::size() because when the user increases
-  innodb_rollback_segments, the rollback segments are created and rseg
-  objects are added to the vector ready to use before
-  srv_rollback_segments is increased. */
-  ut_ad(n_rollback_segments <= trx_sys->rsegs.size());
-
-  /* Try the next slot that no other thread is looking at */
-  ulint slot = (rseg_counter.fetch_add(1) + 1) % n_rollback_segments;
-
-  /* s_lock the vector since it might be sorted when added to. */
-  trx_sys->rsegs.s_lock();
-  trx_rseg_t *rseg = trx_sys->rsegs.at(slot);
-  trx_sys->rsegs.s_unlock();
-
-  /* It is not necessary to s_lock Rsegs::m_latch here because the
-  system tablespace is never truncated like other undo tablespaces. */
-  rseg->trx_ref_count++;
-
-  ut_ad(rseg->space_id == TRX_SYS_SPACE);
-
-  return (rseg);
-}
-
-/** Get next redo rollback segment in round-robin fashion.
-We assume that the assigned slots are not contiguous and have gaps.
-@return assigned rollback segment instance */
-static trx_rseg_t *get_next_redo_rseg() {
-  if (!trx_sys->rsegs.is_empty()) {
-    return (get_next_redo_rseg_from_trx_sys());
-  } else {
-    return (get_next_redo_rseg_from_undo_spaces());
-  }
 }
 
 /** Get the next noredo rollback segment.
@@ -1278,6 +1274,27 @@ void trx_assign_rseg_durable(trx_t *trx) {
   trx->rsegs.m_redo.rseg = srv_read_only_mode ? nullptr : get_next_redo_rseg();
 }
 
+/** Assign an id for this RW transaction and insert it into trx_sys->rw_trx_ids
+@param trx	transaction to assign an id for */
+static void trx_assign_id_for_rw(trx_t *trx) {
+  ut_ad(trx_sys_mutex_own());
+
+  trx->id =
+      trx->preallocated_id ? trx->preallocated_id : trx_sys_allocate_trx_id();
+
+  if (trx->preallocated_id) {
+    // preallocated_id might not be received in ascending order,
+    // so we need to maintain ordering in rw_trx_ids and update
+    // min_active_trx_id
+    auto upper_bound_it = std::upper_bound(trx_sys->rw_trx_ids.begin(),
+                                           trx_sys->rw_trx_ids.end(), trx->id);
+    trx_sys->rw_trx_ids.insert(upper_bound_it, trx->id);
+  } else {
+    // The id is known to be greatest
+    trx_sys->rw_trx_ids.push_back(trx->id);
+  }
+}
+
 /** Assign a temp-tablespace bound rollback-segment to a transaction.
 @param[in,out]  trx     transaction that involves write to temp-table. */
 void trx_assign_rseg_temp(trx_t *trx) {
@@ -1290,9 +1307,7 @@ void trx_assign_rseg_temp(trx_t *trx) {
   if (trx->id == 0) {
     trx_sys_mutex_enter();
 
-    trx->id = trx_sys_allocate_trx_id();
-
-    trx_sys->rw_trx_ids.push_back(trx->id);
+    trx_assign_id_for_rw(trx);
 
     trx_sys_mutex_exit();
 
@@ -1408,9 +1423,7 @@ static void trx_start_low(
 
     trx_sys_mutex_enter();
 
-    trx->id = trx_sys_allocate_trx_id();
-
-    trx_sys->rw_trx_ids.push_back(trx->id);
+    trx_assign_id_for_rw(trx);
 
     ut_ad(trx->rsegs.m_redo.rseg != nullptr || srv_read_only_mode ||
           srv_force_recovery >= SRV_FORCE_NO_TRX_UNDO);
@@ -1439,10 +1452,7 @@ static void trx_start_low(
         ut_ad(!srv_read_only_mode);
 
         trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
-
-        trx->id = trx_sys_allocate_trx_id();
-
-        trx_sys->rw_trx_ids.push_back(trx->id);
+        trx_assign_id_for_rw(trx);
 
         trx_sys_mutex_exit();
 
@@ -1922,7 +1932,13 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
           ut_d(const size_t trx_shard_no = trx_get_shard_no(trx->id));
           ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
           trx_by_id_with_min.erase(trx->id);
-          ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
+#ifdef UNIV_DEBUG
+          /* This invariant will be needed by future calls to erase() as its
+          body assumes the new minimum can be found by adding k*TRX_SHARDS_N. */
+          const auto new_min_id = trx_by_id_with_min.min_id();
+          ut_ad(new_min_id == TRX_ID_MAX ||
+                trx_get_shard_no(new_min_id) == trx_shard_no);
+#endif
         },
         UT_LOCATION_HERE);
   } else {
@@ -2332,6 +2348,42 @@ ReadView *trx_assign_read_view(trx_t *trx) /*!< in/out: active transaction */
   return (trx->read_view);
 }
 
+/** Clones the read view from another transaction. All consistent reads within
+the receiver transaction will get the same read view as the donor transaction
+@param[in]	trx		receiver transaction
+@param[in]	from_trx	donor transaction
+@return read view clone */
+ReadView *trx_clone_read_view(trx_t *trx, trx_t *from_trx) {
+  ut_ad(locksys::owns_exclusive_global_latch());
+  ut_ad(trx_sys_mutex_own());
+  ut_ad(trx_mutex_own(from_trx));
+
+  if (UNIV_UNLIKELY(srv_read_only_mode)) {
+    ut_ad(trx->read_view == nullptr);
+    trx_sys_mutex_exit();
+    trx_mutex_exit(from_trx);
+    return (nullptr);
+  }
+
+  if (from_trx->state != TRX_STATE_ACTIVE || from_trx->read_view == nullptr) {
+    trx_sys_mutex_exit();
+    trx_mutex_exit(from_trx);
+    return (nullptr);
+  }
+
+  const bool needs_adding = (trx->read_view == nullptr);
+
+  from_trx->read_view->clone(trx->read_view, from_trx);
+
+  trx_mutex_exit(from_trx);
+
+  if (needs_adding) trx_sys->mvcc->view_add(trx->read_view);
+
+  trx_sys_mutex_exit();
+
+  return (trx->read_view);
+}
+
 /** Prepares a transaction for commit/rollback. */
 void trx_commit_or_rollback_prepare(trx_t *trx) /*!< in/out: transaction */
 {
@@ -2364,6 +2416,8 @@ void trx_commit_or_rollback_prepare(trx_t *trx) /*!< in/out: transaction */
         ut_a(trx->lock.wait_thr != nullptr);
         trx->lock.wait_thr->state = QUE_THR_SUSPENDED;
         trx->lock.wait_thr = nullptr;
+
+        trx->stats.stop_lock_wait(*trx);
 
         trx->lock.que_state = TRX_QUE_RUNNING;
       }
@@ -3446,13 +3500,10 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
 
   trx_sys_mutex_enter();
 
-  ut_ad(trx->id == 0);
-  trx->id = trx_sys_allocate_trx_id();
+  trx_assign_id_for_rw(trx);
 
-  trx_sys->rw_trx_ids.push_back(trx->id);
-
-  /* So that we can see our own changes. */
-  if (MVCC::is_view_active(trx->read_view)) {
+  /* So that we can see our own changes unless our view is a clone */
+  if (MVCC::is_view_active(trx->read_view) && !trx->read_view->is_cloned()) {
     MVCC::set_view_creator_trx_id(trx->read_view, trx->id);
   }
   trx_add_to_rw_trx_list(trx);

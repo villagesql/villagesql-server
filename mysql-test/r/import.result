@@ -363,7 +363,7 @@ DROP TABLE s1.t1;
 # Drop s1 which is empty in DD, but which has files in directory
 DROP SCHEMA s1;
 Warnings:
-Warning	3607	Problem while dropping database. Can't remove database directory (Error dropping database (can't rmdir './s1', errno: ## - ...). Please remove it manually.
+Warning	3607	Problem while dropping database. Can't remove database directory (Error dropping database (can't rmdir './s1/', errno: ## - ...). Please remove it manually.
 # Show offending files
 t1.MYD
 t1.MYI
@@ -497,6 +497,19 @@ DROP TABLE t1;
 SET SESSION sql_require_primary_key= ON;
 IMPORT TABLE FROM 't1_*.sdi';
 ERROR HY000: Unable to create or change a table without a primary key, when the system variable 'sql_require_primary_key' is set. Add a primary key to the table or unset this variable to avoid this message. Note that tables without a primary key can cause performance problems in row-based replication, so please consult your DBA before changing this setting.
+SET SESSION sql_require_primary_key= OFF;
+# Clean SDI files in $EXPORT_DIR
+
+# Addendum for Bug#31402520: UNIQUE KEY NOT NULL should be accepted.
+CREATE TABLE t1 (i INT UNIQUE KEY NOT NULL);
+FLUSH TABLES WITH READ LOCK;
+# Copy t1 files to export dir
+UNLOCK TABLES;
+DROP TABLE t1;
+# Copy files back into datadir
+SET SESSION sql_require_primary_key= ON;
+IMPORT TABLE FROM 't1_*.sdi';
+DROP TABLE IF EXISTS t1;
 SET SESSION sql_require_primary_key= OFF;
 # Clean SDI files in $EXPORT_DIR
 #-----------------------------------------------------------------------

@@ -29,7 +29,6 @@
 
 #include "my_inttypes.h"                                // IWYU pragma: keep
 #include "mysql/binlog/event/compression/compressor.h"  // mysql::binlog::event::compression::Compressor
-#include "mysql/binlog/event/nodiscard.h"
 
 #include "mysql/binlog/event/compression/factory.h"
 #include "sql/binlog/group_commit/bgc_ticket.h"
@@ -261,14 +260,13 @@ class Last_used_gtid_tracker_ctx {
 
 class Transaction_compression_ctx {
   using Compressor_t = mysql::binlog::event::compression::Compressor;
-  using Grow_calculator_t =
-      mysql::binlog::event::compression::buffer::Grow_calculator;
+  using Grow_calculator_t = mysql::containers::buffers::Grow_calculator;
   using Factory_t = mysql::binlog::event::compression::Factory;
 
  public:
   using Compressor_ptr_t = std::shared_ptr<Compressor_t>;
   using Managed_buffer_sequence_t = Compressor_t::Managed_buffer_sequence_t;
-  using Memory_resource_t = mysql::binlog::event::resource::Memory_resource;
+  using Memory_resource_t = mysql::allocators::Memory_resource;
 
   explicit Transaction_compression_ctx(PSI_memory_key key);
 

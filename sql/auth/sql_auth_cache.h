@@ -46,11 +46,11 @@
 #include "my_inttypes.h"
 #include "my_sharedlib.h"
 #include "my_sys.h"
+#include "my_temporal.h"  // Datetime_val
 #include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/mysql_lex_string.h"
 #include "mysql/strings/m_ctype.h"
-#include "mysql_com.h"   // SCRAMBLE_LENGTH
-#include "mysql_time.h"  // MYSQL_TIME
+#include "mysql_com.h"  // SCRAMBLE_LENGTH
 #include "sql/auth/auth_common.h"
 #include "sql/auth/auth_internal.h"  // List_of_authid, Authid
 #include "sql/auth/partial_revokes.h"
@@ -67,6 +67,7 @@ struct TABLE;
 template <typename Element_type, size_t Prealloc>
 class Prealloced_array;
 class Acl_restrictions;
+enum class Acl_type;
 enum class Lex_acl_attrib_udyn;
 
 /* Classes */
@@ -253,7 +254,7 @@ class ACL_USER : public ACL_ACCESS {
   LEX_CSTRING plugin;
   bool password_expired;
   bool can_authenticate;
-  MYSQL_TIME password_last_changed;
+  Datetime_val password_last_changed;
   uint password_lifetime;
   bool use_default_password_lifetime;
   /**
@@ -529,7 +530,7 @@ extern std::unique_ptr<malloc_unordered_multimap<
     column_priv_hash;
 extern std::unique_ptr<
     malloc_unordered_multimap<std::string, unique_ptr_destroy_only<GRANT_NAME>>>
-    proc_priv_hash, func_priv_hash;
+    proc_priv_hash, func_priv_hash, library_priv_hash;
 extern collation_unordered_map<std::string, ACL_USER *> *acl_check_hosts;
 extern bool allow_all_hosts;
 extern uint grant_version; /* Version of priv tables */
@@ -573,12 +574,14 @@ T *name_hash_search(
   return found;
 }
 
+malloc_unordered_multimap<std::string, unique_ptr_destroy_only<GRANT_NAME>>
+    *get_routine_priv_hash(Acl_type type);
+
 inline GRANT_NAME *routine_hash_search(const char *host, const char *ip,
                                        const char *db, const char *user,
-                                       const char *tname, bool proc,
-                                       bool exact) {
-  assert(proc ? proc_priv_hash : func_priv_hash);
-  return name_hash_search(proc ? *proc_priv_hash : *func_priv_hash, host, ip,
+                                       const char *tname,
+                                       Acl_type routine_acl_type, bool exact) {
+  return name_hash_search(*get_routine_priv_hash(routine_acl_type), host, ip,
                           db, user, tname, exact, true);
 }
 
@@ -670,6 +673,7 @@ class Acl_map {
   Table_access_map *table_acls();
   SP_access_map *sp_acls();
   SP_access_map *func_acls();
+  SP_access_map *lib_acls();
   Grant_acl_set *grant_acls();
   Dynamic_privileges *dynamic_privileges();
   Restrictions &restrictions();
@@ -685,6 +689,7 @@ class Acl_map {
   Access_bitmask m_global_acl;
   SP_access_map m_sp_acls;
   SP_access_map m_func_acls;
+  SP_access_map m_lib_acls;
   Grant_acl_set m_with_admin_acls;
   Dynamic_privileges m_dynamic_privileges;
   Restrictions m_restrictions;
@@ -884,5 +889,18 @@ class ACL_temporary_lock_state {
   const uint m_remaining_login_attempts;
   const long m_daynr_locked;
 };
+
+size_t acl_users_size();
+
+class ACL_USER_visitor {
+ public:
+  ACL_USER_visitor() = default;
+  virtual ~ACL_USER_visitor() = default;
+  virtual void visit(const ACL_USER *acl_user) = 0;
+};
+
+void acl_users_accept(ACL_USER_visitor *visitor);
+
+extern ACL_USER acl_utility_user;
 
 #endif /* SQL_USER_CACHE_INCLUDED */

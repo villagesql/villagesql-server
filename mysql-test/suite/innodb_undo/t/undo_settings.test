@@ -5,6 +5,9 @@
 --echo # Also make sure that --innodb_validate_tablespace_paths=OFF does not
 --echo # affect the validation of undo tablespaces. (See undo_settings-master.opt)
 
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
+
 --source include/have_innodb_default_undo_tablespaces.inc
 
 SET DEFAULT_STORAGE_ENGINE=InnoDB;
@@ -44,7 +47,7 @@ INSERT INTO t3 VALUES (101, repeat('x1 ',5));
 connection default;
 --echo # Connection default
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -57,7 +60,7 @@ SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
 --echo #
 CREATE UNDO TABLESPACE `undo_003` ADD DATAFILE 'undo_003.ibu';
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -99,7 +102,7 @@ SET GLOBAL innodb_rollback_segments=4;
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
 CREATE UNDO TABLESPACE `undo_004` ADD DATAFILE 'undo_004.ibu';
 
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -159,7 +162,7 @@ ALTER UNDO TABLESPACE `undo_004` SET INACTIVE;
 let $inactive_undo_space = undo_004;
 source include/wait_until_undo_space_is_empty.inc;
 
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -179,7 +182,7 @@ SELECT COUNT(*) FROM t3;
 --echo # Change number of Rollback Segments from 2 to 5 while online.
 --echo #
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 
 SET GLOBAL innodb_rollback_segments=5;
 ALTER UNDO TABLESPACE `undo_003` SET ACTIVE;
@@ -187,7 +190,7 @@ ALTER UNDO TABLESPACE `undo_004` SET ACTIVE;
 CREATE UNDO TABLESPACE `undo_005` ADD DATAFILE 'undo_005.ibu';
 
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -222,7 +225,7 @@ let $restart_parameters = restart: --innodb_rollback_segments=6;
 --source include/start_mysqld.inc
 
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -244,7 +247,7 @@ let $restart_parameters = restart: --innodb_rollback_segments=4 --innodb_validat
 --source include/start_mysqld.inc
 
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -277,7 +280,7 @@ let $restart_parameters = restart: --innodb_rollback_segments=2 --innodb_validat
 disconnect con1;
 
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -307,7 +310,7 @@ let $restart_parameters = restart: --innodb_rollback_segments=7;
 --source include/kill_and_restart_mysqld.inc
 disconnect con1;
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -337,7 +340,7 @@ disconnect con1;
 --error ER_READ_ONLY_MODE
 CREATE UNDO TABLESPACE `undo_007` ADD DATAFILE 'undo_007.ibu';
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -359,7 +362,7 @@ let $restart_parameters = restart: --innodb_force_recovery=1 --innodb_rollback_s
 --source include/restart_mysqld.inc
 --error ER_INNODB_READ_ONLY
 CREATE UNDO TABLESPACE `undo_007` ADD DATAFILE 'undo_007.ibu';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -398,7 +401,7 @@ INSERT INTO t3  VALUES (10, repeat('j',15));
 let $restart_parameters = restart;
 --source include/restart_mysqld.inc
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE '%undo%';
+SHOW GLOBAL STATUS LIKE 'Innodb_undo%';
 SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE name LIKE '%undo%' ORDER BY NAME;
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
@@ -458,5 +461,12 @@ call mtr.add_suppression("Skip re-populating collations and character sets table
 call mtr.add_suppression("\\[Warning\\].*Cannot set innodb_rollback_segments to [8,3] when in read-only mode");
 call mtr.add_suppression("\\[Warning\\].*Cannot set innodb_rollback_segments to [8,3] when in innodb_force_recovery > 0");
 call mtr.add_suppression("\\[Warning\\].*Doublewrite page .* could not be restored. File name unknown for tablespace ID");
+call mtr.add_suppression("Failed to compress the gtid_executed table.");
+call mtr.add_suppression("innodb_force_recovery is on.");
 --enable_query_log
-
+# The value of gtid_mode might have been changed already(via start_mysqld.inc)
+# but if it's not then do it now
+if (`SELECT @@GLOBAL.gtid_mode = "OFF"`)
+{
+  --source include/rpl/set_gtid_mode_on.inc
+}

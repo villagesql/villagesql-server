@@ -41,8 +41,10 @@ ROUTER_ADD_SHARED_LIBRARY(metadata_cache
   PUBLIC
   harness_stdx
   router_cluster
-  mysqlxclient_lite
+  router_mysqlxclient
   router_mysqlxmessages
+  router_utils
+  routing_guidelines
   PRIVATE
   extra::rapidjson
 

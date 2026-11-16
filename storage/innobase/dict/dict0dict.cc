@@ -76,7 +76,6 @@ dict_index_t *dict_ind_redundant;
 extern uint ibuf_debug;
 #endif /* UNIV_DEBUG || UNIV_IBUF_DEBUG */
 
-#include <algorithm>
 #include <vector>
 
 #include "btr0btr.h"
@@ -96,7 +95,6 @@ extern uint ibuf_debug;
 #endif /* !UNIV_HOTBACKUP */
 #include "fsp0sysspace.h"
 #ifndef UNIV_HOTBACKUP
-#include "fts0fts.h"
 #include "fts0types.h"
 #include "lock0lock.h"
 #endif /* !UNIV_HOTBACKUP */
@@ -194,9 +192,6 @@ constexpr uint32_t DICT_POOL_PER_TABLE_HASH = 512;
 /** Identifies generated InnoDB foreign key names */
 static char dict_ibfk[] = "_ibfk_";
 
-/** Array to store table_ids of INNODB_SYS_* TABLES */
-static table_id_t dict_sys_table_id[SYS_NUM_SYSTEM_TABLES];
-
 /** Tries to find column names for the index and sets the col field of the
 index.
 @param[in]      table   table
@@ -238,7 +233,7 @@ have some changed dynamic metadata in memory and have not been written
 back to mysql.innodb_dynamic_metadata. Update LSN limit, which is used
 to stop user threads when redo log is running out of space and they
 do not hold latches (log.free_check_limit_lsn). */
-static void dict_persist_update_log_margin(void);
+static void dict_persist_update_log_margin();
 
 /** Removes a table object from the dictionary cache. */
 static void dict_table_remove_from_cache_low(
@@ -308,10 +303,10 @@ ulint dict_get_db_name_len(const char *name) /*!< in: table name in the form
 
 #ifndef UNIV_HOTBACKUP
 /** Reserves the dictionary system mutex for MySQL. */
-void dict_mutex_enter_for_mysql(void) { dict_sys_mutex_enter(); }
+void dict_mutex_enter_for_mysql() { dict_sys_mutex_enter(); }
 
 /** Releases the dictionary system mutex for MySQL. */
-void dict_mutex_exit_for_mysql(void) { dict_sys_mutex_exit(); }
+void dict_mutex_exit_for_mysql() { dict_sys_mutex_exit(); }
 
 /** Allocate and init a dict_table_t's stats latch.
 This function must not be called concurrently on the same table object.
@@ -330,6 +325,20 @@ static void dict_table_stats_latch_alloc(void *table_void) {
                  LATCH_ID_DICT_TABLE_STATS);
 }
 
+/** Allocate and init a dict_table_t's stats compute mutex.
+This function must not be called concurrently on the same table object.
+@param[in,out]  table_void      table whose stats compute mutex to create */
+static void dict_table_stats_compute_mutex_alloc(void *table_void) {
+  dict_table_t *table = static_cast<dict_table_t *>(table_void);
+
+  table->stats_compute_mutex =
+      ut::new_withkey<ib_mutex_t>(UT_NEW_THIS_FILE_PSI_KEY);
+
+  ut_a(table->stats_compute_mutex != nullptr);
+
+  mutex_create(LATCH_ID_DICT_TABLE_STATS_COMPUTE, table->stats_compute_mutex);
+}
+
 /** Deinit and free a dict_table_t's stats latch.
 This function must not be called concurrently on the same table object.
 @param[in,out]  table   table whose stats latch to free */
@@ -338,13 +347,21 @@ static void dict_table_stats_latch_free(dict_table_t *table) {
   ut::free(table->stats_latch);
 }
 
+/** Deinit and free a dict_table_t's stats compute mutex.
+This function must not be called concurrently on the same table object.
+@param[in,out]  table   table whose stats compute mutex to free */
+static void dict_table_stats_compute_mutex_free(dict_table_t *table) {
+  mutex_free(table->stats_compute_mutex);
+  ut::delete_(table->stats_compute_mutex);
+}
+
 /** Create a dict_table_t's stats latch or delay for lazy creation.
 This function is only called from either single threaded environment
 or from a thread that has not shared the table object with other threads.
 @param[in,out]  table   table whose stats latch to create
 @param[in]      enabled if false then the latch is disabled
 and dict_table_stats_lock()/unlock() become noop on this table. */
-void dict_table_stats_latch_create(dict_table_t *table, bool enabled) {
+void dict_table_stats_latch_create_lazy(dict_table_t *table, bool enabled) {
   if (!enabled) {
     table->stats_latch = nullptr;
     table->stats_latch_created = os_once::DONE;
@@ -356,6 +373,25 @@ void dict_table_stats_latch_create(dict_table_t *table, bool enabled) {
   table->stats_latch_created = os_once::NEVER_DONE;
 }
 
+/** Create a dict_table_t's stats compute mutex or delay for lazy creation.
+This function is only called from either single threaded environment
+or from a thread that has not shared the table object with other threads.
+@param[in,out]  table   table whose stats compute mutex to create
+@param[in]      enabled if false then the latch is disabled
+and dict_table_stats_compute_lock()/unlock() become noop on this table. */
+void dict_table_stats_compute_mutex_create_lazy(dict_table_t *table,
+                                                bool enabled) {
+  if (!enabled) {
+    table->stats_compute_mutex = nullptr;
+    table->stats_compute_mutex_created = os_once::DONE;
+    return;
+  }
+
+  /* We create this lazily the first time it is used. */
+  table->stats_compute_mutex = nullptr;
+  table->stats_compute_mutex_created = os_once::NEVER_DONE;
+}
+
 /** Destroy a dict_table_t's stats latch.
 This function is only called from either single threaded environment
 or from a thread that has not shared the table object with other threads.
@@ -364,6 +400,17 @@ void dict_table_stats_latch_destroy(dict_table_t *table) {
   if (table->stats_latch_created == os_once::DONE &&
       table->stats_latch != nullptr) {
     dict_table_stats_latch_free(table);
+  }
+}
+
+/** Destroy a dict_table_t's stats compute mutex.
+This function is only called from either single threaded environment
+or from a thread that has not shared the table object with other threads.
+@param[in,out]  table   table whose stats compute mutex to destroy */
+void dict_table_stats_compute_mutex_destroy(dict_table_t *table) {
+  if (table->stats_compute_mutex_created == os_once::DONE &&
+      table->stats_compute_mutex != nullptr) {
+    dict_table_stats_compute_mutex_free(table);
   }
 }
 
@@ -426,6 +473,38 @@ void dict_table_stats_unlock(dict_table_t *table, ulint latch_mode) {
   }
 }
 
+void dict_table_stats_compute_lock(dict_table_t *table) {
+  ut_ad(table != nullptr);
+  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
+
+  os_once::do_or_wait_for_done(&table->stats_compute_mutex_created,
+                               dict_table_stats_compute_mutex_alloc, table);
+
+  if (table->stats_compute_mutex == nullptr) {
+    /* This is a dummy table object that is private in the current
+    thread and is not shared between multiple threads, thus we
+    skip any locking. */
+    return;
+  }
+
+  mutex_enter(table->stats_compute_mutex);
+}
+
+void dict_table_stats_compute_unlock(dict_table_t *table) {
+  ut_ad(table != nullptr);
+  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
+
+  if (table->stats_compute_mutex == nullptr) {
+    /* This is a dummy table object that is private in the current
+    thread and is not shared between multiple threads, thus we
+    skip any locking. */
+    return;
+  }
+
+  mutex_exit(table->stats_compute_mutex);
+}
+
+#ifndef UNIV_DEBUG
 /** Try to drop any indexes after an aborted index creation.
  This can also be after a server kill during DROP INDEX. */
 static void dict_table_try_drop_aborted(
@@ -465,29 +544,8 @@ static void dict_table_try_drop_aborted(
   row_mysql_unlock_data_dictionary(trx);
   trx_free_for_background(trx);
 }
+#endif /* !UNIV_DEBUG */
 
-/** When opening a table,
- try to drop any indexes after an aborted index creation.
- Release the dict_sys->mutex. */
-static void dict_table_try_drop_aborted_and_mutex_exit(
-    dict_table_t *table, /*!< in: table (may be NULL) */
-    bool try_drop)       /*!< in: false if should try to
-                         drop indexes whose online creation
-                         was aborted */
-{
-  if (try_drop && table != nullptr && table->drop_aborted &&
-      table->get_ref_count() == 1 && table->first_index()) {
-    /* Attempt to drop the indexes whose online creation
-    was aborted. */
-    table_id_t table_id = table->id;
-
-    dict_sys_mutex_exit();
-
-    dict_table_try_drop_aborted(table, table_id, 1);
-  } else {
-    dict_sys_mutex_exit();
-  }
-}
 #endif /* !UNIV_HOTBACKUP */
 
 /** Decrements the count of open handles to a table.
@@ -711,7 +769,8 @@ This function must not be called concurrently on the same table object.
 static void dict_table_autoinc_alloc(void *table_void) {
   dict_table_t *table = static_cast<dict_table_t *>(table_void);
 
-  table->autoinc_mutex = ut::new_withkey<ib_mutex_t>(UT_NEW_THIS_FILE_PSI_KEY);
+  table->autoinc_mutex =
+      ut::new_withkey<AutoIncMutex>(UT_NEW_THIS_FILE_PSI_KEY);
   ut_a(table->autoinc_mutex != nullptr);
   mutex_create(LATCH_ID_AUTOINC, table->autoinc_mutex);
 
@@ -1009,15 +1068,11 @@ bool dict_table_col_in_clustered_key(
 #endif /* !UNIV_HOTBACKUP */
 
 /** Inits the data dictionary module. */
-void dict_init(void) {
+void dict_init() {
   dict_operation_lock = static_cast<rw_lock_t *>(ut::zalloc_withkey(
       UT_NEW_THIS_FILE_PSI_KEY, sizeof(*dict_operation_lock)));
 
-  dict_sys = static_cast<dict_sys_t *>(
-      ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(*dict_sys)));
-
-  UT_LIST_INIT(dict_sys->table_LRU);
-  UT_LIST_INIT(dict_sys->table_non_LRU);
+  dict_sys = ut::new_withkey<dict_sys_t>(UT_NEW_THIS_FILE_PSI_KEY);
 
   mutex_create(LATCH_ID_DICT_SYS, &dict_sys->mutex);
 
@@ -1056,76 +1111,6 @@ void dict_move_to_mru(dict_table_t *table) /*!< in: table to move to MRU */
 
   ut_ad(dict_lru_validate());
 }
-
-/** Returns a table object and increment its open handle count.
- NOTE! This is a high-level function to be used mainly from outside the
- 'dict' module. Inside this directory dict_table_get_low
- is usually the appropriate function.
- @return table, NULL if does not exist */
-dict_table_t *dict_table_open_on_name(
-    const char *table_name,       /*!< in: table name */
-    bool dict_locked,             /*!< in: true=data dictionary locked */
-    bool try_drop,                /*!< in: true=try to drop any orphan
-                                  indexes after an aborted online
-                                  index creation */
-    dict_err_ignore_t ignore_err) /*!< in: error to be ignored when
-                                  loading a table definition */
-{
-  dict_table_t *table;
-  DBUG_TRACE;
-  DBUG_PRINT("dict_table_open_on_name", ("table: '%s'", table_name));
-
-  if (!dict_locked) {
-    dict_sys_mutex_enter();
-  }
-
-  ut_ad(table_name);
-  ut_ad(dict_sys_mutex_own());
-
-  std::string table_str(table_name);
-  /* Check and convert 5.7 table name. We always keep 8.0 format name in cache
-  during upgrade. */
-  if (dict_name::is_partition(table_name)) {
-    dict_name::rebuild(table_str);
-  }
-  table = dict_table_check_if_in_cache_low(table_str.c_str());
-
-  if (table == nullptr) {
-    table = dict_load_table(table_name, true, ignore_err);
-  }
-
-  ut_ad(!table || table->cached);
-
-  if (table != nullptr) {
-    if (ignore_err == DICT_ERR_IGNORE_NONE && table->is_corrupted()) {
-      /* Make life easy for drop table. */
-      dict_table_prevent_eviction(table);
-
-      if (!dict_locked) {
-        dict_sys_mutex_exit();
-      }
-
-      ib::info(ER_IB_MSG_175) << "Table " << table->name
-                              << " is corrupted. Please drop the table"
-                                 " and recreate it";
-      return nullptr;
-    }
-
-    if (table->can_be_evicted) {
-      dict_move_to_mru(table);
-    }
-
-    table->acquire();
-  }
-
-  ut_ad(dict_lru_validate());
-
-  if (!dict_locked) {
-    dict_table_try_drop_aborted_and_mutex_exit(table, try_drop);
-  }
-
-  return table;
-}
 #endif /* !UNIV_HOTBACKUP */
 
 /** Adds system columns to a table object.
@@ -1148,8 +1133,8 @@ void dict_table_add_system_columns(dict_table_t *table, mem_heap_t *heap) {
   for these tables. */
 
   const uint32_t phy_pos = UINT32_UNDEFINED;
-  const uint8_t v_added = 0;
-  const uint8_t v_dropped = 0;
+  const row_version_t v_added = 0;
+  const row_version_t v_dropped = 0;
 
   dict_mem_table_add_col(table, heap, "DB_ROW_ID", DATA_SYS,
                          DATA_ROW_ID | DATA_NOT_NULL, DATA_ROW_ID_LEN, false,
@@ -1256,10 +1241,6 @@ void dict_table_add_to_cache(dict_table_t *table, bool can_be_evicted) {
 
   dict_sys->size +=
       mem_heap_get_size(table->heap) + strlen(table->name.m_name) + 1;
-  DBUG_EXECUTE_IF(
-      "dd_upgrade", if (srv_is_upgrade_mode && srv_upgrade_old_undo_found) {
-        ib::info(ER_IB_MSG_176) << "Adding table to cache: " << table->name;
-      });
 }
 
 /** Test whether a table can be evicted from the LRU cache.
@@ -2131,79 +2112,6 @@ void get_permissible_max_size(const dict_table_t *table,
   }
 }
 
-/** Legacy version of get_field_max_size() which doesn't include the fix for
-Bug#39129182 to keep its original behaviour for LTS releases. This function
-is only used in DDL, to judge if the new shape of the table is acceptable.
-It should not be used in B-tree navigation to decide if X-latch should be
-taken, as this could lead to the deadlock reported in the mentioned bug
-@param[in]      table         innodb table definition cache
-@param[in]      index         index
-@param[in]      field         field
-@param[in,out]  rec_max_size  max record size calculated till now. It
-                              will be increased with the length needed
-                              for this field */
-static void legacy_get_field_max_size(const dict_table_t *table,
-                                      const dict_index_t *index,
-                                      const dict_field_t *field,
-                                      size_t &rec_max_size) {
-  const bool comp = dict_table_is_comp(table);
-  const dict_col_t *col = field->col;
-  ulint field_max_size;
-  ulint field_ext_max_size;
-  /* In dtuple_convert_big_rec(), variable-length columns
-  that are longer than BTR_EXTERN_LOCAL_STORED_MAX_SIZE
-  may be chosen for external storage.
-  Fixed-length columns, and all columns of secondary
-  index records are always stored inline. */
-  /* Determine the maximum length of the index field.
-  The field_ext_max_size should be computed as the worst
-  case in rec_get_converted_size_comp() for
-  REC_STATUS_ORDINARY records. */
-  field_max_size = col->get_fixed_size(comp);
-  if (field_max_size && field->fixed_len != 0) {
-    /* dict_index_add_col() should guarantee this */
-    ut_ad(!field->prefix_len || field->fixed_len == field->prefix_len);
-    /* Fixed lengths are not encoded in ROW_FORMAT=COMPACT. */
-    field_ext_max_size = 0;
-    rec_max_size += field_max_size;
-    return;
-  }
-  field_max_size = col->get_max_size();
-  field_ext_max_size = field_max_size < 256 ? 1 : 2;
-  if (field->prefix_len) {
-    if (field->prefix_len < field_max_size) {
-      field_max_size = field->prefix_len;
-    }
-  } else if (field_max_size > BTR_EXTERN_LOCAL_STORED_MAX_SIZE &&
-             index->is_clustered()) {
-    if (dict_table_has_atomic_blobs(table)) {
-      /* In the worst case, we have a locally stored column of
-      BTR_EXTERN_LOCAL_STORED_MAX_SIZE bytes. The length can be stored in one
-      byte. If the column were stored externally, the lengths in the clustered
-      index page would be BTR_EXTERN_FIELD_REF_SIZE and 2. */
-      field_max_size = BTR_EXTERN_LOCAL_STORED_MAX_SIZE;
-      field_ext_max_size = 1;
-    } else {
-      /* In this case, externally stored fields would have 768 byte prefix
-      stored in-line followed by fields reference. */
-      size_t local_stored_length =
-          BTR_EXTERN_FIELD_REF_SIZE + DICT_ANTELOPE_MAX_INDEX_COL_LEN;
-      if (field_max_size > local_stored_length) {
-        field_max_size = local_stored_length;
-        /* Prefix length will be stored in 2 bytes. */
-        field_ext_max_size = 2;
-      }
-    }
-  }
-  if (comp) {
-    /* Add the extra size for ROW_FORMAT=COMPACT.
-    For ROW_FORMAT=REDUNDANT, these bytes were
-    added to rec_max_size before this loop. */
-    rec_max_size += field_ext_max_size;
-  }
-  rec_max_size += field_max_size;
-}
-
 void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
                         const dict_field_t *field, size_t &rec_max_size) {
   /* Determine the maximum length of the index field. In case ROW_FORMAT is
@@ -2268,7 +2176,7 @@ void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
     }
   } else if (!always_inlined &&
              field_max_size > BTR_EXTERN_LOCAL_STORED_MAX_SIZE &&
-             DATA_BIG_COL(col) && index->is_clustered()) {
+             index->is_clustered()) {
     /* In dtuple_convert_big_rec(), a "big" variable-length column that is
     longer than BTR_EXTERN_LOCAL_STORED_MAX_SIZE and is not used for navigation
     may be chosen for external storage. */
@@ -2308,76 +2216,6 @@ void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
   rec_max_size += field_max_size;
 }
 
-/** Legacy version of dict_index_validate_max_rec_size() which uses
-legacy_get_field_max_size() instead of get_field_max_size(), which doesn't
-include the fix for Bug#39129182 to keep its original behaviour for LTS
-releases. This function is only used in DDL, to judge if the new shape of the
-table is acceptable. It should not be used in B-tree navigation to decide if
-X-latch should be taken, as this could lead to the deadlock reported in the
-mentioned bug.
-@param[in]  table        innodb table definition cache
-@param[in]  index        index
-@param[in]  page_rec_max maximum size of possible record on leaf page
-@param[in]  page_ptr_max maximum size of possible record on non-leaf page
-@return true if max record size exceeds the limit, false otherwise. */
-static bool legacy_dict_index_validate_max_rec_size(const dict_table_t *table,
-                                                    const dict_index_t *index,
-                                                    const size_t page_rec_max,
-                                                    const size_t page_ptr_max) {
-  size_t rec_max_size;
-  const bool comp = dict_table_is_comp(table);
-
-  const page_size_t page_size(dict_table_page_size(table));
-  if (page_size.is_compressed() &&
-      page_size.physical() < univ_page_size.physical()) {
-    /* On a compressed page, there is a two-byte entry in the dense page
-    directory for every record. But there is no record header. */
-    rec_max_size = 2;
-  } else {
-    /* Each record has a header. */
-    rec_max_size = comp ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES;
-  }
-
-  if (comp) {
-    /* Include the "null" flags in the maximum possible record size. */
-    rec_max_size += UT_BITS_IN_BYTES(index->n_nullable);
-  } else {
-    /* For each column, include a 2-byte offset and a "null" flag.  The 1-byte
-    format is only used in short records that do not contain externally stored
-    columns. Such records could never exceed the page limit, even when using
-    the 2-byte format. */
-    rec_max_size += 2 * index->n_fields;
-  }
-
-  /* Each record would have version stored in 1 byte */
-  if (index->has_row_versions()) {
-    rec_max_size += 1;
-  }
-
-  /* Compute the maximum possible record size. */
-  for (size_t i = 0; i < index->n_fields; i++) {
-    const dict_field_t *field = index->get_field(i);
-    legacy_get_field_max_size(table, index, field, rec_max_size);
-
-    /* Check the size limit on leaf pages. */
-    if (rec_max_size >= page_rec_max) {
-      return true;
-    }
-
-    /* Check the size limit on non-leaf pages. Records stored in non-leaf
-    B-tree pages consist of the unique columns of the record (the key columns
-    of the B-tree) and a node pointer field. When we have processed the unique
-    columns, rec_max_size equals the size of the node pointer record minus the
-    node pointer column. */
-    if (i + 1 == dict_index_get_n_unique_in_tree_nonleaf(index) &&
-        rec_max_size + REC_NODE_PTR_SIZE >= page_ptr_max) {
-      return (true);
-    }
-  }
-
-  return (false);
-}
-
 /** A B-tree page should accommodate at least two records. This function finds
 out if this is violated for records of maximum possible length of this index.
 @param[in]   table         table
@@ -2399,8 +2237,10 @@ static bool dict_index_too_big_for_tree(const dict_table_t *table,
   size_t page_ptr_max;
   get_permissible_max_size(table, new_index, page_rec_max, page_ptr_max);
 
-  return legacy_dict_index_validate_max_rec_size(table, new_index, page_rec_max,
-                                                 page_ptr_max);
+  size_t rec_max_size;
+  bool res = dict_index_validate_max_rec_size(table, new_index, page_rec_max,
+                                              page_ptr_max, rec_max_size);
+  return (res);
 }
 
 bool dict_index_validate_max_rec_size(const dict_table_t *table,
@@ -2686,20 +2526,21 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
     ut_ad(field->col->ord_part == 1);
   }
 
-  new_index->stat_n_diff_key_vals = static_cast<uint64_t *>(mem_heap_zalloc(
+  new_index->stats.n_diff_key_vals = static_cast<uint64_t *>(mem_heap_zalloc(
       new_index->heap, dict_index_get_n_unique(new_index) *
-                           sizeof(*new_index->stat_n_diff_key_vals)));
+                           sizeof(*new_index->stats.n_diff_key_vals)));
 
-  new_index->stat_n_sample_sizes = static_cast<uint64_t *>(mem_heap_zalloc(
+  new_index->stats.n_sample_sizes = static_cast<uint64_t *>(mem_heap_zalloc(
       new_index->heap, dict_index_get_n_unique(new_index) *
-                           sizeof(*new_index->stat_n_sample_sizes)));
+                           sizeof(*new_index->stats.n_sample_sizes)));
 
-  new_index->stat_n_non_null_key_vals = static_cast<uint64_t *>(mem_heap_zalloc(
-      new_index->heap, dict_index_get_n_unique(new_index) *
-                           sizeof(*new_index->stat_n_non_null_key_vals)));
+  new_index->stats.n_non_null_key_vals =
+      static_cast<uint64_t *>(mem_heap_zalloc(
+          new_index->heap, dict_index_get_n_unique(new_index) *
+                               sizeof(*new_index->stats.n_non_null_key_vals)));
 
-  new_index->stat_index_size = 1;
-  new_index->stat_n_leaf_pages = 1;
+  new_index->stats.index_size = 1;
+  new_index->stats.n_leaf_pages = 1;
 
   new_index->table = table;
   new_index->table_name = table->name.m_name;
@@ -2830,7 +2671,7 @@ static void dict_index_remove_from_cache_low(
       !index->table->discard_after_ddl) {
     index_id_t id(index->space, index->id);
     mutex_enter(&page_zip_stat_per_index_mutex);
-    page_zip_stat_per_index.erase(id);
+    page_zip_stat_per_index[id].dropped = true;
     mutex_exit(&page_zip_stat_per_index_mutex);
   }
 
@@ -4075,7 +3916,7 @@ void dict_print_info_on_foreign_key_in_create_format(FILE *file, trx_t *trx,
 #endif /* !UNIV_HOTBACKUP */
 
 /** Inits the structure for persisting dynamic metadata */
-void dict_persist_init(void) {
+void dict_persist_init() {
   dict_persist = static_cast<dict_persist_t *>(
       ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(*dict_persist)));
 
@@ -4100,7 +3941,9 @@ void dict_persist_init(void) {
 }
 
 /** Clear the structure */
-void dict_persist_close(void) {
+void dict_persist_close() {
+  if (!dict_persist) return;
+
   ut::delete_(dict_persist->persisters);
 
 #ifndef UNIV_HOTBACKUP
@@ -4169,7 +4012,7 @@ static bool dict_table_apply_dynamic_metadata(
 
     } else {
       /* In some cases, we could only load some indexes
-      of a table but not all(See dict_load_indexes()).
+      of a table but not all (TODO: when is it reachable?).
       So we might not find it here */
       ib::info(ER_IB_MSG_184)
           << "Failed to find the index: " << index_id.m_index_id
@@ -4546,8 +4389,40 @@ void dict_set_merge_threshold_all_debug(uint merge_threshold_all) {
 }
 #endif /* UNIV_DEBUG */
 
+/** Set is_corrupt flag by space_id
+@param	space_id	space id
+@param	need_mutex	whether dict_sys->mutex needs to be locked
+*/
+void dict_table_set_corrupt_by_space(space_id_t space_id,
+                                     bool need_mutex) noexcept {
+  ut_a(space_id != 0);
+  ut_a(space_id < dict_sys_t::s_log_space_id);
+
+  if (need_mutex) mutex_enter(&(dict_sys->mutex));
+
+  dict_table_t *table = UT_LIST_GET_FIRST(dict_sys->table_LRU);
+  bool found = false;
+
+  while (table) {
+    if (table->space == space_id) {
+      table->is_corrupt = true;
+      found = true;
+    }
+
+    table = UT_LIST_GET_NEXT(table_LRU, table);
+  }
+
+  if (need_mutex) mutex_exit(&(dict_sys->mutex));
+
+  if (!found) {
+    ib::warn() << "Space to be marked as crashed was not found "
+                  "for id "
+               << space_id << ".";
+  }
+}
+
 /** Inits dict_ind_redundant. */
-void dict_ind_init(void) {
+void dict_ind_init() {
   dict_table_t *table;
 
   /* create dummy table and index for REDUNDANT infimum and supremum */
@@ -4564,7 +4439,7 @@ void dict_ind_init(void) {
 }
 
 /** Frees dict_ind_redundant. */
-void dict_ind_free(void) {
+void dict_ind_free() {
   dict_table_t *table;
 
   table = dict_ind_redundant->table;
@@ -4812,7 +4687,7 @@ void dict_set_corrupted(dict_index_t *index [[maybe_unused]]) {}
 #endif /* !UNIV_HOTBACKUP */
 
 /** Closes the data dictionary module. */
-void dict_close(void) {
+void dict_close() {
   if (dict_sys == nullptr) {
     /* This should only happen if a failure occurred
     during redo log processing. */
@@ -4883,7 +4758,7 @@ void dict_close(void) {
 
   ut_ad(dict_sys->size == 0);
 
-  ut::free(dict_sys);
+  ut::delete_(dict_sys);
   dict_sys = nullptr;
 }
 
@@ -6028,53 +5903,6 @@ void dict_sdi_remove_from_cache(space_id_t space_id, dict_table_t *sdi_table,
   }
 }
 
-/** Change the table_id of SYS_* tables if they have been created after
-an earlier upgrade. This will update the table_id by adding DICT_MAX_DD_TABLES
-TODO - This function is to be removed by WL#16210.
-*/
-void dict_table_change_id_sys_tables() {
-  ut_ad(dict_sys_mutex_own());
-
-  /* On upgrading from 5.6 to 5.7, new system table SYS_VIRTUAL is given table
-   id after the last created user table. So, if last user table was created
-   with table_id as 1027, SYS_VIRTUAL would get id 1028. On upgrade to 8.0,
-   all these tables are shifted by 1024. On 5.7, the SYS_FIELDS has table id
-   4, which gets updated to 1028 on upgrade. This would later assert when we
-   try to open the SYS_VIRTUAL table (having id 1028) for upgrade. Hence, we
-   need to upgrade system tables in reverse order to avoid that.
-   These tables are created on boot. And hence this issue can only be caused by
-   a new table being added at a later stage - the SYS_VIRTUAL table being added
-   on upgrading to 5.7. */
-
-  for (int i = SYS_NUM_SYSTEM_TABLES - 1; i >= 0; i--) {
-    dict_table_t *system_table = dict_table_get_low(SYSTEM_TABLE_NAME[i]);
-
-    ut_a(system_table != nullptr);
-    ut_ad(dict_sys_table_id[i] == system_table->id);
-
-    /* During upgrade, table_id of user tables is also
-    moved by DICT_MAX_DD_TABLES. See dict_load_table_one()*/
-    table_id_t new_table_id = system_table->id + DICT_MAX_DD_TABLES;
-
-    dict_table_change_id_in_cache(system_table, new_table_id);
-
-    dict_sys_table_id[i] = system_table->id;
-
-    dict_table_prevent_eviction(system_table);
-  }
-}
-
-/** @return true if table is InnoDB SYS_* table
-@param[in]      table_id        table id  */
-bool dict_table_is_system(table_id_t table_id) {
-  for (uint32_t i = 0; i < SYS_NUM_SYSTEM_TABLES; i++) {
-    if (table_id == dict_sys_table_id[i]) {
-      return (true);
-    }
-  }
-  return (false);
-}
-
 dberr_t dd_sdi_acquire_exclusive_mdl(THD *thd, space_id_t space_id,
                                      MDL_ticket **sdi_mdl) {
   /* Exclusive MDL always need trx context and is
@@ -6216,4 +6044,171 @@ void dict_validate_no_purge_rollback_threads() {
   ut_ad(!srv_thread_is_active(srv_threads.m_trx_recovery_rollback));
 }
 #endif /* UNIV_DEBUG */
+
+static void dict_sys_set_min_id_on_disc(row_id_t needed_id) {
+  ut_a_eq(needed_id % DICT_HDR_ROW_ID_WRITE_MARGIN, 0);
+
+  /* Margin less than global row_id is already on disc */
+  if (needed_id < dict_sys->row_id.load()) {
+    return;
+  }
+
+  dict_sys_mutex_enter();
+
+  auto seen_in_ram = dict_sys->row_id.load();
+
+  /* Margin less than seen_in_ram is already on disc */
+  while (seen_in_ram <= needed_id) {
+    /* Bump the in-memory value to the rounded one we need to store. This should
+    also pause threads in dict_sys_get_new_row_id, as we hold the mutex. This is
+    important that they are paused, because we don't want anyone to use such
+    high ids until we write to disc. (Note in case seen_in_ram == needed_id this
+    will succeed, too) */
+    if (dict_sys->row_id.compare_exchange_weak(seen_in_ram, needed_id)) {
+      /* so, at the moment dict_sys->row_id == needed_id, and we hold the mutex,
+      so this can't change. The situation here is analogous to that in
+      dict_sys_get_new_row_id when we hold the mutex and see the row_id % MARGIN
+      == 0. So we do the same thing: store it, then bump it in ram */
+      dict_sys->dict_hdr_flush_row_id();
+      dict_sys->row_id.store(needed_id + 1, std::memory_order_release);
+      break;
+    }
+  }
+
+  dict_sys_mutex_exit();
+}
+
+static void dict_sys_set_min_id_in_ram(row_id_t needed_id) {
+  auto seen_in_ram = dict_sys->row_id.load();
+  while (seen_in_ram < needed_id) {
+    /* Both seen_in_ram and needed_id will fall within same margin */
+    ut_a_eq(seen_in_ram / DICT_HDR_ROW_ID_WRITE_MARGIN,
+            needed_id / DICT_HDR_ROW_ID_WRITE_MARGIN);
+
+    if (dict_sys->row_id.compare_exchange_weak(seen_in_ram, needed_id)) {
+      return;
+    }
+  }
+}
+
+void dict_sys_set_min_next_row_id(row_id_t next_id) {
+  const auto previous_margin =
+      next_id - (next_id % DICT_HDR_ROW_ID_WRITE_MARGIN);
+
+  dict_sys_set_min_id_on_disc(previous_margin);
+  dict_sys_set_min_id_in_ram(next_id);
+}
 #endif /* !UNIV_HOTBACKUP */
+
+/** Reads mysql.ibd's page0 from buffer if the tablespace is already loaded
+into Fil_system cache
+@return tuple <0> success - true if no error
+              <1> true if encryption flag is set, false otherwise */
+static std::tuple<bool, bool> get_mysql_ibd_page_0_from_buffer() {
+  auto result = std::make_tuple(false, false);
+
+  fil_space_t *space = fil_space_acquire_silent(dict_sys_t::s_dict_space_id);
+  if (space == nullptr) {
+    return (result);
+  }
+
+  const page_size_t page_size(space->flags);
+  mtr_t mtr;
+  mtr_start(&mtr);
+  buf_block_t *block =
+      buf_page_get(page_id_t(dict_sys_t::s_dict_space_id, 0), univ_page_size,
+                   RW_X_LATCH, UT_LOCATION_HERE, &mtr);
+
+  if (block == nullptr) {
+    mtr_commit(&mtr);
+    fil_space_release(space);
+    return (result);
+  }
+
+  const ulint flags = fsp_header_get_flags(buf_block_get_frame(block));
+  std::get<0>(result) = true;
+  std::get<1>(result) = FSP_FLAGS_GET_ENCRYPTION(flags);
+
+  mtr_commit(&mtr);
+  fil_space_release(space);
+  return (result);
+}
+
+/** Reads mysql.ibd's page0 directly from disk
+@return tuple <0> success - true if no error
+              <1> true if encryption flag is set, false otherwise */
+static std::tuple<bool, bool> get_mysql_ibd_page_0_io() {
+  auto result = std::make_tuple(false, false);
+
+  /* page0 of mysql.ibd is not in the buffer, try direct io */
+  auto buf = ut::ut_make_unique_ptr_nokey(2 * UNIV_PAGE_SIZE);
+
+  bool successfully_opened = false;
+
+  pfs_os_file_t file = os_file_create_simple_no_error_handling(
+      innodb_data_file_key, dict_sys_t::s_dd_space_file_name, OS_FILE_OPEN,
+      OS_FILE_READ_ONLY, srv_read_only_mode, &successfully_opened);
+
+  if (!successfully_opened) {
+    return (result);
+  }
+
+  buf_frame_t *page =
+      static_cast<buf_frame_t *>(ut_align(buf.get(), UNIV_PAGE_SIZE));
+
+  ut_ad(page == page_align(page));
+
+  IORequest request(IORequest::READ);
+  dberr_t err = os_file_read_first_page_noexit(
+      request, dict_sys_t::s_dd_space_file_name, file, page, UNIV_PAGE_SIZE);
+
+  os_file_close(file);
+
+  if (err != DB_SUCCESS) {
+    return (result);
+  }
+
+  const ulint flags = fsp_header_get_flags(page);
+  std::get<0>(result) = true;
+  std::get<1>(result) = FSP_FLAGS_GET_ENCRYPTION(flags);
+
+  return (result);
+}
+
+/** Detect if mysql.ibd's page0 has encryption flag set.
+The page 0 either read from buffer (if available) or
+directly from disk.
+@return tuple 0 success - true if no error
+              1 true if encryption flag is set, false otherwise */
+static std::tuple<bool, bool> dict_mysql_ibd_page_0_has_encryption_flag_set() {
+  // 0 element - success, 1 element - encryption flag
+  auto result = std::make_tuple(false, false);
+
+  /* read from buffer */
+  result = get_mysql_ibd_page_0_from_buffer();
+  if (!std::get<0>(result)) {
+    result = get_mysql_ibd_page_0_io();
+  }
+  return (result);
+}
+
+bool dict_detect_encryption_of_mysql_ibd(dict_init_mode_t dict_init_mode,
+                                         bool &encrypt_mysql) {
+  enum_default_table_encryption default_enc =
+      static_cast<enum_default_table_encryption>(
+          global_system_variables.default_table_encryption);
+
+  bool success = false;
+  switch (dict_init_mode) {
+    case DICT_INIT_CREATE_FILES:
+      encrypt_mysql = (default_enc == DEFAULT_TABLE_ENC_ON);
+      return true;
+    case DICT_INIT_CHECK_FILES:
+      std::tie(success, encrypt_mysql) =
+          dict_mysql_ibd_page_0_has_encryption_flag_set();
+      return success;
+    default:
+      ut_ad(0);
+      return false;
+  }
+}

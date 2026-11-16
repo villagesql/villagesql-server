@@ -48,9 +48,6 @@ Statement_runnable::Statement_runnable(LEX_STRING sql_text)
 */
 
 bool Statement_runnable::execute_server_code(THD *thd) {
-  sql_digest_state *parent_digest;
-  PSI_statement_locker *parent_locker;
-
   if (alloc_query(thd, m_sql_text.str, m_sql_text.length)) return true;
 
   Parser_state parser_state;
@@ -77,13 +74,7 @@ bool Statement_runnable::execute_server_code(THD *thd) {
     assert(thd->lex->get_sp_current_parsing_ctx() == nullptr);
   }
 
-  parent_digest = thd->m_digest;
-  parent_locker = thd->m_statement_psi;
-  thd->m_digest = nullptr;
-  thd->m_statement_psi = nullptr;
   bool error = parse_sql(thd, &parser_state, nullptr) || thd->is_error();
-  thd->m_digest = parent_digest;
-  thd->m_statement_psi = parent_locker;
 
   if (error) goto end;
 
@@ -95,16 +86,14 @@ bool Statement_runnable::execute_server_code(THD *thd) {
   assert(!executing_statement_under_stored_program ||
          thd->lex->sphead == thd->sp_runtime_ctx->sp);
 
-  // Set multi-result state if statement belongs to SP.
-  if (executing_statement_under_stored_program) {
+  // Set multi-result state if statement belongs to Stored procedure.
+  if (executing_statement_under_stored_program &&
+      thd->sp_runtime_ctx->sp->m_type == enum_sp_type::PROCEDURE) {
     error = set_sp_multi_result_state(thd, thd->lex);
     if (error) goto end;
   }
 
   thd->lex->set_trg_event_type_for_tables();
-
-  parent_locker = thd->m_statement_psi;
-  thd->m_statement_psi = nullptr;
 
   /*
     Rewrite first, execution might replace passwords
@@ -117,7 +106,6 @@ bool Statement_runnable::execute_server_code(THD *thd) {
   set_query_for_display(thd);
 
   error = mysql_execute_command(thd);
-  thd->m_statement_psi = parent_locker;
 
 end:
   /*

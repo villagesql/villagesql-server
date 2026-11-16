@@ -25,7 +25,7 @@
 
 #include "client/logger.h"
 
-#include <time.h>
+#include <ctime>
 #include <iostream>
 #include <locale>
 #include <memory>

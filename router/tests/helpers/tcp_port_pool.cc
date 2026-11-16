@@ -262,6 +262,8 @@ std::shared_ptr<UniqueId::ProcessUniqueIds> UniqueId::process_unique_ids() {
 }
 
 uint16_t TcpPortPool::get_next_available() {
+  if (reuse_port_) return reuse_port_;
+
   net::io_context io_ctx;
 
   constexpr const auto bind_address = net::ip::address_v4::loopback();

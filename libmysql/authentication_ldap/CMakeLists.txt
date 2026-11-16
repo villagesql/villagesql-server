@@ -100,8 +100,8 @@ IF(KERBEROS_FOUND AND LINUX)
     ${CMAKE_CURRENT_SOURCE_DIR}/authentication_ldap_sasl_client.ver)
   # Hide all symbols in mysys, to avoid ODR violations.
   # There is *one* visible symbol: _mysql_client_plugin_declaration_
-  MY_TARGET_LINK_OPTIONS(authentication_ldap_sasl_client
-    "LINKER:--version-script=${PLUGIN_VERSION_FILE}"
+  TARGET_LINK_OPTIONS(authentication_ldap_sasl_client PRIVATE
+    LINKER:--version-script=${PLUGIN_VERSION_FILE}
     )
 ENDIF()
 
@@ -125,7 +125,7 @@ IF(WIN32)
   MESSAGE(STATUS "SASL_SCRAM_PLUGIN = ${SASL_SCRAM_PLUGIN}")
   MESSAGE(STATUS "SASL_GSSAPI_PLUGIN = ${SASL_GSSAPI_PLUGIN}")
 
-  # Note that SASL library (libsasl.dll") goes into "bin" directory 
+  # Note that SASL library (libsasl.dll") goes into "bin" directory
   # (where "mysql.exe" and other client executables are located)
   # SASL plugins ("saslSCRAM.dll" and "saslGSSAPI.dll") go into "bin/sasl2" directory
   INSTALL(FILES "${SASL_LIBRARY_DLL}"

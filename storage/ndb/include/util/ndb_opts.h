@@ -51,7 +51,7 @@ OPT_EXTERN(int, opt_connect_retries, NONE);
 OPT_EXTERN(const char *, opt_charsets_dir, = nullptr);
 OPT_EXTERN(const char *, opt_tls_search_path, = NDB_TLS_SEARCH_PATH);
 OPT_EXTERN(unsigned long long, opt_mgm_tls, = 0);
-OPT_EXTERN(unsigned long long, opt_ndb_log_timestamps, = 0);
+OPT_EXTERN(unsigned long long, opt_ndb_log_timestamps, = 1);
 
 #ifndef NDEBUG
 OPT_EXTERN(const char *, opt_debug, = nullptr);
@@ -280,7 +280,7 @@ static constexpr struct my_option log_timestamps = {
     &timestamps_typelib,
     GET_ENUM,
     REQUIRED_ARG,
-    0 /* default */,
+    1 /* default */,
     0 /*min*/,
     2 /*max*/,
     nullptr,

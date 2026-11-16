@@ -22,9 +22,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysql/binlog/event/compression/zstd_dec.h"
-#include <my_byteorder.h>  // TODO: fix this include
 #include <algorithm>
-// #include "mysql/binlog/event/wrapper_functions.h"
+#include "my_byteorder.h"  // TODO: fix this include
 
 namespace mysql::binlog::event::compression {
 
@@ -152,12 +151,12 @@ Decompressor::Grow_constraint_t Zstd_dec::do_get_grow_constraint_hint() const {
 }
 
 void *Zstd_dec::zstd_mem_res_alloc(void *opaque, size_t size) {
-  Memory_resource_t *mem_res = static_cast<Memory_resource_t *>(opaque);
+  auto *mem_res = static_cast<Memory_resource_t *>(opaque);
   return mem_res->allocate(size);
 }
 
 void Zstd_dec::zstd_mem_res_free(void *opaque, void *address) {
-  Memory_resource_t *mem_res = static_cast<Memory_resource_t *>(opaque);
+  auto *mem_res = static_cast<Memory_resource_t *>(opaque);
   mem_res->deallocate(address);
 }
 

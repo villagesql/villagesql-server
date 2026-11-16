@@ -23,7 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "test_udf_extension.h"
 #include <mysql/udf_registration_types.h>
-#include <string.h>
+#include <cstring>
 #include <sstream>
 #include "services_required.h"
 

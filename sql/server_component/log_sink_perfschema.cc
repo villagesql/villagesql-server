@@ -46,7 +46,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "log_sink_perfschema.h"
 #include <mysql/components/services/log_shared.h>  // data types
-#include <string.h>                                // memset()
+#include <cstring>                                 // memset()
 #include "log_builtins_internal.h"
 #include "log_sink_perfschema_imp.h"
 #include "log_sink_trad.h"  // log_sink_trad_parse_log_line()
@@ -261,7 +261,7 @@ log_sink_pfs_event *log_sink_pfs_event_valid(log_sink_pfs_event *e,
 }
 
 // expire tail event (oldest event in buffer) by adjusting the read-pointer
-static inline void log_sink_pfs_event_expire(void) {
+static inline void log_sink_pfs_event_expire() {
   assert(log_sink_pfs_buffered_events > 0);
   assert(ring_buffer_read != nullptr);
 

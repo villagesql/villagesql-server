@@ -30,8 +30,8 @@
   @file mysys/my_mkdir.cc
 */
 
-#include <errno.h>
 #include <sys/stat.h>
+#include <cerrno>
 
 #include "my_dbug.h"
 #include "my_inttypes.h"

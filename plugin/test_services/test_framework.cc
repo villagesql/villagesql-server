@@ -23,7 +23,7 @@
 
 #include <mysql/plugin.h>
 #include <mysql_version.h>
-#include <stddef.h>
+#include <cstddef>
 
 #include "m_string.h"  // strlen
 #include "my_dbug.h"

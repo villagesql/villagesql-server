@@ -26,9 +26,9 @@
  * ndbjtie_unit_tests_classes.cpp
  */
 
-#include <assert.h>
 #include <my_config.h>
-#include <string.h>
+#include <cassert>
+#include <cstring>
 
 #include "NdbApi.hpp"
 #include "ndbjtie_unit_tests_consts.hpp"

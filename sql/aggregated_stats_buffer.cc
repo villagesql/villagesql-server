@@ -35,7 +35,7 @@ void aggregated_stats_buffer::flush() {
   com_stmt_reset = 0ULL;
   com_stmt_reprepare = 0ULL;
   com_stmt_send_long_data = 0ULL;
-  for (std::size_t i = 0; i < SQLCOM_COMPACT_COUNT; i++) com_stat[i] = 0ULL;
+  for (auto &i : com_stat) i = 0ULL;
   table_open_cache_hits = 0ULL;
   table_open_cache_misses = 0ULL;
   table_open_cache_overflows = 0ULL;
@@ -96,6 +96,7 @@ void aggregated_stats_buffer::add_from(aggregated_stats_buffer &shard) {
   table_open_cache_overflows += shard.table_open_cache_overflows;
   created_tmp_disk_tables += shard.created_tmp_disk_tables;
   created_tmp_tables += shard.created_tmp_tables;
+  count_hit_tmp_table_size += shard.count_hit_tmp_table_size;
   max_execution_time_exceeded += shard.max_execution_time_exceeded;
   max_execution_time_set += shard.max_execution_time_set;
   max_execution_time_set_failed += shard.max_execution_time_set_failed;
@@ -136,7 +137,6 @@ void aggregated_stats_buffer::add_from(aggregated_stats_buffer &shard) {
 }
 
 uint64_t aggregated_stats_buffer::get_counter(std::size_t offset) {
-  std::atomic_uint64_t *counter =
-      pointer_cast<std::atomic_uint64_t *>((char *)this + offset);
+  auto *counter = pointer_cast<std::atomic_uint64_t *>((char *)this + offset);
   return counter->load();
 }

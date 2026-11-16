@@ -46,7 +46,6 @@
 class Item;
 class THD;
 struct MEM_ROOT;
-struct SYS_VAR;
 struct TYPELIB;
 struct st_plugin_int;
 
@@ -180,6 +179,13 @@ struct st_bookmark {
 
 st_bookmark *find_bookmark(const char *plugin, const char *name, int flags);
 
+extern MEM_ROOT plugin_mem_root;
+extern uint global_variables_dynamic_size;
+extern malloc_unordered_map<std::string, st_bookmark *> *bookmark_hash;
+/** Hash for system variables of string type with MEMALLOC flag. */
+extern malloc_unordered_map<std::string, st_bookmark *>
+    *malloced_string_type_sysvars_bookmark_hash;
+
 /*
   returns a bookmark for thd-local variables, creating if necessary.
   returns null for non thd-local variables.
@@ -194,13 +200,6 @@ unsigned long *mysql_sys_var_ulong(THD *thd, int offset);
 unsigned long long *mysql_sys_var_ulonglong(THD *thd, int offset);
 char **mysql_sys_var_str(THD *thd, int offset);
 double *mysql_sys_var_double(THD *thd, int offset);
-
-/*
-  skeleton of a plugin variable - portion of structure common to all.
-*/
-struct SYS_VAR {
-  MYSQL_PLUGIN_VAR_HEADER;
-};
 
 inline void convert_underscore_to_dash(char *str, size_t len) {
   for (char *p = str; p <= str + len; p++)
@@ -299,6 +298,16 @@ class sys_var_pluginvar : public sys_var {
   bool do_check(THD *thd, set_var *var) override;
   void session_save_default(THD *, set_var *) override {}
   void saved_value_to_string(THD *thd, set_var *var, char *def_val) override;
+
+  /**
+    Set a PERSIST_ONLY value for a variable. The resulting value should be
+    set to a string representation of the actual value.
+
+    @param[in]     thd   Thread context.
+    @param[in]     var   Plugin variable.
+    @param[in,out] dest  Destination string pointer.
+  */
+  void persist_only_to_string(THD *thd, set_var *var, String *dest) override;
   void global_save_default(THD *, set_var *) override {}
   bool session_update(THD *thd, set_var *var) override;
   bool global_update(THD *thd, set_var *var) override;
@@ -311,7 +320,33 @@ class sys_var_pluginvar : public sys_var {
   bool is_non_persistent() override {
     return (plugin_var->flags & PLUGIN_VAR_NOPERSIST);
   }
+  bool is_hint_updateable() const override {
+    return (plugin_var->flags & PLUGIN_VAR_HINTUPDATEABLE);
+  }
+
   void set_is_plugin(bool val) override { is_plugin = val; }
+
+  /**
+    Check variable type.
+
+    @param[in]     type_mask   Type mask.
+    @return Completion status
+    @retval true Variable type matches with provided type mask
+    @retval false Variable type doesnt match with provided type mask
+  */
+  bool check_type(uint type_mask) const {
+    return ((plugin_var->flags & PLUGIN_VAR_TYPEMASK) == type_mask);
+  }
+
+  /**
+    Create item from plugin variable session value.
+
+    @param  thd  pointer to THD object
+
+    @return pointer to Item object or NULL if it's
+            impossible to obtain the value.
+  */
+  Item *copy_value(THD *thd) override;
 };
 
 /*

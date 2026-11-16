@@ -55,11 +55,19 @@ using std::min;
 Cached_item *new_Cached_item(THD *thd, Item *item) {
   switch (item->result_type()) {
     case STRING_RESULT:
-      if (item->is_temporal())
-        return new (thd->mem_root) Cached_item_temporal(item);
-      if (item->data_type() == MYSQL_TYPE_JSON)
-        return new (thd->mem_root) Cached_item_json(item);
-      return new (thd->mem_root) Cached_item_str(item);
+      switch (item->data_type()) {
+        case MYSQL_TYPE_TIME:
+          return new (thd->mem_root) Cached_item_time(item);
+        case MYSQL_TYPE_DATE:
+          return new (thd->mem_root) Cached_item_date(item);
+        case MYSQL_TYPE_DATETIME:
+        case MYSQL_TYPE_TIMESTAMP:
+          return new (thd->mem_root) Cached_item_temporal(item);
+        case MYSQL_TYPE_JSON:
+          return new (thd->mem_root) Cached_item_json(item);
+        default:
+          return new (thd->mem_root) Cached_item_str(item);
+      }
     case INT_RESULT:
       return new (thd->mem_root) Cached_item_int(item);
     case REAL_RESULT:
@@ -84,6 +92,9 @@ bool Cached_item_str::cmp() {
     if (null_value) return false;
     null_value = true;
     return true;
+  } else if (res == nullptr) {
+    assert(current_thd->is_error());
+    return false;
   } else if (null_value ||
              sortcmp(&value, res, item->collation.collation) != 0) {
     null_value = false;
@@ -167,9 +178,54 @@ bool Cached_item_int::cmp() {
   return false;
 }
 
+bool Cached_item_time::cmp() {
+  DBUG_TRACE;
+  Time_val time;
+  if (item->val_time(&time) && current_thd->is_error()) return true;
+
+  if (item->null_value) {
+    if (null_value) return false;
+    null_value = true;
+    return true;
+  } else if (null_value || m_time.compare(time) != 0) {
+    null_value = false;
+    m_time = time;
+    return true;
+  }
+  return false;
+}
+
+bool Cached_item_date::cmp() {
+  DBUG_TRACE;
+  Date_val date;
+  if (item->val_date(&date, 0) && current_thd->is_error()) return true;
+
+  if (item->null_value) {
+    if (null_value) return false;
+    null_value = true;
+    return true;
+  } else if (null_value || m_date.compare(date) != 0) {
+    null_value = false;
+    m_date = date;
+    return true;
+  }
+  return false;
+}
+
 bool Cached_item_temporal::cmp() {
   DBUG_TRACE;
-  const longlong nr = item->val_temporal_by_field_type();
+  assert(item->data_type() != MYSQL_TYPE_TIME &&
+         item->data_type() != MYSQL_TYPE_DATE);
+  longlong nr = 0;
+  switch (item->data_type()) {
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+      nr = item->val_date_temporal();
+      break;
+    default:
+      assert(false);
+      break;
+  }
   DBUG_PRINT("info", ("old: %lld, new: %lld", value, nr));
   if (item->null_value) {
     if (null_value) return false;
@@ -201,6 +257,9 @@ bool Cached_item_decimal::cmp() {
     if (null_value) return false;
     null_value = true;
     return true;
+  } else if (ptmp == nullptr) {
+    assert(current_thd->is_error());
+    return false;
   } else if (null_value || my_decimal_cmp(&value, ptmp)) {
     null_value = false;
     my_decimal2decimal(ptmp, &value);

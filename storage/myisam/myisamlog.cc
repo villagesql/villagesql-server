@@ -26,9 +26,9 @@
 #include "my_config.h"
 
 #include <fcntl.h>
-#include <stdarg.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cstdarg>
+#include <cstdlib>
 
 #include <algorithm>
 
@@ -341,7 +341,10 @@ static int examine_log(const char *file_name, char **table_names) {
     }
   }
 
-  init_io_cache(&cache, file, 0, READ_CACHE, start_offset, false, MYF(0));
+  if (init_io_cache(&cache, file, 0, READ_CACHE, start_offset, false, MYF(0))) {
+    if (write_file != nullptr) my_fclose(write_file, MYF(0));
+    my_close(file, MYF(0));
+  }
   memset(com_count, 0, sizeof(com_count));
   init_tree(&tree, 0, sizeof(file_info), file_info_compare, true,
             file_info_free, nullptr);
@@ -660,8 +663,8 @@ static int read_string(IO_CACHE *file, uchar **to, uint length) {
 static int file_info_compare(const void *, const void *a, const void *b) {
   long lint;
 
-  const file_info *file_a = static_cast<const struct file_info *>(a);
-  const file_info *file_b = static_cast<const struct file_info *>(b);
+  const auto *file_a = static_cast<const struct file_info *>(a);
+  const auto *file_b = static_cast<const struct file_info *>(b);
   if ((lint = file_a->process - file_b->process)) return lint < 0L ? -1 : 1;
   return file_a->filenr - file_b->filenr;
 }
@@ -669,8 +672,8 @@ static int file_info_compare(const void *, const void *a, const void *b) {
 /* ARGSUSED */
 
 static int test_if_open(void *v_key, element_count, void *v_param) {
-  file_info *key = static_cast<file_info *>(v_key);
-  test_if_open_param *param = static_cast<test_if_open_param *>(v_param);
+  auto *key = static_cast<file_info *>(v_key);
+  auto *param = static_cast<test_if_open_param *>(v_param);
   if (!strcmp(key->name, param->name) && key->id > param->max_id)
     param->max_id = key->id;
   return 0;
@@ -693,9 +696,8 @@ static void fix_blob_pointers(MI_INFO *info, uchar *record) {
 
 static int test_when_accessed(void *v_key, element_count,
                               void *v_access_param) {
-  file_info *key = static_cast<file_info *>(v_key);
-  st_access_param *access_param =
-      static_cast<st_access_param *>(v_access_param);
+  auto *key = static_cast<file_info *>(v_key);
+  auto *access_param = static_cast<st_access_param *>(v_access_param);
   if (key->accessed < access_param->min_accessed && !key->closed) {
     access_param->min_accessed = key->accessed;
     access_param->found = key;
@@ -704,7 +706,7 @@ static int test_when_accessed(void *v_key, element_count,
 }
 
 static void file_info_free(void *v_fileinfo, TREE_FREE, const void *) {
-  file_info *fileinfo = static_cast<file_info *>(v_fileinfo);
+  auto *fileinfo = static_cast<file_info *>(v_fileinfo);
   DBUG_TRACE;
   if (update) {
     if (!fileinfo->closed) (void)mi_close(fileinfo->isam);
@@ -772,7 +774,7 @@ static void printf_log(const char *format, ...) {
 
 static bool cmp_filename(struct file_info *file_info, const char *name) {
   if (!file_info) return true;
-  return strcmp(file_info->name, name) ? true : false;
+  return strcmp(file_info->name, name) != 0;
 }
 
 #include "storage/myisam/mi_extrafunc.h"

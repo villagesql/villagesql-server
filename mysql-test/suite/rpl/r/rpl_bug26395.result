@@ -5,6 +5,7 @@ Note	####	Storing MySQL user name or password information in the connection meta
 [connection master]
 ==== Initialize ====
 [on master]
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 CREATE TABLE tinnodb (a INT) ENGINE = INNODB;
 SHOW CREATE TABLE tinnodb;
 Table	Create Table
@@ -30,6 +31,10 @@ include/assert.inc [Assert that the slave table has no rows]
 [on master]
 DROP TABLE tinnodb;
 set @@debug= @old_debug;
+RESET BINARY LOGS AND GTIDS;
 [on slave]
 DROP TABLE tinnodb;
+RESET REPLICA;
+RESET BINARY LOGS AND GTIDS;
+include/rpl/start_replica.inc
 include/rpl/deinit.inc

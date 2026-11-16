@@ -18,6 +18,7 @@
 #define VILLAGESQL_SQL_PARSE_TREE_ITEMS_H_
 
 #include "lex_string.h"
+#include "sql/parse_location.h"
 
 class Item;
 struct Parse_context;
@@ -30,13 +31,15 @@ class PT_item_list;
 // Note: calls to VDFs in views reconstruct the SQL and thus need to "hardcode"
 // the separator. If that changes, we need to update set_vdf_qualified_name() in
 // sql_udf.cc.
-bool try_itemize_custom_vdf(Parse_context *pc, const LEX_STRING &extension_name,
+bool try_itemize_custom_vdf(Parse_context *pc, const POS &pos,
+                            const LEX_STRING &extension_name,
                             const LEX_STRING &func, PT_item_list *opt_expr_list,
                             Item **res, bool *error);
 
 // Try to resolve an unqualified function call as a VDF.
 // Returns true if handled (check *error), false to try other resolution.
-bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
+bool try_itemize_unqualified_vdf(Parse_context *pc, const POS &pos,
+                                 const LEX_STRING &func,
                                  PT_item_list *opt_expr_list, Item **res,
                                  bool *error);
 

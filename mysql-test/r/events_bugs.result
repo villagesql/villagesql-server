@@ -225,13 +225,13 @@ drop event events_test.mysqltest_user1;
 drop user mysqltest_user1@localhost;
 drop database mysqltest_db1;
 create event e_53 on schedule at (select s1 from ttx) do drop table t;
-ERROR 42000: This version of MySQL doesn't yet support 'Usage of subqueries or stored function calls as part of this statement'
+ERROR 42000: This version of MySQL doesn't yet support 'Event schedule expressions which contain subqueries or stored function calls'
 create event e_53 on schedule every (select s1 from ttx) second do drop table t;
-ERROR 42000: This version of MySQL doesn't yet support 'Usage of subqueries or stored function calls as part of this statement'
+ERROR 42000: This version of MySQL doesn't yet support 'Event schedule expressions which contain subqueries or stored function calls'
 create event e_53 on schedule every 5 second starts (select s1 from ttx) do drop table t;
-ERROR 42000: This version of MySQL doesn't yet support 'Usage of subqueries or stored function calls as part of this statement'
+ERROR 42000: This version of MySQL doesn't yet support 'Event schedule expressions which contain subqueries or stored function calls'
 create event e_53 on schedule every 5 second ends (select s1 from ttx) do drop table t;
-ERROR 42000: This version of MySQL doesn't yet support 'Usage of subqueries or stored function calls as part of this statement'
+ERROR 42000: This version of MySQL doesn't yet support 'Event schedule expressions which contain subqueries or stored function calls'
 drop event if exists e_16;
 drop procedure if exists p_16;
 create event e_16 on schedule every 1 second do set @a=5;
@@ -272,7 +272,7 @@ begin
 call p22830_wait();
 select 123;
 end|
-ERROR 42000: This version of MySQL doesn't yet support 'Usage of subqueries or stored function calls as part of this statement'
+ERROR 42000: This version of MySQL doesn't yet support 'Event schedule expressions which contain subqueries or stored function calls'
 create event e22830_1 on schedule every 1 hour do
 begin
 call p22830_wait();
@@ -397,6 +397,24 @@ ERROR 42000: Access denied; you need (at least one of) the SUPER or SET_ANY_DEFI
 DROP EVENT e1;
 ERROR HY000: Unknown event 'e1'
 DROP USER mysqltest_u1@localhost;
+CREATE USER 'mysqltest_u1@corp'@'localhost';
+GRANT EVENT ON events_test.* TO 'mysqltest_u1@corp'@'localhost';
+CREATE DEFINER='mysqltest_u1@corp'@'localhost' EVENT e1 ON SCHEDULE EVERY 1 DAY STARTS '2006-01-01 00:00:00' DO SELECT 1;
+SHOW CREATE EVENT e1;
+Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
+e1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`mysqltest_u1@corp`@`localhost` EVENT `e1` ON SCHEDULE EVERY 1 DAY STARTS '2006-01-01 00:00:00' ON COMPLETION NOT PRESERVE ENABLE DO SELECT 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci
+DROP EVENT e1;
+DROP USER 'mysqltest_u1@corp'@'localhost';
+CREATE USER 'mysqltest_u1@corp@comp'@'localhost';
+GRANT EVENT ON events_test.* TO 'mysqltest_u1@corp@comp'@'localhost';
+CREATE DEFINER='mysqltest_u1@corp@comp'@'localhost' EVENT e1 ON SCHEDULE EVERY 1 DAY STARTS '2006-01-01 00:00:00' DO SELECT 1;
+SHOW CREATE EVENT e1;
+Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
+e1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`mysqltest_u1@corp@comp`@`localhost` EVENT `e1` ON SCHEDULE EVERY 1 DAY STARTS '2006-01-01 00:00:00' ON COMPLETION NOT PRESERVE ENABLE DO SELECT 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci
+DROP EVENT e1;
+DROP USER 'mysqltest_u1@corp@comp'@'localhost';
+CREATE USER 'mysqltest_u1'@'localhost@corp';
+ERROR HY000: Malformed hostname (illegal symbol: '@')
 SET GLOBAL EVENT_SCHEDULER= OFF;
 SET @save_time_zone= @@TIME_ZONE;
 SET TIME_ZONE= '+00:00';
@@ -739,7 +757,7 @@ DROP USER mysqltest_u1@localhost;
 
 drop procedure if exists p;
 set @old_mode= @@sql_mode;
-set @@sql_mode= cast(pow(2,33)-1 as unsigned integer) & ~0x1003ff00;
+set @@sql_mode= cast(pow(2,34)-1 as unsigned integer) & ~0x1003ff00;
 Warnings:
 Warning	3090	Changing sql mode 'PAD_CHAR_TO_FULL_LENGTH' is deprecated. It will be removed in a future release.
 create event e1 on schedule every 1 day do select 1;

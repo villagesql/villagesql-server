@@ -53,9 +53,9 @@ explain select _koi8r'a' = _koi8r'A' COLLATE koi8r_general_ci;
 select _koi8r'a' = _koi8r'A' COLLATE koi8r_bin;
 select _koi8r'a' COLLATE koi8r_general_ci = _koi8r'A';
 select _koi8r'a' COLLATE koi8r_bin = _koi8r'A';
---error 1267
+--error ER_CANT_AGGREGATE_2COLLATIONS
 select _koi8r'a' COLLATE koi8r_bin = _koi8r'A' COLLATE koi8r_general_ci;
---error 1267
+--error ER_CANT_AGGREGATE_2COLLATIONS
 select _koi8r'a' = _latin1'A';
 
 select strcmp(_koi8r'a', _koi8r'A');
@@ -63,9 +63,9 @@ select strcmp(_koi8r'a', _koi8r'A' COLLATE koi8r_general_ci);
 select strcmp(_koi8r'a', _koi8r'A' COLLATE koi8r_bin);
 select strcmp(_koi8r'a' COLLATE koi8r_general_ci, _koi8r'A');
 select strcmp(_koi8r'a' COLLATE koi8r_bin, _koi8r'A');
---error 1267
+--error ER_CANT_AGGREGATE_2COLLATIONS
 select strcmp(_koi8r'a' COLLATE koi8r_general_ci, _koi8r'A' COLLATE koi8r_bin);
---error 1267
+--error ER_CANT_AGGREGATE_2COLLATIONS
 select strcmp(_koi8r'a', _latin1'A');
 
 select _koi8r'a' LIKE _koi8r'A';
@@ -73,9 +73,9 @@ select _koi8r'a' LIKE _koi8r'A' COLLATE koi8r_general_ci;
 select _koi8r'a' LIKE _koi8r'A' COLLATE koi8r_bin;
 select _koi8r'a' COLLATE koi8r_general_ci LIKE _koi8r'A';
 select _koi8r'a' COLLATE koi8r_bin LIKE _koi8r'A';
---error 1267
+--error ER_CANT_AGGREGATE_2COLLATIONS
 select _koi8r'a' COLLATE koi8r_general_ci LIKE _koi8r'A' COLLATE koi8r_bin;
---error 1267
+--error ER_CANT_AGGREGATE_2COLLATIONS
 select _koi8r'a' LIKE _latin1'A';
 
 #
@@ -269,7 +269,7 @@ SELECT GREATEST(5, -5) AS c1,
        GREATEST(5.5, '5') AS c13,
        GREATEST(010101.5, date '2005-05-05') AS c14,
        GREATEST(5.5, time '05:05:05.555555') AS c15,
-       GREATEST(010101.5, timestamp '2005-05-05 05:05:05.555555') AS c16,
+       GREATEST(010101.0, timestamp '2005-05-05 05:05:05.555555') AS c16,
        GREATEST(5.5e5, '5') AS c21,
        GREATEST(2004041e1, date '2005-05-05') AS c22,
        GREATEST(150505.0e5, time '05:05:05.555555') AS c23,
@@ -571,3 +571,89 @@ SELECT GREATEST(enum_col, NULL) AS col1,
 FROM t UNION SELECT 1, 2, 3, 4;
 
 DROP TABLE t;
+
+--echo # Bug#34646522: Literal value with different character set from derived
+--echo #               table causes error
+
+CREATE TABLE t
+(a VARCHAR(10) CHARACTER SET ascii,
+ b VARCHAR(10) CHARACTER SET latin1,
+ c VARCHAR(10) CHARACTER SET latin2,
+ d VARCHAR(10) CHARACTER SET utf16
+);
+
+INSERT INTO t VALUES('a', 'a', 'a', 'a');
+SELECT GREATEST(_utf8mb4 'a', a) FROM t;
+SELECT GREATEST(dt.a, t.a) FROM t, (SELECT _utf8mb4 'a') AS dt(a);
+--error ER_CANNOT_CONVERT_STRING
+SELECT GREATEST(_utf8mb4 'Â±', a) FROM t;
+--error ER_CANNOT_CONVERT_STRING
+SELECT GREATEST(dt.a, t.a) FROM t, (SELECT _utf8mb4 'Â±') AS dt(a);
+SELECT GREATEST(_utf8mb4 'a', b) FROM t;
+SELECT GREATEST(dt.a, t.b) FROM t, (SELECT _utf8mb4 'a') AS dt(a);
+SELECT GREATEST(_utf8mb4 'Â±', b) FROM t;
+SELECT GREATEST(dt.a, t.b) FROM t, (SELECT _utf8mb4 'Â±') AS dt(a);
+SELECT GREATEST(_utf8mb4 'a', c) FROM t;
+SELECT GREATEST(dt.a, t.c) FROM t, (SELECT _utf8mb4 'a') AS dt(a);
+--error ER_CANNOT_CONVERT_STRING
+SELECT GREATEST(_utf8mb4 'Â±', c) FROM t;
+--error ER_CANNOT_CONVERT_STRING
+SELECT GREATEST(dt.a, t.c) FROM t, (SELECT _utf8mb4 'Â±') AS dt(a);
+SELECT GREATEST(_utf8mb4 'a', d) FROM t;
+SELECT GREATEST(dt.a, t.d) FROM t, (SELECT _utf8mb4 'a') AS dt(a);
+SELECT GREATEST(_latin1 'a', a) FROM t;
+SELECT GREATEST(dt.a, t.a) FROM t, (SELECT _latin1 'a') AS dt(a);
+--error ER_CANNOT_CONVERT_STRING
+SELECT GREATEST(_latin1 'Ã¥', a) FROM t;
+--error ER_CANNOT_CONVERT_STRING
+SELECT GREATEST(dt.a, t.a) FROM t, (SELECT _latin1 'Ã¥') AS dt(a);
+SELECT GREATEST(_latin1 'a', c) FROM t;
+SELECT GREATEST(dt.a, t.c) FROM t, (SELECT _latin1 'a') AS dt(a);
+--error ER_CANNOT_CONVERT_STRING
+SELECT GREATEST(_latin1 'Ã¥', c) FROM t;
+--error ER_CANNOT_CONVERT_STRING
+SELECT GREATEST(dt.a, t.c) FROM t, (SELECT _latin1 'Ã¥') AS dt(a);
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#37083848: virtual longlong Item_func_min_max::int_op():
+--echo # Assertion `!unsigned_flag || !arg_val.is_negative()' failed
+--echo #
+
+CREATE TABLE t1 (
+  id INT UNSIGNED NOT NULL
+);
+INSERT INTO t1 VALUES(1);
+SELECT id FROM t1 WHERE LEAST(id, id) AND -1 = id;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#38482019: Assertion 'false' failed sql/item_func.cc
+--echo #
+CREATE TABLE t1(t TIME, d DATE, y YEAR);
+
+INSERT INTO t1 VALUES(TIME'12:02:12', DATE'2024-09-03', 2025);
+
+SET TIMESTAMP = UNIX_TIMESTAMP('2025-01-01 00:00:00');
+
+SELECT FROM_UNIXTIME(GREATEST(d, t, y)) FROM t1;
+
+SET TIMESTAMP = DEFAULT;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#36065440: Unexpected result for LEAST function
+--echo #
+
+CREATE TABLE t0(c0 LONGTEXT);
+INSERT INTO t0(c0) VALUES(0.1);
+CREATE TABLE t1(c0 INT ZEROFILL PRIMARY KEY);
+INSERT IGNORE INTO t1(c0) VALUES(NULL);
+
+SELECT NOT (LEAST(t0.c0, t1.c0) OR t1.c0) AS c FROM t1, t0;
+SELECT * FROM t1, t0 WHERE NOT (LEAST(t0.c0, t1.c0) OR t1.c0);
+
+DROP TABLE t0, t1;

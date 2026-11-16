@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
-  @file rows_event.h
+  @file
 
   @brief Contains the classes representing events which are used for row based
   replication. In row-based replication, the master writes events to the binary
@@ -567,8 +567,9 @@ class Table_map_event : public Binary_log_event {
                                      columns, optimized to minimize
                                      space when many columns have the
                                      same charset. */
-    COLUMN_VISIBILITY             /* Flag to indicate column visibility
+    COLUMN_VISIBILITY,            /* Flag to indicate column visibility
                                      attribute. */
+    VECTOR_DIMENSIONALITY         /* Vector column dimensionality */
   };
 
   /**
@@ -605,6 +606,7 @@ class Table_map_event : public Binary_log_event {
     std::vector<str_vector> m_enum_str_value;
     std::vector<str_vector> m_set_str_value;
     std::vector<unsigned int> m_geometry_type;
+    std::vector<unsigned int> m_vector_dimensionality;
     /*
       The uint_pair means <column index, prefix length>.  Prefix length is 0 if
       whole column value is used.
@@ -898,11 +900,13 @@ class Rows_event : public Binary_log_event {
       values for all columns of the table.
     */
     COMPLETE_ROWS_F = (1U << 3),
+    /** Value which represents DISABLE_INNODB_CHECK */
+    USE_SQL_FOREIGN_KEY_F = (1U << 4),
     /**
       Flags for everything. Please update when you add new flags.
      */
     ALL_FLAGS = STMT_END_F | NO_FOREIGN_KEY_CHECKS_F | RELAXED_UNIQUE_CHECKS_F |
-                COMPLETE_ROWS_F
+                COMPLETE_ROWS_F | USE_SQL_FOREIGN_KEY_F
   };
 
   /**
@@ -1047,13 +1051,14 @@ class Rows_event : public Binary_log_event {
    */
   std::string get_enum_flag_string() const {
     assert((STMT_END_F | NO_FOREIGN_KEY_CHECKS_F | RELAXED_UNIQUE_CHECKS_F |
-            COMPLETE_ROWS_F) == ALL_FLAGS);
+            COMPLETE_ROWS_F | USE_SQL_FOREIGN_KEY_F) == ALL_FLAGS);
     if (!m_flags) return "";
     std::stringstream ss;
     ss << " flags:";
     if (m_flags & STMT_END_F) ss << " STMT_END_F";
     if (m_flags & NO_FOREIGN_KEY_CHECKS_F) ss << " NO_FOREIGN_KEY_CHECKS_F";
     if (m_flags & RELAXED_UNIQUE_CHECKS_F) ss << " RELAXED_UNIQUE_CHECKS_F";
+    if (m_flags & USE_SQL_FOREIGN_KEY_F) ss << " USE_SQL_FOREIGN_KEY_F";
     if (m_flags & COMPLETE_ROWS_F) ss << " COMPLETE_ROWS_F";
     if (m_flags & ~ALL_FLAGS) {
       assert(false);
@@ -1071,11 +1076,13 @@ class Rows_event : public Binary_log_event {
   */
   static std::string get_flag_string(enum_flag flag) {
     assert((STMT_END_F | NO_FOREIGN_KEY_CHECKS_F | RELAXED_UNIQUE_CHECKS_F |
-            COMPLETE_ROWS_F) == ALL_FLAGS);
+            COMPLETE_ROWS_F | USE_SQL_FOREIGN_KEY_F) == ALL_FLAGS);
     std::string str = "";
     if (flag & STMT_END_F) str.append(" Last event of the statement");
     if (flag & NO_FOREIGN_KEY_CHECKS_F) str.append(" No foreign Key checks");
     if (flag & RELAXED_UNIQUE_CHECKS_F) str.append(" No unique key checks");
+    if (flag & USE_SQL_FOREIGN_KEY_F)
+      str.append(" Use SQL Foreign Key handling");
     if (flag & COMPLETE_ROWS_F) str.append(" Complete Rows");
     if (flag & ~ALL_FLAGS) str.append(" Unknown Flag");
     return str;
@@ -1168,6 +1175,11 @@ class Delete_rows_event : public virtual Rows_event {
     <td>char array</td>
     <td>Records the original query executed in RBR </td>
   </tr>
+  <tr>
+    <td>m_rows_query_length</td>
+    <td>integer</td>
+    <td>Stores the original query length executed in RBR </td>
+  </tr>
   </table>
 */
 class Rows_query_event : public virtual Ignorable_event {
@@ -1193,12 +1205,15 @@ class Rows_query_event : public virtual Ignorable_event {
     ROWS_QUERY_LOG_EVENT in the header object in Binary_log_event.
   */
   Rows_query_event()
-      : Ignorable_event(ROWS_QUERY_LOG_EVENT), m_rows_query(nullptr) {}
+      : Ignorable_event(ROWS_QUERY_LOG_EVENT),
+        m_rows_query(nullptr),
+        m_rows_query_length(0) {}
 
   ~Rows_query_event() override;
 
  protected:
   char *m_rows_query;
+  size_t m_rows_query_length;
 };
 }  // namespace mysql::binlog::event
 

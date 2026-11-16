@@ -15,23 +15,22 @@
 --write_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1.sql
 help;
 EOF
---echo # test: must not fail
---exec $MYSQL < $MYSQLTEST_VARDIR/tmp/wl16949_fr1.sql > $MYSQLTEST_VARDIR/tmp/wl16949_fr1.out 2>&1
+--error 1
+--exec $MYSQL < $MYSQLTEST_VARDIR/tmp/wl16949_fr1.sql 2>&1
 --remove_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1.sql
---remove_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1.out
 
 --exec $MYSQL --help > $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out 2>&1
 --let $assert_text=FR1.1: checking the default --commands value
 --let $assert_file=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out
---let $assert_select=^commands[\\ \\t]*TRUE\$
+--let $assert_select=^commands[\\ \\t]*FALSE\$
 --let $assert_count=1
 --source include/assert_grep.inc
 --remove_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out
 
---exec $MYSQL --commands=0 --help > $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out 2>&1
+--exec $MYSQL --commands --help > $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out 2>&1
 --let $assert_text=FR1.1: checking the updated --commands value
 --let $assert_file=$MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out
---let $assert_select=^commands[\\ \\t]*FALSE\$
+--let $assert_select=^commands[\\ \\t]*TRUE\$
 --let $assert_count=1
 --source include/assert_grep.inc
 --remove_file $MYSQLTEST_VARDIR/tmp/wl16949_fr1_1.out
@@ -42,7 +41,7 @@ EOF
 \?
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.2: clear disabled
@@ -51,7 +50,7 @@ EOF
 clear;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.3: connect disabled
@@ -60,7 +59,7 @@ EOF
 connect;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.4: delimier enabled
@@ -68,7 +67,7 @@ EOF
 --write_file $filename
 delimiter ;
 EOF
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.5: edit disabled
@@ -77,7 +76,7 @@ EOF
 edit;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.6: ego disabled
@@ -86,7 +85,7 @@ EOF
 SELECT 1\G
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.7: exit disabled
@@ -97,7 +96,7 @@ exit;
 SELECT 2;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.8: go enabled
@@ -106,7 +105,7 @@ EOF
 SELECT 1
 go;
 EOF
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.9: help disabled
@@ -115,7 +114,7 @@ EOF
 help;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.10: nopager disabled
@@ -124,7 +123,7 @@ EOF
 nopager;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.11: notee disabled
@@ -133,7 +132,7 @@ EOF
 notee;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.12: pager disabled
@@ -142,7 +141,7 @@ EOF
 pager more;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.13: print disabled
@@ -151,7 +150,7 @@ EOF
 print;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.14: prompt disabled
@@ -160,7 +159,7 @@ EOF
 prompt foo;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.15: quit disabled
@@ -170,7 +169,7 @@ quit;
 SELECT 2;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.16: rehash disabled
@@ -179,7 +178,7 @@ EOF
 rehash;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.17: source disabled
@@ -188,7 +187,7 @@ EOF
 source gogo.text;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.18: status disabled
@@ -197,7 +196,7 @@ EOF
 status;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.19: system disabled
@@ -206,7 +205,7 @@ EOF
 system echo;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.20: tee disabled
@@ -215,7 +214,7 @@ EOF
 tee foo;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.21: use disabled
@@ -224,7 +223,7 @@ EOF
 \u test;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.22: charset disabled
@@ -233,7 +232,7 @@ EOF
 charset latin1;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.22.1: \c enabled
@@ -252,7 +251,7 @@ EOF
 warnings;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.24: nowarning disabled
@@ -261,7 +260,7 @@ EOF
 nowarning;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.25: resetconnection disabled
@@ -270,7 +269,7 @@ EOF
 resetconnection;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.26: query_attributes disabled
@@ -279,7 +278,7 @@ EOF
 query_attributes a b;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 --echo # FR1.2.27: ssl_session_data_print disabled
@@ -288,7 +287,7 @@ EOF
 ssl_session_data_print foo;
 EOF
 --error 1
---exec $MYSQL --commands=0 < $filename 2>&1
+--exec $MYSQL < $filename 2>&1
 --remove_file $filename
 
 

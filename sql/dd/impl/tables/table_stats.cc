@@ -27,8 +27,7 @@
 #include "sql/dd/impl/tables/dd_properties.h"  // TARGET_DD_VERSION
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -70,7 +69,7 @@ Table_stats::Table_stats() {
 ///////////////////////////////////////////////////////////////////////////
 
 const Table_stats &Table_stats::instance() {
-  static Table_stats *s_instance = new Table_stats();
+  static auto *s_instance = new Table_stats();
   return *s_instance;
 }
 
@@ -85,5 +84,4 @@ Table_stat::Name_key *Table_stats::create_object_key(
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

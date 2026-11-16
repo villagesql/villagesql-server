@@ -40,7 +40,7 @@ LogHandlerList::LogHandlerList()
 LogHandlerList::~LogHandlerList() { removeAll(); }
 
 bool LogHandlerList::add(LogHandler *pNewHandler) {
-  LogHandlerNode *pNode = new LogHandlerNode();
+  auto *pNode = new LogHandlerNode();
   if (!pNode) return false;
 
   if (m_pHeadNode == nullptr) {

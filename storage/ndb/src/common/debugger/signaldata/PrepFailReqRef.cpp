@@ -29,7 +29,7 @@
 
 bool printPREPFAILREQREF(FILE *output, const Uint32 *theData, Uint32 len,
                          Uint16 /*receiverBlockNo*/) {
-  const PrepFailReqRef *cc = (const PrepFailReqRef *)theData;
+  const auto *cc = (const PrepFailReqRef *)theData;
 
   fprintf(output, " xxxBlockRef = (%d, %d) failNo = %d noOfNodes = %d\n",
           refToBlock(cc->xxxBlockRef), refToNode(cc->xxxBlockRef), cc->failNo,

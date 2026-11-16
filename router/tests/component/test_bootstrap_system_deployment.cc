@@ -48,17 +48,28 @@ using namespace std::chrono_literals;
  */
 #ifndef SKIP_BOOTSTRAP_SYSTEM_DEPLOYMENT_TESTS
 
-class RouterBootstrapSystemDeploymentTest : public RouterComponentBootstrapTest,
-                                            public RouterSystemLayout {
+class RouterBootstrapSystemDeploymentTest
+    : public RouterComponentBootstrapTest,
+      public RouterSystemLayout,
+      public testing::WithParamInterface<bool> {
+ public:
+  RouterBootstrapSystemDeploymentTest()
+      : RouterComponentBootstrapTest(GetParam()) {}
+
  protected:
   void SetUp() override {
+    auto new_exe = GetParam();
     RouterComponentTest::SetUp();
     // this test modifies the origin path so we need to restore it
     ProcessManager::set_origin(g_origin_path);
-    init_system_layout_dir(get_mysqlrouter_exec(),
-                           ProcessManager::get_origin());
+    init_system_layout_dir(
+        new_exe ? get_mysqlrouter_bootstrap_exec() : get_mysqlrouter_exec(),
+        ProcessManager::get_origin());
 
-    set_mysqlrouter_exec(Path(exec_file_));
+    if (new_exe)
+      set_mysqlrouter_bootstrap_exec(Path(exec_file_));
+    else
+      set_mysqlrouter_exec(Path(exec_file_));
   }
 
   void TearDown() override {
@@ -67,16 +78,20 @@ class RouterBootstrapSystemDeploymentTest : public RouterComponentBootstrapTest,
   }
 
   auto &run_server_mock() {
-    const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
     server_port_ = port_pool_.get_next_available();
     const auto http_port = port_pool_.get_next_available();
 
     // launch mock server and wait for it to start accepting connections
-    auto &server_mock = launch_mysql_server_mock(
-        json_stmts, server_port_, EXIT_SUCCESS, false, http_port);
+    auto &server_mock =
+        mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                        .port(server_port_)
+                                        .http_port(http_port)
+                                        .args());
+
     set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                       classic_ports_to_gr_nodes({server_port_}), 0,
                       {server_port_});
+
     return server_mock;
   }
 
@@ -88,7 +103,7 @@ class RouterBootstrapSystemDeploymentTest : public RouterComponentBootstrapTest,
  * Windows. Bootstrap for other layouts uses directories to which tests don't
  * have access (see install_layout.cmake).
  */
-TEST_F(RouterBootstrapSystemDeploymentTest, BootstrapPass) {
+TEST_P(RouterBootstrapSystemDeploymentTest, BootstrapPass) {
   run_server_mock();
 
   // launch the router in bootstrap mode
@@ -110,7 +125,7 @@ TEST_F(RouterBootstrapSystemDeploymentTest, BootstrapPass) {
  * Windows. Bootstrap for other layouts uses directories to which tests don't
  * have access (see install_layout.cmake).
  */
-TEST_F(RouterBootstrapSystemDeploymentTest,
+TEST_P(RouterBootstrapSystemDeploymentTest,
        No_mysqlrouter_conf_tmp_WhenBootstrapFailed) {
   /*
    * Create directory with the same name as mysql router's config file to force
@@ -142,7 +157,7 @@ TEST_F(RouterBootstrapSystemDeploymentTest,
  * Windows. Bootstrap for other layouts uses directories to which tests don't
  * have access (see install_layout.cmake).
  */
-TEST_F(RouterBootstrapSystemDeploymentTest,
+TEST_P(RouterBootstrapSystemDeploymentTest,
        No_mysqlrouter_key_WhenBootstrapFailed) {
   /*
    * Create directory with the same name as mysql router's config file to force
@@ -173,7 +188,7 @@ TEST_F(RouterBootstrapSystemDeploymentTest,
  * Windows. Bootstrap for other layouts uses directories to which tests don't
  * have access (see install_layout.cmake).
  */
-TEST_F(RouterBootstrapSystemDeploymentTest,
+TEST_P(RouterBootstrapSystemDeploymentTest,
        IsKeyringRevertedWhenBootstrapFail) {
   const std::array<char, 5> kMasterKeyFileSignature = {'M', 'R', 'K', 'F',
                                                        '\0'};
@@ -225,7 +240,7 @@ TEST_F(RouterBootstrapSystemDeploymentTest,
  * Windows. Bootstrap for other layouts uses directories to which tests don't
  * have access (see install_layout.cmake).
  */
-TEST_F(RouterBootstrapSystemDeploymentTest,
+TEST_P(RouterBootstrapSystemDeploymentTest,
        Keep_mysqlrouter_log_WhenBootstrapFailed) {
   /*
    * Create directory with the same name as mysql router's config file to force
@@ -250,6 +265,10 @@ TEST_F(RouterBootstrapSystemDeploymentTest,
   mysql_harness::Path mysqlrouter_log_path(tmp_dir_ + "/stage/mysqlrouter.log");
   EXPECT_TRUE(mysqlrouter_log_path.exists());
 }
+
+INSTANTIATE_TEST_SUITE_P(NewAndOldBootstrap,
+                         RouterBootstrapSystemDeploymentTest,
+                         ::testing::Values(false, true));
 
 #endif
 

@@ -31,6 +31,7 @@
 #include "my_systime.h"
 #include "mysql/strings/m_ctype.h" /* my_charset_bin */
 #include "mysqld_error.h"
+#include "option_usage.h"
 #include "plugin/connection_control/connection_control.h"
 #include "plugin/connection_control/security_context_wrapper.h"
 #include "sql/current_thd.h" /* current_thd */
@@ -557,8 +558,7 @@ bool Connection_delay_action::notify_event(
         &self, STAT_CONNECTION_EXEMPTED_USERS, ACTION_INC);
     if (error) {
       error_handler->handle_error(
-          ER_LOG_PRINTF_MSG,
-          "Failed to update connection delay user exempt stats");
+          ER_CONN_CONTROL_STAT_CONN_EXEMPTED_USERS_UPDATE_FAILED);
     }
     return error;
   }
@@ -592,6 +592,10 @@ bool Connection_delay_action::notify_event(
       error_handler->handle_error(
           ER_CONN_CONTROL_STAT_CONN_DELAY_TRIGGERED_UPDATE_FAILED);
     }
+
+    m_log_rate_limiter.report_delayed_connection(
+        userhost, current_count == threshold, error_handler);
+
     /*
       Invoking sleep while holding read lock on Connection_delay_action
       would block access to cache data through IS table.
@@ -599,6 +603,8 @@ bool Connection_delay_action::notify_event(
     rd_lock.unlock();
     conditional_wait(thd, wait_time);
     rd_lock.lock();
+
+    ++opt_option_tracker_usage_connection_control_plugin;
 
     /* Introduce a delay to check that connection delay status doesn't last
      * longer than configured */

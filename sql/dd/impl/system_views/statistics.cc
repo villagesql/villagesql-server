@@ -27,8 +27,7 @@
 
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Statistics_base &Statistics::instance() {
   static Statistics_base *s_instance = new Statistics();
@@ -133,5 +132,4 @@ Show_statistics::Show_statistics() {
                          "COLUMN_ORDINAL_POSITION", "icu.ordinal_position");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

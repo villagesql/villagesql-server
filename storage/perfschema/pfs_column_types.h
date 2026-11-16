@@ -76,6 +76,11 @@
 /** Size of the SOURCE columns, in bytes. */
 #define COL_SOURCE_SIZE (COL_SOURCE_CHAR_SIZE * 1)
 
+/** Size of the short NAME columns, in characters. */
+#define COL_SHORT_NAME_CHAR_SIZE 32
+/** Size of the short NAME columns, in bytes. */
+#define COL_SHORT_NAME_SIZE (COL_SHORT_NAME_CHAR_SIZE * 1)
+
 /**
   Enum values for the TIMER_NAME columns.
   This enum is found in the following tables:
@@ -247,7 +252,9 @@ enum enum_object_type : char {
   OBJECT_TYPE_RESOURCE_GROUPS = 17,
   OBJECT_TYPE_FOREIGN_KEY = 18,
   OBJECT_TYPE_CHECK_CONSTRAINT = 19,
-  OBJECT_TYPE_EXTENSION = 20
+  OBJECT_TYPE_LIBRARY = 20,
+  OBJECT_TYPE_BACKUP_TABLES = 21,
+  OBJECT_TYPE_EXTENSION = 22
 };
 /** Integer, first value of @sa enum_object_type. */
 #define FIRST_OBJECT_TYPE (static_cast<int>(OBJECT_TYPE_EVENT))

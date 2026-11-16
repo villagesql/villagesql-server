@@ -22,8 +22,9 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
-#include <assert.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
+#include <utility>
 #include <vector>
 
 #include "openssl/err.h"
@@ -31,12 +32,14 @@
 #include "openssl/x509.h"
 
 #include "debugger/EventLogger.hpp"
+#include "my_compiler.h"
 #include "portlib/NdbGetRUsage.h"
 #include "portlib/NdbMutex.h"
 #include "portlib/NdbSleep.h"
 #include "portlib/NdbTCP.h"
 #include "portlib/NdbTick.h"
 #include "portlib/ndb_sockaddr.h"
+#include "scope_guard.h"
 #include "unittest/mytap/tap.h"
 #include "util/NdbSocket.h"
 #include "util/SocketClient.hpp"
@@ -165,11 +168,17 @@ static struct my_option options[] = {
 
 class EchoSession : public SocketServer::Session {
  public:
+  // GCC 16 emits a false-positive -Wmaybe-uninitialized warning here when
+  // the base SocketServer::Session is initialized with a reference to the
+  // not-yet-initialized m_secure_socket member.
+  MY_COMPILER_DIAGNOSTIC_PUSH()
+  MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wmaybe-uninitialized")
   EchoSession(NdbSocket &&s, bool sink, SSL_CTX *ctx)
       : SocketServer::Session(m_secure_socket),
         m_sink(sink),
         m_ssl_ctx(ctx),
         m_secure_socket(std::move(s)) {}
+  MY_COMPILER_DIAGNOSTIC_POP()
   void runSession() override;
 
  private:
@@ -403,13 +412,13 @@ class ClientTest {
 };
 
 void *runClientSendThread(void *p) {
-  ClientTest *t = (ClientTest *)p;
+  auto *t = (ClientTest *)p;
   t->runTestSend();
   my_thread_exit(&t->sendStatus);
 }
 
 void *runClientRecvThread(void *p) {
-  ClientTest *t = (ClientTest *)p;
+  auto *t = (ClientTest *)p;
   t->runTestRecv();
   my_thread_exit(&t->recvStatus);
 }
@@ -690,7 +699,7 @@ int SendTest::runTest() {
 }
 
 int SendTest::testRecv() {
-  while (1) {
+  while (true) {
     int r = recv(m_buff_size);
     if (verbose()) printf("                    RECV    .. %d \n", r);
     if (r < 1 && r != TLS_BUSY_TRY_AGAIN) return r;
@@ -741,12 +750,13 @@ int ReadLineTest::testRecv() {
   if (opt_data_dest && !outfp) return error_message("Destination file", -1);
   int r = 0;
   int elapsed_time;
-  while (1) {
+  while (true) {
     elapsed_time = 0;
     r = m_socket.readln(m_timeout, &elapsed_time, m_recv_buffer, m_buff_size,
                         nullptr);
     if (elapsed_time >= m_timeout) break;
     if (r == -1) continue;  // buffer full, no line found
+    if (r == 0) continue;   // timeout
     assert(r > 0);
     assert(m_recv_buffer[r] == '\0');
     assert(m_recv_buffer[r - 1] == '\n');
@@ -826,7 +836,7 @@ class WritevTest : public SendTest {
 
 WritevTest::WritevTest(NdbSocket &s, const char *name, size_t buff,
                        std::vector<int> dist)
-    : SendTest(s, name, buff), m_buffer_dist(dist) {
+    : SendTest(s, name, buff), m_buffer_dist(std::move(dist)) {
   size_t size = m_buff_size;
   int n = 0;
   for (n = 0; n < IovList::MaxBuffers; n++) m_iov.iov(n).iov_len = 0;
@@ -849,7 +859,7 @@ WritevTest::WritevTest(NdbSocket &s, const char *name, size_t buff,
 int WritevTest::retry_writev() {
   IovList iov(m_iov);
   int nsent = 0;
-  while (1) {
+  while (true) {
     int r = iov.writev(m_socket, m_timeout);
     if (r > 0) nsent += r;
     if (verbose()) printf("WRITEV  .. %d .. %llu \n", r, m_bytes_sent + nsent);
@@ -867,7 +877,7 @@ int WritevTest::testSend() {
   FILE *infp = fopen(opt_data_source, "r");
   int sent = 0;
 
-  while (1) {
+  while (true) {
     m_bytes_sent += sent;
     if (m_bytes_sent >= m_test_bytes) break;
 
@@ -956,6 +966,11 @@ int run_client(const char *server_host) {
       new BigWritevTest(plain_socket, "plain big writev"),
       new BigWritevTest(tls_socket, " TLS  big writev")};
 
+  auto tests_guard = create_scope_guard([&tests, &client]() {
+    for (auto *t : tests) delete t;
+    client.disconnect();
+  });
+
   /* Print list of tests and exit */
   if (opt_list) {
     for (int t = 1; t <= (int)tests.size(); t++) {
@@ -980,17 +995,14 @@ int run_client(const char *server_host) {
     if (t >= opt_start_test_number && t <= opt_end_test_number)
       rft = tests[t - 1]->run(t);
 
-  for (ClientTest *t : tests) delete t;
-
-  client.disconnect();
   return rft;
 }
 
 /* Server */
 void run_server(bool standalone = false) {
   SocketServer server;
-  PlainService *s1 = new PlainService(opt_sink);
-  TlsService *s2 = new TlsService(opt_sink);
+  auto *s1 = new PlainService(opt_sink);
+  auto *s2 = new TlsService(opt_sink);
   unsigned short port = opt_port;
   const char *srvType = opt_sink ? "sink" : "echo";
 

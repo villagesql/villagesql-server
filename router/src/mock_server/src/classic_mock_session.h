@@ -35,7 +35,9 @@
 #include "mysql/harness/net_ts/buffer.h"
 #include "mysql/harness/net_ts/impl/socket_constants.h"
 
+#include "mysql/harness/logging/logger.h"
 #include "mysql/harness/tls_context.h"
+#include "mysql/harness/tls_server_context.h"
 #include "mysqlrouter/classic_protocol_constants.h"
 #include "mysqlrouter/classic_protocol_message.h"
 
@@ -99,12 +101,12 @@ class MySQLClassicProtocol : public ProtocolBase {
 class MySQLServerMockSessionClassic : public MySQLServerMockSession {
  public:
   MySQLServerMockSessionClassic(
-      ProtocolBase::socket_type client_sock,
-      ProtocolBase::endpoint_type client_ep, TlsServerContext &tls_server_ctx,
+      mysql_harness::DestinationSocket sock,
+      mysql_harness::DestinationEndpoint ep, TlsServerContext &tls_ctx,
       std::unique_ptr<StatementReaderBase> statement_processor,
       const bool debug_mode, const bool with_tls)
       : MySQLServerMockSession(std::move(statement_processor), debug_mode),
-        protocol_{std::move(client_sock), client_ep, tls_server_ctx},
+        protocol_(std::move(sock), std::move(ep), tls_ctx),
         with_tls_{with_tls} {}
 
   void run() override;
@@ -123,11 +125,16 @@ class MySQLServerMockSessionClassic : public MySQLServerMockSession {
   void finish();
 
   stdx::expected<void, ErrorResponse> authenticate(
+      const StatementReaderBase::handshake_data &handshake,
       const std::vector<uint8_t> &client_auth_method_data);
 
   MySQLClassicProtocol protocol_;
 
   bool with_tls_{false};
+
+  std::optional<StatementReaderBase::handshake_data> expected_handshake_;
+
+  mysql_harness::logging::DomainLogger logger_;
 };
 
 }  // namespace server_mock

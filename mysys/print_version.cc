@@ -35,8 +35,7 @@
 
 #include "my_config.h"
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
 #include <sstream>
 
 #include "my_sys.h"

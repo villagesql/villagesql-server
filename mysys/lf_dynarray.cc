@@ -49,15 +49,15 @@
   Actually, it's wait-free, not lock-free ;-)
 */
 
-#include <string.h>
 #include <sys/types.h>
 
 #include <algorithm>
+#include <atomic>
+#include <iterator>
 
 #include "lf.h"
 #include "my_compiler.h"
 #include "my_inttypes.h"
-#include "my_macros.h"
 #include "my_sys.h"
 #include "mysql/service_mysql_alloc.h"
 #include "mysys/mysys_priv.h"

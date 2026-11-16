@@ -54,6 +54,7 @@ performance_schema	file_instances	def
 performance_schema	file_summary_by_event_name	def
 performance_schema	file_summary_by_instance	def
 performance_schema	global_status	def
+performance_schema	global_variable_attributes	def
 performance_schema	global_variables	def
 performance_schema	host_cache	def
 performance_schema	hosts	def
@@ -61,6 +62,8 @@ performance_schema	innodb_redo_log_files	def
 performance_schema	keyring_component_status	def
 performance_schema	keyring_keys	def
 performance_schema	log_status	def
+performance_schema	malloc_stats	def
+performance_schema	malloc_stats_totals	def
 performance_schema	memory_summary_by_account_by_event_name	def
 performance_schema	memory_summary_by_host_by_event_name	def
 performance_schema	memory_summary_by_thread_by_event_name	def
@@ -109,6 +112,7 @@ performance_schema	table_handles	def
 performance_schema	table_io_waits_summary_by_index_usage	def
 performance_schema	table_io_waits_summary_by_table	def
 performance_schema	table_lock_waits_summary_by_table	def
+performance_schema	temporary_account_locks	def
 performance_schema	threads	def
 performance_schema	tls_channel_status	def
 performance_schema	user_defined_functions	def
@@ -116,6 +120,7 @@ performance_schema	user_variables_by_thread	def
 performance_schema	users	def
 performance_schema	variables_by_thread	def
 performance_schema	variables_info	def
+performance_schema	variables_metadata	def
 select lower(TABLE_NAME), TABLE_TYPE, ENGINE
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema';
@@ -172,6 +177,7 @@ file_instances	BASE TABLE	PERFORMANCE_SCHEMA
 file_summary_by_event_name	BASE TABLE	PERFORMANCE_SCHEMA
 file_summary_by_instance	BASE TABLE	PERFORMANCE_SCHEMA
 global_status	BASE TABLE	PERFORMANCE_SCHEMA
+global_variable_attributes	BASE TABLE	PERFORMANCE_SCHEMA
 global_variables	BASE TABLE	PERFORMANCE_SCHEMA
 host_cache	BASE TABLE	PERFORMANCE_SCHEMA
 hosts	BASE TABLE	PERFORMANCE_SCHEMA
@@ -179,6 +185,8 @@ innodb_redo_log_files	BASE TABLE	PERFORMANCE_SCHEMA
 keyring_component_status	BASE TABLE	PERFORMANCE_SCHEMA
 keyring_keys	BASE TABLE	PERFORMANCE_SCHEMA
 log_status	BASE TABLE	PERFORMANCE_SCHEMA
+malloc_stats	BASE TABLE	PERFORMANCE_SCHEMA
+malloc_stats_totals	BASE TABLE	PERFORMANCE_SCHEMA
 memory_summary_by_account_by_event_name	BASE TABLE	PERFORMANCE_SCHEMA
 memory_summary_by_host_by_event_name	BASE TABLE	PERFORMANCE_SCHEMA
 memory_summary_by_thread_by_event_name	BASE TABLE	PERFORMANCE_SCHEMA
@@ -227,6 +235,7 @@ table_handles	BASE TABLE	PERFORMANCE_SCHEMA
 table_io_waits_summary_by_index_usage	BASE TABLE	PERFORMANCE_SCHEMA
 table_io_waits_summary_by_table	BASE TABLE	PERFORMANCE_SCHEMA
 table_lock_waits_summary_by_table	BASE TABLE	PERFORMANCE_SCHEMA
+temporary_account_locks	BASE TABLE	PERFORMANCE_SCHEMA
 threads	BASE TABLE	PERFORMANCE_SCHEMA
 tls_channel_status	BASE TABLE	PERFORMANCE_SCHEMA
 user_defined_functions	BASE TABLE	PERFORMANCE_SCHEMA
@@ -234,6 +243,7 @@ user_variables_by_thread	BASE TABLE	PERFORMANCE_SCHEMA
 users	BASE TABLE	PERFORMANCE_SCHEMA
 variables_by_thread	BASE TABLE	PERFORMANCE_SCHEMA
 variables_info	BASE TABLE	PERFORMANCE_SCHEMA
+variables_metadata	BASE TABLE	PERFORMANCE_SCHEMA
 select lower(TABLE_NAME), VERSION, ROW_FORMAT
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema';
@@ -290,6 +300,7 @@ file_instances	10	Dynamic
 file_summary_by_event_name	10	Dynamic
 file_summary_by_instance	10	Dynamic
 global_status	10	Dynamic
+global_variable_attributes	10	Dynamic
 global_variables	10	Dynamic
 host_cache	10	Dynamic
 hosts	10	Fixed
@@ -297,6 +308,8 @@ innodb_redo_log_files	10	Dynamic
 keyring_component_status	10	Dynamic
 keyring_keys	10	Dynamic
 log_status	10	Dynamic
+malloc_stats	10	Fixed
+malloc_stats_totals	10	Fixed
 memory_summary_by_account_by_event_name	10	Dynamic
 memory_summary_by_host_by_event_name	10	Dynamic
 memory_summary_by_thread_by_event_name	10	Dynamic
@@ -345,6 +358,7 @@ table_handles	10	Dynamic
 table_io_waits_summary_by_index_usage	10	Dynamic
 table_io_waits_summary_by_table	10	Dynamic
 table_lock_waits_summary_by_table	10	Dynamic
+temporary_account_locks	10	Fixed
 threads	10	Dynamic
 tls_channel_status	10	Dynamic
 user_defined_functions	10	Dynamic
@@ -352,6 +366,7 @@ user_variables_by_thread	10	Dynamic
 users	10	Fixed
 variables_by_thread	10	Dynamic
 variables_info	10	Dynamic
+variables_metadata	10	Dynamic
 select lower(TABLE_NAME), AVG_ROW_LENGTH
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema' and
@@ -408,12 +423,15 @@ events_waits_summary_global_by_event_name	0
 file_instances	0
 file_summary_by_event_name	0
 file_summary_by_instance	0
+global_variable_attributes	0
 host_cache	0
 hosts	0
 innodb_redo_log_files	0
 keyring_component_status	0
 keyring_keys	0
 log_status	0
+malloc_stats	0
+malloc_stats_totals	0
 memory_summary_by_account_by_event_name	0
 memory_summary_by_host_by_event_name	0
 memory_summary_by_thread_by_event_name	0
@@ -455,6 +473,7 @@ table_handles	0
 table_io_waits_summary_by_index_usage	0
 table_io_waits_summary_by_table	0
 table_lock_waits_summary_by_table	0
+temporary_account_locks	0
 threads	0
 tls_channel_status	0
 user_defined_functions	0
@@ -476,6 +495,7 @@ status_by_thread	table_rows	avg_row_len
 status_by_user	table_rows	avg_row_len
 variables_by_thread	table_rows	avg_row_len
 variables_info	table_rows	avg_row_len
+variables_metadata	table_rows	avg_row_len
 select lower(TABLE_NAME), DATA_LENGTH, MAX_DATA_LENGTH
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema';
@@ -532,6 +552,7 @@ file_instances	0	0
 file_summary_by_event_name	0	0
 file_summary_by_instance	0	0
 global_status	0	0
+global_variable_attributes	0	0
 global_variables	0	0
 host_cache	0	0
 hosts	0	0
@@ -539,6 +560,8 @@ innodb_redo_log_files	0	0
 keyring_component_status	0	0
 keyring_keys	0	0
 log_status	0	0
+malloc_stats	0	0
+malloc_stats_totals	0	0
 memory_summary_by_account_by_event_name	0	0
 memory_summary_by_host_by_event_name	0	0
 memory_summary_by_thread_by_event_name	0	0
@@ -587,6 +610,7 @@ table_handles	0	0
 table_io_waits_summary_by_index_usage	0	0
 table_io_waits_summary_by_table	0	0
 table_lock_waits_summary_by_table	0	0
+temporary_account_locks	0	0
 threads	0	0
 tls_channel_status	0	0
 user_defined_functions	0	0
@@ -594,6 +618,7 @@ user_variables_by_thread	0	0
 users	0	0
 variables_by_thread	0	0
 variables_info	0	0
+variables_metadata	0	0
 select lower(TABLE_NAME), INDEX_LENGTH, DATA_FREE, AUTO_INCREMENT
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema';
@@ -650,6 +675,7 @@ file_instances	0	0	NULL
 file_summary_by_event_name	0	0	NULL
 file_summary_by_instance	0	0	NULL
 global_status	0	0	NULL
+global_variable_attributes	0	0	NULL
 global_variables	0	0	NULL
 host_cache	0	0	NULL
 hosts	0	0	NULL
@@ -657,6 +683,8 @@ innodb_redo_log_files	0	0	NULL
 keyring_component_status	0	0	NULL
 keyring_keys	0	0	NULL
 log_status	0	0	NULL
+malloc_stats	0	0	NULL
+malloc_stats_totals	0	0	NULL
 memory_summary_by_account_by_event_name	0	0	NULL
 memory_summary_by_host_by_event_name	0	0	NULL
 memory_summary_by_thread_by_event_name	0	0	NULL
@@ -705,6 +733,7 @@ table_handles	0	0	NULL
 table_io_waits_summary_by_index_usage	0	0	NULL
 table_io_waits_summary_by_table	0	0	NULL
 table_lock_waits_summary_by_table	0	0	NULL
+temporary_account_locks	0	0	NULL
 threads	0	0	NULL
 tls_channel_status	0	0	NULL
 user_defined_functions	0	0	NULL
@@ -712,6 +741,7 @@ user_variables_by_thread	0	0	NULL
 users	0	0	NULL
 variables_by_thread	0	0	NULL
 variables_info	0	0	NULL
+variables_metadata	0	0	NULL
 select lower(TABLE_NAME), CREATE_TIME, UPDATE_TIME, CHECK_TIME
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema';
@@ -768,6 +798,7 @@ file_instances	NULL	NULL	NULL
 file_summary_by_event_name	NULL	NULL	NULL
 file_summary_by_instance	NULL	NULL	NULL
 global_status	NULL	NULL	NULL
+global_variable_attributes	NULL	NULL	NULL
 global_variables	NULL	NULL	NULL
 host_cache	NULL	NULL	NULL
 hosts	NULL	NULL	NULL
@@ -775,6 +806,8 @@ innodb_redo_log_files	NULL	NULL	NULL
 keyring_component_status	NULL	NULL	NULL
 keyring_keys	NULL	NULL	NULL
 log_status	NULL	NULL	NULL
+malloc_stats	NULL	NULL	NULL
+malloc_stats_totals	NULL	NULL	NULL
 memory_summary_by_account_by_event_name	NULL	NULL	NULL
 memory_summary_by_host_by_event_name	NULL	NULL	NULL
 memory_summary_by_thread_by_event_name	NULL	NULL	NULL
@@ -823,6 +856,7 @@ table_handles	NULL	NULL	NULL
 table_io_waits_summary_by_index_usage	NULL	NULL	NULL
 table_io_waits_summary_by_table	NULL	NULL	NULL
 table_lock_waits_summary_by_table	NULL	NULL	NULL
+temporary_account_locks	NULL	NULL	NULL
 threads	NULL	NULL	NULL
 tls_channel_status	NULL	NULL	NULL
 user_defined_functions	NULL	NULL	NULL
@@ -830,6 +864,7 @@ user_variables_by_thread	NULL	NULL	NULL
 users	NULL	NULL	NULL
 variables_by_thread	NULL	NULL	NULL
 variables_info	NULL	NULL	NULL
+variables_metadata	NULL	NULL	NULL
 select lower(TABLE_NAME), TABLE_COLLATION, CHECKSUM
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema';
@@ -886,6 +921,7 @@ file_instances	utf8mb4_0900_ai_ci	NULL
 file_summary_by_event_name	utf8mb4_0900_ai_ci	NULL
 file_summary_by_instance	utf8mb4_0900_ai_ci	NULL
 global_status	utf8mb4_0900_ai_ci	NULL
+global_variable_attributes	utf8mb4_0900_ai_ci	NULL
 global_variables	utf8mb4_0900_ai_ci	NULL
 host_cache	utf8mb4_0900_ai_ci	NULL
 hosts	utf8mb4_0900_ai_ci	NULL
@@ -893,6 +929,8 @@ innodb_redo_log_files	utf8mb4_0900_ai_ci	NULL
 keyring_component_status	utf8mb4_0900_ai_ci	NULL
 keyring_keys	utf8mb4_bin	NULL
 log_status	utf8mb4_0900_ai_ci	NULL
+malloc_stats	utf8mb4_0900_ai_ci	NULL
+malloc_stats_totals	utf8mb4_0900_ai_ci	NULL
 memory_summary_by_account_by_event_name	utf8mb4_0900_ai_ci	NULL
 memory_summary_by_host_by_event_name	utf8mb4_0900_ai_ci	NULL
 memory_summary_by_thread_by_event_name	utf8mb4_0900_ai_ci	NULL
@@ -941,6 +979,7 @@ table_handles	utf8mb4_0900_ai_ci	NULL
 table_io_waits_summary_by_index_usage	utf8mb4_0900_ai_ci	NULL
 table_io_waits_summary_by_table	utf8mb4_0900_ai_ci	NULL
 table_lock_waits_summary_by_table	utf8mb4_0900_ai_ci	NULL
+temporary_account_locks	utf8mb4_0900_ai_ci	NULL
 threads	utf8mb4_0900_ai_ci	NULL
 tls_channel_status	utf8mb4_0900_ai_ci	NULL
 user_defined_functions	utf8mb4_0900_ai_ci	NULL
@@ -948,6 +987,7 @@ user_variables_by_thread	utf8mb4_0900_ai_ci	NULL
 users	utf8mb4_0900_ai_ci	NULL
 variables_by_thread	utf8mb4_0900_ai_ci	NULL
 variables_info	utf8mb4_0900_ai_ci	NULL
+variables_metadata	utf8mb4_0900_ai_ci	NULL
 select lower(TABLE_NAME), CREATE_OPTIONS
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema';
@@ -1004,6 +1044,7 @@ file_instances
 file_summary_by_event_name	
 file_summary_by_instance	
 global_status	
+global_variable_attributes	
 global_variables	
 host_cache	
 hosts	
@@ -1011,6 +1052,8 @@ innodb_redo_log_files
 keyring_component_status	
 keyring_keys	
 log_status	
+malloc_stats	
+malloc_stats_totals	
 memory_summary_by_account_by_event_name	
 memory_summary_by_host_by_event_name	
 memory_summary_by_thread_by_event_name	
@@ -1059,6 +1102,7 @@ table_handles
 table_io_waits_summary_by_index_usage	
 table_io_waits_summary_by_table	
 table_lock_waits_summary_by_table	
+temporary_account_locks	
 threads	
 tls_channel_status	
 user_defined_functions	
@@ -1066,6 +1110,7 @@ user_variables_by_thread
 users	
 variables_by_thread	
 variables_info	
+variables_metadata	
 select lower(TABLE_NAME), TABLE_COMMENT
 from information_schema.tables
 where TABLE_SCHEMA='performance_schema';
@@ -1122,6 +1167,7 @@ file_instances
 file_summary_by_event_name	
 file_summary_by_instance	
 global_status	
+global_variable_attributes	
 global_variables	
 host_cache	
 hosts	
@@ -1129,6 +1175,8 @@ innodb_redo_log_files
 keyring_component_status	
 keyring_keys	
 log_status	
+malloc_stats	
+malloc_stats_totals	
 memory_summary_by_account_by_event_name	
 memory_summary_by_host_by_event_name	
 memory_summary_by_thread_by_event_name	
@@ -1177,6 +1225,7 @@ table_handles
 table_io_waits_summary_by_index_usage	
 table_io_waits_summary_by_table	
 table_lock_waits_summary_by_table	
+temporary_account_locks	
 threads	
 tls_channel_status	
 user_defined_functions	
@@ -1184,3 +1233,4 @@ user_variables_by_thread
 users	
 variables_by_thread	
 variables_info	
+variables_metadata	

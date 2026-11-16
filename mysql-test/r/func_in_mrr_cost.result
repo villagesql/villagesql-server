@@ -516,7 +516,7 @@ SELECT * FROM t4 WHERE a IN ('1972-02-06','19772-07-29');
 a
 1972-02-06
 Warnings:
-Warning	1292	Incorrect date value: '19772-07-29' for column 'a' at row 1
+Warning	1292	Truncated incorrect date value: '19772-07-29'
 DROP TABLE t1,t2,t3,t4;
 CREATE TABLE t1 (id int not null);
 INSERT INTO t1 VALUES (1),(2);
@@ -645,6 +645,9 @@ INSERT INTO t1 VALUES('iynfj', 1, 1, 1, 1);
 INSERT INTO t1 VALUES('innfj', 2, 2, 2, 2);
 SELECT SUM( DISTINCT a ) FROM t1 GROUP BY a HAVING a IN ( AVG( 1 ), 1 + a);
 SUM( DISTINCT a )
+Warnings:
+Warning	1366	Incorrect DOUBLE value: 'innfj' for column '' at row 1
+Warning	1366	Incorrect DOUBLE value: 'iynfj' for column '' at row 1
 SELECT SUM( DISTINCT b ) FROM t1 GROUP BY b HAVING b IN ( AVG( 1 ), 1 + b);
 SUM( DISTINCT b )
 1

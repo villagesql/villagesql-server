@@ -28,6 +28,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <algorithm>
+#include <functional>
 #include <new>
 #include <unordered_map>
 
@@ -38,7 +39,7 @@
 #include "my_inttypes.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
-#include "my_systime.h"  // Timout_type
+#include "my_systime.h"  // Timeout_type
 #include "mysql/components/services/bits/mysql_cond_bits.h"
 #include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "mysql/components/services/bits/mysql_rwlock_bits.h"
@@ -46,6 +47,7 @@
 #include "mysql/components/services/bits/psi_stage_bits.h"
 #include "mysql/psi/mysql_rwlock.h"
 #include "mysql_com.h"
+#include "prealloced_array.h"
 #include "sql/sql_plist.h"
 #include "template_utils.h"
 
@@ -385,6 +387,7 @@ struct MDL_key {
      - TABLE is for tables and views.
      - FUNCTION is for stored functions.
      - PROCEDURE is for stored procedures.
+     - LIBRARY is for libraries.
      - TRIGGER is for triggers.
      - EVENT is for event scheduler events.
      - COMMIT is for enabling the global read lock to block commits.
@@ -401,7 +404,7 @@ struct MDL_key {
   */
   enum enum_mdl_namespace {
     GLOBAL = 0,
-    BACKUP_LOCK,
+    BACKUP_LOCK, /* Oracle LOCK INSTANCE FOR BACKUP */
     TABLESPACE,
     EXTENSION,
     SCHEMA,
@@ -419,6 +422,8 @@ struct MDL_key {
     RESOURCE_GROUPS,
     FOREIGN_KEY,
     CHECK_CONSTRAINT,
+    LIBRARY,
+    BACKUP_TABLES, /* Percona LOCK TABLES FOR BACKUP */
     /* This should be the last ! */
     NAMESPACE_END
   };
@@ -780,8 +785,8 @@ struct MDL_key {
   */
   bool use_normalized_object_name() const {
     return (mdl_namespace() == FUNCTION || mdl_namespace() == PROCEDURE ||
-            mdl_namespace() == EVENT || mdl_namespace() == RESOURCE_GROUPS ||
-            mdl_namespace() == TRIGGER);
+            mdl_namespace() == LIBRARY || mdl_namespace() == EVENT ||
+            mdl_namespace() == RESOURCE_GROUPS || mdl_namespace() == TRIGGER);
   }
 
  private:
@@ -1430,6 +1435,10 @@ class MDL_context {
                      Timeout_type lock_wait_timeout);
   bool upgrade_shared_lock(MDL_ticket *mdl_ticket, enum_mdl_type new_type,
                            Timeout_type lock_wait_timeout);
+  bool upgrade_shared_locks(MDL_request_list *mdl_requests,
+                            enum_mdl_type new_type,
+                            Timeout_type lock_wait_timeout,
+                            bool (*filter_func)(MDL_request *) = nullptr);
 
   bool clone_ticket(MDL_request *mdl_request);
 
@@ -1674,6 +1683,10 @@ class MDL_context {
 
   friend bool mdl_unittest::test_drive_fix_pins(MDL_context *);
   bool fix_pins();
+
+  bool filter_and_sort_requests_by_mdl_key(
+      Prealloced_array<MDL_request *, 16> *sort_buf,
+      MDL_request_list *mdl_requests, bool (*filter_func)(MDL_request *));
 
  public:
   void find_deadlock();

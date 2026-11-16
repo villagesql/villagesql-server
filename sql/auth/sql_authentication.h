@@ -25,6 +25,7 @@
 #ifndef SQL_AUTHENTICATION_INCLUDED
 #define SQL_AUTHENTICATION_INCLUDED
 
+#include <map>
 #include <openssl/rsa.h>
 #include <stddef.h>
 #include <sys/types.h>
@@ -169,7 +170,6 @@ extern bool allow_all_hosts;
 
 typedef enum {
   PLUGIN_CACHING_SHA2_PASSWORD = 0,
-  PLUGIN_MYSQL_NATIVE_PASSWORD,
   PLUGIN_SHA256_PASSWORD,
   /* Add new plugin before this */
   PLUGIN_LAST
@@ -254,7 +254,12 @@ class Cached_authentication_plugins {
   bool m_valid;
 };
 
+using name_and_host_t = std::pair<std::string, std::string>;
+using external_roles_t = std::map<name_and_host_t, std::vector<std::string>>;
+extern external_roles_t g_external_roles;
 extern Cached_authentication_plugins *g_cached_authentication_plugins;
+
+constexpr unsigned int AUTH_PLUGIN_SHUTDOWN_TIMEOUT_MS = 2000;
 
 ACL_USER *decoy_user(const LEX_CSTRING &username, const LEX_CSTRING &hostname,
                      MEM_ROOT *mem, struct rand_struct *rand,

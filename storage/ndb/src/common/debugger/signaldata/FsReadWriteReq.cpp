@@ -29,7 +29,7 @@ bool printFSREADWRITEREQ(FILE *output, const Uint32 *theData, Uint32 /*len*/,
                          Uint16 /*receiverBlockNo*/) {
   bool ret = true;
 
-  const FsReadWriteReq *const sig = (const FsReadWriteReq *)theData;
+  const auto *const sig = (const FsReadWriteReq *)theData;
 
   fprintf(output, " UserPointer: %d\n", sig->userPointer);
   fprintf(output, " FilePointer: %d\n", sig->filePointer);

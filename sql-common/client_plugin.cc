@@ -43,9 +43,9 @@
 #include "my_config.h"
 
 #include <mysql/client_plugin.h>
-#include <stdarg.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cstdarg>
+#include <cstdlib>
 
 #include "errmsg.h"
 #include "my_alloc.h"
@@ -590,7 +590,7 @@ have_plugin:
     goto err;
   }
 
-  if (strcmp(name, plugin->name)) {
+  if (strcmp(name, plugin->name) != 0) {
     errmsg = "name mismatch";
     goto err;
   }

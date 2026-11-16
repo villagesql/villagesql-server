@@ -68,7 +68,7 @@ SocketServer::~SocketServer() {
   }
 }
 
-bool SocketServer::tryBind(ndb_sockaddr servaddr, char *error,
+bool SocketServer::tryBind(const ndb_sockaddr &servaddr, char *error,
                            size_t error_size) {
   const ndb_socket_t sock = ndb_socket_create(servaddr.get_address_family());
 
@@ -226,14 +226,14 @@ bool SocketServer::doAccept() {
 }
 
 extern "C" void *socketServerThread_C(void *_ss) {
-  SocketServer *ss = (SocketServer *)_ss;
+  auto *ss = (SocketServer *)_ss;
   ss->doRun();
   return nullptr;
 }
 
 struct NdbThread *SocketServer::startServer() {
   m_threadLock.lock();
-  if (m_thread == nullptr && m_stopThread == false) {
+  if (m_thread == nullptr && !m_stopThread) {
     m_thread = NdbThread_Create(socketServerThread_C, (void **)this,
                                 0,  // default stack size
                                 "NdbSockServ", NDB_THREAD_PRIO_LOW);
@@ -367,7 +367,7 @@ bool SocketServer::stopSessions(bool wait, unsigned wait_timeout) {
 /***** Session code ******/
 
 extern "C" void *sessionThread_C(void *_sc) {
-  SocketServer::Session *si = (SocketServer::Session *)_sc;
+  auto *si = (SocketServer::Session *)_sc;
 
   assert(si->m_thread_stopped == false);
 

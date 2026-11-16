@@ -84,7 +84,7 @@ class SparseBitmask {
   }
 
   /* Clear all bits */
-  void clear(void) { m_vec.clear(); }
+  void clear() { m_vec.clear(); }
 
   /* Find first bit >= n */
   unsigned find(unsigned n) const {
@@ -105,7 +105,7 @@ class SparseBitmask {
     return m_vec[n];
   }
 
-  void print(void) const {
+  void print() const {
     for (unsigned i = 0; i < m_vec.size(); i++) {
       const unsigned j = m_vec[i];
       printf("[%u]: %u\n", i, j);

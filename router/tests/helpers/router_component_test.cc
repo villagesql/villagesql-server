@@ -31,6 +31,7 @@
 #include "dim.h"
 #include "filesystem_utils.h"
 #include "mock_server_testutils.h"
+#include "mysql/harness/stdx/expected.h"
 #include "mysqlrouter/utils.h"  // copy_file
 #include "random_generator.h"
 #include "router_component_testutils.h"
@@ -118,6 +119,51 @@ void RouterComponentTest::check_log_contains(
       << log_content;
 }
 
+std::string RouterComponentTest::plugin_output_directory() {
+  const auto bindir = get_origin().real_path();
+
+  // if this is a multi-config-build, remember the build-type.
+  auto build_type = bindir.basename().str();
+  if (build_type == "runtime_output_directory") {
+    // no multi-config build.
+    build_type = {};
+  }
+
+  auto builddir = bindir.dirname();
+  if (!build_type.empty()) {
+    builddir = builddir.dirname();
+  }
+  auto plugindir = builddir.join("plugin_output_directory");
+  if (!build_type.empty()) {
+    plugindir = plugindir.join(build_type);
+  }
+
+  return plugindir.str();
+}
+
+stdx::expected<std::string, int>
+RouterComponentTest::create_openid_connect_id_token_file(
+    const std::string &subject, const std::string &identity_provider_name,
+    int expiry, const std::string &private_key_file,
+    const std::string &outdir) {
+  auto jwt_exit_code =
+      spawner(
+          ProcessManager::get_origin().join("mysql_test_jwt_generator").str())
+          .wait_for_sync_point(Spawner::SyncPoint::NONE)
+          .spawn({
+              subject,
+              identity_provider_name,
+              std::to_string(expiry),
+              private_key_file,
+              outdir,
+          })
+          .wait_for_exit();
+
+  if (jwt_exit_code != 0) return stdx::unexpected(jwt_exit_code);
+
+  return Path(outdir).join("jwt.txt").str();
+}
+
 constexpr const char RouterComponentBootstrapTest::kRootPassword[];
 
 const RouterComponentBootstrapTest::OutputResponder
@@ -146,7 +192,7 @@ void RouterComponentBootstrapTest::bootstrap_failover(
     std::chrono::milliseconds wait_for_exit_timeout,
     const mysqlrouter::MetadataSchemaVersion &metadata_version,
     const std::vector<std::string> &extra_router_options) {
-  std::string cluster_name("mycluster");
+  std::string cluster_name("my-cluster");
 
   std::vector<uint16_t> classic_ports;
   for (const auto &mock_server_config : mock_server_configs) {
@@ -180,10 +226,15 @@ void RouterComponentBootstrapTest::bootstrap_failover(
     const auto port =
         mock_server_config.unaccessible ? 0x10000 : mock_server_config.port;
     const auto http_port = mock_server_config.http_port;
+
     mock_servers.emplace_back(
-        launch_mysql_server_mock(mock_server_config.js_filename, port,
-                                 EXIT_SUCCESS, false, http_port),
+        mock_server_spawner().spawn(
+            mock_server_cmdline(mock_server_config.js_filename)
+                .port(port)
+                .http_port(http_port)
+                .args()),
         port);
+
     set_mock_metadata(http_port, mock_server_config.cluster_specific_id,
                       gr_nodes, 0, cluster_nodes, 0, false, "127.0.0.1", "",
                       metadata_version, cluster_name);

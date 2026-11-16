@@ -184,7 +184,7 @@ Master_info::Master_info(
       key_info_rotate_lock(param_key_info_rotate_lock),
       key_info_rotate_cond(param_key_info_rotate_cond),
 #endif
-      ssl(false),
+      ssl(true),
       ssl_verify_server_cert(false),
       get_public_key(false),
       port(MYSQL_PORT),
@@ -795,7 +795,7 @@ void Master_info::update_flushed_relay_log_info() {
   }
 }
 
-void Master_info::get_flushed_relay_log_info(LOG_INFO *linfo) {
+void Master_info::get_flushed_relay_log_info(Log_info *linfo) {
   strmake(linfo->log_file_name, flushed_relay_log_info.log_file_name,
           sizeof(linfo->log_file_name) - 1);
   linfo->pos = flushed_relay_log_info.pos;

@@ -1,4 +1,5 @@
 SET @max_row = 20;
+include/rpl/set_gtid_mode_off.inc
 SET @@session.default_storage_engine = 'InnoDB';
 
 #------------------------------------------------------------------------
@@ -327,6 +328,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -348,6 +351,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -369,6 +374,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -390,6 +397,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -411,6 +420,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -432,6 +443,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -443,6 +456,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -819,6 +834,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -840,6 +857,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -861,6 +880,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -882,6 +903,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -903,6 +926,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -924,6 +949,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -935,6 +962,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -1326,6 +1355,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -1347,6 +1378,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -1368,6 +1401,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -1389,6 +1424,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -1410,6 +1447,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -1431,6 +1470,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -1442,6 +1483,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -1827,6 +1870,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -1848,6 +1893,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -1869,6 +1916,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -1890,6 +1939,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -1911,6 +1962,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -1932,6 +1985,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -1943,6 +1998,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -2326,6 +2383,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -2347,6 +2406,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -2368,6 +2429,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -2389,6 +2452,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -2410,6 +2475,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -2431,6 +2498,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -2442,6 +2511,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -2836,6 +2907,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -2857,6 +2930,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -2878,6 +2953,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -2899,6 +2976,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -2920,6 +2999,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -2941,6 +3022,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -2952,6 +3035,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -3348,6 +3433,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -3369,6 +3456,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -3390,6 +3479,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -3411,6 +3502,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -3432,6 +3525,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -3453,6 +3548,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -3464,6 +3561,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -3848,6 +3947,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -3869,6 +3970,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -3890,6 +3993,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -3911,6 +4016,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -3932,6 +4039,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -3953,6 +4062,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -3964,6 +4075,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -4341,6 +4454,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -4362,6 +4477,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -4383,6 +4500,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -4404,6 +4523,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -4425,6 +4546,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -4446,6 +4569,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -4457,6 +4582,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -4833,6 +4960,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -4854,6 +4983,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -4875,6 +5006,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -4896,6 +5029,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -4917,6 +5052,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -4938,6 +5075,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -4949,6 +5088,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -5340,6 +5481,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -5361,6 +5504,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -5382,6 +5527,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -5403,6 +5550,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -5424,6 +5573,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -5445,6 +5596,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -5456,6 +5609,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -5841,6 +5996,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -5862,6 +6019,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -5883,6 +6042,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -5904,6 +6065,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -5925,6 +6088,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -5946,6 +6111,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -5957,6 +6124,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -6340,6 +6509,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -6361,6 +6532,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -6382,6 +6555,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -6403,6 +6578,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -6424,6 +6601,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -6445,6 +6624,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -6456,6 +6637,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -6850,6 +7033,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -6871,6 +7056,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -6892,6 +7079,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -6913,6 +7102,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -6934,6 +7125,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -6955,6 +7148,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -6966,6 +7161,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -7362,6 +7559,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -7383,6 +7582,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -7404,6 +7605,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -7425,6 +7628,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -7446,6 +7651,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -7467,6 +7674,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -7478,6 +7687,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -7862,6 +8073,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -7883,6 +8096,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -7904,6 +8119,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -7925,6 +8142,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -7946,6 +8165,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -7967,6 +8188,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -7978,6 +8201,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -8372,6 +8597,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -8393,6 +8620,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -8414,6 +8643,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -8435,6 +8666,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -8456,6 +8689,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -8477,6 +8712,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -8488,6 +8725,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -8880,6 +9119,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -8901,6 +9142,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -8922,6 +9165,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -8943,6 +9188,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -8964,6 +9211,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -8985,6 +9234,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -8996,6 +9247,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -9403,6 +9656,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -9424,6 +9679,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -9445,6 +9702,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -9466,6 +9725,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -9487,6 +9748,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -9508,6 +9771,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -9519,6 +9784,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -9920,6 +10187,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -9941,6 +10210,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -9962,6 +10233,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -9983,6 +10256,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -10004,6 +10279,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -10025,6 +10302,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -10036,6 +10315,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -10435,6 +10716,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -10456,6 +10739,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -10477,6 +10762,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -10498,6 +10785,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -10519,6 +10808,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -10540,6 +10831,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -10551,6 +10844,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -10961,6 +11256,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -10982,6 +11279,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -11003,6 +11302,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -11024,6 +11325,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -11045,6 +11348,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -11066,6 +11371,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -11077,6 +11384,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -11489,6 +11798,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -11510,6 +11821,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -11531,6 +11844,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -11552,6 +11867,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -11573,6 +11890,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -11594,6 +11913,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -11605,6 +11926,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -12005,6 +12328,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -12026,6 +12351,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -12047,6 +12374,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -12068,6 +12397,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -12089,6 +12420,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -12110,6 +12443,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -12121,6 +12456,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -12514,6 +12851,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -12535,6 +12874,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -12556,6 +12897,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -12577,6 +12920,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -12598,6 +12943,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -12619,6 +12966,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -12630,6 +12979,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -13022,6 +13373,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -13043,6 +13396,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -13064,6 +13419,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -13085,6 +13442,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -13106,6 +13465,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -13127,6 +13488,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -13138,6 +13501,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -13545,6 +13910,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -13566,6 +13933,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -13587,6 +13956,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -13608,6 +13979,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -13629,6 +14002,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -13650,6 +14025,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -13661,6 +14038,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -14062,6 +14441,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -14083,6 +14464,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -14104,6 +14487,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -14125,6 +14510,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -14146,6 +14533,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -14167,6 +14556,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -14178,6 +14569,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -14577,6 +14970,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -14598,6 +14993,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -14619,6 +15016,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -14640,6 +15039,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -14661,6 +15062,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -14682,6 +15085,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -14693,6 +15098,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -15103,6 +15510,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -15124,6 +15533,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -15145,6 +15556,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -15166,6 +15579,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -15187,6 +15602,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -15208,6 +15625,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -15219,6 +15638,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -15631,6 +16052,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -15652,6 +16075,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -15673,6 +16098,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -15694,6 +16121,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -15715,6 +16144,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -15736,6 +16167,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -15747,6 +16180,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -16147,6 +16582,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -16168,6 +16605,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -16189,6 +16628,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -16210,6 +16651,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -16231,6 +16674,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -16252,6 +16697,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -16263,6 +16710,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -16642,6 +17091,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -16663,6 +17114,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -16684,6 +17137,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -16705,6 +17160,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -16726,6 +17183,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -16747,6 +17206,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -16758,6 +17219,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -17135,6 +17598,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -17156,6 +17621,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -17177,6 +17644,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -17198,6 +17667,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -17219,6 +17690,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -17240,6 +17713,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -17251,6 +17726,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -17643,6 +18120,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -17664,6 +18143,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -17685,6 +18166,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -17706,6 +18189,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -17727,6 +18212,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -17748,6 +18235,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -17759,6 +18248,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -18145,6 +18636,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -18166,6 +18659,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -18187,6 +18682,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -18208,6 +18705,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -18229,6 +18728,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -18250,6 +18751,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -18261,6 +18764,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -18645,6 +19150,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -18666,6 +19173,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -18687,6 +19196,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -18708,6 +19219,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -18729,6 +19242,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -18750,6 +19265,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -18761,6 +19278,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -19156,6 +19675,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -19177,6 +19698,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -19198,6 +19721,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -19219,6 +19744,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -19240,6 +19767,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -19261,6 +19790,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -19272,6 +19803,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -19669,6 +20202,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -19690,6 +20225,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -19711,6 +20248,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -19732,6 +20271,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -19753,6 +20294,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -19774,6 +20317,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -19785,6 +20330,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -20170,6 +20717,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -20191,6 +20740,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -20212,6 +20763,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -20233,6 +20786,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -20254,6 +20809,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -20275,6 +20832,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -20286,6 +20845,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -20664,6 +21225,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -20685,6 +21248,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -20706,6 +21271,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -20727,6 +21294,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -20748,6 +21317,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -20769,6 +21340,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -20780,6 +21353,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -21157,6 +21732,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -21178,6 +21755,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -21199,6 +21778,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -21220,6 +21801,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -21241,6 +21824,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -21262,6 +21847,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -21273,6 +21860,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -21665,6 +22254,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -21686,6 +22277,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -21707,6 +22300,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -21728,6 +22323,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -21749,6 +22346,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -21770,6 +22369,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -21781,6 +22382,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -22167,6 +22770,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -22188,6 +22793,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -22209,6 +22816,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -22230,6 +22839,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -22251,6 +22862,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -22272,6 +22885,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -22283,6 +22898,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -22667,6 +23284,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -22688,6 +23307,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -22709,6 +23330,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -22730,6 +23353,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -22751,6 +23376,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -22772,6 +23399,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -22783,6 +23412,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -23178,6 +23809,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -23199,6 +23832,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -23220,6 +23855,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -23241,6 +23878,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -23262,6 +23901,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -23283,6 +23924,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -23294,6 +23937,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -23691,6 +24336,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -23712,6 +24359,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -23733,6 +24382,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -23754,6 +24405,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -23775,6 +24428,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -23796,6 +24451,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -23807,6 +24464,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -24192,6 +24851,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -24213,6 +24874,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -24234,6 +24897,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -24255,6 +24920,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -24276,6 +24943,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -24297,6 +24966,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -24308,6 +24979,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -24686,6 +25359,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -24707,6 +25382,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -24728,6 +25405,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -24749,6 +25428,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -24770,6 +25451,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -24791,6 +25474,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -24802,6 +25487,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -25179,6 +25866,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -25200,6 +25889,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -25221,6 +25912,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -25242,6 +25935,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -25263,6 +25958,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -25284,6 +25981,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -25295,6 +25994,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -25687,6 +26388,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -25708,6 +26411,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -25729,6 +26434,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -25750,6 +26457,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -25771,6 +26480,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -25792,6 +26503,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -25803,6 +26516,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -26189,6 +26904,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -26210,6 +26927,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -26231,6 +26950,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -26252,6 +26973,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -26273,6 +26996,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -26294,6 +27019,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -26305,6 +27032,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -26689,6 +27418,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -26710,6 +27441,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -26731,6 +27464,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -26752,6 +27487,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -26773,6 +27510,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -26794,6 +27533,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -26805,6 +27546,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -27200,6 +27943,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -27221,6 +27966,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -27242,6 +27989,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -27263,6 +28012,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -27284,6 +28035,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -27305,6 +28058,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -27316,6 +28071,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -27713,6 +28470,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -27734,6 +28493,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -27755,6 +28516,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -27776,6 +28539,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -27797,6 +28562,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -27818,6 +28585,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -27829,6 +28598,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -28214,6 +28985,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-3 success: 	1
 DROP TRIGGER trg_1;
@@ -28235,6 +29008,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-4 success: 	1
 DROP TRIGGER trg_1;
@@ -28256,6 +29031,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-5 success: 	1
 DROP TRIGGER trg_1;
@@ -28277,6 +29054,8 @@ f_charbig = 'updated by trigger'
 END|
 UPDATE t0_aux SET f_int1 =  - f_int1, f_int2 = - f_int2
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-6 success: 	1
 DROP TRIGGER trg_1;
@@ -28298,6 +29077,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-7 success: 	1
 DROP TRIGGER trg_1;
@@ -28319,6 +29100,8 @@ f_charbig = 'updated by trigger'
 END|
 DELETE FROM t0_aux
 WHERE f_int1 IN (- (@max_row_div2 - 1),- @max_row_div2,- (@max_row_div2 + 1));
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 	
 # check trigger-8 success: 	1
 DROP TRIGGER trg_1;
@@ -28330,6 +29113,8 @@ DELETE FROM t0_aux
 WHERE ABS(f_int1) BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
 DELETE FROM t1
 WHERE f_int1 BETWEEN @max_row_div2 - 1 AND @max_row_div2 + 1;
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MEMORY is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MEMORY table test.t0_aux.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = old.f_int1 + @max_row,
@@ -28431,3 +29216,4 @@ DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t0_aux;
 DROP TABLE IF EXISTS t0_definition;
 DROP TABLE IF EXISTS t0_template;
+include/rpl/set_gtid_mode_on.inc

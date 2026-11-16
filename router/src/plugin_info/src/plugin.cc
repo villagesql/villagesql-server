@@ -67,7 +67,7 @@ void Plugin_info::print_as_json(std::ostream &out_stream) const {
   writer.StartObject();
 
   writer.Key("abi-version");
-  std::string abi_version_str = get_abi_version_str(abi_version);
+  std::string const abi_version_str = get_abi_version_str(abi_version);
   writer.String(abi_version_str.c_str());
 
   writer.Key("arch-descriptor");
@@ -77,7 +77,7 @@ void Plugin_info::print_as_json(std::ostream &out_stream) const {
   writer.String(brief.c_str());
 
   writer.Key("plugin-version");
-  std::string plugin_version_str = get_plugin_version_str(plugin_version);
+  std::string const plugin_version_str = get_plugin_version_str(plugin_version);
   writer.String(plugin_version_str.c_str());
 
   writer.Key("requires");

@@ -37,5 +37,7 @@ MYSQL_ADD_PLUGIN(clone
   src/clone_os.cc
   src/clone_hton.cc
   MODULE_ONLY
+  LINK_LIBRARIES
+    extra::rapidjson
   MODULE_OUTPUT_NAME "mysql_clone"
   )

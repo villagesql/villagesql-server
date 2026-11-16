@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #define MYSQL_STORED_PROGRAM_IMP_H
 
 #include <cstdint>
+#include "mysql/components/services/mysql_string.h"
 
 #include <mysql/components/service_implementation.h>
 #include <mysql/components/services/mysql_stored_program.h>
@@ -147,6 +148,14 @@ class mysql_stored_program_runtime_argument_string_imp {
                              size_t length));
 };
 
+class mysql_stored_program_runtime_argument_string_charset_imp {
+ public:
+  static DEFINE_BOOL_METHOD(set,
+                            (stored_program_runtime_context sp_runtime_context,
+                             uint16_t index, char const *string, size_t length,
+                             CHARSET_INFO_h charset));
+};
+
 class mysql_stored_program_runtime_argument_int_imp {
  public:
   static DEFINE_BOOL_METHOD(get,
@@ -232,6 +241,14 @@ class mysql_stored_program_return_value_string_imp {
                              char const *string, size_t length));
 };
 
+class mysql_stored_program_return_value_string_charset_imp {
+ public:
+  static DEFINE_BOOL_METHOD(set,
+                            (stored_program_runtime_context sp_runtime_context,
+                             char const *string, size_t length,
+                             CHARSET_INFO_h charset));
+};
+
 class mysql_stored_program_return_value_int_imp {
  public:
   static DEFINE_BOOL_METHOD(set,
@@ -261,4 +278,16 @@ class mysql_stored_program_external_program_handle_imp {
   static DEFINE_BOOL_METHOD(set, (stored_program_handle sp,
                                   external_program_handle value));
 };
+
+class mysql_stored_program_import_metadata_query_imp {
+ public:
+  static DEFINE_BOOL_METHOD(get,
+                            (stored_program_handle sp_handle, uint32_t index,
+                             mysql_cstring_with_length *schema_name,
+                             mysql_cstring_with_length *library_name,
+                             mysql_cstring_with_length *version,
+                             mysql_cstring_with_length *alias,
+                             void *extension));
+};
+
 #endif /* MYSQL_STORED_PROGRAM_IMP_H */

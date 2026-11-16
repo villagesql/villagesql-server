@@ -33,9 +33,9 @@
 # The intention behind convenience libraries is simplify the build and to
 # reduce excessive recompiles.
 
-# Except for convenience libraries, this file provides macros to merge static
-# libraries (we need it for mysqlclient) and to create shared library out of
-# convenience libraries(again, for mysqlclient)
+# Except for convenience libraries, this file provides macros to merge static 
+# libraries (we need it for perconaserverclient) and to create shared library out of 
+# convenience libraries(again, for perconaserverclient)
 
 # CREATE_EXPORT_FILE (VAR target api_functions)
 # Internal macro, used on Windows to export API functions as dllexport.
@@ -294,9 +294,9 @@ MACRO(MERGE_LIBRARIES_SHARED TARGET_ARG)
     # --Wl,--no-whole-archive, but is more focused.
     FOREACH(SYMBOL ${ARG_EXPORTS})
       IF(APPLE)
-        SET(export_link_flags "${export_link_flags} -Wl,-u,_${SYMBOL}")
+        LIST(APPEND export_link_flags "-Wl,-u,_${SYMBOL}")
       ELSE()
-        SET(export_link_flags "${export_link_flags} -Wl,-u,${SYMBOL}")
+        LIST(APPEND export_link_flags "-Wl,-u,${SYMBOL}")
       ENDIF()
     ENDFOREACH()
   ENDIF()
@@ -361,7 +361,7 @@ MACRO(MERGE_LIBRARIES_SHARED TARGET_ARG)
     TARGET_LINK_OPTIONS(${TARGET} PRIVATE LINKER:-no_warn_duplicate_libraries)
   ENDIF()
 
-  MY_TARGET_LINK_OPTIONS(${TARGET} "${export_link_flags}")
+  TARGET_LINK_OPTIONS(${TARGET} PRIVATE ${export_link_flags})
 
   IF(APPLE_WITH_CUSTOM_SSL)
     SET_PATH_TO_CUSTOM_SSL_FOR_APPLE(${TARGET})
@@ -575,6 +575,7 @@ ENDMACRO(MERGE_CONVENIENCE_LIBRARIES)
 FUNCTION(ADD_SHARED_LIBRARY TARGET_ARG)
   SET(LIBRARY_OPTIONS
     EXCLUDE_FROM_ALL
+    EXCLUDE_FROM_PGO
     NO_UNDEFINED
     SKIP_INSTALL
     NAMELINK_SKIP
@@ -603,6 +604,12 @@ FUNCTION(ADD_SHARED_LIBRARY TARGET_ARG)
     ${ARGN}
     )
 
+  IF(ARG_EXCLUDE_FROM_PGO)
+    IF(FPROFILE_GENERATE)
+      RETURN()
+    ENDIF()
+  ENDIF()
+
   SET(TARGET ${TARGET_ARG})
   SET(SOURCES ${ARG_UNPARSED_ARGUMENTS})
 
@@ -628,7 +635,7 @@ FUNCTION(ADD_SHARED_LIBRARY TARGET_ARG)
   ENDIF()
 
   IF(ARG_NO_UNDEFINED AND LINK_FLAG_NO_UNDEFINED)
-    MY_TARGET_LINK_OPTIONS(${TARGET} "${LINK_FLAG_NO_UNDEFINED}")
+    TARGET_LINK_OPTIONS(${TARGET} PRIVATE ${LINK_FLAG_NO_UNDEFINED})
   ENDIF()
 
   IF(NOT ARG_SKIP_INSTALL)
@@ -674,8 +681,8 @@ FUNCTION(ADD_SHARED_LIBRARY TARGET_ARG)
   ENDIF()
 
   IF(LINUX AND ARG_LINUX_VERSION_SCRIPT)
-    MY_TARGET_LINK_OPTIONS(${TARGET}
-      "LINKER:--version-script=${ARG_LINUX_VERSION_SCRIPT}")
+    TARGET_LINK_OPTIONS(${TARGET} PRIVATE
+      LINKER:--version-script=${ARG_LINUX_VERSION_SCRIPT})
     SET_TARGET_PROPERTIES(${TARGET}
       PROPERTIES LINK_DEPENDS ${ARG_LINUX_VERSION_SCRIPT}
       )
@@ -686,7 +693,7 @@ FUNCTION(ADD_SHARED_LIBRARY TARGET_ARG)
     # Bug in cmake Visual Studio generator:
     # https://gitlab.kitware.com/cmake/cmake/-/issues/19618
     IF(WIN32 AND CMAKE_GENERATOR MATCHES "Visual Studio")
-      MY_TARGET_LINK_OPTIONS(${TARGET} "/VERSION:${ARG_VERSION}")
+      TARGET_LINK_OPTIONS(${TARGET} PRIVATE /VERSION:${ARG_VERSION})
     ENDIF()
   ENDIF()
 
@@ -699,7 +706,7 @@ FUNCTION(ADD_SHARED_LIBRARY TARGET_ARG)
       "${RUNTIME_DIR}/${CMAKE_CFG_INTDIR}/$<TARGET_FILE_NAME:${TARGET}>"
       )
     IF(ARG_WIN_DEF_FILE)
-      MY_TARGET_LINK_OPTIONS(${TARGET} "/DEF:${ARG_WIN_DEF_FILE}")
+      TARGET_LINK_OPTIONS(${TARGET} PRIVATE /DEF:${ARG_WIN_DEF_FILE})
     ENDIF()
   ENDIF()
 

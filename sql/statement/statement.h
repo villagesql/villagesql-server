@@ -48,9 +48,24 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 */
 int dummy_function_to_ensure_we_are_linked_into_the_server();
 
+/// Max limit for Regular Statement Handles in use.
+static constexpr unsigned short MAX_REGULAR_STATEMENT_HANDLES_LIMIT{1024};
+
 /**
- * @brief
- * Statement_handle is extension of Ed_connection. Some of the
+  Number of PSI_statement_info instruments for Statement handles.
+*/
+#define STMT_HANDLE_PSI_STATEMENT_INFO_COUNT 6
+
+#ifdef HAVE_PSI_INTERFACE
+/**
+  Initializes Statement Handles PFS statement instrumentation information
+  instances.
+*/
+void init_statement_handle_interface_psi_keys();
+#endif
+
+/**
+ * @brief Statement_handle is similar to Ed_connection. Some of the
  * limitations in Ed_connection is that,
  * - It does not support reading result metadata
  * - It does not support prepared statement, parameters and cursors.
@@ -79,7 +94,7 @@ class Statement_handle {
    *
    * @return true of error is reported.
    */
-  const char *get_last_error() {
+  LEX_CSTRING get_last_error() {
     assert(is_error());
     return convert_and_store(&m_warning_mem_root,
                              m_diagnostics_area->message_text(),
@@ -102,7 +117,7 @@ class Statement_handle {
    *
    * @return const char*
    */
-  const char *get_mysql_state() {
+  LEX_CSTRING get_mysql_state() {
     assert(is_error());
     return convert_and_store(&m_warning_mem_root,
                              m_diagnostics_area->returned_sqlstate(),
@@ -123,6 +138,28 @@ class Statement_handle {
    * @return Warning*
    */
   Warning *get_warnings();
+
+  /**
+   * @brief Set the flag to indicate clear diagnostics area on successful
+   *        execution of a statement.
+   *
+   * @param clear_da  If false, the diagnostics area is not cleared on
+   *                  successful execution of a statement. Otherwise, the
+   *                  diagnostics area is cleared.
+   */
+  void set_clear_diagnostics_area_on_success(bool clear_da) {
+    m_clear_diagnostics_area_on_success = clear_da;
+  }
+
+  /**
+   * @brief Get value of a flag which indicates whether diagnostics area should
+   *        be cleared on successful execution of a statement or not.
+   *
+   * @returns Value of a flag.
+   */
+  bool clear_diagnostics_area_on_success() const {
+    return m_clear_diagnostics_area_on_success;
+  }
 
   /**
    * @brief Get the next result sets generated while executing the statement.
@@ -283,11 +320,17 @@ class Statement_handle {
   // The query being executed.
   std::string m_query;
 
-  // Details about error or warning occured.
+  // Details about error or warning occurred.
   MEM_ROOT m_warning_mem_root;
   Warning *m_warnings;
   ulonglong m_warnings_count = 0;
+
   Diagnostics_area *m_diagnostics_area;
+
+  /// Flag to indicate if diagnostics area should be cleared or retained on
+  /// successful execution of a statement.
+  /// If retained, then user of this class should manage diagnostics area.
+  bool m_clear_diagnostics_area_on_success{true};
 
   // The thread executing the statement.
   THD *m_thd;
@@ -347,6 +390,10 @@ class Regular_statement_handle : public Statement_handle {
   Regular_statement_handle(THD *thd, const char *query, uint length)
       : Statement_handle(thd, query, length) {}
 
+  ~Regular_statement_handle() override {
+    if (m_is_executed) m_thd->m_regular_statement_handle_count--;
+  }
+
   /**
    * @brief Execute a regular statement.
    *
@@ -370,9 +417,14 @@ class Regular_statement_handle : public Statement_handle {
    */
   bool is_executed_or_prepared() override { return m_is_executed; }
 
+ public:
+#ifdef HAVE_PSI_INTERFACE
+  // PSI_statement_info instances for regular statement handle.
+  static PSI_statement_info stmt_psi_info;
+#endif
+
  private:
-  // Flag to show whether statement has been executed. Change to true after
-  // execute is called
+  /// Flag to indicate if statement has been executed. Set to true in execute().
   bool m_is_executed = false;
 
   // Used by execute() above.
@@ -541,6 +593,15 @@ class Prepared_statement_handle : public Statement_handle {
    */
   virtual ~Prepared_statement_handle() override { internal_close(); }
 
+#ifdef HAVE_PSI_INTERFACE
+  // PSI_statement_info instances for prepared statement handle.
+  static PSI_statement_info prepare_psi_info;
+  static PSI_statement_info execute_psi_info;
+  static PSI_statement_info fetch_psi_info;
+  static PSI_statement_info reset_psi_info;
+  static PSI_statement_info close_psi_info;
+#endif
+
  private:
   /**
    * @brief This is a wrapper function used to execute
@@ -550,11 +611,13 @@ class Prepared_statement_handle : public Statement_handle {
    *
    * @tparam Function type of function to run
    * @param exec_func function to run
+   * @param psi_info  PSI_statement_info instance.
+   *
    * @return true
    * @return false
    */
   template <typename Function>
-  bool run(Function exec_func);
+  bool run(Function exec_func, PSI_statement_info *psi_info);
 
   // See prepare()
   bool internal_prepare();

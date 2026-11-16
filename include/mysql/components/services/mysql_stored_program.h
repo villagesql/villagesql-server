@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #define MYSQL_STORED_PROGRAM_H
 
 #include <mysql/components/service.h>
+#include <mysql/components/services/mysql_string.h>
 #include <cstddef>  // size_t
 #include <cstdint>  // intXX_t
 #include "bits/mysql_stored_program_bits.h"
@@ -55,6 +56,7 @@ BEGIN_SERVICE_DEFINITION(mysql_stored_program_metadata_query)
   "sp_body"        -> mysql_cstring_with_length *
   "sp_type"        -> uint16_t
   "argument_count" -> uint32_t
+  "import_count"   -> uint32_t
 
   @param [in]  sp_handle Handle to stored procedure structure
   @param [in]  key       Metadata name
@@ -438,7 +440,7 @@ DECLARE_BOOL_METHOD(get, (stored_program_runtime_context sp_runtime_context,
                           uint16_t index, char const **value, size_t *length,
                           bool *is_null));
 /**
-  Set value of a string argument
+  Set value of a string argument with utf8mb4 as charset
 
   @param [in] sp_runtime_context  stored program runtime context.
                                   If null, current runtime context will be
@@ -456,6 +458,27 @@ DECLARE_BOOL_METHOD(set, (stored_program_runtime_context sp_runtime_context,
                           uint16_t index, char const *string, size_t length));
 
 END_SERVICE_DEFINITION(mysql_stored_program_runtime_argument_string)
+
+BEGIN_SERVICE_DEFINITION(mysql_stored_program_runtime_argument_string_charset)
+/**
+  Set value of a string argument
+
+  @param [in] sp_runtime_context  stored program runtime context.
+                                  If null, current runtime context will be
+                                  used.
+  @param [in] index               Argument position
+  @param [in] string              Value of the argument
+  @param [in] length              Length of the string
+  @param [in] charset             The character set of the string
+
+  @returns Status of operation
+  @retval false Success
+  @retval true  Error
+*/
+DECLARE_BOOL_METHOD(set, (stored_program_runtime_context sp_runtime_context,
+                          uint16_t index, char const *string, size_t length,
+                          CHARSET_INFO_h charset));
+END_SERVICE_DEFINITION(mysql_stored_program_runtime_argument_string_charset)
 
 BEGIN_SERVICE_DEFINITION(mysql_stored_program_runtime_argument_int)
 
@@ -718,7 +741,7 @@ END_SERVICE_DEFINITION(mysql_stored_program_return_value_null)
 BEGIN_SERVICE_DEFINITION(mysql_stored_program_return_value_string)
 
 /**
-  Set value of a string return value
+  Set value of a string return value with utf8mb4 as charset
 
   @param [in] sp_runtime_context  stored program runtime context.
                                   If null, current runtime context will be
@@ -735,6 +758,26 @@ DECLARE_BOOL_METHOD(set, (stored_program_runtime_context sp_runtime_context,
                           char const *string, size_t length));
 
 END_SERVICE_DEFINITION(mysql_stored_program_return_value_string)
+
+BEGIN_SERVICE_DEFINITION(mysql_stored_program_return_value_string_charset)
+/**
+  Set value of a string return value
+
+  @param [in] sp_runtime_context  stored program runtime context.
+                                  If null, current runtime context will be
+                                  used.
+  @param [in] string              Value of the argument
+  @param [in] length              Length of the string
+  @param [in] charset             The character set of the input string
+
+  @returns Status of operation
+  @retval false Success
+  @retval true  Error
+*/
+DECLARE_BOOL_METHOD(set, (stored_program_runtime_context sp_runtime_context,
+                          char const *string, size_t length,
+                          CHARSET_INFO_h charset));
+END_SERVICE_DEFINITION(mysql_stored_program_return_value_string_charset)
 
 BEGIN_SERVICE_DEFINITION(mysql_stored_program_return_value_int)
 
@@ -885,4 +928,33 @@ DECLARE_BOOL_METHOD(set,
                     (stored_program_handle sp, external_program_handle value));
 
 END_SERVICE_DEFINITION(mysql_stored_program_external_program_handle)
+
+/*
+ * Import-related services:
+ */
+BEGIN_SERVICE_DEFINITION(mysql_stored_program_import_metadata_query)
+
+/**
+  Get stored program import metadata
+
+  @param [in]  sp_handle      Handle to stored procedure structure
+  @param [in]  index          Argument index
+  @param [out] schema_name    Name of the schema where library is defined
+  @param [out] library_name   Name of the library
+  @param [out] version        Version of the library
+  @param [out] alias          Alias, if provided. Returns nullptr if not
+  @param [out] extension      Not used
+
+  @returns status of get operation
+  @retval false Success
+  @retval true  Failure
+*/
+DECLARE_BOOL_METHOD(get, (stored_program_handle sp_handle, uint32_t index,
+                          mysql_cstring_with_length *schema_name,
+                          mysql_cstring_with_length *library_name,
+                          mysql_cstring_with_length *version,
+                          mysql_cstring_with_length *alias, void *extension));
+
+END_SERVICE_DEFINITION(mysql_stored_program_import_metadata_query)
+
 #endif /* MYSQL_STORED_PROGRAM_H */

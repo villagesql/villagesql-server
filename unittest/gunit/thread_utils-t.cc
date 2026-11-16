@@ -60,8 +60,8 @@ class NotificationThread : public Thread {
   Notification *m_end_notification;
   int *m_counter;
 
-  NotificationThread(const NotificationThread &);  // Not copyable.
-  void operator=(const NotificationThread &);      // Not assignable.
+  NotificationThread(const NotificationThread &) = delete;  // Not copyable.
+  void operator=(const NotificationThread &) = delete;      // Not assignable.
 };
 
 /*

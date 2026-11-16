@@ -36,9 +36,6 @@ SET(TESTS
   grow_calculator
   gtids
   heartbeat_codec
-  managed_buffer
-  managed_buffer_sequence
-  rw_buffer_sequence
   payload_event_buffer_istream
   transaction_compression
   transaction_payload_codec
@@ -54,10 +51,10 @@ FOREACH(test ${TESTS})
 ENDFOREACH()
 
 SET(SRC_FILES
-gtid_set-t.cc)
+  legacy_gtid_set-t.cc)
 
-MYSQL_ADD_EXECUTABLE(gtid_set-t ${SRC_FILES}
-  ADD_TEST gtid_set
+MYSQL_ADD_EXECUTABLE(legacy_gtid_set-t ${SRC_FILES}
+  ADD_TEST legacy_gtid_set
   LINK_LIBRARIES gunit_large server_unittest_library
   COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}")
 

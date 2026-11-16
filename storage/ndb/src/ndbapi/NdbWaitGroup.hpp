@@ -123,7 +123,7 @@ class NdbWaitGroup : private NdbLockable {
   Ndb *m_wakeNdb;
 
  private:
-  void resize_list(void);
+  void resize_list();
 };
 
 #endif

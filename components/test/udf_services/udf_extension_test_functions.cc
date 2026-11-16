@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "udf_extension_test_functions.h"
-#include <string.h>
+#include <cstring>
 #include "test_udf_extension.h"
 
 using namespace udf_ext;

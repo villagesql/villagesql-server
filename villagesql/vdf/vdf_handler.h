@@ -51,7 +51,8 @@ class vdf_handler {
 
   // Aggregate methods - called by udf_handler for aggregate VDFs
   void clear();
-  void accumulate(bool *null_value);
+  // Returns true if the VDF reported an error (already raised)
+  bool accumulate(bool *null_value);
 
   // Value accessors - called by udf_handler when is_vdf() is true
   double val_real(bool *null_value);

@@ -808,6 +808,22 @@ extern SERVICE_TYPE(log_builtins_string) * log_bs;
       .function(__FUNCTION__)        \
       .lookup(ecode, ##__VA_ARGS__)
 
+#ifdef HAVE_LOG_DIAGNOSTIC
+#define LogDiag(severity, ecode, ...) \
+  LogEvent()                          \
+      .prio(severity)                 \
+      .errcode(ecode)                 \
+      .subsys(LOG_SUBSYSTEM_TAG)      \
+      .component(LOG_COMPONENT_TAG)   \
+      .source_line(__LINE__)          \
+      .source_file(MY_BASENAME)       \
+      .function(__FUNCTION__)         \
+      .type(LOG_TYPE_DIAG)            \
+      .lookup(ecode, ##__VA_ARGS__)
+#else
+#define LogDiag(...)
+#endif /* HAVE_LOG_DIAGNOSTIC */
+
 #define LogComponentErr(severity, ecode, ...)                           \
   LogEvent()                                                            \
       .prio(severity)                                                   \
@@ -866,6 +882,20 @@ extern SERVICE_TYPE(log_builtins_string) * log_bs;
       .function(__FUNCTION__)        \
       .lookup(ecode, ##__VA_ARGS__)
 
+#ifdef HAVE_LOG_DIAGNOSTIC
+#define LogDiag(severity, ecode, ...) \
+  LogEvent()                          \
+      .prio(severity)                 \
+      .errcode(ecode)                 \
+      .subsys(LOG_SUBSYSTEM_TAG)      \
+      .source_line(__LINE__)          \
+      .source_file(MY_BASENAME)       \
+      .function(__FUNCTION__)         \
+      .type(LOG_TYPE_DIAG)            \
+      .lookup(ecode, ##__VA_ARGS__)
+#else
+#define LogDiag(...)
+#endif /* HAVE_LOG_DIAGNOSTIC */
 #endif
 
 #else
@@ -1382,12 +1412,30 @@ class LogEvent {
   */
   LogEvent &message_quoted(const char *tag, const char *fmt, ...)
       MY_ATTRIBUTE((format(printf, 3, 4))) {
-    msg_tag = tag;
-
     va_list args;
     va_start(args, fmt);
-    set_message(fmt, args);
+    message_quotedv(tag, fmt, args);
     va_end(args);
+
+    return *this;
+  }
+
+  /**
+    Fill in a format string by substituting the % with the given
+    arguments and tag, then add the result as the event's message.
+
+    @param  tag  Tag to prefix to message.
+    @param  fmt  message (treated as a printf-style format-string,
+                 so % substitution will happen)
+    @param  args varargs to satisfy any % in the message
+
+    @retval      the LogEvent, for easy fluent-style chaining.
+  */
+  LogEvent &message_quotedv(const char *tag, const char *fmt, va_list args)
+      MY_ATTRIBUTE((format(printf, 3, 0))) {
+    msg_tag = tag;
+
+    set_message(fmt, args);
 
     return *this;
   }

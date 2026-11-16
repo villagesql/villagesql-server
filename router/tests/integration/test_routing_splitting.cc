@@ -42,11 +42,14 @@
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
 
+#ifdef RAPIDJSON_NO_SIZETYPEDEFINE
 #include "my_rapidjson_size_t.h"
+#endif
 
 #include <rapidjson/pointer.h>
 
 #include "hexify.h"
+#include "idc_metadata_schema.h"
 #include "mysql/harness/filesystem.h"
 #include "mysql/harness/net_ts/impl/socket.h"
 #include "mysql/harness/stdx/expected.h"
@@ -440,8 +443,7 @@ class TestEnv : public ::testing::Environment {
         GTEST_SKIP() << "mysql-server failed to start.";
       }
 
-      seeds.emplace_back(srv->server_host() + ":"s +
-                         std::to_string(srv->server_port()));
+      seeds.emplace_back(srv->classic_tcp_destination().str());
     }
 
     for (auto [ndx, srv] : stdx::views::enumerate(shared_servers_)) {
@@ -450,6 +452,14 @@ class TestEnv : public ::testing::Environment {
       ASSERT_NO_ERROR(cli_res);
 
       auto cli = std::move(*cli_res);
+
+      auto install_res = SharedServer::local_install_plugin(
+          cli, "authentication_openid_connect");
+      if (install_res) srv->has_openid_connect(true);
+
+      if (srv->has_openid_connect()) {
+        ASSERT_NO_ERROR(SharedServer::local_set_openid_connect_config(cli));
+      }
 
       for (const auto &stmt :
            gr_node_init_stmts(ndx == 0 ? std::vector<std::string>{} : seeds)) {
@@ -474,30 +484,12 @@ class TestEnv : public ::testing::Environment {
     ASSERT_NO_ERROR(primary_cli_res);
     auto primary_cli = std::move(*primary_cli_res);
 
-    std::stringstream ss;
-    {
-      std::ifstream ifs(ProcessManager::get_data_dir()
-                            .join("metadata-model-2.1.0.sql")
-                            .str());
-
-      ASSERT_TRUE(ifs.good());
-      ss << ifs.rdbuf();
-    }
-
-    auto &proc_mgr = srv->process_manager();
-    {
-      auto &mysql_proc =
-          proc_mgr.spawner(proc_mgr.get_origin().join("mysql").str())
-              .wait_for_sync_point(ProcessManager::Spawner::SyncPoint::NONE)
-              .spawn({"--host", "127.0.0.1", "--port",
-                      std::to_string(srv->server_port()), "--user", "root",
-                      "--password=", "-e",
-                      "source " + ProcessManager::get_data_dir()
-                                      .join("metadata-model-2.1.0.sql")
-                                      .str()});
-      ASSERT_NO_THROW(mysql_proc.wait_for_exit(20s))
-          << mysql_proc.get_current_output();
-      ASSERT_EQ(mysql_proc.exit_code(), 0) << mysql_proc.get_full_output();
+    // create a metadata schema
+    const char **query_ptr;
+    for (query_ptr = &idc_metadata_schema[0]; *query_ptr != nullptr;
+         query_ptr++) {
+      const std::string query{*query_ptr};
+      ASSERT_NO_ERROR(primary_cli.query(query));
     }
 
     // create a cluster
@@ -528,10 +520,8 @@ class TestEnv : public ::testing::Environment {
       auto row = (*query_res)[0];
       auto [server_uuid, server_id] = std::make_pair(row[0], row[1]);
 
-      auto server_classic_address =
-          srv->server_host() + ":"s + std::to_string(srv->server_port());
-      auto server_x_address =
-          srv->server_host() + ":"s + std::to_string(srv->server_mysqlx_port());
+      auto server_classic_address = srv->classic_tcp_destination().str();
+      auto server_x_address = srv->x_tcp_destination().str();
 
       // add this instance to the cluster.
       ASSERT_NO_ERROR(primary_cli.query(
@@ -576,10 +566,10 @@ class TestEnv : public ::testing::Environment {
               return "";
             })
             .spawn({"--bootstrap",
-                    "root@127.0.0.1:" + std::to_string(srv->server_port()),
-                    "--account", "router",         //
-                    "--report-host", "127.0.0.1",  //
-                    "-d", router_dir_.name(),      //
+                    "root@" + srv->classic_tcp_destination().str(),  //
+                    "--account", "router",                           //
+                    "--report-host", "127.0.0.1",                    //
+                    "-d", router_dir_.name(),                        //
                     "--conf-set-option",
                     "DEFAULT.plugin_folder=" +
                         ProcessManager::get_plugin_dir().str()});
@@ -588,14 +578,24 @@ class TestEnv : public ::testing::Environment {
     ASSERT_EQ(bootstrap_proc.exit_code(), 0)
         << bootstrap_proc.get_full_output();
 
-    srv->setup_mysqld_accounts();
-
     // create a table used for insert/update/select.
     auto primary_cli_res = srv->admin_cli();
     ASSERT_NO_ERROR(primary_cli_res);
     auto primary_cli = std::move(*primary_cli_res);
 
+    SharedServer::setup_mysqld_accounts(primary_cli);
     ASSERT_NO_ERROR(primary_cli.query("CREATE TABLE testing.t1 (id SERIAL)"));
+
+    if (srv->has_openid_connect()) {
+      auto account = SharedServer::openid_connect_account();
+
+      ASSERT_NO_FATAL_FAILURE(
+          SharedServer::create_account(primary_cli, account));
+      ASSERT_NO_FATAL_FAILURE(SharedServer::grant_access(
+          primary_cli, account, "SELECT", "performance_schema"));
+      ASSERT_NO_FATAL_FAILURE(
+          SharedServer::grant_access(primary_cli, account, "ALL", "testing"));
+    }
   }
 
   std::array<SharedServer *, 3> servers() { return shared_servers_; }
@@ -605,12 +605,6 @@ class TestEnv : public ::testing::Environment {
   [[nodiscard]] bool run_slow_tests() const { return run_slow_tests_; }
 
   void TearDown() override {
-    if (testing::Test::HasFailure()) {
-      for (auto &srv : shared_servers_) {
-        srv->process_manager().dump_logs();
-      }
-    }
-
     for (auto &srv : shared_servers_) {
       if (srv == nullptr || srv->mysqld_failed_to_start()) continue;
 
@@ -918,7 +912,14 @@ class SplittingConnectionTestBaseP : public RouterComponentTest {
                                          shared_servers(), kMaxPoolSize);
   }
 
-  static void TearDownTestSuite() { TestWithSharedRouter::TearDownTestSuite(); }
+  static void TearDownTestSuite() {
+    TestWithSharedRouter::TearDownTestSuite();
+    if (testing::Test::HasFailure()) {
+      for (const auto &srv : shared_servers()) {
+        srv->process_manager().dump_logs();
+      }
+    }
+  }
 
   static std::array<SharedServer *, kNumServers> shared_servers() {
     std::array<SharedServer *, kNumServers> srvs;
@@ -936,6 +937,13 @@ class SplittingConnectionTestBaseP : public RouterComponentTest {
   static SharedRouter *shared_router() {
     return TestWithSharedRouter::router();
   }
+
+ protected:
+  static void wait_for_empty_router_connection_pool() {
+    ASSERT_NO_ERROR(shared_router()->wait_for_idle_server_connections(0, 10s));
+    ASSERT_NO_ERROR(
+        shared_router()->wait_for_stashed_server_connections(0, 10s));
+  }
 };
 
 using SplittingConnectionTestBase = SplittingConnectionTestBaseP<3, 128>;
@@ -951,9 +959,12 @@ class SplittingConnectionTest
       if (srv == nullptr || srv->mysqld_failed_to_start()) {
         GTEST_SKIP() << "failed to start mysqld";
       } else {
-        srv->close_all_connections();  // reset the router's connection-pool
+        ASSERT_NO_ERROR(srv->close_all_connections());  // reset the router's
+                                                        // connection-pool
       }
     }
+
+    ASSERT_NO_FATAL_FAILURE(wait_for_empty_router_connection_pool());
   }
 
   void TearDown() override {
@@ -2267,7 +2278,7 @@ TEST_P(SplittingConnectionTest, change_user_targets_the_current_destination) {
   MysqlClient cli;
 
   auto account = SharedServer::caching_sha2_empty_password_account();
-  auto change_user_account = SharedServer::native_empty_password_account();
+  auto change_user_account = SharedServer::caching_sha2_password_account();
 
   cli.username(account.username);
   cli.password(account.password);
@@ -2281,8 +2292,18 @@ TEST_P(SplittingConnectionTest, change_user_targets_the_current_destination) {
 
   SCOPED_TRACE("// change-user to primary");
 
-  ASSERT_NO_ERROR(cli.change_user(change_user_account.username,
-                                  change_user_account.password, ""));
+  auto change_user_res = cli.change_user(change_user_account.username,
+                                         change_user_account.password, "");
+
+  if (GetParam().client_ssl_mode == kDisabled) {
+    ASSERT_ERROR(change_user_res);
+    // Authentication plugin 'caching_sha2_password' reported error:
+    // Authentication requires secure connection.
+    EXPECT_EQ(change_user_res.error().value(), 2061);
+
+    return;
+  }
+  ASSERT_NO_ERROR(change_user_res);
 
   // executed on the secondary:
   //
@@ -2952,6 +2973,10 @@ class SplittingConnectionNoPoolTest
   void TearDown() override {
     if (HasFailure()) {
       shared_router()->process_manager().dump_logs();
+
+      for (auto &srv : shared_servers()) {
+        srv->process_manager().dump_logs();
+      }
     }
   }
 };
@@ -3128,6 +3153,191 @@ TEST_P(SplittingConnectionNoPoolTest, classic_protocol_quit_sender) {
       }
 
       EXPECT_NE(rw_port, ro_port);
+    }
+  }
+}
+
+TEST_P(SplittingConnectionNoPoolTest,
+       classic_protocol_split_after_connect_openid_connect) {
+#ifdef SKIP_AUTHENTICATION_CLIENT_PLUGINS_TESTS
+  GTEST_SKIP() << "built with WITH_AUTHENTICATION_CLIENT_PLUGINS=OFF";
+#endif
+
+  if (!shared_servers()[0]->has_openid_connect()) GTEST_SKIP();
+
+  RecordProperty("Worklog", "16466");
+  RecordProperty("Requirement", "FR6");
+  RecordProperty("Description",
+                 "check that connection via openid_connect can be shared if "
+                 "the connection is encrypted, and fails otherwise.");
+
+  SCOPED_TRACE("// create the JWT token for authentication.");
+  TempDirectory jwtdir;
+  auto id_token_res = create_openid_connect_id_token_file(
+      "openid_user1",                  // subject
+      "https://myissuer.com",          // ${identity_provider}.name
+      120,                             // expiry in seconds
+      CMAKE_SOURCE_DIR                 //
+      "/router/tests/component/data/"  //
+      "openid_key.pem",                // private-key of the identity-provider
+      jwtdir.name()                    // out-dir
+  );
+  ASSERT_NO_ERROR(id_token_res);
+
+  auto id_token = *id_token_res;
+
+  SCOPED_TRACE("// setup mysql connection");
+
+  MysqlClient cli;
+
+  auto account = SharedServer::openid_connect_account();
+
+  SCOPED_TRACE(
+      "// set the JWT-token in the authentication_openid_connect_client "
+      "plugin.");
+
+  cli.set_option(MysqlClient::PluginDir(plugin_output_directory().c_str()));
+
+  auto plugin_res = cli.find_plugin("authentication_openid_connect_client",
+                                    MYSQL_CLIENT_AUTHENTICATION_PLUGIN);
+  ASSERT_NO_ERROR(plugin_res);
+
+  plugin_res->set_option(
+      MysqlClient::Plugin::StringOption("id-token-file", id_token.c_str()));
+
+  SCOPED_TRACE("// connecting to server");
+
+  cli.username(account.username);
+  cli.password(account.password);
+
+  auto connect_res =
+      cli.connect(shared_router()->host(), shared_router()->port(GetParam()));
+
+  if (GetParam().client_ssl_mode == kDisabled ||
+      GetParam().server_ssl_mode == kDisabled) {
+    // should fail as the connection is not secure.
+    ASSERT_ERROR(connect_res);
+    if (GetParam().server_ssl_mode == kDisabled ||
+        GetParam().server_ssl_mode == kAsClient) {
+      EXPECT_EQ(connect_res.error().value(), 1045);
+    } else {
+      EXPECT_EQ(connect_res.error().value(), 2000);
+    }
+
+    return;
+  }
+
+  ASSERT_NO_ERROR(connect_res);
+
+  ASSERT_NO_ERROR(shared_router()->wait_for_stashed_server_connections(1, 10s));
+
+  SCOPED_TRACE("// detect the port of the PRIMARY");
+
+  std::string primary_port;
+
+  {
+    auto query_res = query_one_result(
+        cli, "SELECT * FROM performance_schema.replication_group_members");
+    ASSERT_NO_ERROR(query_res);
+
+    // 3 nodes
+    // - a PRIMARY and 2 SECONDARY
+    // - all ONLINE
+    EXPECT_THAT(
+        *query_res,
+        UnorderedElementsAre(
+            ElementsAre("group_replication_applier", testing::_, "127.0.0.1",
+                        testing::_, "ONLINE", "PRIMARY", testing::_, "MySQL"),
+            ElementsAre("group_replication_applier", testing::_, "127.0.0.1",
+                        testing::_, "ONLINE", "SECONDARY", testing::_, "MySQL"),
+            ElementsAre("group_replication_applier", testing::_, "127.0.0.1",
+                        testing::_, "ONLINE", "SECONDARY", testing::_,
+                        "MySQL")));
+
+    // find the port of the current PRIMARY.
+    for (auto const &row : *query_res) {
+      if (row[5] == "PRIMARY") primary_port = row[3];
+    }
+  }
+  ASSERT_THAT(primary_port, ::testing::Not(::testing::IsEmpty()));
+
+  // enable tracing to detect if the query went to the primary or secondary.
+  ASSERT_NO_ERROR(cli.query("ROUTER SET trace = 1"));
+
+  SCOPED_TRACE("// clean up from earlier runs");
+  ASSERT_NO_ERROR(cli.query("TRUNCATE TABLE testing.t1"));
+
+  {
+    auto query_res = query_one_result(cli, "SHOW WARNINGS");
+    ASSERT_NO_ERROR(query_res);
+    ASSERT_THAT(*query_res, ElementsAre(::testing::SizeIs(3)));
+
+    auto json_trace = query_res->operator[](0)[2];
+
+    rapidjson::Document doc;
+    doc.Parse(json_trace.data(), json_trace.size());
+
+    for (const auto &[pntr, val] : {
+             std::pair{"/name", rapidjson::Value("mysql/query")},
+             std::pair{"/attributes/mysql.sharing_blocked",
+                       rapidjson::Value(false)},
+             std::pair{"/events/0/name",
+                       rapidjson::Value("mysql/query_classify")},
+             std::pair{"/events/0/attributes/mysql.query.classification",
+                       rapidjson::Value("accept_session_state_from_"
+                                        "session_tracker")},
+             std::pair{"/events/1/name",
+                       rapidjson::Value("mysql/connect_and_forward")},
+             std::pair{"/events/1/attributes/mysql.remote.is_connected",
+                       rapidjson::Value(false)},
+         }) {
+      ASSERT_TRUE(json_pointer_eq(doc, rapidjson::Pointer(pntr), val))
+          << json_trace;
+    }
+  }
+
+  SCOPED_TRACE("// INSERT on PRIMARY");
+  ASSERT_NO_ERROR(cli.query("INSERT INTO testing.t1 VALUES ()"));
+  {
+    auto query_res = query_one_result(cli, "SHOW WARNINGS");
+    ASSERT_NO_ERROR(query_res);
+    ASSERT_THAT(*query_res, ElementsAre(::testing::SizeIs(3)));
+
+    auto json_trace = query_res->operator[](0)[2];
+
+    rapidjson::Document doc;
+    doc.Parse(json_trace.data(), json_trace.size());
+
+    for (const auto &[pntr, val] : {
+             std::pair{"/name", rapidjson::Value("mysql/query")},
+             std::pair{"/attributes/mysql.sharing_blocked",
+                       rapidjson::Value(false)},
+             std::pair{"/events/0/name",
+                       rapidjson::Value("mysql/query_classify")},
+             std::pair{"/events/0/attributes/mysql.query.classification",
+                       rapidjson::Value("accept_session_state_from_"
+                                        "session_tracker")},
+             std::pair{"/events/1/name",
+                       rapidjson::Value("mysql/connect_and_forward")},
+             std::pair{"/events/1/attributes/mysql.remote.is_connected",
+                       rapidjson::Value(false)},
+             std::pair{"/events/1/events/0/name",
+                       rapidjson::Value("mysql/prepare_server_connection")},
+             std::pair{"/events/1/events/0/events/0/name",
+                       rapidjson::Value("mysql/from_stash")},
+             std::pair{"/events/1/events/0/events/0/attributes/"
+                       "mysql.remote.is_connected",
+                       rapidjson::Value(true)},
+             std::pair{"/events/1/events/0/events/0/attributes/"
+                       "mysql.remote.endpoint",
+                       rapidjson::Value("127.0.0.1:" + primary_port,
+                                        doc.GetAllocator())},
+             std::pair{"/events/1/events/0/events/0/attributes/"
+                       "db.name",
+                       rapidjson::Value("")},
+         }) {
+      ASSERT_TRUE(json_pointer_eq(doc, rapidjson::Pointer(pntr), val))
+          << json_trace;
     }
   }
 }

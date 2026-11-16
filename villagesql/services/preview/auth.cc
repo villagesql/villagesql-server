@@ -189,6 +189,9 @@ static bool provision_run(const std::string &sql) {
   bool failed = false;
   {
     Auto_THD provisioner;
+    // Auto_THD leaves thread_id 0; with gtid_mode=ON the commit takes GTID
+    // ownership keyed by thread_id, which must be nonzero.
+    provisioner.thd->set_new_thread_id();
     provisioner.thd->security_context()->skip_grants();
     Ed_connection conn(provisioner.thd);
     MYSQL_LEX_STRING s;
@@ -342,7 +345,7 @@ bool run_vef_provision(MPVIO_EXT *mpvio) {
   const std::string account_id =
       Auth_id(req->account, strlen(req->account), "%", 1).auth_str();
   String method_id;
-  append_identifier(&method_id, req->method, strlen(req->method));
+  append_identifier_with_backtick(&method_id, req->method, strlen(req->method));
 
   std::string create = "CREATE USER IF NOT EXISTS ";
   create.append(account_id);

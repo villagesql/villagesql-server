@@ -101,50 +101,40 @@ def					col2	253	256	16	Y	0	31	255
 def					col3	253	256	18	Y	0	31	255
 col1	col2	col3
 utf8mb4_0900_bin	utf8mb4_0900_bin	utf8mb4_0900_ai_ci
-SELECT JSON_VALUE('{"data": "2019-01-01"}', '$.data' RETURNING DATE);
+SELECT JSON_VALUE('{"data": "2019-01-01"}', '$.data' RETURNING DATE) AS d;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					JSON_VALUE('{"data": "2019-01-01"}', '$.data' RETURNING DATE)	10	40	10	Y	0	0	255
-JSON_VALUE('{"data": "2019-01-01"}', '$.data' RETURNING DATE)
+def					d	10	10	10	Y	128	0	63
+d
 2019-01-01
 SELECT JSON_VALUE(JSON_OBJECT('data', CAST( DATE'2019-01-01' AS JSON)),
-'$.data' RETURNING DATE);
+'$.data' RETURNING DATE) AS d;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					JSON_VALUE(JSON_OBJECT('data', CAST( DATE'2019-01-01' AS JSON)),
-'$.data' RETURNING DATE)	10	40	10	Y	0	0	255
-JSON_VALUE(JSON_OBJECT('data', CAST( DATE'2019-01-01' AS JSON)),
-'$.data' RETURNING DATE)
+def					d	10	10	10	Y	128	0	63
+d
 2019-01-01
-SELECT JSON_VALUE('{"data": "11:11:11"}', '$.data' RETURNING TIME);
+SELECT JSON_VALUE('{"data": "11:11:11"}', '$.data' RETURNING TIME) AS t;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					JSON_VALUE('{"data": "11:11:11"}', '$.data' RETURNING TIME)	11	40	8	Y	0	0	255
-JSON_VALUE('{"data": "11:11:11"}', '$.data' RETURNING TIME)
+def					t	11	10	8	Y	128	0	63
+t
 11:11:11
 SELECT JSON_VALUE(JSON_OBJECT('data', CAST( TIME'11:11:11' AS JSON)),
-'$.data' RETURNING TIME);
+'$.data' RETURNING TIME) AS t;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					JSON_VALUE(JSON_OBJECT('data', CAST( TIME'11:11:11' AS JSON)),
-'$.data' RETURNING TIME)	11	40	8	Y	0	0	255
-JSON_VALUE(JSON_OBJECT('data', CAST( TIME'11:11:11' AS JSON)),
-'$.data' RETURNING TIME)
+def					t	11	10	8	Y	128	0	63
+t
 11:11:11
 SELECT JSON_VALUE('{"data": "2019-01-01 11:11:11"}',
-'$.data' RETURNING DATETIME);
+'$.data' RETURNING DATETIME) AS dt;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					JSON_VALUE('{"data": "2019-01-01 11:11:11"}',
-'$.data' RETURNING DATETIME)	12	76	19	Y	0	0	255
-JSON_VALUE('{"data": "2019-01-01 11:11:11"}',
-'$.data' RETURNING DATETIME)
+def					dt	12	19	19	Y	128	0	63
+dt
 2019-01-01 11:11:11
 SELECT JSON_VALUE(
 JSON_OBJECT('data', CAST(TIMESTAMP'2019-01-01 11:11:11' AS JSON)),
-'$.data' RETURNING DATETIME);
+'$.data' RETURNING DATETIME) AS dt;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					JSON_VALUE(
-JSON_OBJECT('data', CAST(TIMESTAMP'2019-01-01 11:11:11' AS JSON)),
-'$.data' RETURNING DATETIME)	12	76	19	Y	0	0	255
-JSON_VALUE(
-JSON_OBJECT('data', CAST(TIMESTAMP'2019-01-01 11:11:11' AS JSON)),
-'$.data' RETURNING DATETIME)
+def					dt	12	19	19	Y	128	0	63
+dt
 2019-01-01 11:11:11
 SELECT JSON_VALUE('{"data": 123.45}', '$.data' RETURNING CHAR(10));
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
@@ -485,7 +475,7 @@ DEFAULT 'asdf' ON EMPTY);
 ERROR 22007: Truncated incorrect DOUBLE value: 'asdf'
 SELECT JSON_VALUE('{"data": 123}', '$.num' RETURNING DATE
 DEFAULT 'asdf' ON EMPTY);
-ERROR 22007: Incorrect datetime value: 'asdf'
+ERROR 22007: Truncated incorrect date value: 'asdf'
 SELECT JSON_VALUE('{"data": 123}', '$.num' RETURNING TIME
 DEFAULT 'asdf' ON EMPTY);
 ERROR 22007: Truncated incorrect time value: 'asdf'
@@ -517,7 +507,7 @@ DEFAULT 'asdf' ON ERROR);
 ERROR 22007: Truncated incorrect DOUBLE value: 'asdf'
 SELECT JSON_VALUE('{"data": 123}', '$.data' RETURNING DATE
 DEFAULT 'asdf' ON ERROR);
-ERROR 22007: Incorrect datetime value: 'asdf'
+ERROR 22007: Truncated incorrect date value: 'asdf'
 SELECT JSON_VALUE('{"data": 123}', '$.data' RETURNING TIME
 DEFAULT 'asdf' ON ERROR);
 ERROR 22007: Truncated incorrect time value: 'asdf'
@@ -731,7 +721,7 @@ ERROR 22003: UNSIGNED DEFAULT value is out of range in 'json_value'
 SELECT JSON_VALUE('{}', '$.a' RETURNING UNSIGNED DEFAULT '-1' ON EMPTY) v;
 ERROR 22003: UNSIGNED DEFAULT value is out of range in 'json_value'
 SELECT JSON_VALUE('{}', '$.a' RETURNING DATE DEFAULT 'abc' ON EMPTY) v;
-ERROR 22007: Incorrect datetime value: 'abc'
+ERROR 22007: Truncated incorrect date value: 'abc'
 SELECT JSON_VALUE('{}', '$.a' RETURNING TIME DEFAULT 'abc' ON EMPTY) v;
 ERROR 22007: Truncated incorrect time value: 'abc'
 SELECT JSON_VALUE('{}', '$.a' RETURNING TIME(2)
@@ -771,31 +761,31 @@ ERROR 22003: YEAR value is out of range in 'json_value'
 SELECT JSON_VALUE('{}', '$.a' RETURNING YEAR DEFAULT 'xyz' ON EMPTY) v;
 ERROR 22007: Truncated incorrect YEAR value: 'xyz'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '0000-00-00' ON EMPTY);
-ERROR 22007: Incorrect datetime value: '0000-00-00'
+ERROR 22007: Truncated incorrect date value: '0000-00-00'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '0000-00-00' ON ERROR);
-ERROR 22007: Incorrect datetime value: '0000-00-00'
+ERROR 22007: Truncated incorrect date value: '0000-00-00'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '2000-01-00' ON EMPTY);
-ERROR 22007: Incorrect datetime value: '2000-01-00'
+ERROR 22007: Truncated incorrect date value: '2000-01-00'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '2000-00-01' ON ERROR);
-ERROR 22007: Incorrect datetime value: '2000-00-01'
+ERROR 22007: Truncated incorrect date value: '2000-00-01'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '2004-02-31' ON EMPTY);
-ERROR 22007: Incorrect datetime value: '2004-02-31'
+ERROR 22007: Truncated incorrect date value: '2004-02-31'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '2004-02-31' ON ERROR);
-ERROR 22007: Incorrect datetime value: '2004-02-31'
+ERROR 22007: Truncated incorrect date value: '2004-02-31'
 SET @saved_sql_mode = @@sql_mode;
 SET sql_mode = 'ALLOW_INVALID_DATES';
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '0000-00-00' ON EMPTY);
-ERROR 22007: Incorrect datetime value: '0000-00-00'
+ERROR 22007: Truncated incorrect date value: '0000-00-00'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '0000-00-00' ON ERROR);
-ERROR 22007: Incorrect datetime value: '0000-00-00'
+ERROR 22007: Truncated incorrect date value: '0000-00-00'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '2000-01-00' ON EMPTY);
-ERROR 22007: Incorrect datetime value: '2000-01-00'
+ERROR 22007: Truncated incorrect date value: '2000-01-00'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '2000-00-01' ON ERROR);
-ERROR 22007: Incorrect datetime value: '2000-00-01'
+ERROR 22007: Truncated incorrect date value: '2000-00-01'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '2004-02-31' ON EMPTY);
-ERROR 22007: Incorrect datetime value: '2004-02-31'
+ERROR 22007: Truncated incorrect date value: '2004-02-31'
 SELECT JSON_VALUE('{}', '$' RETURNING DATE DEFAULT '2004-02-31' ON ERROR);
-ERROR 22007: Incorrect datetime value: '2004-02-31'
+ERROR 22007: Truncated incorrect date value: '2004-02-31'
 SET sql_mode = @saved_sql_mode;
 SELECT JSON_VALUE('{"a":"b"}', '$.a' RETURNING SIGNED) AS c1,
 REPEAT(JSON_VALUE('{"a":"b"}', '$.a' RETURNING SIGNED), 10) AS c2,

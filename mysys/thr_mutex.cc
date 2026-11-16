@@ -32,11 +32,10 @@
 
 #include "thr_mutex.h"
 
-#include <assert.h>
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cassert>  // IWYU pragma: keep
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 
 #include "my_thread_local.h"
 

@@ -45,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "os0thread-create.h"
 #include "row0mysql.h"
 #include "sql/histograms/histogram.h"
+#include "sql/mysqld.h"  // get_server_state()
 #include "srv0start.h"
 #include "ut0new.h"
 
@@ -297,7 +298,7 @@ static void dict_stats_process_entry_from_recalc_pool(THD *thd) {
   }
 
   /* Set bg flag. */
-  table->stats_bg_flag = BG_STAT_IN_PROGRESS;
+  table->stats_bg_flag.store(BG_STAT_IN_PROGRESS);
 
   dict_sys_mutex_exit();
 
@@ -321,13 +322,13 @@ static void dict_stats_process_entry_from_recalc_pool(THD *thd) {
 
   } else {
     dict_stats_update_result =
-        dict_stats_update(table, DICT_STATS_RECALC_PERSISTENT);
+        dict_stats_update_retry(table, DICT_STATS_RECALC_PERSISTENT, 30);
   }
 
   dict_sys_mutex_enter();
 
   /* Set back bg flag */
-  table->stats_bg_flag = BG_STAT_NONE;
+  table->stats_bg_flag.store(BG_STAT_NONE);
 
   dict_sys_mutex_exit();
 
@@ -405,7 +406,18 @@ void dict_stats_thread() {
       break;
     }
 
-    dict_stats_process_entry_from_recalc_pool(thd);
+    /* Some steps of server start-up process which are performed after this
+    thread starts (e.g., Percona Telemetry setup step) might update tables and
+    thus trigger request to recalculate statistics and update histograms.
+    However, the latter might be problematic before server becames fully
+    operational, as it involves usage of global optimizer cost model object,
+    which at the same time is  concurrently inited/destroyed/reloaded by the
+    main thread performing start-up. Hence we delay handling of requests
+    to update statistics/histogram until server is fully operational (and thus
+    global optimizer cost model object is initialized and stable). */
+    if (get_server_state() == SERVER_OPERATING) {
+      dict_stats_process_entry_from_recalc_pool(thd);
+    }
 
     os_event_reset(dict_stats_event);
   }

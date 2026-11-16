@@ -78,6 +78,17 @@
 static MEM_ROOT null_root;
 static SEL_TREE null_sel_tree(SEL_TREE::IMPOSSIBLE, &null_root, 0);
 
+static bool is_between_bound_evaluable_now(const THD *thd, Item *bound) {
+  if (bound->const_item()) return true;
+  if (!thd->lex->is_query_tables_locked() || !bound->const_for_execution()) {
+    return false;
+  }
+
+  Query_block *query_block = thd->lex->current_query_block();
+  return query_block != nullptr &&
+         evaluate_during_optimization(bound, query_block);
+}
+
 static uchar is_null_string[2] = {1, 0};
 
 static SEL_TREE *get_mm_parts(THD *thd, RANGE_OPT_PARAM *param,
@@ -228,8 +239,7 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
         We create the Item on thd->mem_root which points to
         per-statement mem_root.
       */
-      Item_basic_constant *value_item =
-          op->m_const_array->create_item(thd->mem_root);
+      Item *value_item = op->m_const_array->create_item(thd->mem_root);
       if (value_item == nullptr) return nullptr;
 
       /* Get a SEL_TREE for "(-inf|NULL) < X < c_0" interval.  */
@@ -248,7 +258,7 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
         /* We get here in cases like "t.unsigned NOT IN (-1,-2,-3) */
         return nullptr;
       SEL_TREE *tree2 = nullptr;
-      Item_basic_constant *previous_range_value =
+      Item *previous_range_value =
           op->m_const_array->create_item(thd->mem_root);
       for (; i < op->m_const_array->m_used_size; i++) {
         // Check if the value stored in the field for the previous range
@@ -772,15 +782,15 @@ static SEL_TREE *get_full_func_mm_tree(THD *thd, RANGE_OPT_PARAM *param,
     Item_field *item_field = static_cast<Item_field *>(predicand);
     Field *field = item_field->field;
 
-    if (!((ref_tables | item_field->table_ref->map()) & param_comp))
+    if (!((ref_tables | item_field->m_table_ref->map()) & param_comp))
       ftree = get_func_mm_tree(thd, param, prev_tables, read_tables,
                                remove_jump_scans, predicand, op, value, inv);
-    Item_equal *item_equal = item_field->multi_equality();
+    Item_multi_eq *item_equal = item_field->multi_equality();
     if (item_equal != nullptr) {
       for (Item_field &item : item_equal->get_fields()) {
         Field *f = item.field;
         if (!field->eq(f) &&
-            !((ref_tables | item.table_ref->map()) & param_comp)) {
+            !((ref_tables | item.m_table_ref->map()) & param_comp)) {
           tree = get_func_mm_tree(thd, param, prev_tables, read_tables,
                                   remove_jump_scans, &item, op, value, inv);
           ftree = !ftree ? tree : tree_and(param, ftree, tree);
@@ -939,7 +949,16 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
         Concerning the code below see the NOTES section in
         the comments for the function get_full_func_mm_tree()
       */
-      SEL_TREE *tree = nullptr;
+      bool all_bounds_evaluable = true;
+      for (uint i = 1; i < cond_func->arg_count; i++) {
+        Item *const arg = cond_func->arguments()[i];
+        if (!is_between_bound_evaluable_now(thd, arg)) {
+          all_bounds_evaluable = false;
+          break;
+        }
+      }
+
+      SEL_TREE *bound_tree = nullptr;
       for (uint i = 1; i < cond_func->arg_count; i++) {
         Item *const arg = cond_func->arguments()[i];
 
@@ -951,17 +970,32 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
               remove_jump_scans, field_item, cond_func,
               reinterpret_cast<Item *>(i), inv);
           if (inv) {
-            tree = !tree ? tmp : tree_or(param, remove_jump_scans, tree, tmp);
-            if (tree == nullptr) break;
+            if (bound_tree == nullptr)
+              bound_tree = tmp;
+            else
+              bound_tree = tree_or(param, remove_jump_scans, bound_tree, tmp);
+            if (bound_tree == nullptr) break;
           } else
-            tree = tree_and(param, tree, tmp);
+            bound_tree = tree_and(param, bound_tree, tmp);
         } else if (inv) {
-          tree = nullptr;
+          bound_tree = nullptr;
           break;
         }
       }
+      if (!all_bounds_evaluable || bound_tree != nullptr) {
+        /*
+          When all BETWEEN bounds can be evaluated now, a missing bound-side
+          tree means there is no additional range predicate to combine with
+          ftree; the range built from the predicand already represents the
+          BETWEEN predicate.
 
-      ftree = tree_and(param, ftree, tree);
+          When a bound cannot be evaluated now, a missing bound-side tree may
+          mean that part of the predicate could not be represented as a range.
+          Combine through tree_and() so the tree is marked inexact and the
+          original predicate is rechecked as a filter.
+        */
+        ftree = tree_and(param, ftree, bound_tree);
+      }
       break;
     }  // end case Item_func::BETWEEN
 
@@ -981,15 +1015,15 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
       break;
     }  // end case Item_func::IN_FUNC
 
-    case Item_func::MULT_EQUAL_FUNC: {
-      Item_equal *item_equal = down_cast<Item_equal *>(cond);
+    case Item_func::MULTI_EQ_FUNC: {
+      Item_multi_eq *item_equal = down_cast<Item_multi_eq *>(cond);
       Item *value = item_equal->const_arg();
       if (value == nullptr) return nullptr;
       table_map ref_tables = value->used_tables();
       for (Item_field &field_item : item_equal->get_fields()) {
         Field *field = field_item.field;
         table_map param_comp = ~(prev_tables | read_tables | current_table);
-        if (!((ref_tables | field_item.table_ref->map()) & param_comp)) {
+        if (!((ref_tables | field_item.m_table_ref->map()) & param_comp)) {
           SEL_TREE *tree =
               get_mm_parts(thd, param, prev_tables, read_tables, item_equal,
                            field, Item_func::EQ_FUNC, value);
@@ -999,7 +1033,7 @@ SEL_TREE *get_mm_tree(THD *thd, RANGE_OPT_PARAM *param, table_map prev_tables,
 
       dbug_print_tree("tree_returned", ftree, param);
       return ftree;
-    }  // end case Item_func::MULT_EQUAL_FUNC
+    }  // end case Item_func::MULTI_EQ_FUNC
 
     default: {
       Item *const arg_left = cond_func->arguments()[0];

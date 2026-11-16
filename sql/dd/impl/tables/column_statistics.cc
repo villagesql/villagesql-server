@@ -37,11 +37,10 @@ namespace dd {
 class Raw_record;
 }  // namespace dd
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Column_statistics &Column_statistics::instance() {
-  static Column_statistics *s_instance = new Column_statistics();
+  static auto *s_instance = new Column_statistics();
   return *s_instance;
 }
 
@@ -102,5 +101,4 @@ bool Column_statistics::update_object_key(Item_name_key *key,
   return false;
 }
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

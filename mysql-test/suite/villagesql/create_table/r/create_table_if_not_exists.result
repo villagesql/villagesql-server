@@ -31,11 +31,11 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 )
 #	#	Query	#	#	BEGIN
 #	#	Table_map	#	#	table_id: # (test.t1)
-#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 #	#	Xid	#	#	COMMIT /* XID */
 #	#	Query	#	#	BEGIN
 #	#	Table_map	#	#	table_id: # (test.t1)
-#	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
 #	#	Xid	#	#	COMMIT /* XID */
 #	#	Query	#	#	use `test`; CREATE TABLE IF NOT EXISTS t1 (
 id INT PRIMARY KEY,

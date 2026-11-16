@@ -52,7 +52,6 @@
 #include <cstdint>
 #include <cstring>
 
-#include "my_compiler.h"
 #include "mysql/strings/m_ctype.h"
 #include "strings/m_ctype_internals.h"
 #include "template_utils.h"

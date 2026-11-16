@@ -21,16 +21,12 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/// @defgroup GroupLibsMysqlGtid MySQL Libraries : GTID
-/// @ingroup GroupLibsMysql
-
 #ifndef MYSQL_GTID_GTID_H
 #define MYSQL_GTID_GTID_H
 
 #include <set>
 #include <sstream>
 
-#include "mysql/binlog/event/nodiscard.h"
 #include "mysql/gtid/global.h"
 #include "mysql/gtid/tsid.h"
 #include "mysql/serialization/archive_binary.h"
@@ -132,7 +128,7 @@ class Gtid {
    * @return Number of bytes read from the buffer or 0 in case decoding is not
    * possible
    */
-  [[NODISCARD]] virtual std::size_t decode_gtid_tagged(const unsigned char *buf,
+  [[nodiscard]] virtual std::size_t decode_gtid_tagged(const unsigned char *buf,
                                                        std::size_t buf_len);
 
   /**

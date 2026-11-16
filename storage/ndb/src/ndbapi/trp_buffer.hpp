@@ -51,7 +51,7 @@ struct TFPage {
   }
 
   static TFPage *ptr(struct iovec p) {
-    UintPtr v = UintPtr(p.iov_base);
+    auto v = UintPtr(p.iov_base);
     v -= offsetof(TFPage, m_data);
     return (TFPage *)v;
   }

@@ -57,9 +57,6 @@
 #endif
 
 inline static ib_rbt_node_t *ROOT(const ib_rbt_t *t) { return t->root->left; }
-inline static size_t SIZEOF_NODE(const ib_rbt_t *t) {
-  return sizeof(ib_rbt_node_t) + t->sizeof_value - 1;
-}
 
 #if defined UNIV_DEBUG || defined IB_RBT_TESTING
 /** Verify that the keys are in order.
@@ -102,9 +99,9 @@ static ulint rbt_count_black_nodes(
   ulint result;
 
   if (node != tree->nil) {
-    ulint left_height = rbt_count_black_nodes(tree, node->left);
+    ulint const left_height = rbt_count_black_nodes(tree, node->left);
 
-    ulint right_height = rbt_count_black_nodes(tree, node->right);
+    ulint const right_height = rbt_count_black_nodes(tree, node->right);
 
     if (left_height == 0 || right_height == 0 || left_height != right_height) {
       result = 0;
@@ -199,7 +196,7 @@ static ib_rbt_node_t *rbt_tree_add_child(const ib_rbt_t *tree,
                                          ib_rbt_bound_t *parent,
                                          ib_rbt_node_t *node) {
   /* Cast away the const. */
-  ib_rbt_node_t *last = (ib_rbt_node_t *)parent->last;
+  auto *last = (ib_rbt_node_t *)parent->last;
 
   if (last == tree->root || parent->result < 0) {
     last->left = node;
@@ -425,7 +422,7 @@ static void rbt_replace_node(
     ib_rbt_node_t *replace, /*!< in: node to replace */
     ib_rbt_node_t *node)    /*!< in: node to replace with */
 {
-  ib_rbt_color_t color = node->color;
+  ib_rbt_color_t const color = node->color;
 
   /* Update the node pointers. */
   node->left = replace->left;
@@ -744,6 +741,17 @@ const ib_rbt_node_t *rbt_add_node(ib_rbt_t *tree,         /*!< in: rb tree */
                                              SIZEOF_NODE(tree));
 
   memcpy(node->value, value, tree->sizeof_value);
+  rbt_add_preallocated_node(tree, parent, node);
+  return node;
+}
+
+/** Add a new caller-provided node to tree at the specified position.
+The node must have its key fields initialized correctly.
+@param[in]	tree	rb tree
+@param[in]	parent	parent
+@param[in]	node	node */
+void rbt_add_preallocated_node(ib_rbt_t *tree, ib_rbt_bound_t *parent,
+                               ib_rbt_node_t *node) {
   node->parent = node->left = node->right = tree->nil;
 
   /* If tree is empty */
@@ -761,12 +769,11 @@ const ib_rbt_node_t *rbt_add_node(ib_rbt_t *tree,         /*!< in: rb tree */
 #if (defined IB_RBT_TESTING)
   ut_a(rbt_validate(tree));
 #endif
-  return (node);
 }
 
 /** Find a matching node in the rb tree.
  @return NULL if not found else the node where key was found */
-static const ib_rbt_node_t *rbt_lookup(
+const ib_rbt_node_t *rbt_lookup(
     const ib_rbt_t *tree, /*!< in: rb tree */
     const void *key)      /*!< in: key to use for search */
 {
@@ -800,7 +807,7 @@ bool rbt_delete(ib_rbt_t *tree,  /*!< in: rb tree */
                 const void *key) /*!< in: key to delete */
 {
   bool deleted = false;
-  ib_rbt_node_t *node = (ib_rbt_node_t *)rbt_lookup(tree, key);
+  auto *node = (ib_rbt_node_t *)rbt_lookup(tree, key);
 
   if (node) {
     rbt_remove_node_and_rebalance(tree, node);
@@ -951,6 +958,13 @@ const ib_rbt_node_t *rbt_prev(
     const ib_rbt_node_t *current) /*!< in: current node */
 {
   return (current ? rbt_find_predecessor(tree, current) : nullptr);
+}
+
+/** Clear the tree without deleting and freeing its nodes.
+    @param[in]      tree    rb tree */
+void rbt_reset(ib_rbt_t *tree) {
+  tree->n_nodes = 0;
+  tree->root->left = tree->root->right = tree->nil;
 }
 
 /** Merge the node from dst into src. Return the number of nodes merged.

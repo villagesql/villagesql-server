@@ -351,7 +351,8 @@ static String *query_parameter_val_str(const PS_PARAM *param,
     case MYSQL_TYPE_TINY_BLOB:
     case MYSQL_TYPE_MEDIUM_BLOB:
     case MYSQL_TYPE_LONG_BLOB:
-    case MYSQL_TYPE_BLOB: {
+    case MYSQL_TYPE_BLOB:
+    case MYSQL_TYPE_VECTOR: {
       str = new String[1];
       uint dummy_errors;
       if (str->copy(reinterpret_cast<const char *>(param->value), param->length,
@@ -407,4 +408,20 @@ DEFINE_BOOL_METHOD(mysql_query_attributes_imp::string_get,
   String *str = query_parameter_val_str(param, iter_ptr->get_thd()->charset());
   *out_string_value = reinterpret_cast<my_h_string>(str);
   return false;
+}
+
+DEFINE_BOOL_METHOD(mysql_query_attributes_imp::get_first_name_data,
+                   (const char **name_buffer, size_t *name_length)) {
+  if (current_thd == nullptr || current_thd->bind_parameter_values_count == 0) {
+    return 1;
+  }
+  auto *bind_parameter_values = current_thd->bind_parameter_values;
+  if (bind_parameter_values == nullptr ||
+      bind_parameter_values->name == nullptr ||
+      bind_parameter_values->name_length == 0) {
+    return 1;
+  }
+  *name_buffer = reinterpret_cast<const char *>(bind_parameter_values->name);
+  *name_length = bind_parameter_values->name_length;
+  return 0;
 }

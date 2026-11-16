@@ -299,7 +299,7 @@ REVOKE CONNECTION_ADMIN ON *.* from u1@localhost;
 
 --echo # Connection will fail
 --disable_query_log
---error 3032
+--error ER_SERVER_OFFLINE_MODE
 connect(con_admin_test_test,localhost,u1,pwd,,,,);
 --enable_query_log
 

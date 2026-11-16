@@ -65,7 +65,7 @@ class DynArr256Pool {
     Uint32 nodes_per_page;
   };
 
-  const Info getInfo() const;
+  Info getInfo() const;
 
   Uint32 getUsed() { return m_used; }      // # entries currently seized
   Uint32 getUsedHi() { return m_usedHi; }  // high water mark for getUsed()
@@ -172,7 +172,7 @@ inline Uint32 DynArr256::release(ReleaseIterator &iter, Uint32 *retptr) {
 }
 
 inline Uint32 DynArr256::trim(Uint32 pos, ReleaseIterator &iter) {
-  return truncate(pos, iter, NULL);
+  return truncate(pos, iter, nullptr);
 }
 
 inline Uint32 *DynArr256::get(Uint32 pos) const {

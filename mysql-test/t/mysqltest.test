@@ -2910,6 +2910,45 @@ eval $show_statement;
 
 drop table t1;
 
+#
+# 11. Usage with a procedure call which can return multiple result sets,
+#     only the first result shall be considered.
+CREATE TABLE t1(a int, b varchar(10), c double);
+INSERT INTO t1 VALUES
+(1, "1a", 4.12),
+(2, "2b", 123.321),
+(3, "3c", 0),
+(4, "4d",9999.999);
+
+delimiter //;
+CREATE PROCEDURE p1()
+BEGIN
+  SELECT * FROM t1;
+  SET @a := 3;
+  SELECT * FROM t1;
+  SELECT * FROM t1;
+END
+//
+delimiter ;//
+
+--let $res=query_get_value(CALL p1(), a, 1)
+--echo Fetched value from column 'a' of row 1 without specifying result set number is: $res
+--let $res=query_get_value(CALL p1(), c, 2)
+--echo Fetched value from column 'c' of row 2 without specifying result set number is: $res
+--let $res=query_get_value(CALL p1(), a, 1, 1)
+--echo Fetched value from column 'a' of row 1 of result set 1 is: $res
+--let $res=query_get_value(CALL p1(), b, 2, 2)
+--echo Fetched value from column 'b' of row 2 of result set 2 is: $res
+--let $res=query_get_value(CALL p1(), c, 4, 3)
+--echo Fetched value from column 'c' of row 4 of result set 3 is: $res
+
+--error 1
+--exec echo "let \$value= query_get_value(CALL p1(), c, 1, 6);" | $MYSQL_TEST 2>&1
+
+SELECT 4 as regular_select;
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
 # ----------------------------------------------------------------------------
 # Test change_user command
 # ----------------------------------------------------------------------------
@@ -3037,12 +3076,26 @@ disconnect $x;
 disconnect $y;
 --echo $CURRENT_CONNECTION
 
-
---echo End of tests
-
 connection default;
 # Wait till we reached the initial number of concurrent sessions
 --source include/wait_until_count_sessions.inc
+
+--echo #
+--echo # Test that a query failed with ER_NO_SUCH_THREAD causes mysqltest to dump the processlist before dying
+--echo #
+--replace_regex /Id[[:space:]]+[0-9]+/Id MASKED/ /Time[[:space:]]+[0-9]+/Time MASKED/ /Time_ms[[:space:]]+[0-9]+/Time_ms MASKED/ /Waiting for next activation/Waiting on empty queue/
+--error 1
+--exec echo "KILL QUERY 276447231;" | $MYSQL_TEST 2>&1
+
+--echo # PROCESSLIST should not be dumped if error was expected
+--exec echo "error ER_NO_SUCH_THREAD; KILL QUERY 276447231;" | $MYSQL_TEST 2>&1
+
+--echo # PROCESSLIST should be dumped if a different error was expected
+--replace_regex /Id[[:space:]]+[0-9]+/Id MASKED/ /Time[[:space:]]+[0-9]+/Time MASKED/ /Time_ms[[:space:]]+[0-9]+/Time_ms MASKED/ /Waiting for next activation/Waiting on empty queue/
+--error 1
+--exec echo "error ER_PARSE_ERROR; KILL QUERY 276447231;" | $MYSQL_TEST 2>&1
+
+--echo End of tests
 
 # To test \r\n in cat_file
 --cat_file std_data/cat_file.txt

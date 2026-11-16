@@ -582,7 +582,7 @@ a	b	c	d
 1	1	1	1
 DELETE FROM t1;
 INSERT INTO t1 ( a ) VALUES ( regexp_replace('a', 'a', 'a') );
-ERROR 01000: Data truncated for column 'a' at row 1
+ERROR HY000: Incorrect DOUBLE value: 'a' for column 'a' at row 1
 INSERT INTO t1 ( b ) VALUES ( regexp_replace('a', 'a', 'a') );
 ERROR HY000: Incorrect integer value: 'a' for column 'b' at row 1
 INSERT INTO t1 ( c ) VALUES ( regexp_replace('a', 'a', 'a') );
@@ -593,7 +593,7 @@ a	b	c	d
 NULL	NULL	a	NULL
 DELETE FROM t1;
 INSERT INTO t1 ( a ) VALUES ( regexp_substr('a', 'a') );
-ERROR 01000: Data truncated for column 'a' at row 1
+ERROR HY000: Incorrect DOUBLE value: 'a' for column 'a' at row 1
 INSERT INTO t1 ( b ) VALUES ( regexp_substr('a', 'a') );
 ERROR HY000: Incorrect integer value: 'a' for column 'b' at row 1
 INSERT INTO t1 ( c ) VALUES ( regexp_substr('a', 'a') );
@@ -669,7 +669,7 @@ SELECT @@global.max_allowed_packet;
 SET @buf_sz_utf16 = @@global.max_allowed_packet / length( _utf16'x' );
 SELECT @buf_sz_utf16;
 @buf_sz_utf16
-512.000000000
+512.0000
 SELECT length(regexp_replace( repeat('a', @buf_sz_utf16), 'a', 'b' ));
 length(regexp_replace( repeat('a', @buf_sz_utf16), 'a', 'b' ))
 512
@@ -820,7 +820,6 @@ SELECT regexp_like( repeat(@v1, 'abc'), 'abc' );
 regexp_like( repeat(@v1, 'abc'), 'abc' )
 NULL
 Warnings:
-Warning	1292	Truncated incorrect INTEGER value: 'abc'
 Warning	1292	Truncated incorrect INTEGER value: 'abc'
 #
 # Bug#27597980: ADD ERROR MESSAGE FOR INVALID CAPTURE GROUP NAME

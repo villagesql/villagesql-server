@@ -29,6 +29,8 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -44,13 +46,13 @@
 #include "sql/mem_root_array.h"
 #include "sql/sql_const.h"
 
-class CompanionSet;
 class Field;
 class JOIN;
 class Query_block;
 class THD;
 struct MEM_ROOT;
 struct RelationalExpression;
+struct SecondaryEngineNrowsParameters;
 struct TABLE;
 
 /**
@@ -73,6 +75,15 @@ struct SargablePredicate {
   /// be constant during execution. Also, it should not contain subqueries or
   /// stored procedures, which we do not want to execute during optimization.
   bool can_evaluate;
+};
+
+/// Information about a join condition that can potentially be pushed down as a
+/// sargable predicate for a Node.
+struct PushableJoinCondition {
+  /// The condition that may be pushed as a sargable predicate.
+  Item *cond;
+  /// The relational expression from which this condition is pushable.
+  const RelationalExpression *from;
 };
 
 /**
@@ -110,17 +121,16 @@ struct JoinHypergraph {
 
   class Node final {
    public:
-    Node(MEM_ROOT *mem_root, TABLE *table, const CompanionSet *companion_set)
+    Node(MEM_ROOT *mem_root, TABLE *table, int64_t read_set_width)
         : m_table{table},
-          m_companion_set{companion_set},
           m_sargable_predicates{mem_root},
-          m_pushable_conditions(mem_root) {
+          m_pushable_conditions{mem_root},
+          m_read_set_width{read_set_width} {
       assert(mem_root != nullptr);
       assert(table != nullptr);
     }
 
     TABLE *table() const { return m_table; }
-    const CompanionSet *companion_set() const { return m_companion_set; }
 
     void AddSargable(const SargablePredicate &predicate) {
       assert(predicate.predicate_index >= 0);
@@ -133,19 +143,27 @@ struct JoinHypergraph {
       return m_sargable_predicates;
     }
 
-    void AddPushable(Item *cond) {
+    /**
+      Add a join condition that is potentially pushable as a sargable predicate
+      for this node.
+
+      @param cond   The condition to be considered for pushdown.
+      @param from   The relational expression from which this condition
+                    originates.
+    */
+    void AddPushable(Item *cond, const RelationalExpression *from) {
       // Don't add duplicate conditions, as this causes their selectivity to
       // be applied multiple times, giving poor row estimates (cf.
       // bug#36135001).
-      if (std::none_of(m_pushable_conditions.cbegin(),
-                       m_pushable_conditions.cend(), [&](const Item *other) {
-                         return ItemsAreEqual(cond, other, true);
-                       })) {
-        m_pushable_conditions.push_back(cond);
+      if (std::ranges::none_of(m_pushable_conditions,
+                               [&](const PushableJoinCondition &other) {
+                                 return ItemsAreEqual(cond, other.cond);
+                               })) {
+        m_pushable_conditions.push_back({.cond = cond, .from = from});
       }
     }
 
-    const Mem_root_array<Item *> &pushable_conditions() const {
+    const Mem_root_array<PushableJoinCondition> &pushable_conditions() const {
       return m_pushable_conditions;
     }
 
@@ -157,9 +175,13 @@ struct JoinHypergraph {
       m_lateral_dependencies = dependencies;
     }
 
+    int64_t read_set_width() const { return m_read_set_width; }
+
+    /* Estimated rows cardinality after table filters. */
+    std::optional<double> cardinality;
+
    private:
     TABLE *m_table;
-    const CompanionSet *m_companion_set;
     // List of all sargable predicates (see SargablePredicate) where
     // the field is part of this table. When we see the node for
     // the first time, we will evaluate all of these and consider
@@ -176,13 +198,18 @@ struct JoinHypergraph {
     // ourselves when determining sargable conditions, but there would be
     // a fair amount of duplicated code in determining pushability,
     // which is why regular join pushdown does the computation.)
-    Mem_root_array<Item *> m_pushable_conditions;
+    Mem_root_array<PushableJoinCondition> m_pushable_conditions;
 
     // The lateral dependencies of this table. That is, the set of tables that
     // must be available on the outer side of a nested loop join in which this
     // table is on the inner side. This map may be set for LATERAL derived
     // tables and derived tables with outer references, and for table functions.
     hypergraph::NodeMap m_lateral_dependencies{0};
+
+    // The estimated size (in bytes) of a row. This is used when making cost
+    // estimates for hash joins. It is cached here to avoid computing it
+    // repeatedly.
+    int64_t m_read_set_width{0};
   };
   Mem_root_array<Node> nodes;
 
@@ -190,14 +217,67 @@ struct JoinHypergraph {
   // for more information), so edges[i] corresponds to graph.edges[i*2].
   Mem_root_array<JoinPredicate> edges;
 
-  // The first <num_where_predicates> are WHERE predicates;
-  // the rest are sargable join predicates. The latter are in the array
-  // solely so they can be part of the regular “applied_filters” bitmap
+  // The first <num_filter_predicates> are filter predicates. These are the
+  // predicates that may be added as filters on nodes in the join tree by
+  // setting the corresponding bit in AccessPath::filter_predicates, which at
+  // the end of join optimization gets expanded to proper FILTER access paths by
+  // ExpandFilterAccessPaths(). They include:
+  //
+  // - Actual WHERE predicates that could not be pushed down into one of the
+  //   join conditions.
+  //
+  // - Predicates that could be pushed all the way down and become a table
+  //   filter. These could be WHERE predicates, but they could also be
+  //   predicates that are possible to push all the way down, but not possible
+  //   to pull all the way up. Take for example "SELECT 1 FROM t1 LEFT JOIN t2
+  //   ON t1.a=t2.a AND t2.b=1". The t2.b=1 predicate can be pushed down as a
+  //   table filter, but it cannot be used as a WHERE predicate, as it would
+  //   incorrectly filter out the NULL-complemented rows. Still, such table
+  //   filters are also counted in "num_filter_predicates".
+  //
+  // - Predicates that are join conditions in some inner join that is involved
+  //   in a cycle in the join hypergraph. These are applied as filters in the
+  //   join tree if the tables are joined via another edge in the cycle. Such
+  //   predicates are also not necessarily possible to pull up to the WHERE
+  //   clause. If they for example came from an inner join on the inner side of
+  //   some outer join, they cannot be applied as WHERE predicates. Even so,
+  //   they are still counted in "num_filter_predicates".
+  //
+  // The rest are sargable join predicates. The latter are in the array
+  // solely so they can be part of the regular "applied_filters" bitmap
   // if they are pushed down into an index, so that we know that we
   // don't need to apply them as join conditions later.
+  //
+  // Layout of predicates[]:
+  //
+  //   [ Cycle join preds | WHERE preds | Table filter preds | Sargable join
+  //   preds ]
+  //   <--------------- num_filter_predicates ---------------->
+  //
+  //   [0, num_filter_predicates):  "filter predicates"
+  //       (see description above)
+  //   [num_filter_predicates, predicates.size()):
+  //       Sargable join predicates (tracked for index pushdown only).
+  //
+  // If a sargable join predicate comes from a join that is part of a cycle in
+  // the hypergraph, it could be present in both partitions of the array.
   Mem_root_array<Predicate> predicates;
 
-  unsigned num_where_predicates = 0;
+  // How many of the predicates in "predicates" are filter predicates. The rest
+  // of them are sargable join predicates.
+  unsigned num_filter_predicates = 0;
+
+  /// Returns an immutable view of the filter predicates portion of the
+  /// predicates array.
+  std::span<const Predicate> filter_predicates() const {
+    return {predicates.data(), num_filter_predicates};
+  }
+
+  /// Returns a mutable view of the filter predicates portion of the predicates
+  /// array.
+  std::span<Predicate> filter_predicates() {
+    return {predicates.data(), num_filter_predicates};
+  }
 
   // A bitmap over predicates that are, or contain, at least one
   // materializable subquery.
@@ -222,10 +302,23 @@ struct JoinHypergraph {
   /// the root cause.
   bool has_reordered_left_joins = false;
 
-  /// The set of tables that are on the inner side of some outer join or
-  /// antijoin. If a table is not part of this set, and it is found to be empty,
-  /// we can assume that the result of the top-level join will also be empty.
-  table_map tables_inner_to_outer_or_anti = 0;
+  // True if estimates for one or more Nodes in the graph have been provided
+  // by the secondary engine (i.e. at least one Node has the field `cardinality`
+  // set).
+  bool has_estimates_from_secondary_engine = false;
+
+  /// The set of nodes that are on the inner side of some outer join.
+  hypergraph::NodeMap nodes_inner_to_outer_join = 0;
+
+  /// The set of nodes that are on the inner side of some semijoin.
+  hypergraph::NodeMap nodes_inner_to_semijoin = 0;
+
+  /// The set of nodes that are on the inner side of some antijoin.
+  hypergraph::NodeMap nodes_inner_to_antijoin = 0;
+
+  /// The set of nodes that are represented by table_function. This will be set
+  /// only when optimizing for secondary engine.
+  hypergraph::NodeMap nodes_for_table_function = 0;
 
   int FindSargableJoinPredicate(const Item *predicate) const {
     const auto iter = m_sargable_join_predicates.find(predicate);
@@ -236,7 +329,31 @@ struct JoinHypergraph {
     m_sargable_join_predicates.emplace(predicate, position);
   }
 
+  using secondary_engine_nrows_hook_t =
+      bool (*)(const SecondaryEngineNrowsParameters &params);
+
+  /// Returns true if the secondary engine nrows hook is available.
+  bool has_secondary_engine_nrows_hook() const {
+    return m_secondary_engine_nrows_hook != nullptr;
+  }
+
+  /// Calls the secondary engine nrows hook.
+  /// Requires has_secondary_engine_nrows_hook() == true; asserts otherwise.
+  bool call_secondary_engine_nrows_hook(
+      const SecondaryEngineNrowsParameters &params) const {
+    assert(m_secondary_engine_nrows_hook != nullptr);
+    return m_secondary_engine_nrows_hook(params);
+  }
+
+  /// Sets the secondary engine nrows hook (nullptr means unavailable).
+  void set_secondary_engine_nrows_hook(
+      secondary_engine_nrows_hook_t secondary_engine_nrows_hook) {
+    m_secondary_engine_nrows_hook = secondary_engine_nrows_hook;
+  }
+
  private:
+  secondary_engine_nrows_hook_t m_secondary_engine_nrows_hook = nullptr;
+
   // For each sargable join condition, maps into its index in “predicates”.
   // We need the predicate index when applying the join to figure out whether
   // we have already applied the predicate or not; see

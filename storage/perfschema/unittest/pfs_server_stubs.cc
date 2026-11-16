@@ -41,7 +41,6 @@ ulong max_connections;
 struct System_status_var global_status_var;
 
 struct sql_digest_storage;
-volatile bool ready_to_exit = false;
 
 uint lower_case_table_names = 0;
 CHARSET_INFO *files_charset_info = nullptr;
@@ -67,8 +66,6 @@ void thd_mem_cnt_alloc(THD *, size_t) {}
 
 void thd_mem_cnt_free(THD *, size_t) {}
 
-unsigned int mysql_errno_to_sqlstate_index(unsigned int) { return 0; }
-
 SERVICE_TYPE(registry) * mysql_plugin_registry_acquire() { return nullptr; }
 
 int mysql_plugin_registry_release(SERVICE_TYPE(registry) * reg
@@ -79,6 +76,10 @@ int mysql_plugin_registry_release(SERVICE_TYPE(registry) * reg
 int log_message(int, ...) {
   /* Do not pollute the unit test output with annoying messages. */
   return 0;
+}
+
+bool acl_is_utility_user(const char *, const char *, const char *) {
+  return false;
 }
 
 void reset_status_by_thd() {}

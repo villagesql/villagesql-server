@@ -32,7 +32,7 @@ bool printNODE_PING_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const NodePingReq *const sig = CAST_CONSTPTR(NodePingReq, theData);
+  const auto *const sig = CAST_CONSTPTR(NodePingReq, theData);
   fprintf(output, " senderRef : %x round : %u\n", sig->senderRef,
           sig->senderData);
   return true;
@@ -45,7 +45,7 @@ bool printNODE_PING_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const NodePingConf *const sig = CAST_CONSTPTR(NodePingConf, theData);
+  const auto *const sig = CAST_CONSTPTR(NodePingConf, theData);
   fprintf(output, " senderRef : %x round : %u\n", sig->senderRef,
           sig->senderData);
   return true;

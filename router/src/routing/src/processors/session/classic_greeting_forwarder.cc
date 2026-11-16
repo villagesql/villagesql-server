@@ -36,7 +36,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
-#include "await_client_or_server.h"
+#include "processors/base/await_client_or_server.h"
 #include "classic_auth.h"
 #include "classic_auth_caching_sha2.h"
 #include "classic_auth_cleartext.h"
@@ -678,7 +678,8 @@ ServerGreetor::client_greeting() {
       break;
     case SslMode::kPreferred:
       client_caps.set(classic_protocol::capabilities::pos::ssl,
-                      server_supports_tls);
+                      server_supports_tls &&
+                          !connection()->server_conn().is_secure_transport());
       break;
     case SslMode::kRequired:
       client_caps.set(classic_protocol::capabilities::pos::ssl);
@@ -832,10 +833,11 @@ ServerGreetor::client_greeting_full() {
     tr.trace(Tracer::Event().stage("client::greeting::plain"));
   }
 
-  if (src_protocol.password().has_value()) {
+  if (auto creds = src_protocol.credentials().get(
+          client_greeting_msg.auth_method_name())) {
     // scramble with the server's auth-data to trigger a fast-auth.
 
-    auto pwd = *(src_protocol.password());
+    auto pwd = *creds;
 
     // if the password set and not empty, rehash it.
     if (!pwd.empty()) {
@@ -876,12 +878,19 @@ ServerGreetor::client_greeting_full() {
 }
 
 static stdx::expected<TlsClientContext *, std::error_code> get_dest_ssl_ctx(
-    MySQLRoutingContext &ctx, const std::string &id) {
-  return mysql_harness::make_tcp_address(id).and_then(
-      [&ctx, &id](const auto &addr)
-          -> stdx::expected<TlsClientContext *, std::error_code> {
-        return ctx.dest_ssl_ctx(id, addr.address());
-      });
+    MySQLRoutingContext &ctx,
+    const std::optional<mysql_harness::Destination> &opt_dest) {
+  if (!opt_dest) {
+    return stdx::unexpected(make_error_code(std::errc::invalid_argument));
+  }
+
+  const auto &dest = *opt_dest;
+
+  if (dest.is_local()) {
+    return ctx.dest_ssl_ctx(dest.str(), dest.as_local().path());
+  }
+
+  return ctx.dest_ssl_ctx(dest.str(), dest.as_tcp().hostname());
 }
 
 stdx::expected<Processor::Result, std::error_code>
@@ -909,15 +918,6 @@ ServerGreetor::tls_connect_init() {
 
   SSL_set_msg_callback(dst_channel.ssl(), ssl_msg_cb);
   SSL_set_msg_callback_arg(dst_channel.ssl(), connection());
-
-  // when a connection is taken from the pool for this client-connection ...
-
-  // ... ensure it is TLS again.
-  connection()->requires_tls(true);
-
-  // ... ensure it has/hasn't a client cert.
-  connection()->requires_client_cert(SSL_get_certificate(dst_channel.ssl()) !=
-                                     nullptr);
 
   trace_event_tls_connect_ =
       trace_span(trace_event_client_greeting_, "mysql/tls_connect");
@@ -1088,10 +1088,11 @@ ServerGreetor::client_greeting_after_tls() {
     ev->attrs.emplace_back("db.name", client_greeting_msg.schema());
   }
 
-  if (src_protocol.password().has_value()) {
+  if (auto creds = src_protocol.credentials().get(
+          client_greeting_msg.auth_method_name())) {
     // scramble with the server's auth-data to trigger a fast-auth.
 
-    auto pwd = *(src_protocol.password());
+    auto pwd = *creds;
 
     // if the password set and not empty, rehash it.
     if (!pwd.empty()) {
@@ -1136,10 +1137,12 @@ ServerGreetor::initial_response() {
   // auto &src_channel = src_conn.channel();
   auto &src_protocol = src_conn.protocol();
 
-  connection()->push_processor(std::make_unique<AuthForwarder>(
-      connection(),
-      // password was requested already.
-      src_protocol.password() && !src_protocol.password()->empty()));
+  auto creds = src_protocol.credentials().get(src_protocol.auth_method_name());
+
+  connection()->push_processor(
+      std::make_unique<AuthForwarder>(connection(),
+                                      // password was requested already.
+                                      creds && !creds->empty()));
 
   stage(Stage::FinalResponse);
   return Result::Again;
@@ -1258,6 +1261,18 @@ stdx::expected<Processor::Result, std::error_code> ServerGreetor::auth_ok() {
     src_protocol.schema(dst_protocol.schema());
   } else {
     src_protocol.schema("");
+  }
+
+  // when a connection is taken from the pool for this client-connection ...
+  //
+  using TC = TransportConstraints::Constraint;
+
+  if (auto *ssl = src_conn.channel().ssl()) {
+    connection()->expected_server_transport_constraints(
+        (SSL_get_certificate(ssl) != nullptr) ? TC::kHasClientCert
+                                              : TC::kEncrypted);
+  } else {
+    connection()->expected_server_transport_constraints(TC::kPlaintext);
   }
 
   stage(Stage::Ok);
@@ -1673,10 +1688,11 @@ ServerFirstAuthenticator::client_greeting_full() {
   client_greeting_msg.capabilities(dst_protocol.client_capabilities());
   client_greeting_msg.attributes(attrs);
 
-  if (src_protocol.password().has_value()) {
+  if (auto creds = src_protocol.credentials().get(
+          client_greeting_msg.auth_method_name())) {
     // scramble with the server's auth-data to trigger a fast-auth.
 
-    auto pwd = *(src_protocol.password());
+    auto pwd = *creds;
 
     // if the password set and not empty, rehash it.
     if (!pwd.empty()) {
@@ -1857,15 +1873,6 @@ ServerFirstAuthenticator::tls_connect_init() {
   SSL_set_msg_callback(dst_channel.ssl(), ssl_msg_cb);
   SSL_set_msg_callback_arg(dst_channel.ssl(), connection());
 
-  // when a connection is taken from the pool for this client-connection ...
-
-  // ... ensure it is TLS again.
-  connection()->requires_tls(true);
-
-  // ... ensure it has/hasn't a client cert.
-  connection()->requires_client_cert(SSL_get_certificate(dst_channel.ssl()) !=
-                                     nullptr);
-
   tls_client_ctx->get_session().and_then(
       [&](auto *sess) -> stdx::expected<void, std::error_code> {
         SSL_set_session(dst_channel.ssl(), sess);
@@ -2010,10 +2017,11 @@ ServerFirstAuthenticator::client_greeting_after_tls() {
   client_greeting_msg.capabilities(dst_protocol.client_capabilities());
   client_greeting_msg.attributes(attrs);
 
-  if (src_protocol.password().has_value()) {
+  if (auto creds = src_protocol.credentials().get(
+          client_greeting_msg.auth_method_name())) {
     // scramble with the server's auth-data to trigger a fast-auth.
 
-    auto pwd = *(src_protocol.password());
+    auto pwd = *creds;
 
     // if the password set and not empty, rehash it.
     if (!pwd.empty()) {
@@ -2042,10 +2050,12 @@ ServerFirstAuthenticator::initial_response() {
   auto &src_conn = connection()->client_conn();
   auto &src_protocol = src_conn.protocol();
 
-  connection()->push_processor(std::make_unique<AuthForwarder>(
-      connection(),
-      // password was requested already.
-      src_protocol.password() && !src_protocol.password()->empty()));
+  auto creds = src_protocol.credentials().get(src_protocol.auth_method_name());
+
+  connection()->push_processor(
+      std::make_unique<AuthForwarder>(connection(),
+                                      // password was requested already.
+                                      creds && !creds->empty()));
 
   stage(Stage::FinalResponse);
   return Result::Again;
@@ -2146,6 +2156,18 @@ ServerFirstAuthenticator::auth_ok() {
   if (!msg.session_changes().empty()) {
     (void)connection()->track_session_changes(
         net::buffer(msg.session_changes()), src_protocol.shared_capabilities());
+  }
+
+  // when a connection is taken from the pool for this client-connection ...
+  //
+  using TC = TransportConstraints::Constraint;
+
+  if (auto *ssl = src_conn.channel().ssl()) {
+    connection()->expected_server_transport_constraints(
+        (SSL_get_certificate(ssl) != nullptr) ? TC::kHasClientCert
+                                              : TC::kEncrypted);
+  } else {
+    connection()->expected_server_transport_constraints(TC::kPlaintext);
   }
 
   if (connection()->context().router_require_enforce()) {

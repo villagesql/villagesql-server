@@ -75,7 +75,7 @@
 # - INSTALL_PARTIAL_REVOKES (--partial-revokes)
 #
 # When changing this page,  _please_ do not forget to update public Wiki
-# https://dev.mysql.com/doc/refman/8.0/en/source-configuration-options.html#option_cmake_install_layout
+# https://dev.mysql.com/doc/refman/en/source-configuration-options.html#option_cmake_install_layout
 
 IF(NOT INSTALL_LAYOUT)
   SET(DEFAULT_INSTALL_LAYOUT "STANDALONE")
@@ -249,6 +249,7 @@ SET(INSTALL_BINDIR_DEB                  "bin")
 SET(INSTALL_SBINDIR_DEB                 "sbin")
 #
 SET(INSTALL_LIBDIR_DEB                  "lib")
+SET(INSTALL_PLUGINDIR_DEB               "lib/mysql/plugin")
 SET(INSTALL_PRIV_LIBDIR_DEB             "lib/mysql/private")
 IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG")
   SET(INSTALL_PLUGINDIR_DEB             "lib/mysql/plugin/debug")

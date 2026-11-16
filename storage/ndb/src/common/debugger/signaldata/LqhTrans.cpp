@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +27,7 @@
 
 bool printLQH_TRANSCONF(FILE *output, const Uint32 *theData, Uint32 len,
                         Uint16 /*receiverBlockNo*/) {
-  const LqhTransConf *const sig = (const LqhTransConf *)theData;
+  const auto *const sig = (const LqhTransConf *)theData;
   if (len >= LqhTransConf::MarkerSignalLength) {
     fprintf(output, " tcRef: %x\n", sig->tcRef);
     fprintf(output, " lqhNodeId: %x\n", sig->lqhNodeId);

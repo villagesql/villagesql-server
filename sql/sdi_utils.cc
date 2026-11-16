@@ -23,7 +23,7 @@
 
 #include "sql/sdi_utils.h"
 
-#include <string.h>
+#include <cstring>
 
 #include "my_compiler.h"
 #include "my_sys.h"
@@ -74,9 +74,7 @@ bool different_serialized_meta_data(const uchar *a_meta_data,
                                     size_t a_meta_data_length,
                                     const uchar *b_meta_data,
                                     size_t b_meta_data_length) {
-  if ((a_meta_data_length != b_meta_data_length) ||
-      (memcmp(a_meta_data, b_meta_data, a_meta_data_length)))
-    return true;
-  return false;
+  return (a_meta_data_length != b_meta_data_length) ||
+         (memcmp(a_meta_data, b_meta_data, a_meta_data_length) != 0);
 }
 /* purecov: end */

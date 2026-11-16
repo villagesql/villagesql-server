@@ -3,6 +3,9 @@
 --source include/not_valgrind.inc
 --source include/force_restart.inc
 
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
+
 --echo #
 --echo # Bug#30248138 - adding a function once mysql.func is converted to myisam
 --echo #                leads to crash
@@ -293,18 +296,5 @@ SET GLOBAL default_password_lifetime = DEFAULT;
 DROP TABLE t1;
 DROP FUNCTION f1;
 DROP USER 'user1'@'%';
-
-
---echo #-----------------------------------------------------------------------
---echo # Test case to verify logical upgrade from 5.7 dump file.
---echo #-----------------------------------------------------------------------
---exec $MYSQL < $MYSQL_TEST_DIR/std_data/mysqldump_57.sql
-SELECT table_schema, table_name, engine FROM information_schema.tables
-                                        WHERE table_schema='mysql'
-                                              AND engine='MyISAM';
---let $restart_parameters = restart:--upgrade=FORCE
---let $wait_counter= 10000
---source include/restart_mysqld.inc
-SELECT table_schema, table_name, engine FROM information_schema.tables
-                                        WHERE table_schema='mysql'
-                                              AND engine='MyISAM';
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

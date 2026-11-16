@@ -33,7 +33,6 @@
 #include <my_inttypes.h>              /* typedefs */
 #include <my_macros.h>                /* STRINGIFY_ARG */
 #include <mysql.h>                    /* MYSQL */
-#include <mysql/service_mysql_alloc.h>/* my_strdup */
 #include <mysql_com.h>                /* get_tty_password */
 #include <print_version.h>            /* print_version */
 #include <typelib.h>                  /* find_type_or_exit */
@@ -101,11 +100,8 @@ bool get_one_option(int optid, const struct my_option *, char *) {
 }
 
 static bool check_options_for_sanity() {
-  if (Options::s_component_dir == nullptr || !*Options::s_component_dir ||
-      Options::s_keyring == nullptr || !*Options::s_keyring) {
-    return false;
-  }
-  return true;
+  return !(Options::s_component_dir == nullptr || !*Options::s_component_dir ||
+           Options::s_keyring == nullptr || !*Options::s_keyring);
 }
 
 static bool get_options(int argc, char **argv, int &exit_code) {
@@ -114,7 +110,7 @@ static bool get_options(int argc, char **argv, int &exit_code) {
     return false;
   }
 
-  if (check_options_for_sanity() == false) return false;
+  if (!check_options_for_sanity()) return false;
 
   return true;
 }
@@ -132,9 +128,9 @@ bool process_options(int *argc, char ***argv, int &exit_code) {
   }
   my_getopt_use_args_separator = false;
 
-  bool save_skip_unknown = my_getopt_skip_unknown;
+  const bool save_skip_unknown = my_getopt_skip_unknown;
   my_getopt_skip_unknown = true;
-  bool ret = get_options(*argc, *argv, exit_code);
+  const bool ret = get_options(*argc, *argv, exit_code);
   my_getopt_skip_unknown = save_skip_unknown;
   return ret;
 }

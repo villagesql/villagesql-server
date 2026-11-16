@@ -41,12 +41,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "router_component_clusterset.h"
 #include "router_component_test.h"
 #include "router_component_testutils.h"
+#include "routing_guidelines_builder.h"
 #include "stdx_expected_no_error.h"
 #include "tcp_port_pool.h"
 
 using mysqlrouter::InstanceType;
 using mysqlrouter::MySQLSession;
 using namespace std::chrono_literals;
+using ::testing::Contains;
 
 Path g_origin_path;
 
@@ -63,9 +65,13 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
     auto ttl_str = std::to_string(std::chrono::duration<double>(kTTL).count());
 
     std::map<std::string, std::string> options{
-        {"cluster_type", cluster_type_str}, {"router_id", "1"},
-        {"user", "mysql_router1_user"},     {"metadata_cluster", "test"},
-        {"connect_timeout", "1"},           {"ttl", ttl_str}};
+        {"cluster_type", cluster_type_str},  //
+        {"router_id", "1"},                  //
+        {"user", "mysql_router1_user"},      //
+        {"metadata_cluster", "test"},        //
+        {"connect_timeout", "1"},            //
+        {"ttl", ttl_str},                    //
+    };
 
     return {"metadata_cache:test", options};
   }
@@ -98,7 +104,6 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
 
     std::map<std::string, std::string> options{
         {"bind_port", std::to_string(router_port)},
-        {"mode", "read-only"},
         {"destinations", destinations},
         {"routing_strategy", "round-robin"},
         {"protocol", "classic"}};
@@ -251,13 +256,23 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
     return json_doc;
   }
 
-  void set_mock_metadata(uint16_t http_port, const std::string &gr_id,
-                         unsigned gr_pos,
-                         const std::vector<NodeData> &cluster_nodes,
-                         const std::string &router_options,
-                         const std::string &node_host = "127.0.0.1") {
-    const auto json_doc = mock_metadata_as_json(gr_id, gr_pos, cluster_nodes,
-                                                router_options, node_host);
+  void set_mock_metadata(
+      uint16_t http_port, const std::string &gr_id, unsigned gr_pos,
+      const std::vector<NodeData> &cluster_nodes,
+      const std::string &router_options,
+      const std::string &node_host = "127.0.0.1",
+      const std::optional<std::string> &routing_guidelines = std::nullopt) {
+    auto json_doc = mock_metadata_as_json(gr_id, gr_pos, cluster_nodes,
+                                          router_options, node_host);
+
+    JsonAllocator allocator;
+
+    if (routing_guidelines) {
+      json_doc.AddMember("routing_guidelines",
+                         JsonValue(routing_guidelines->data(),
+                                   routing_guidelines->size(), allocator),
+                         allocator);
+    }
 
     const auto json_str = json_to_string(json_doc);
 
@@ -265,17 +280,18 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
   }
 
   void launch_static_destinations(const size_t qty) {
-    const auto trace_file = get_data_dir().join("my_port.js").str();
-
     for (size_t i{0}; i < qty; ++i) {
       const auto classic_port = port_pool_.get_next_available();
       const auto http_port = port_pool_.get_next_available();
       router_static_dest_ports.push_back(classic_port);
       router_static_dest_http_ports.push_back(http_port);
 
-      auto &mock_serv = launch_mysql_server_mock(
-          trace_file, router_static_dest_ports.back(), EXIT_SUCCESS, false,
-          router_static_dest_http_ports.back());
+      auto &mock_serv = mock_server_spawner().spawn(
+          mock_server_cmdline("my_port.js")
+              .port(router_static_dest_ports.back())
+              .http_port(router_static_dest_http_ports.back())
+              .args());
+
       ASSERT_NO_FATAL_FAILURE(check_port_ready(mock_serv, http_port));
       EXPECT_TRUE(
           MockServerRestClient(http_port).wait_for_rest_endpoint_ready());
@@ -284,9 +300,8 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
 
   void create_gr_cluster(size_t gr_nodes_number, size_t rr_number,
                          const std::string &read_only_targets) {
-    const auto gr_trace_file =
-        get_data_dir().join("metadata_rr_gr_nodes.js").str();
-    const auto no_gr_trace_file = get_data_dir().join("my_port.js").str();
+    const std::string gr_trace_file = "metadata_rr_gr_nodes.js";
+    const std::string no_gr_trace_file = "my_port.js";
 
     gr_nodes_count_ = gr_nodes_number;
     read_replica_nodes_count_ = rr_number;
@@ -307,9 +322,13 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
       const std::string trace_file =
           cluster_node.instance_type == "group-member" ? gr_trace_file
                                                        : no_gr_trace_file;
-      cluster_node.process = &launch_mysql_server_mock(
-          trace_file, cluster_node.classic_port, EXIT_SUCCESS, false,
-          cluster_node.http_port);
+
+      cluster_node.process =
+          &mock_server_spawner().spawn(mock_server_cmdline(trace_file)
+                                           .port(cluster_node.classic_port)
+                                           .http_port(cluster_node.http_port)
+                                           .args());
+
       ASSERT_NO_FATAL_FAILURE(
           check_port_ready(*cluster_node.process, cluster_node.http_port));
       EXPECT_TRUE(MockServerRestClient(cluster_node.http_port)
@@ -321,8 +340,7 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
   }
 
   void create_ar_cluster(size_t ar_nodes_number, size_t rr_number) {
-    const auto ar_trace_file =
-        get_data_dir().join("metadata_dynamic_nodes_v2_ar.js").str();
+    const std::string ar_trace_file = "metadata_dynamic_nodes_v2_ar.js";
 
     gr_nodes_count_ = ar_nodes_number;
     read_replica_nodes_count_ = rr_number;
@@ -339,9 +357,11 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
     }
 
     for (auto &cluster_node : cluster_nodes_) {
-      cluster_node.process = &launch_mysql_server_mock(
-          ar_trace_file, cluster_node.classic_port, EXIT_SUCCESS, false,
-          cluster_node.http_port);
+      cluster_node.process =
+          &mock_server_spawner().spawn(mock_server_cmdline(ar_trace_file)
+                                           .port(cluster_node.classic_port)
+                                           .http_port(cluster_node.http_port)
+                                           .args());
       ASSERT_NO_FATAL_FAILURE(
           check_port_ready(*cluster_node.process, cluster_node.http_port));
       EXPECT_TRUE(MockServerRestClient(cluster_node.http_port)
@@ -383,7 +403,7 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
   void add_read_replica_node(std::optional<size_t> classic_port = std::nullopt,
                              bool update_metadata = true,
                              std::optional<size_t> position = std::nullopt) {
-    const auto no_gr_trace_file = get_data_dir().join("my_port.js").str();
+    const std::string no_gr_trace_file = "my_port.js";
 
     NodeData node;
     node.instance_type = "read-replica";
@@ -392,8 +412,11 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
     node.uuid = "uuid-" + std::to_string(node.classic_port);
     node.http_port = port_pool_.get_next_available();
     node.process =
-        &launch_mysql_server_mock(no_gr_trace_file, node.classic_port,
-                                  EXIT_SUCCESS, false, node.http_port);
+        &mock_server_spawner().spawn(mock_server_cmdline(no_gr_trace_file)
+                                         .port(node.classic_port)
+                                         .http_port(node.http_port)
+                                         .args());
+
     ASSERT_NO_FATAL_FAILURE(check_port_ready(*node.process, node.http_port));
     EXPECT_TRUE(
         MockServerRestClient(node.http_port).wait_for_rest_endpoint_ready());
@@ -475,6 +498,22 @@ class ReadReplicaTest : public RouterComponentClusterSetTest {
     for (size_t i = gr_nodes_count_;
          i < gr_nodes_count_ + read_replica_nodes_count_; ++i) {
       result.push_back(cluster_nodes_[i].classic_port);
+    }
+
+    return result;
+  }
+
+  std::vector<std::uint16_t> get_cs_read_replicas_classic_ports(
+      const ClusterSetOptions &cs_options) const {
+    std::vector<std::uint16_t> result;
+
+    for (const auto [i, cluster] :
+         stdx::ranges::views::enumerate(cs_options.topology.clusters)) {
+      const auto node_cnt = cluster.nodes.size();
+      for (std::size_t j = node_cnt - cs_options.read_replicas_number[i];
+           j < node_cnt; j++) {
+        result.push_back(cs_options.topology.clusters[i].nodes[j].classic_port);
+      }
     }
 
     return result;
@@ -717,7 +756,8 @@ TEST_F(ReadReplicaTest, ReadOnlyTargetsChanges) {
   change_read_only_targets("all");
   EXPECT_TRUE(
       wait_for_transaction_count_increase(cluster_nodes_[0].http_port, 3));
-  check_log_contains(router, "Using read_only_targets='all'", 2);
+  EXPECT_NO_FATAL_FAILURE(
+      check_log_contains(router, "Using read_only_targets='all'", 2));
 
   // make sure Read Replicas were NOT added to the state file as a metadata
   // servers
@@ -1020,7 +1060,7 @@ TEST_P(ReadReplicaQuarantinedTest, ReadReplicaQuarantined) {
 
   ASSERT_NO_FATAL_FAILURE(check_log_contains(
       router,
-      "add destination '127.0.0.1:" + std::to_string(classic_port_D) +
+      "Add destination '127.0.0.1:" + std::to_string(classic_port_D) +
           "' to quarantine",
       1));
 
@@ -1063,7 +1103,7 @@ TEST_P(ReadReplicaQuarantinedTest, ReadReplicaQuarantined) {
 
   ASSERT_NO_FATAL_FAILURE(check_log_contains(
       router,
-      "add destination '127.0.0.1:" + std::to_string(classic_port_E) +
+      "Add destination '127.0.0.1:" + std::to_string(classic_port_E) +
           "' to quarantine",
       1));
 
@@ -1078,7 +1118,7 @@ TEST_P(ReadReplicaQuarantinedTest, ReadReplicaQuarantined) {
 
   ASSERT_NO_FATAL_FAILURE(check_log_contains(
       router,
-      "add destination '127.0.0.1:" + std::to_string(classic_port_D) +
+      "Add destination '127.0.0.1:" + std::to_string(classic_port_D) +
           "' to quarantine",
       2));
 
@@ -1134,7 +1174,7 @@ TEST_F(ReadReplicaTest, ReadReplicaQuarantinedReadOnlyTargetsAll) {
   }
 
   check_log_contains(router,
-                     "add destination '127.0.0.1:" +
+                     "Add destination '127.0.0.1:" +
                          std::to_string(classic_port_D) + "' to quarantine",
                      1);
 
@@ -1171,7 +1211,7 @@ TEST_F(ReadReplicaTest, ReadReplicaQuarantinedReadOnlyTargetsAll) {
   }
 
   check_log_contains(router,
-                     "add destination '127.0.0.1:" +
+                     "Add destination '127.0.0.1:" +
                          std::to_string(classic_port_E) + "' to quarantine",
                      1);
 
@@ -1191,7 +1231,7 @@ TEST_F(ReadReplicaTest, ReadReplicaQuarantinedReadOnlyTargetsAll) {
   }
 
   check_log_contains(router,
-                     "add destination '127.0.0.1:" +
+                     "Add destination '127.0.0.1:" +
                          std::to_string(classic_port_D) + "' to quarantine",
                      2);
 
@@ -1439,6 +1479,161 @@ TEST_F(ReadReplicaTest, ReadReplicaClusterSet) {
     ro_cons.emplace_back(*port_res, std::move(*conn_res));
   }
   check_all_ports_used(expected_ports, ro_cons);
+}
+
+TEST_F(ReadReplicaTest, ReadReplicaClusterSetRoutingGuidelines) {
+  const unsigned primary_read_replicas_nodes_count = 2;
+  const unsigned replica1_read_replicas_nodes_count = 1;
+  const auto replica_cnt =
+      primary_read_replicas_nodes_count + replica1_read_replicas_nodes_count;
+  std::string router_options =
+      get_router_options_as_json_str("primary", std::nullopt, "all");
+
+  ClusterSetOptions cs_options;
+  cs_options.tracefile = "metadata_clusterset.js";
+  cs_options.router_options = router_options;
+  cs_options.gr_nodes_number = std::vector<size_t>{3, 3, 3};
+  cs_options.read_replicas_number = std::vector<size_t>{
+      primary_read_replicas_nodes_count, replica1_read_replicas_nodes_count, 0};
+  create_clusterset(cs_options);
+
+  is_target_clusterset(true);
+
+  launch_router(get_md_servers_classic_ports(cs_options.topology));
+
+  const std::string custom_routing_guidelines = guidelines_builder::create(
+      {{"d1", "$.server.memberRole = READ_REPLICA"}},
+      {{"r1",
+        "$.session.targetPort =" + std::to_string(router_port_ro),
+        {{"round-robin", {"d1"}}}}});
+
+  SCOPED_TRACE("Set routing guidelines");
+
+  for (const auto [cluster_id, cluster] :
+       stdx::ranges::views::enumerate(cs_options.topology.clusters)) {
+    for (const auto [node_id, node] :
+         stdx::ranges::views::enumerate(cluster.nodes)) {
+      set_mock_clusterset_metadata(node.http_port, cluster_id, node_id,
+                                   cs_options, custom_routing_guidelines);
+    }
+  }
+
+  ASSERT_TRUE(wait_for_transaction_count_increase(
+      cs_options.topology.clusters[0].nodes[0].http_port, 3));
+
+  const auto expected_ports = get_cs_read_replicas_classic_ports(cs_options);
+
+  for (size_t i = 0; i < 2 * replica_cnt; i++) {
+    auto client_res = make_new_connection(router_port_ro);
+    ASSERT_NO_ERROR(client_res);
+    auto port_res = select_port(client_res->get());
+    ASSERT_NO_ERROR(port_res);
+    EXPECT_THAT(expected_ports, ::Contains(*port_res));
+  }
+
+  // change the target cluster to secondary cluster, it should not affect the
+  // routing as we are matching all Read Replica nodes
+  cs_options.view_id = ++view_id_;
+  cs_options.target_cluster_id = 1;
+  cs_options.router_options = get_router_options_as_json_str(
+      "00000000-0000-0000-0000-0000000000g2", std::nullopt, "all");
+
+  set_mock_metadata_on_all_cs_nodes(cs_options);
+  ASSERT_TRUE(wait_for_transaction_count_increase(
+      cs_options.topology.clusters[0].nodes[0].http_port, 2));
+
+  for (size_t i = 0; i < 2 * replica_cnt; i++) {
+    auto client_res = make_new_connection(router_port_ro);
+    ASSERT_NO_ERROR(client_res);
+    auto port_res = select_port(client_res->get());
+    ASSERT_NO_ERROR(port_res);
+    EXPECT_THAT(expected_ports, ::Contains(*port_res));
+  }
+
+  // change the target cluster back to primary cluster
+  cs_options.view_id = ++view_id_;
+  cs_options.target_cluster_id = 0;
+  cs_options.router_options =
+      get_router_options_as_json_str("primary", std::nullopt, "all");
+  set_mock_metadata_on_all_cs_nodes(cs_options);
+
+  ASSERT_TRUE(wait_for_transaction_count_increase(
+      cs_options.topology.clusters[0].nodes[0].http_port, 2));
+
+  for (size_t i = 0; i < 2 * replica_cnt; i++) {
+    auto client_res = make_new_connection(router_port_ro);
+    ASSERT_NO_ERROR(client_res);
+    auto port_res = select_port(client_res->get());
+    ASSERT_NO_ERROR(port_res);
+    EXPECT_THAT(expected_ports, ::Contains(*port_res));
+  }
+}
+
+TEST_F(ReadReplicaTest, ReadReplicaClusterRoutingGuidelines) {
+  const unsigned initial_gr_nodes_count = 3;
+  const unsigned initial_read_replica_nodes_count = 1;
+
+  create_gr_cluster(initial_gr_nodes_count, initial_read_replica_nodes_count,
+                    "all");
+  launch_router(get_md_servers_classic_ports());
+
+  const std::string custom_routing_guidelines = guidelines_builder::create(
+      {{"d1", "$.server.memberRole = READ_REPLICA"}},
+      {{"r1",
+        "$.session.targetPort =" + std::to_string(router_port_ro),
+        {{"round-robin", {"d1"}}}}});
+
+  SCOPED_TRACE("Set routing guidelines");
+  for (unsigned node_id = 0; node_id < cluster_nodes_.size(); ++node_id) {
+    auto &node = cluster_nodes_[node_id];
+
+    set_mock_metadata(node.http_port, "", 0, cluster_nodes_, router_options_,
+                      "127.0.0.1", custom_routing_guidelines);
+  }
+
+  ASSERT_TRUE(
+      wait_for_transaction_count_increase(cluster_nodes_[0].http_port, 3));
+
+  for (size_t i = 0; i < gr_nodes_count_ + read_replica_nodes_count_; i++) {
+    auto client_res = make_new_connection(router_port_ro);
+    ASSERT_NO_ERROR(client_res);
+    auto port_res = select_port(client_res->get());
+    ASSERT_NO_ERROR(port_res);
+    EXPECT_THAT(get_read_replicas_classic_ports(), ::Contains(*port_res));
+  }
+
+  SCOPED_TRACE(
+      "Add new RR to the Cluster, check that it is used for RO connections");
+  add_read_replica_node();
+  ASSERT_TRUE(
+      wait_for_transaction_count_increase(cluster_nodes_[0].http_port, 3));
+  for (size_t i = 0; i < gr_nodes_count_ + read_replica_nodes_count_; i++) {
+    auto client_res = make_new_connection(router_port_ro);
+    ASSERT_NO_ERROR(client_res);
+    auto port_res = select_port(client_res->get());
+    ASSERT_NO_ERROR(port_res);
+    EXPECT_THAT(get_read_replicas_classic_ports(), ::Contains(*port_res));
+  }
+
+  SCOPED_TRACE("Remove first RR");
+  remove_node(/*id=*/gr_nodes_count_);
+  ASSERT_TRUE(
+      wait_for_transaction_count_increase(cluster_nodes_[0].http_port, 3));
+  for (size_t i = 0; i < 2 * (gr_nodes_count_ + read_replica_nodes_count_);
+       i++) {
+    auto client_res = make_new_connection(router_port_ro);
+    ASSERT_NO_ERROR(client_res);
+    auto port_res = select_port(client_res->get());
+    ASSERT_NO_ERROR(port_res);
+    EXPECT_THAT(get_read_replicas_classic_ports(), ::Contains(*port_res));
+  }
+
+  SCOPED_TRACE("Remove last remaining RR");
+  remove_node(/*id=*/gr_nodes_count_);
+  ASSERT_TRUE(
+      wait_for_transaction_count_increase(cluster_nodes_[0].http_port, 3));
+
+  verify_new_connection_fails(router_port_ro);
 }
 
 struct ReadReplicaInvalidatedClusterTestParam {
@@ -1716,11 +1911,16 @@ TEST_F(ReadReplicaTest, HidingNodesReadOnlyTargetsAll) {
   }
 }
 
+class HiddenNodesReadReplicaTest : public ReadReplicaTest,
+                                   public ::testing::WithParamInterface<bool> {
+};
+
 /**
  * @test Check that hiding Read Replica nodes works as expected when
- * read_only_targets="read_replicas" option is used
+ * a) read_only_targets="read_replicas" option is used
+ * b) Rouing Guidelines are used
  */
-TEST_F(ReadReplicaTest, HidingNodesReadReplicas) {
+TEST_P(HiddenNodesReadReplicaTest, HidingNodesReadReplicas) {
   // [ A ] - GR RW node
   // [ B, C ] - GR RO nodes
   // [ D, E ] - RR nodes
@@ -1729,6 +1929,25 @@ TEST_F(ReadReplicaTest, HidingNodesReadReplicas) {
 
   create_gr_cluster(gr_nodes_count, replica_nodes_count, "read_replicas");
   launch_router(get_md_servers_classic_ports());
+
+  if (GetParam()) {
+    const std::string custom_routing_guidelines = guidelines_builder::create(
+        {{"d1", "$.server.memberRole = READ_REPLICA"}},
+        {{"r1",
+          "$.session.targetPort =" + std::to_string(router_port_ro),
+          {{"round-robin", {"d1"}}}}});
+
+    SCOPED_TRACE("Set routing guidelines");
+    for (unsigned node_id = 0; node_id < cluster_nodes_.size(); ++node_id) {
+      auto &node = cluster_nodes_[node_id];
+
+      set_mock_metadata(node.http_port, "", 0, cluster_nodes_, router_options_,
+                        "127.0.0.1", custom_routing_guidelines);
+    }
+
+    EXPECT_TRUE(
+        wait_for_transaction_count_increase(cluster_nodes_[0].http_port, 3));
+  }
 
   std::vector<std::pair<uint16_t, std::unique_ptr<MySQLSession>>> ro_cons;
 
@@ -1809,6 +2028,12 @@ TEST_F(ReadReplicaTest, HidingNodesReadReplicas) {
                 testing::Contains(*port_res));
   }
 }
+
+INSTANTIATE_TEST_SUITE_P(HiddenNodesReadReplicaTest, HiddenNodesReadReplicaTest,
+                         ::testing::Values(true, false), [](const auto &arg) {
+                           return arg.param ? "routing_guidelines"
+                                            : "read_only_targets";
+                         });
 
 class MetadataUnavailableTest
     : public ReadReplicaTest,

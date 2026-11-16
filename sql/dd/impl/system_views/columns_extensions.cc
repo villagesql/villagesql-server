@@ -44,8 +44,7 @@ const dd::system_views::Columns_extensions *s_instance =
 
 }  // namespace
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Columns_extensions &Columns_extensions::instance() { return *s_instance; }
 
@@ -89,5 +88,4 @@ Columns_extensions::Columns_extensions(const dd::String_type &n) {
 }
 
 const dd::String_type &Columns_extensions::view_name() { return s_view_name; }
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

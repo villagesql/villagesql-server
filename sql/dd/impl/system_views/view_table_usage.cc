@@ -27,11 +27,10 @@
 
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const View_table_usage &View_table_usage::instance() {
-  static View_table_usage *s_instance = new View_table_usage();
+  static auto *s_instance = new View_table_usage();
   return *s_instance;
 }
 
@@ -64,5 +63,4 @@ View_table_usage::View_table_usage() {
       "vw.view_definer, vw.options)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

@@ -105,6 +105,30 @@ inline bool is_string_type(enum_field_types type) {
 }
 
 /**
+  Is this a simple string type? CHAR/VARCHAR/BINARY/VARBINARY and variants of
+  TEXT and BLOB are considered simple string types. Not string-like types with
+  special semantics, such as JSON, GEOMETRY and temporal types.
+
+  @param type Field type, as returned by field->type()
+
+  @returns true if simple string type, false otherwise
+*/
+inline bool is_simple_string_type(enum_field_types type) {
+  switch (type) {
+    case MYSQL_TYPE_STRING:
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
   Tests if field type is temporal, i.e. represents
   DATE, TIME, DATETIME, TIMESTAMP or YEAR types in SQL.
 

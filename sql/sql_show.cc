@@ -37,6 +37,7 @@
 #include <memory>
 #include <new>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,7 @@
 #include "my_command.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
+#include "my_default.h"
 #include "my_hostname.h"
 #include "my_io.h"
 #include "my_macros.h"
@@ -74,7 +76,8 @@
 #include "mysql_time.h"
 #include "mysqld_error.h"
 #include "nulls.h"
-#include "scope_guard.h"         // Scope_guard
+#include "scope_guard.h"  // Scope_guard
+#include "sql-common/json_dom.h"
 #include "sql/auth/auth_acls.h"  // DB_ACLS
 #include "sql/auth/auth_common.h"
 #include "sql/auth/sql_security_ctx.h"
@@ -95,7 +98,8 @@
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // Internal_error_handler
 #include "sql/events.h"         // Events
-#include "sql/field.h"          // Field
+#include "sql/external_table_const.h"
+#include "sql/field.h"  // Field
 #include "sql/handler.h"
 #include "sql/item.h"  // Item_empty_string
 #include "sql/key.h"
@@ -126,12 +130,14 @@
 #include "sql/sql_gipk.h"      // table_has_generated_invisible_primary_key
 #include "sql/sql_lex.h"       // LEX
 #include "sql/sql_list.h"
+#include "sql/sql_masking_policy.h"
 #include "sql/sql_optimizer.h"  // JOIN
 #include "sql/sql_parse.h"      // command_name
 #include "sql/sql_partition.h"  // HA_USE_AUTO_PARTITION
 #include "sql/sql_plugin.h"     // PLUGIN_IS_DELETED, LOCK_plugin
 #include "sql/sql_plugin_ref.h"
-#include "sql/sql_profile.h"    // query_profile_statistics_info
+#include "sql/sql_profile.h"  // query_profile_statistics_info
+#include "sql/sql_rewrite.h"
 #include "sql/sql_table.h"      // primary_key_name
 #include "sql/sql_tmp_table.h"  // create_ondisk_from_heap
 #include "sql/sql_trigger.h"    // acquire_shared_mdl_for_trigger
@@ -349,6 +355,12 @@ bool Sql_cmd_show_create_function::execute_inner(THD *thd) {
   return sp_show_create_routine(thd, enum_sp_type::FUNCTION, lex->spname);
 }
 
+bool Sql_cmd_show_create_library::check_privileges(THD *) { return false; }
+
+bool Sql_cmd_show_create_library::execute_inner(THD *thd) {
+  return sp_show_create_routine(thd, enum_sp_type::LIBRARY, lex->spname);
+}
+
 bool Sql_cmd_show_create_procedure::check_privileges(THD *) { return false; }
 
 bool Sql_cmd_show_create_procedure::execute_inner(THD *thd) {
@@ -455,6 +467,51 @@ bool Sql_cmd_show_create_user::execute_inner(THD *thd) {
   return false;
 }
 
+bool Sql_cmd_show_create_masking_policy::check_privileges(THD *thd) {
+  return check_masking_policy_manage_privilege(thd);
+}
+
+bool Sql_cmd_show_create_masking_policy::execute_inner(THD *thd) {
+  std::string reason;
+  std::optional<Sql_masking_policy_spec> spec =
+      get_masking_policy_spec(thd, m_policy_name, &reason);
+  if (!spec.has_value()) {
+    my_error(ER_MASKING_POLICY_COMPONENT_ERROR, MYF(0), reason.c_str());
+    return true;
+  }
+
+  mem_root_deque<Item *> field_list(thd->mem_root);
+  field_list.push_back(new Item_empty_string("policy_name", NAME_CHAR_LEN));
+  field_list.push_back(new Item_empty_string("create_policy", 2048));
+
+  if (thd->send_result_metadata(field_list,
+                                Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF)) {
+    return true;
+  }
+
+  Protocol *protocol = thd->get_protocol();
+  protocol->start_row();
+  protocol->store_string(spec->policy_name.str, spec->policy_name.length,
+                         system_charset_info);
+
+  StringBuffer<2048> buffer{system_charset_info};
+  buffer.append("CREATE MASKING POLICY ");
+  append_identifier(thd, &buffer, spec->policy_name.str,
+                    spec->policy_name.length);
+  buffer.append(" (");
+  append_identifier(thd, &buffer, spec->argument_name.str,
+                    spec->argument_name.length);
+  buffer.append(") ");
+  buffer.append(spec->masking_expression);
+
+  protocol->store_string(buffer.ptr(), buffer.length(), buffer.charset());
+
+  if (protocol->end_row()) return true;
+
+  my_eof(thd);
+  return false;
+}
+
 bool Sql_cmd_show_databases::check_privileges(THD *thd) {
   Table_ref *const table = thd->lex->query_tables;
 
@@ -463,6 +520,26 @@ bool Sql_cmd_show_databases::check_privileges(THD *thd) {
 
   return (specialflag & SPECIAL_SKIP_SHOW_DB) &&
          check_global_access(thd, SHOW_DB_ACL);
+}
+
+bool Sql_cmd_show_client_stats::check_privileges(THD *thd) {
+  return check_global_access(thd, PROCESS_ACL);
+}
+
+bool Sql_cmd_show_index_stats::check_privileges(THD *thd) {
+  return check_global_access(thd, PROCESS_ACL);
+}
+
+bool Sql_cmd_show_table_stats::check_privileges(THD *thd) {
+  return check_global_access(thd, PROCESS_ACL);
+}
+
+bool Sql_cmd_show_thread_stats::check_privileges(THD *thd) {
+  return check_global_access(thd, PROCESS_ACL);
+}
+
+bool Sql_cmd_show_user_stats::check_privileges(THD *thd) {
+  return check_global_access(thd, PROCESS_ACL);
 }
 
 bool Sql_cmd_show_engine_logs::check_privileges(THD *thd) {
@@ -535,7 +612,8 @@ bool Sql_cmd_show_grants::execute_inner(THD *thd) {
       const List_of_auth_id_refs *active_list =
           thd->security_context()->get_active_roles();
       return mysql_show_grants(thd, &current_user, *active_list,
-                               show_mandatory_roles, have_using_clause);
+                               show_mandatory_roles, have_using_clause,
+                               effective_grants);
     }
   } else if (strcmp(thd->security_context()->priv_user().str,
                     for_user->user.str) != 0) {
@@ -559,7 +637,7 @@ bool Sql_cmd_show_grants::execute_inner(THD *thd) {
   LEX_USER *tmp_user = const_cast<LEX_USER *>(for_user);
   tmp_user = get_current_user(thd, tmp_user);
   return mysql_show_grants(thd, tmp_user, authid_list, show_mandatory_roles,
-                           have_using_clause);
+                           have_using_clause, effective_grants);
 }
 
 bool Sql_cmd_show_binary_log_status::check_privileges(THD *thd) {
@@ -1270,7 +1348,7 @@ bool mysqld_show_create_db(THD *thd, char *dbname,
   char buff[2048], orig_dbname[NAME_LEN];
   String buffer(buff, sizeof(buff), system_charset_info);
   Security_context *sctx = thd->security_context();
-  uint db_access;
+  Access_bitmask db_access;
   HA_CREATE_INFO create;
   bool schema_read_only{false};
   const uint create_options = create_info ? create_info->options : 0;
@@ -1289,6 +1367,7 @@ bool mysqld_show_create_db(THD *thd, char *dbname,
              sctx->priv_user().str, dbname, strlen(dbname)) |
          sctx->master_access(dbname ? dbname : ""));
   if (!(db_access & DB_OP_ACLS) && check_grant_db(thd, dbname, true)) {
+    thd->diff_access_denied_errors++;
     my_error(ER_DBACCESS_DENIED_ERROR, MYF(0), sctx->priv_user().str,
              sctx->host_or_ip().str, dbname);
     query_logger.general_log_print(
@@ -1462,7 +1541,8 @@ static const char *require_quotes(const char *name, size_t name_length) {
   @param length                length of the appending identifier
 */
 
-void append_identifier(String *packet, const char *name, size_t length) {
+void append_identifier_with_backtick(String *packet, const char *name,
+                                     size_t length) {
   const char *name_end;
   const char quote_char = '`';
 
@@ -1500,6 +1580,8 @@ void append_identifier(String *packet, const char *name, size_t length) {
 /**
   Convert and quote the given identifier if needed and append it to the
   target string. If the given identifier is empty, it will be quoted.
+  This function use the backtick or double quotes as escape char based on
+  sql_mode.
 
   @param thd                   thread handler
   @param packet                target string
@@ -1512,6 +1594,8 @@ void append_identifier(String *packet, const char *name, size_t length) {
 void append_identifier(const THD *thd, String *packet, const char *name,
                        size_t length, const CHARSET_INFO *from_cs,
                        const CHARSET_INFO *to_cs) {
+  if (thd == nullptr)
+    return append_identifier_with_backtick(packet, name, length);
   const char *name_end;
   char quote_char;
   int q;
@@ -1535,8 +1619,7 @@ void append_identifier(const THD *thd, String *packet, const char *name,
     cs_info = to_cs;
   }
 
-  q = thd != nullptr ? get_quote_char_for_identifier(thd, to_name, to_length)
-                     : '`';
+  q = get_quote_char_for_identifier(thd, to_name, to_length);
 
   if (q == EOF) {
     packet->append(to_name, to_length, packet->charset());
@@ -1605,14 +1688,6 @@ int get_quote_char_for_identifier(const THD *thd, const char *name,
   return '`';
 }
 
-void append_identifier(const THD *thd, String *packet, const char *name,
-                       size_t length) {
-  if (thd == nullptr)
-    append_identifier(packet, name, length);
-  else
-    append_identifier(thd, packet, name, length, nullptr, nullptr);
-}
-
 /* Append directory name (if exists) to CREATE INFO */
 
 static void append_directory(THD *thd, String *packet, const char *dir_type,
@@ -1662,6 +1737,7 @@ static bool print_on_update_clause(Field *field, String *val, bool lcase) {
 /**
   Print "DEFAULT" clause of a field into a string.
 
+
   @param thd               The THD to create the DEFAULT clause for.
   @param field             The field to generate the DEFAULT clause for.
   @param def_value         String to write the DEFAULT clause to to.
@@ -1669,124 +1745,150 @@ static bool print_on_update_clause(Field *field, String *val, bool lcase) {
                            false for not needed (value will became its
                            own field (with its own charset) in a table);
                            true for quote (as part of a SHOW CREATE statement).
+  @param[out] as_a_comment if not null, the function will set it to true when
+                           the default value is invalid, to signal that we
+                           should show it as a comment.
+                           Caller should initialize the value to 'false'.
   @return                  true if field has a DEFAULT value, false otherwise.
 */
 static bool print_default_clause(THD *thd, Field *field, String *def_value,
-                                 bool quoted) {
+                                 bool quoted, bool *as_a_comment) {
   const enum enum_field_types field_type = field->type();
   const bool has_default = (!field->is_flag_set(NO_DEFAULT_VALUE_FLAG) &&
                             !(field->auto_flags & Field::NEXT_NUMBER));
 
-  if (field->gcol_info) return false;
+  if (field->gcol_info || !has_default) return false;
 
   def_value->length(0);
-  if (has_default) {
-    if (field->has_insert_default_general_value_expression()) {
-      def_value->append("(");
-      char buffer[128];
-      String s(buffer, sizeof(buffer), system_charset_info);
-      field->m_default_val_expr->print_expr(thd, &s);
-      def_value->append(s);
-      def_value->append(")");
-    } else if (field->has_insert_default_datetime_value_expression()) {
+
+  if (field->has_insert_default_general_value_expression()) {
+    def_value->append("(");
+    char buffer[128];
+    String s(buffer, sizeof(buffer), system_charset_info);
+    field->m_default_val_expr->print_expr(thd, &s);
+    def_value->append(s);
+    def_value->append(")");
+
+    return true;
+  }
+  // BLOB-based columns cannot have a DEFAULT
+  if (field_type == MYSQL_TYPE_BLOB) return false;
+
+  if (field->has_insert_default_datetime_value_expression()) {
+    /*
+      We are using CURRENT_TIMESTAMP instead of NOW because it is the SQL
+      standard.
+    */
+    def_value->append(STRING_WITH_LEN("CURRENT_TIMESTAMP"));
+    if (field->decimals() > 0) {
+      def_value->append_parenthesized(field->decimals());
+    }
+    return true;
+  }
+
+  if (!field->is_null()) {
+    // Print the empty DEFAULT commented out to give the user a chance to fix
+    // it. JSON was  not supposed to have  any non-NULL DEFAULT in the first
+    // place. This check as well as the parameter as_a_comment should be
+    // removed when an error is raised  during CREATE TABLE.
+    if (field_type == MYSQL_TYPE_JSON) {
+      push_warning_printf(
+          thd, Sql_condition::SL_WARNING, ER_BLOB_CANT_HAVE_DEFAULT,
+          ER_THD(thd, ER_BLOB_CANT_HAVE_DEFAULT), field->field_name);
+      if (as_a_comment != nullptr) *as_a_comment = true;
+    }
+    char tmp[MAX_FIELD_WIDTH];
+    String type(tmp, sizeof(tmp), field->charset());
+    // Wrap bit values in b'...'
+    if (field_type == MYSQL_TYPE_BIT) {
+      const longlong dec = field->val_int();
+      char *ptr = longlong2str(dec, tmp + 2, 2);
+      const uint32 length = (uint32)(ptr - tmp);
+      tmp[0] = 'b';
+      tmp[1] = '\'';
+      tmp[length] = '\'';
+      type.length(length + 1);
+      quoted = false;
+    } else {
+      // VillageSQL: val_external_str handles both custom and regular types
+      field->val_external_str(&type);
+    }
+
+    if (type.length()) {
       /*
-        We are using CURRENT_TIMESTAMP instead of NOW because it is the SQL
-        standard.
+        value_only will contain only the default value itself,
+        while def_value will contain that, any quotation, escaping,
+        character-set designation, and so on.
       */
-      def_value->append(STRING_WITH_LEN("CURRENT_TIMESTAMP"));
-      if (field->decimals() > 0)
-        def_value->append_parenthesized(field->decimals());
-      // Not null by default and not a BLOB
-    } else if (!field->is_null() && field_type != FIELD_TYPE_BLOB) {
-      char tmp[MAX_FIELD_WIDTH];
-      String type(tmp, sizeof(tmp), field->charset());
-      // Wrap bit values in b'...'
-      if (field_type == MYSQL_TYPE_BIT) {
-        const longlong dec = field->val_int();
-        char *ptr = longlong2str(dec, tmp + 2, 2);
-        const uint32 length = (uint32)(ptr - tmp);
-        tmp[0] = 'b';
-        tmp[1] = '\'';
-        tmp[length] = '\'';
-        type.length(length + 1);
-        quoted = false;
-      } else {
-        // VillageSQL: val_external_str handles both custom and regular types
-        field->val_external_str(&type);
+      String value_only;
+
+      /* Try to convert to system_charset_info (UTF-8). */
+      /* Counter-intuitively, we do not receive an error if we can not
+         create valid UTF-8 with copy(), so we'll have to talk to the
+         lower level functions. */
+
+      const char *well_formed_error_pos;
+      const char *cannot_convert_error_pos;
+      const char *from_end_pos;
+      size_t to_len; /* destination size in bytes (not characters) */
+      size_t bytes_copied;
+
+      to_len = type.length() * system_charset_info->mbmaxlen;
+
+      value_only.reserve(to_len);
+
+      bytes_copied = well_formed_copy_nchars(
+          /* to    */ system_charset_info, value_only.ptr(), to_len,
+          /* from  */ field->charset(), type.ptr(), type.length(),
+          /* chars */ type.length(), &well_formed_error_pos,
+          &cannot_convert_error_pos, &from_end_pos);
+
+      // If conversion failed, hexify string.
+      if ((well_formed_error_pos != nullptr) ||
+          (cannot_convert_error_pos != nullptr)) {
+        unsigned char *p;
+        size_t l = type.length();
+        char hex[3];  // 2 characters as we have 2 nibbles per byte, plus '\0'.
+
+        /*
+          Result length:
+          - 2 characters (for 2 nibbles) for each byte we hexify
+          - plus "0x"
+          - plus '\0'
+        */
+        def_value->reserve(l * 2 + 3);
+        def_value->append("0x");
+        p = (unsigned char *)type.ptr();
+        while (l--) {
+          snprintf(hex, sizeof(hex), "%02X", (int)(*(p++) & 0xff));
+          def_value->append(hex);
+        }
       }
 
-      if (type.length()) {
-        /*
-          value_only will contain only the default value itself,
-          while def_value will contain that, any quotation, escaping,
-          character-set designation, and so on.
-        */
-        String value_only;
+      /*
+        Charset conversation succeeded or wasn't necessary.
+      */
+      else {
+        value_only.length(bytes_copied);
 
-        /* Try to convert to system_charset_info (UTF-8). */
-        /* Counter-intuitively, we do not receive an error if we can not
-           create valid UTF-8 with copy(), so we'll have to talk to the
-           lower level functions. */
+        if (quoted)
+          append_unescaped(def_value, value_only.ptr(), value_only.length());
+        else
+          def_value->append(value_only.ptr(), value_only.length());
+      }
 
-        const char *well_formed_error_pos;
-        const char *cannot_convert_error_pos;
-        const char *from_end_pos;
-        size_t to_len; /* destination size in bytes (not characters) */
-        size_t bytes_copied;
-
-        to_len = type.length() * system_charset_info->mbmaxlen;
-
-        value_only.reserve(to_len);
-
-        bytes_copied = well_formed_copy_nchars(
-            /* to    */ system_charset_info, value_only.ptr(), to_len,
-            /* from  */ field->charset(), type.ptr(), type.length(),
-            /* chars */ type.length(), &well_formed_error_pos,
-            &cannot_convert_error_pos, &from_end_pos);
-
-        // If conversion failed, hexify string.
-        if ((well_formed_error_pos != nullptr) ||
-            (cannot_convert_error_pos != nullptr)) {
-          unsigned char *p;
-          size_t l = type.length();
-          char
-              hex[3];  // 2 characters as we have 2 nibbles per byte, plus '\0'.
-
-          /*
-            Result length:
-            - 2 characters (for 2 nibbles) for each byte we hexify
-            - plus "0x"
-            - plus '\0'
-          */
-          def_value->reserve(l * 2 + 3);
-          def_value->append("0x");
-          p = (unsigned char *)type.ptr();
-          while (l--) {
-            snprintf(hex, sizeof(hex), "%02X", (int)(*(p++) & 0xff));
-            def_value->append(hex);
-          }
-        }
-
-        /*
-          Charset conversation succeeded or wasn't necessary.
-        */
-        else {
-          value_only.length(bytes_copied);
-
-          if (quoted)
-            append_unescaped(def_value, value_only.ptr(), value_only.length());
-          else
-            def_value->append(value_only.ptr(), value_only.length());
-        }
-
-      } else if (quoted)  // !type.length()
-        def_value->append(STRING_WITH_LEN("''"));
-    } else if (field->is_nullable() && quoted && field_type != FIELD_TYPE_BLOB)
-      def_value->append(STRING_WITH_LEN("NULL"));  // Null as default
-    else
-      return false;
+    } else if (quoted) {  // !type.length()
+      def_value->append(STRING_WITH_LEN("''"));
+    }
+    return true;
   }
-  return has_default;
+
+  if (field->is_nullable() && quoted) {
+    def_value->append(STRING_WITH_LEN("NULL"));  // Null as default
+    return true;
+  }
+
+  return false;
 }
 
 /*
@@ -1926,6 +2028,389 @@ static void print_foreign_key_info(THD *thd, const LEX_CSTRING *db,
 }
 
 /**
+  Helper function to lookup a specific key in a JSON object and add
+  its numeric value, preceded by the specified prefix, and succeeded
+  by the specified suffix, to the statement string.
+
+  @param packet   Pointer to a string where statement will be written.
+  @param json_obj The JSON object to look for the key.
+  @param prefix   The string to precede the numeric value.
+  @param suffix   The string to succeed the numeric value.
+  @param key_name The name of the key.
+
+  @returns true if error, false otherwise.
+*/
+static bool append_number_option(String *packet, const Json_wrapper &json_obj,
+                                 const char *prefix, const char *suffix,
+                                 std::string_view key_name) {
+  Json_wrapper value = json_obj.lookup(key_name);
+  if (!value.empty()) {
+    packet->append(prefix);
+    packet->append(STRING_WITH_LEN(" "));
+    if (value.to_string(packet, true, "append_number_option()",
+                        JsonDepthErrorHandler)) {
+      return true;
+    }
+    packet->append(STRING_WITH_LEN(" "));
+    packet->append(suffix);
+    packet->append(STRING_WITH_LEN(" "));
+  }
+  return false;
+}
+
+/**
+  Helper function to lookup a specific key in a JSON object and add its
+  boolean value, preceded by the specified SQL keyword, to the statement string.
+
+  @param packet   Pointer to a string where statement will be written.
+  @param json_obj The JSON object to look for the key.
+  @param sql_name The SQL keyword to use.
+  @param key_name The name of the key.
+  @param onoff    Whether the boolean value should be printed as ON/OFF or 1/0.
+*/
+static void append_bool_option(String *packet, const Json_wrapper &json_obj,
+                               const char *sql_name,
+                               const std::string_view key_name,
+                               bool onoff = false) {
+  Json_wrapper bool_value = json_obj.lookup(key_name);
+  if (!bool_value.empty()) {
+    packet->append(sql_name);
+    packet->append(STRING_WITH_LEN(" "));
+    if (bool_value.get_boolean()) {
+      if (onoff) {
+        packet->append(STRING_WITH_LEN("ON"));
+      } else {
+        packet->append(STRING_WITH_LEN("1"));
+      }
+    } else {
+      if (onoff) {
+        packet->append(STRING_WITH_LEN("OFF"));
+      } else {
+        packet->append(STRING_WITH_LEN("0"));
+      }
+    }
+    packet->append(STRING_WITH_LEN(" "));
+  }
+}
+
+/**
+  Helper function to lookup a specific key in a JSON object and add its
+  string value, preceded by the specified SQL keyword, to the statement string.
+
+  @param packet   Pointer to a string where statement will be written.
+  @param json_obj The JSON object to look for the key.
+  @param sql_name The SQL keyword to use.
+  @param key_name The name of the key.
+  @param quotes   Whether the string should be enclosed in quotes.
+*/
+static void append_string_option(String *packet, const Json_wrapper &json_obj,
+                                 const char *sql_name,
+                                 std::string_view key_name,
+                                 bool quotes = true) {
+  Json_wrapper str_value = json_obj.lookup(key_name);
+  if (!str_value.empty()) {
+    packet->append(sql_name);
+    packet->append(STRING_WITH_LEN(" "));
+    if (quotes) {
+      append_unescaped(packet, str_value.get_data(),
+                       str_value.get_data_length());
+    } else {
+      packet->append(str_value.get_data(), str_value.get_data_length());
+    }
+    packet->append(STRING_WITH_LEN(" "));
+  }
+}
+
+/**
+  Generate the FILE_FORMAT table option from the content of ENGINE_ATTRIBUTE
+
+  @param packet          Pointer to a string where statement will be written.
+  @param file_format_obj The dialect object in the ENGINE_ATTRIBUTE.
+
+  @returns true if error, false otherwise.
+*/
+static bool generate_sql_from_file_format_object(
+    String *packet, const Json_wrapper &file_format_obj) {
+  packet->append(STRING_WITH_LEN("FILE_FORMAT = ( "));
+
+  append_string_option(packet, file_format_obj, "FORMAT",
+                       external_table::kFormatParam, false);
+  append_string_option(packet, file_format_obj, "COMPRESSION",
+                       external_table::kCompressionParam);
+  append_string_option(packet, file_format_obj, "CHARACTER SET",
+                       external_table::kEncodingParam);
+  append_bool_option(packet, file_format_obj, "HEADER",
+                     external_table::kHasHeaderParam, true);
+
+  // Check if there is any field options
+  if (file_format_obj.lookup(external_table::kDateFormatParam).type() !=
+          enum_json_type::J_ERROR ||
+      file_format_obj.lookup(external_table::kTimeFormatParam).type() !=
+          enum_json_type::J_ERROR ||
+      file_format_obj.lookup(external_table::kTimestampFormatParam).type() !=
+          enum_json_type::J_ERROR ||
+      file_format_obj.lookup(external_table::kDatetimeFormatParam).type() !=
+          enum_json_type::J_ERROR ||
+      file_format_obj.lookup(external_table::kNullValueParam).type() !=
+          enum_json_type::J_ERROR ||
+      file_format_obj.lookup(external_table::kEmptyValueParam).type() !=
+          enum_json_type::J_ERROR ||
+      file_format_obj.lookup(external_table::kFieldDelimiterParam).type() !=
+          enum_json_type::J_ERROR ||
+      file_format_obj.lookup(external_table::kQuotationMarksParam).type() !=
+          enum_json_type::J_ERROR ||
+      file_format_obj.lookup(external_table::kEscapeCharacterParam).type() !=
+          enum_json_type::J_ERROR) {
+    packet->append(STRING_WITH_LEN("FIELDS "));
+    append_string_option(packet, file_format_obj, "TERMINATED BY",
+                         external_table::kFieldDelimiterParam);
+    append_string_option(packet, file_format_obj, "OPTIONALLY ENCLOSED BY",
+                         external_table::kQuotationMarksParam);
+    append_string_option(packet, file_format_obj, "ESCAPED BY",
+                         external_table::kEscapeCharacterParam);
+    append_string_option(packet, file_format_obj, "DATE FORMAT",
+                         external_table::kDateFormatParam);
+    append_string_option(packet, file_format_obj, "TIME FORMAT",
+                         external_table::kTimeFormatParam);
+    if (!file_format_obj.lookup(external_table::kDatetimeFormatParam).empty()) {
+      append_string_option(packet, file_format_obj, "DATETIME FORMAT",
+                           external_table::kDatetimeFormatParam);
+    } else {
+      append_string_option(packet, file_format_obj, "DATETIME FORMAT",
+                           external_table::kTimestampFormatParam);
+    }
+    append_string_option(packet, file_format_obj, "NULL AS",
+                         external_table::kNullValueParam);
+    append_string_option(packet, file_format_obj, "EMPTY VALUE",
+                         external_table::kEmptyValueParam);
+  }
+  append_string_option(packet, file_format_obj, "LINES TERMINATED BY",
+                       external_table::kRecordDelimiterParam);
+  if (append_number_option(packet, file_format_obj, "IGNORE", "LINES",
+                           external_table::kSkipRowsParam)) {
+    return true;
+  }
+
+  packet->append(STRING_WITH_LEN(") "));
+  return false;
+}
+
+/**
+  Check if all parts of the engine attribute object can be expressed
+  with SQL syntax.
+
+  Iterates through all JSON keys of the engine attribute and checks whether
+  there is a key that does not have a mapping to SQL syntax.
+
+  @param engine_attr_obj The json_object that represents the parsed
+                         engine attribute string.
+  @returns false if an unsupported JSON key is found, true, otherwise.
+ */
+static bool can_use_sql_for_engine_attribute(Json_object *engine_attr_obj) {
+  using namespace external_table;
+
+  const std::set<std::string_view> supported_top_level_params = {
+      kFileParam, kDialectParam, "auto_refresh"sv,
+      "auto_refresh_event_source"sv};
+  for (const auto &iter : *engine_attr_obj) {
+    if (!supported_top_level_params.contains(iter.first)) {
+      return false;
+    }
+  }
+
+  const std::set<std::string_view> supported_file_params = {
+      kUriParam,     kParParam,          kNameParam,        kPrefixParam,
+      kPatternParam, kIsStrictModeParam, kAllowMissingParam};
+  auto *files_dom = engine_attr_obj->get(kFileParam);
+  if (files_dom != nullptr) {
+    if (files_dom->json_type() != enum_json_type::J_ARRAY) {
+      return false;
+    }
+
+    Json_wrapper files_array(files_dom, true);
+    for (size_t i = 0; i < files_array.length(); ++i) {
+      Json_wrapper file_object(files_array[i]);
+      if (file_object.type() != enum_json_type::J_OBJECT) {
+        return false;
+      }
+
+      Json_object_wrapper object_wrapper(file_object);
+      for (const auto &iter : object_wrapper) {
+        if (!supported_file_params.contains(iter.first)) {
+          return false;
+        }
+      }
+    }
+  }
+
+  const std::set<std::string_view> supported_dialect_params = {
+      kFormatParam,          kQuotationMarksParam,  kEscapeCharacterParam,
+      kSkipRowsParam,        kRecordDelimiterParam, kFieldDelimiterParam,
+      kEncodingParam,        kDateFormatParam,      kTimeFormatParam,
+      kTimestampFormatParam, kIsStrictModeParam,    kConstraintCheckParam,
+      kHasHeaderParam,       kAllowMissingParam,    kNullValueParam,
+      kEmptyValueParam,      kCompressionParam,     kDatetimeFormatParam};
+  auto *file_format_dom = engine_attr_obj->get(kDialectParam);
+  if (file_format_dom != nullptr) {
+    if (file_format_dom->json_type() != enum_json_type::J_OBJECT) {
+      return false;
+    }
+    Json_wrapper file_format_obj(file_format_dom, true);
+    Json_object_wrapper object_wrapper(file_format_obj);
+    for (const auto &iter : object_wrapper) {
+      if (!supported_dialect_params.contains(iter.first)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+  Generate SQL clauses that match the content of ENGINE_ATTRIBUTE
+
+  @param thd             The thread.
+  @param packet          Pointer to a string where statement will be written.
+  @param engine_attr_obj JSON object for the parsed ENGINE_ATTRIBUTE.
+  @param table_name      The name of the table.
+  @param redact_par      Whether URLs for external files should be redacted
+
+  @returns true if error, false otherwise.
+*/
+static bool generate_sql_from_engine_attribute(THD *thd, String *packet,
+                                               Json_object *engine_attr_obj,
+                                               LEX_CSTRING table_name,
+                                               bool redact_par) {
+  auto *file_format_dom = engine_attr_obj->get(external_table::kDialectParam);
+  if (file_format_dom != nullptr &&
+      file_format_dom->json_type() == enum_json_type::J_OBJECT) {
+    Json_wrapper file_format_obj(file_format_dom, true);
+    packet->append(STRING_WITH_LEN(" /*!90400 "));
+
+    bool contains_file_format_options = false;
+    Json_object_wrapper object_wrapper(file_format_obj);
+    for (auto iter = object_wrapper.cbegin(); iter != object_wrapper.cend();
+         ++iter) {
+      if (iter->first != external_table::kIsStrictModeParam &&
+          iter->first != external_table::kConstraintCheckParam &&
+          iter->first != external_table::kAllowMissingParam) {
+        contains_file_format_options = true;
+        break;
+      }
+    }
+    if (contains_file_format_options &&
+        generate_sql_from_file_format_object(packet, file_format_obj)) {
+      return true;
+    }
+
+    append_bool_option(packet, file_format_obj, "STRICT_LOAD",
+                       external_table::kIsStrictModeParam);
+    append_bool_option(packet, file_format_obj, "VERIFY_KEY_CONSTRAINTS",
+                       external_table::kConstraintCheckParam);
+    append_bool_option(packet, file_format_obj, "ALLOW_MISSING_FILES",
+                       external_table::kAllowMissingParam);
+
+    packet->append(STRING_WITH_LEN(" */"));
+
+    // Remove dialect object from ENGINE_ATTRIBUTE unless it is requested to
+    // show the original version
+    if (DBUG_EVALUATE_IF("print_engine_attribute", false, true)) {
+      engine_attr_obj->remove(external_table::kDialectParam);
+    }
+  }
+
+  auto *files_dom = engine_attr_obj->get(external_table::kFileParam);
+  if (files_dom != nullptr &&
+      files_dom->json_type() == enum_json_type::J_ARRAY) {
+    Json_wrapper files_array(files_dom, true);
+
+    packet->append(STRING_WITH_LEN(" /*!90400 FILES = ( "));
+
+    bool warning_pushed = false;
+    for (size_t i = 0; i < files_array.length(); ++i) {
+      if (i > 0) {
+        packet->append(", ");
+      }
+      if (redact_par) {
+        Json_wrapper url = files_array[i].lookup(external_table::kParParam);
+        if (url.empty()) {
+          // A PAR added with SQL syntax will not be stored as "uri",
+          // but an explicit ENGINE_ATTRIBUTE may contain a PAR in "uri"
+          url = files_array[i].lookup(external_table::kUriParam);
+        }
+        if (!url.empty()) {
+          packet->append(STRING_WITH_LEN("URL = "));
+          String original_url(url.get_data(), url.get_data_length(),
+                              system_charset_info);
+          String rlb;
+          redact_external_metadata(original_url, rlb);
+          append_unescaped(packet, rlb.ptr(), rlb.length());
+          packet->append(STRING_WITH_LEN(" "));
+          if (!warning_pushed) {
+            push_warning_printf(
+                thd, Sql_condition::SL_WARNING, ER_WARN_REDACTED_PRIVILEGES,
+                ER_THD(thd, ER_WARN_REDACTED_PRIVILEGES), table_name.str);
+            warning_pushed = true;
+          }
+        }
+      } else {
+        append_string_option(packet, files_array[i], "URL",
+                             external_table::kParParam);
+        append_string_option(packet, files_array[i], "URI",
+                             external_table::kUriParam);
+      }
+      append_string_option(packet, files_array[i], "FILE_NAME",
+                           external_table::kNameParam);
+      append_string_option(packet, files_array[i], "FILE_PATTERN",
+                           external_table::kPatternParam);
+      append_string_option(packet, files_array[i], "FILE_PREFIX",
+                           external_table::kPrefixParam);
+
+      append_bool_option(packet, files_array[i], "STRICT_LOAD",
+                         external_table::kIsStrictModeParam);
+      append_bool_option(packet, files_array[i], "ALLOW_MISSING_FILES",
+                         external_table::kAllowMissingParam);
+    }
+    packet->append(STRING_WITH_LEN(") */"));
+
+    // Remove file array from ENGINE_ATTRIBUTE unless it is requested to
+    // show the original version
+    if (DBUG_EVALUATE_IF("print_engine_attribute", false, true)) {
+      engine_attr_obj->remove(external_table::kFileParam);
+    }
+  }
+
+  auto *auto_refresh_dom = engine_attr_obj->get("auto_refresh");
+  if (auto_refresh_dom != nullptr &&
+      auto_refresh_dom->json_type() == enum_json_type::J_BOOLEAN) {
+    Json_wrapper engine_attr(engine_attr_obj, true);
+    packet->append(STRING_WITH_LEN(" /*!90400 "));
+    append_bool_option(packet, engine_attr, "AUTO_REFRESH", "auto_refresh");
+    packet->append(STRING_WITH_LEN(" */"));
+    if (DBUG_EVALUATE_IF("print_engine_attribute", false, true)) {
+      engine_attr_obj->remove("auto_refresh");
+    }
+  }
+
+  auto *auto_refresh_source_dom =
+      engine_attr_obj->get("auto_refresh_event_source");
+  if (auto_refresh_source_dom != nullptr &&
+      auto_refresh_source_dom->json_type() == enum_json_type::J_STRING) {
+    Json_wrapper engine_attr(engine_attr_obj, true);
+    packet->append(STRING_WITH_LEN(" /*!90400 "));
+    append_string_option(packet, engine_attr, "AUTO_REFRESH_SOURCE",
+                         "auto_refresh_event_source");
+    packet->append(STRING_WITH_LEN(" */"));
+    if (DBUG_EVALUATE_IF("print_engine_attribute", false, true)) {
+      engine_attr_obj->remove("auto_refresh_event_source");
+    }
+  }
+
+  return false;
+}
+
+/**
   Build a CREATE TABLE statement for a table.
 
   @param thd              The thread
@@ -1967,6 +2452,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
   const bool foreign_db_mode = (thd->variables.sql_mode & MODE_ANSI) != 0;
   my_bitmap_map *old_map;
   bool error = false;
+  bool omit_compressed_columns_extensions = false;
   DBUG_TRACE;
   DBUG_PRINT("enter", ("table: %s", table->s->table_name.str));
 
@@ -1974,6 +2460,8 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
 
   if (share->tmp_table)
     packet->append(STRING_WITH_LEN("CREATE TEMPORARY TABLE "));
+  else if (share->db_create_options & HA_OPTION_CREATE_EXTERNAL_TABLE)
+    packet->append(STRING_WITH_LEN("CREATE EXTERNAL TABLE "));
   else
     packet->append(STRING_WITH_LEN("CREATE TABLE "));
   if (create_info_arg &&
@@ -2118,6 +2606,12 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         packet->append(STRING_WITH_LEN(" VIRTUAL"));
     }
 
+    if (field->has_masking_policy()) {
+      packet->append(" MASKING POLICY ");
+      const LEX_CSTRING policy_name = field->masking_policy();
+      append_identifier(thd, packet, policy_name.str, policy_name.length);
+    }
+
     if (field->is_flag_set(NOT_NULL_FLAG))
       packet->append(STRING_WITH_LEN(" NOT NULL"));
     else if (field->type() == MYSQL_TYPE_TIMESTAMP) {
@@ -2162,14 +2656,32 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
       case COLUMN_FORMAT_TYPE_DYNAMIC:
         packet->append(STRING_WITH_LEN(" /*!50606 COLUMN_FORMAT DYNAMIC */"));
         break;
+      case COLUMN_FORMAT_TYPE_COMPRESSED:
+        DBUG_EXECUTE_IF("omit_compressed_columns_show_extensions",
+                        omit_compressed_columns_extensions = true;);
+        if (!omit_compressed_columns_extensions) {
+          packet->append(STRING_WITH_LEN(" /*!" STRINGIFY_ARG(
+              FIRST_SUPPORTED_COMPRESSED_COLUMNS_VERSION) " COLUMN_FORMAT "
+                                                          "COMPRESSED"));
+          if (field->has_associated_compression_dictionary()) {
+            packet->append(STRING_WITH_LEN(" WITH COMPRESSION_DICTIONARY "));
+            append_identifier(thd, packet, field->zip_dict_name.str,
+                              field->zip_dict_name.length);
+          }
+          packet->append(STRING_WITH_LEN(" */"));
+        }
+        break;
       default:
         assert(0);
         break;
     }
 
-    if (print_default_clause(thd, field, &def_value, true)) {
+    bool as_a_comment{false};
+    if (print_default_clause(thd, field, &def_value, true, &as_a_comment)) {
+      if (as_a_comment) packet->append(STRING_WITH_LEN(" /* "));
       packet->append(STRING_WITH_LEN(" DEFAULT "));
       packet->append(def_value.ptr(), def_value.length(), system_charset_info);
+      if (as_a_comment) packet->append(STRING_WITH_LEN(" */ "));
     }
 
     if (print_on_update_clause(field, &def_value, false)) {
@@ -2190,12 +2702,59 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
     }
 
     // Storage engine specific json attributes
-    if (field->m_engine_attribute.length) {
-      packet->append(STRING_WITH_LEN(" /*!80021 ENGINE_ATTRIBUTE "));
-      // append escaped JSON
-      append_unescaped(packet, field->m_engine_attribute.str,
-                       field->m_engine_attribute.length);
-      packet->append(STRING_WITH_LEN(" */"));
+    if (field->m_engine_attribute.length > 0) {
+      // If content of ENGINE_ATTRIBUTE is not according to the expectations,
+      // we do not try to generate SQL for it, but show the recorded
+      // ENGINE_ATTRIBUTE, instead.
+      bool engine_attribute_error = false;
+      auto engine_attr = Json_dom::parse(
+          field->m_engine_attribute.str, field->m_engine_attribute.length,
+          [](const char *, size_t) {}, JsonDepthErrorHandler);
+      if (engine_attr != nullptr &&
+          engine_attr->json_type() == enum_json_type::J_OBJECT) {
+        auto *engine_attr_obj = down_cast<Json_object *>(engine_attr.get());
+        Json_dom *format_dom = nullptr;
+        switch (field->type()) {
+          case MYSQL_TYPE_DATE:
+            format_dom = engine_attr_obj->get(external_table::kDateFormatParam);
+            break;
+          case MYSQL_TYPE_TIME:
+            format_dom = engine_attr_obj->get(external_table::kTimeFormatParam);
+            break;
+          case MYSQL_TYPE_TIMESTAMP:
+          case MYSQL_TYPE_DATETIME:
+            // kDatetimeFormatParam has a higher precedence over
+            // kTimestampFormatParam.
+            format_dom =
+                engine_attr_obj->get(external_table::kDatetimeFormatParam);
+            if (format_dom == nullptr) {
+              format_dom =
+                  engine_attr_obj->get(external_table::kTimestampFormatParam);
+            }
+            break;
+          default:
+            engine_attribute_error = true;
+        }
+
+        if (!engine_attribute_error && format_dom != nullptr &&
+            format_dom->json_type() == enum_json_type::J_STRING) {
+          auto *format = down_cast<Json_string *>(format_dom);
+          packet->append(STRING_WITH_LEN(" /*!90300 EXTERNAL_FORMAT "));
+          append_unescaped(packet, format->value().data(), format->size());
+          packet->append(STRING_WITH_LEN(" */"));
+        } else if (!engine_attribute_error) {
+          engine_attribute_error = true;
+        }
+      } else {
+        engine_attribute_error = true;
+      }
+      if (engine_attribute_error ||
+          DBUG_EVALUATE_IF("print_engine_attribute", true, false)) {
+        packet->append(STRING_WITH_LEN(" /*!80021 ENGINE_ATTRIBUTE "));
+        append_unescaped(packet, field->m_engine_attribute.str,
+                         field->m_engine_attribute.length);
+        packet->append(STRING_WITH_LEN(" */"));
+      }
     }
     if (field->m_secondary_engine_attribute.length) {
       packet->append(STRING_WITH_LEN(" /*!80021 SECONDARY_ENGINE_ATTRIBUTE "));
@@ -2568,17 +3127,83 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
                        share->connect_string.length);
     }
     if (share->has_secondary_engine() &&
-        !thd->variables.show_create_table_skip_secondary_engine) {
+        !thd->variables.show_create_table_skip_secondary_engine &&
+        share->tmp_table == NO_TMP_TABLE) {
       packet->append(" SECONDARY_ENGINE=");
       packet->append(share->secondary_engine.str,
                      share->secondary_engine.length);
     }
 
-    if (share->engine_attribute.length) {
-      packet->append(STRING_WITH_LEN(" /*!80021 ENGINE_ATTRIBUTE="));
-      append_unescaped(packet, share->engine_attribute.str,
-                       share->engine_attribute.length);
-      packet->append(STRING_WITH_LEN(" */"));
+    if (share->engine_attribute.length > 0) {
+      // Set to true if we need to hide parts of the par url
+      bool redact_par = false;
+      // If only parts of the engine attribute was converted to SQL syntax,
+      // this object will contain what remains to be printed
+      Json_object *engine_attr_obj = nullptr;
+      // Declared here to avoid that the result of the parsing is
+      // deallocated too early.
+      Json_dom_ptr parsed_engine_attr;
+
+      if (for_show_create_stmt) {
+        redact_par =
+            check_table_access(thd, CREATE_ACL, table_list, false, 1, true) &&
+            check_table_access(thd, ALTER_ACL, table_list, false, 1, true);
+
+        parsed_engine_attr = Json_dom::parse(
+            share->engine_attribute.str, share->engine_attribute.length,
+            [](const char *, size_t) {}, JsonDepthErrorHandler);
+        if (parsed_engine_attr != nullptr &&
+            parsed_engine_attr->json_type() == enum_json_type::J_OBJECT) {
+          engine_attr_obj = down_cast<Json_object *>(parsed_engine_attr.get());
+          if (can_use_sql_for_engine_attribute(engine_attr_obj)) {
+            if (generate_sql_from_engine_attribute(thd, packet, engine_attr_obj,
+                                                   share->table_name,
+                                                   redact_par)) {
+              return true;
+            }
+          }
+        }
+      }
+      String original_engine_attribute(share->engine_attribute.str,
+                                       share->engine_attribute.length,
+                                       system_charset_info);
+      String *engine_attribute = &original_engine_attribute;
+      String json_buffer;
+      // If we have a JSON object from above, use that instead
+      if (engine_attr_obj != nullptr) {
+        if (engine_attr_obj->cardinality() > 0) {
+          Json_wrapper remaining_attributes(engine_attr_obj, true);
+          if (remaining_attributes.to_string(&json_buffer, true,
+                                             "store_create_info()",
+                                             JsonDepthErrorHandler)) {
+            return true;
+          }
+          engine_attribute = &json_buffer;
+        } else {
+          engine_attribute = nullptr;
+        }
+      }
+      if (engine_attribute != nullptr) {
+        packet->append(STRING_WITH_LEN(" /*!80021 ENGINE_ATTRIBUTE="));
+
+        if (redact_par) {
+          String rlb;
+          redact_external_metadata(*engine_attribute, rlb);
+
+          append_unescaped(packet, rlb.ptr(), rlb.length());
+          // inform users without privileges that the result of SHOW CREATE
+          // TABLE is redacted. Useful for the case of redacted mysqldump
+          // result.
+          push_warning_printf(
+              thd, Sql_condition::SL_WARNING, ER_WARN_REDACTED_PRIVILEGES,
+              ER_THD(thd, ER_WARN_REDACTED_PRIVILEGES), share->table_name.str);
+
+        } else {
+          append_unescaped(packet, engine_attribute->ptr(),
+                           engine_attribute->length());
+        }
+        packet->append(STRING_WITH_LEN(" */"));
+      }
     }
     if (share->secondary_engine_attribute.length) {
       packet->append(STRING_WITH_LEN(" /*!80021 SECONDARY_ENGINE_ATTRIBUTE="));
@@ -2677,6 +3302,12 @@ static void store_key_options(THD *thd, String *packet, TABLE *table,
 
 void view_store_options(const THD *thd, Table_ref *table, String *buff) {
   append_algorithm(table, buff);
+  if (table->is_mv_se_materialized()) {
+    buff->append(STRING_WITH_LEN("MATERIALIZED /*(BY ENGINE="));
+    const auto mv_engine = table->get_mv_se_name();
+    buff->append(mv_engine.str, mv_engine.length);
+    buff->append(STRING_WITH_LEN(")*/ "));
+  }
   append_definer(thd, buff, table->definer.user, table->definer.host);
   if (table->view_suid)
     buff->append(STRING_WITH_LEN("SQL SECURITY DEFINER "));
@@ -2739,13 +3370,18 @@ static void view_store_create_info(const THD *thd, Table_ref *table,
   if (!foreign_db_mode) {
     view_store_options(thd, table, buff);
   }
+  if (table->is_json_duality_view()) {
+    buff->append("JSON RELATIONAL DUALITY ");
+  }
   buff->append(STRING_WITH_LEN("VIEW "));
   if (!compact_view_name) {
     append_identifier(thd, buff, table->db, table->db_length);
     buff->append('.');
   }
   append_identifier(thd, buff, table->table_name, table->table_name_length);
-  print_derived_column_names(thd, buff, table->derived_column_names());
+
+  if (!table->is_json_duality_view())
+    print_derived_column_names(thd, buff, table->derived_column_names());
 
   buff->append(STRING_WITH_LEN(" AS "));
 
@@ -2771,13 +3407,15 @@ static void view_store_create_info(const THD *thd, Table_ref *table,
 
 /****************************************************************************
   Return info about all processes
-  returns for each thread: thread id, user, host, db, command, info
+  returns for each thread: thread id, start_time, user, host, db, command, info,
+  rows_sent, rows_examined
 ****************************************************************************/
 class thread_info {
  public:
   thread_info()
       : thread_id(0),
         start_time_in_secs(0),
+        start_time_in_usecs(0),
         command(0),
         user(nullptr),
         host(nullptr),
@@ -2787,9 +3425,11 @@ class thread_info {
 
   my_thread_id thread_id;
   time_t start_time_in_secs;
+  ulonglong start_time_in_usecs;
   uint command;
   const char *user, *host, *db, *proc_info, *state_info;
   CSET_STRING query_string;
+  ulonglong rows_sent, rows_examined;
 };
 
 // For sorting by thread_id.
@@ -2858,6 +3498,9 @@ class List_process_list : public Do_THD_Impl {
       const LEX_CSTRING inspect_sctx_host = inspect_sctx->host();
       const LEX_CSTRING inspect_sctx_host_or_ip = inspect_sctx->host_or_ip();
 
+      const bool is_utility_user = acl_is_utility_user(
+          inspect_sctx_user.str, inspect_sctx_host.str, inspect_sctx->ip().str);
+
       /*
         Since we only access a cached value of connection_alive, which is
         also an atomic, we do not need to lock LOCK_thd_protocol here. We
@@ -2866,7 +3509,8 @@ class List_process_list : public Do_THD_Impl {
       */
       if (!inspect_thd->is_connected(true) ||
           (m_user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
-                      strcmp(inspect_sctx_user.str, m_user)))) {
+                      strcmp(inspect_sctx_user.str, m_user))) ||
+          is_utility_user) {
         return;
       }
 
@@ -2927,6 +3571,9 @@ class List_process_list : public Do_THD_Impl {
     /* STATE */
     thd_info->state_info = thread_state_info(m_client_thd, inspect_thd);
 
+    thd_info->rows_sent = inspect_thd->get_sent_row_count();
+    thd_info->rows_examined = inspect_thd->get_examined_row_count();
+
     mysql_mutex_unlock(&inspect_thd->LOCK_thd_data);
 
     /* INFO */
@@ -2976,6 +3623,7 @@ class List_process_list : public Do_THD_Impl {
 
     /* MYSQL_TIME */
     thd_info->start_time_in_secs = inspect_thd->query_start_in_secs();
+    thd_info->start_time_in_usecs = inspect_thd->query_start_in_usecs();
 
     m_thread_infos->push_back(thd_info);
   }
@@ -3015,6 +3663,16 @@ void mysqld_list_processes(THD *thd, const char *user, bool verbose,
   field->set_nullable(true);
   field_list.push_back(field = new Item_empty_string("Info", max_query_length));
   field->set_nullable(true);
+  field_list.push_back(field = new Item_return_int("Time_ms",
+                                                   MY_INT64_NUM_DECIMAL_DIGITS,
+                                                   MYSQL_TYPE_LONGLONG));
+  field->set_nullable(true);
+  field_list.push_back(field = new Item_return_int("Rows_sent",
+                                                   MY_INT64_NUM_DECIMAL_DIGITS,
+                                                   MYSQL_TYPE_LONGLONG));
+  field_list.push_back(field = new Item_return_int("Rows_examined",
+                                                   MY_INT64_NUM_DECIMAL_DIGITS,
+                                                   MYSQL_TYPE_LONGLONG));
   if (thd->send_result_metadata(field_list,
                                 Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     return;
@@ -3030,6 +3688,7 @@ void mysqld_list_processes(THD *thd, const char *user, bool verbose,
   std::sort(thread_infos.begin(), thread_infos.end(), thread_info_compare());
 
   const time_t now = time(nullptr);
+  auto now_us = my_micro_time();
   for (size_t ix = 0; ix < thread_infos.size(); ++ix) {
     thread_info *thd_info = thread_infos.at(ix);
     protocol->start_row();
@@ -3043,12 +3702,26 @@ void mysqld_list_processes(THD *thd, const char *user, bool verbose,
       protocol->store(Command_names::str_session(thd_info->command).c_str(),
                       system_charset_info);
     if (thd_info->start_time_in_secs)
-      protocol->store_long((longlong)(now - thd_info->start_time_in_secs));
+      protocol->store_long(
+          (thd_info->start_time_in_secs > now)
+              ? 0
+              : static_cast<longlong>(now - thd_info->start_time_in_secs));
     else
       protocol->store_null();
     protocol->store(thd_info->state_info, system_charset_info);
     protocol->store(thd_info->query_string.str(),
                     thd_info->query_string.charset());
+
+    if (thd_info->start_time_in_usecs)
+      protocol->store(((thd_info->start_time_in_usecs > now_us)
+                           ? 0
+                           : now_us - thd_info->start_time_in_usecs) /
+                      1000);
+    else
+      protocol->store_null();
+
+    protocol->store(thd_info->rows_sent);
+    protocol->store(thd_info->rows_examined);
     if (protocol->end_row()) break; /* purecov: inspected */
   }
   /*
@@ -3097,6 +3770,7 @@ class Fill_process_list : public Do_THD_Impl {
 
     TABLE *table;
     const char *val = nullptr;
+    ulonglong now_utime;
 
     {
       MUTEX_LOCK(grd_secctx, &inspect_thd->LOCK_thd_security_ctx);
@@ -3107,12 +3781,16 @@ class Fill_process_list : public Do_THD_Impl {
       const LEX_CSTRING inspect_sctx_host = inspect_sctx->host();
       const LEX_CSTRING inspect_sctx_host_or_ip = inspect_sctx->host_or_ip();
 
+      const bool is_utility_user = acl_is_utility_user(
+          inspect_sctx_user.str, inspect_sctx_host.str, inspect_sctx->ip().str);
+
       const char *client_priv_user =
           m_client_thd->security_context()->priv_user().str;
       const char *user =
           m_client_thd->security_context()->check_access(PROCESS_ACL)
               ? NullS
               : client_priv_user;
+      now_utime = my_micro_time();
 
       /*
         Since we only access a cached value of connection_alive, which is
@@ -3122,7 +3800,8 @@ class Fill_process_list : public Do_THD_Impl {
       */
       if (!inspect_thd->is_connected(true) ||
           (user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
-                    strcmp(inspect_sctx_user.str, user)))) {
+                    strcmp(inspect_sctx_user.str, user))) ||
+          is_utility_user) {
         return;
       }
 
@@ -3201,6 +3880,17 @@ class Fill_process_list : public Do_THD_Impl {
       table->field[6]->set_notnull();
     }
 
+    /* TIME_MS */
+    ulonglong tmp_start_utime = inspect_thd->start_utime;
+    table->field[8]->store(
+        ((tmp_start_utime < now_utime ? now_utime - tmp_start_utime : 0) /
+         1000));
+
+    /* ROWS_SENT */
+    table->field[9]->store((ulonglong)inspect_thd->get_sent_row_count());
+    /* ROWS_EXAMINED */
+    table->field[10]->store((ulonglong)inspect_thd->get_examined_row_count());
+
     mysql_mutex_unlock(&inspect_thd->LOCK_thd_data);
 
     /* INFO */
@@ -3260,6 +3950,8 @@ class Fill_process_list : public Do_THD_Impl {
 
 static int fill_schema_processlist(THD *thd, Table_ref *tables, Item *) {
   DBUG_TRACE;
+
+  DEBUG_SYNC(thd, "before_fill_schema_processlist");
 
   Fill_process_list fill_process_list(thd, tables);
   if (!thd->killed) {
@@ -3748,6 +4440,282 @@ const char *get_one_variable_ext(THD *running_thd, THD *target_thd,
   return pos;
 }
 
+/*
+  Write result to network for SHOW USER_STATISTICS
+
+  SYNOPSIS
+  send_user_stats
+  all_user_stats - values to return
+  table - I_S table
+
+  RETURN
+  0 - OK
+  1 - error
+*/
+static int send_user_stats(THD *thd, const user_stats_t &all_user_stats,
+                           TABLE *table) noexcept {
+  DBUG_ENTER("send_user_stats");
+  for (const auto &it : all_user_stats) {
+    restore_record(table, s->default_values);
+    const USER_STATS *const user_stats = &it.second;
+    table->field[0]->store(it.first.c_str(), it.first.length(),
+                           system_charset_info);
+    table->field[1]->store(user_stats->total_connections, true);
+    table->field[2]->store(user_stats->concurrent_connections, true);
+    table->field[3]->store(user_stats->connected_time);
+    table->field[4]->store(user_stats->busy_time);
+    table->field[5]->store(user_stats->cpu_time);
+    table->field[6]->store(user_stats->bytes_received, true);
+    table->field[7]->store(user_stats->bytes_sent, true);
+    table->field[8]->store(user_stats->binlog_bytes_written, true);
+    table->field[9]->store(user_stats->rows_fetched, true);
+    table->field[10]->store(user_stats->rows_updated, true);
+    table->field[11]->store(user_stats->rows_read, true);
+    table->field[12]->store(user_stats->select_commands, true);
+    table->field[13]->store(user_stats->update_commands, true);
+    table->field[14]->store(user_stats->other_commands, true);
+    table->field[15]->store(user_stats->commit_trans, true);
+    table->field[16]->store(user_stats->rollback_trans, true);
+    table->field[17]->store(user_stats->denied_connections, true);
+    table->field[18]->store(user_stats->lost_connections, true);
+    table->field[19]->store(user_stats->access_denied_errors, true);
+    table->field[20]->store(user_stats->empty_queries, true);
+    table->field[21]->store(user_stats->total_ssl_connections, true);
+    if (schema_table_store_record(thd, table)) {
+      DBUG_PRINT("error", ("store record error"));
+      DBUG_RETURN(1);
+    }
+  }
+  DBUG_RETURN(0);
+}
+
+static int send_thread_stats(THD *thd, const thread_stats_t &all_thread_stats,
+                             TABLE *table) noexcept {
+  DBUG_ENTER("send_thread_stats");
+  for (const auto &it : all_thread_stats) {
+    restore_record(table, s->default_values);
+    const THREAD_STATS *const thread_stats = &it.second;
+    table->field[0]->store(thread_stats->id, true);
+    table->field[1]->store(thread_stats->total_connections, true);
+    table->field[2]->store(thread_stats->connected_time);
+    table->field[3]->store(thread_stats->busy_time);
+    table->field[4]->store(thread_stats->cpu_time);
+    table->field[5]->store(thread_stats->bytes_received, true);
+    table->field[6]->store(thread_stats->bytes_sent, true);
+    table->field[7]->store(thread_stats->binlog_bytes_written, true);
+    table->field[8]->store(thread_stats->rows_fetched, true);
+    table->field[9]->store(thread_stats->rows_updated, true);
+    table->field[10]->store(thread_stats->rows_read, true);
+    table->field[11]->store(thread_stats->select_commands, true);
+    table->field[12]->store(thread_stats->update_commands, true);
+    table->field[13]->store(thread_stats->other_commands, true);
+    table->field[14]->store(thread_stats->commit_trans, true);
+    table->field[15]->store(thread_stats->rollback_trans, true);
+    table->field[16]->store(thread_stats->denied_connections, true);
+    table->field[17]->store(thread_stats->lost_connections, true);
+    table->field[18]->store(thread_stats->access_denied_errors, true);
+    table->field[19]->store(thread_stats->empty_queries, true);
+    table->field[20]->store(thread_stats->total_ssl_connections, true);
+    if (schema_table_store_record(thd, table)) {
+      DBUG_PRINT("error", ("store record error"));
+      DBUG_RETURN(1);
+    }
+  }
+  DBUG_RETURN(0);
+}
+
+/*
+  Process SHOW USER_STATISTICS
+
+  SYNOPSIS
+  mysqld_show_user_stats
+  thd - current thread
+  wild - limit results to the entry for this user
+  with_roles - when true, display role for mapped users
+
+  RETURN
+  0 - OK
+  1 - error
+*/
+
+static int fill_schema_user_stats(THD *thd, Table_ref *tables,
+                                  Item *cond [[maybe_unused]]) noexcept {
+  DBUG_ENTER("fill_schema_user_stats");
+
+  if (check_global_access(thd, SUPER_ACL | PROCESS_ACL)) DBUG_RETURN(1);
+
+  refresh_concurrent_conn_stats();
+  // Iterates through all the global stats and sends them to the client.
+  // Pattern matching on the client IP is supported.
+
+  TABLE *const table = tables->table;
+
+  mysql_mutex_lock(&LOCK_global_user_client_stats);
+  const int result = send_user_stats(thd, *global_user_stats, table);
+  mysql_mutex_unlock(&LOCK_global_user_client_stats);
+
+  DBUG_PRINT("exit", ("fill_schema_user_stats result is %d", result));
+  DBUG_RETURN(result);
+}
+
+/*
+  Process SHOW CLIENT_STATISTICS
+
+  SYNOPSIS
+  mysqld_show_client_stats
+  thd - current thread
+  wild - limit results to the entry for this client
+
+  RETURN
+  0 - OK
+  1 - error
+*/
+
+static int fill_schema_client_stats(THD *thd, Table_ref *tables,
+                                    Item *cond [[maybe_unused]]) noexcept {
+  DBUG_ENTER("fill_schema_client_stats");
+
+  if (check_global_access(thd, SUPER_ACL | PROCESS_ACL)) DBUG_RETURN(1);
+
+  refresh_concurrent_conn_stats();
+  // Iterates through all the global stats and sends them to the client.
+  // Pattern matching on the client IP is supported.
+  TABLE *table = tables->table;
+
+  mysql_mutex_lock(&LOCK_global_user_client_stats);
+  const int result = send_user_stats(thd, *global_client_stats, table);
+  mysql_mutex_unlock(&LOCK_global_user_client_stats);
+
+  DBUG_PRINT("exit", ("mysqld_show_client_stats result is %d", result));
+  DBUG_RETURN(result);
+}
+
+static int fill_schema_thread_stats(THD *thd, Table_ref *tables,
+                                    Item *cond [[maybe_unused]]) noexcept {
+  DBUG_ENTER("fill_schema_thread_stats");
+
+  if (check_global_access(thd, SUPER_ACL | PROCESS_ACL)) DBUG_RETURN(1);
+
+  // Iterates through all the global stats and sends them to the client.
+  // Pattern matching on the client IP is supported.
+  TABLE *table = tables->table;
+
+  mysql_mutex_lock(&LOCK_global_user_client_stats);
+  const int result = send_thread_stats(thd, *global_thread_stats, table);
+  mysql_mutex_unlock(&LOCK_global_user_client_stats);
+
+  DBUG_PRINT("exit", ("mysqld_show_thread_stats result is %d", result));
+  DBUG_RETURN(result);
+}
+
+// Sends the global table stats back to the client.
+static int fill_schema_table_stats(THD *thd, Table_ref *tables,
+                                   Item *cond [[maybe_unused]]) {
+  DBUG_ENTER("fill_schema_table_stats");
+
+  // Create copy of global table stats on current memory root,
+  // to be able safely check table privileges later, outside of
+  // LOCK_global_table_stats mutex scope.
+  using Table_stats_rec = std::tuple<const char *, const char *, TABLE_STATS>;
+  Mem_root_array<Table_stats_rec> table_stats_array(thd->mem_root);
+
+  mysql_mutex_lock(&LOCK_global_table_stats);
+  DEBUG_SYNC(thd, "fill_schema_table_stats");
+  table_stats_array.reserve(global_table_stats->size());
+  for (const auto &it : *global_table_stats) {
+    char *table_full_name = thd->mem_strdup(it.first.c_str());
+    const char *const table_schema = strsep(&table_full_name, ".");
+    table_stats_array.emplace_back(table_schema, table_full_name, it.second);
+  }
+  mysql_mutex_unlock(&LOCK_global_table_stats);
+
+  TABLE *const table = tables->table;
+
+  for (const auto &rec : table_stats_array) {
+    const char *const table_schema = std::get<0>(rec);
+    const char *const table_name = std::get<1>(rec);
+    const TABLE_STATS *const table_stats = &std::get<2>(rec);
+
+    Table_ref tmp_table;
+    memset(reinterpret_cast<char *>(&tmp_table), 0, sizeof(tmp_table));
+    tmp_table.table_name = table_name;
+    tmp_table.db = table_schema;
+    tmp_table.grant.privilege = 0;
+    if (check_access(thd, SELECT_ACL, tmp_table.db, &tmp_table.grant.privilege,
+                     0, 0, is_infoschema_db(table_schema)) ||
+        check_grant(thd, SELECT_ACL, &tmp_table, 1, UINT_MAX, 1))
+      continue;
+
+    restore_record(table, s->default_values);
+
+    table->field[0]->store(table_schema, strlen(table_schema),
+                           system_charset_info);
+    table->field[1]->store(table_name, strlen(table_name), system_charset_info);
+    table->field[2]->store(table_stats->rows_read, true);
+    table->field[3]->store(table_stats->rows_changed, true);
+    table->field[4]->store(table_stats->rows_changed_x_indexes, true);
+
+    if (schema_table_store_record(thd, table)) {
+      DBUG_RETURN(1);
+    }
+  }
+  DBUG_RETURN(0);
+}
+
+// Sends the global index stats back to the client.
+static int fill_schema_index_stats(THD *thd, Table_ref *tables,
+                                   Item *cond [[maybe_unused]]) {
+  DBUG_ENTER("fill_schema_index_stats");
+
+  // Create copy of global index stats on current memory root,
+  // to be able safely check table privileges later, outside of
+  // LOCK_global_index_stats mutex scope.
+  using Index_stats_rec =
+      std::tuple<const char *, const char *, const char *, ulonglong>;
+  Mem_root_array<Index_stats_rec> index_stats_array(thd->mem_root);
+
+  mysql_mutex_lock(&LOCK_global_index_stats);
+  index_stats_array.reserve(global_index_stats->size());
+  for (const auto &it : *global_index_stats) {
+    char *index_full_name = thd->mem_strdup(it.first.c_str());
+    const char *const table_schema = strsep(&index_full_name, ".");
+    const char *const table_name = strsep(&index_full_name, ".");
+    index_stats_array.emplace_back(table_schema, table_name, index_full_name,
+                                   it.second);
+  }
+  mysql_mutex_unlock(&LOCK_global_index_stats);
+
+  TABLE *const table = tables->table;
+
+  for (const auto &rec : index_stats_array) {
+    const char *const table_schema = std::get<0>(rec);
+    const char *const table_name = std::get<1>(rec);
+    const char *const index_name = std::get<2>(rec);
+
+    Table_ref tmp_table;
+    memset(reinterpret_cast<char *>(&tmp_table), 0, sizeof(tmp_table));
+    tmp_table.table_name = table_name;
+    tmp_table.db = table_schema;
+    tmp_table.grant.privilege = 0;
+    if (check_access(thd, SELECT_ACL, tmp_table.db, &tmp_table.grant.privilege,
+                     0, 0, is_infoschema_db(table_schema)) ||
+        check_grant(thd, SELECT_ACL, &tmp_table, 1, UINT_MAX, 1))
+      continue;
+
+    restore_record(table, s->default_values);
+    table->field[0]->store(table_schema, strlen(table_schema),
+                           system_charset_info);
+    table->field[1]->store(table_name, strlen(table_name), system_charset_info);
+    table->field[2]->store(index_name, strlen(index_name), system_charset_info);
+    table->field[3]->store(std::get<3>(rec), true);  // rows_read
+
+    if (schema_table_store_record(thd, table)) {
+      DBUG_RETURN(1);
+    }
+  }
+  DBUG_RETURN(0);
+}
+
 /**
   Collect status for all running threads.
 */
@@ -4026,6 +4994,263 @@ end:
   return result;
 }
 
+/**
+  @brief          Change I_S table item list for SHOW [GLOBAL] TEMPORARY TABLES
+  [FROM/IN db]
+
+  @param[in]      thd                      thread handler
+  @param[in]      schema_table             I_S table
+
+  @return         Operation status
+    @retval       0                        success
+    @retval       1                        error
+*/
+static int make_temporary_tables_old_format(THD *thd,
+                                            ST_SCHEMA_TABLE *schema_table) {
+  char tmp[128];
+  String buffer(tmp, sizeof(tmp), thd->charset());
+  LEX *lex = thd->lex;
+  Name_resolution_context *context = &lex->query_block->context;
+
+  if (thd->lex->option_type == OPT_GLOBAL) {
+    ST_FIELD_INFO *field_info = &schema_table->fields_info[0];
+    Item_field *field =
+        new Item_field(context, NullS, NullS, field_info->field_name);
+    if (add_item_to_list(thd, field)) return 1;
+    field->item_name.copy(field_info->old_name, strlen(field_info->old_name),
+                          system_charset_info);
+  }
+
+  ST_FIELD_INFO *field_info = &schema_table->fields_info[2];
+  buffer.length(0);
+  buffer.append(field_info->old_name);
+  buffer.append(lex->query_block->db);
+
+  if (lex->wild && lex->wild->ptr()) {
+    buffer.append(STRING_WITH_LEN(" ("));
+    buffer.append(lex->wild->ptr());
+    buffer.append(')');
+  }
+
+  Item_field *field =
+      new Item_field(context, NullS, NullS, field_info->field_name);
+  if (add_item_to_list(thd, field)) return 1;
+
+  field->item_name.copy(buffer.ptr(), buffer.length(), system_charset_info);
+  return 0;
+}
+
+/**
+  @brief          Fill records for temporary tables by reading info from table
+  object
+
+  @param[in]      thd                      thread handler
+  @param[in]      table                    I_S table
+  @param[in]      tmp_table                temporary table
+  @param[in]      db                       database name
+  @param[in]      mem_root                 memory root for allocating cloned
+                                           handlers, must have the lifetime of
+                                           the current thread
+
+  @return         Operation status
+    @retval       0                        success
+    @retval       1                        error
+*/
+
+static int store_temporary_table_record(THD *thd, TABLE *table,
+                                        TABLE *tmp_table, const char *db,
+                                        MEM_ROOT *mem_root) {
+  const CHARSET_INFO *const cs = system_charset_info;
+  DBUG_ENTER("store_temporary_table_record");
+
+  if (db && my_strcasecmp(cs, db, tmp_table->s->db.str)) DBUG_RETURN(0);
+
+  restore_record(table, s->default_values);
+
+  // session_id
+  table->field[0]->store(static_cast<longlong>(thd->thread_id()), true);
+
+  // database
+  table->field[1]->store(tmp_table->s->db.str, tmp_table->s->db.length, cs);
+
+  // table
+  table->field[2]->store(tmp_table->s->table_name.str,
+                         tmp_table->s->table_name.length, cs);
+
+  // engine
+  handler *handle = tmp_table->file;
+  // Assume that invoking handler::table_type() on a shared handler is safe
+  const char *engineType = handle ? handle->table_type() : "UNKNOWN";
+  table->field[3]->store(engineType, strlen(engineType), cs);
+
+  // name
+  if (tmp_table->s->path.str) {
+    const char *const p = strstr(tmp_table->s->path.str, "#sql");
+    int len = tmp_table->s->path.length - (p - tmp_table->s->path.str);
+    table->field[4]->store(p, min(FN_REFLEN, len), cs);
+  }
+
+  // file stats
+  handler *file = tmp_table->file;
+
+  /* We have only one handler object for a temp table globally and it might
+  be in use by other thread.  Do not trash it by invoking handler methods on
+  it but rather clone it. if db_stat is 0, the table is not opened in SE,
+  do not clone it */
+  if (file && tmp_table->db_stat != 0) {
+    file = file->clone(tmp_table->s->normalized_path.str, mem_root);
+  }
+
+  if (file && tmp_table->db_stat != 0) {
+    MYSQL_TIME time;
+
+    /**
+        TODO: InnoDB stat(file) checks file on short names within data
+       dictionary rather than using full path, because of that, temp files
+       created in TMPDIR will not have access/create time as it will not find
+       the file
+
+        The fix is to patch InnoDB to use full path
+    */
+    file->info(HA_STATUS_VARIABLE | HA_STATUS_TIME | HA_STATUS_NO_LOCK);
+
+    table->field[5]->store(static_cast<longlong>(file->stats.records), true);
+    table->field[5]->set_notnull();
+
+    table->field[6]->store(static_cast<longlong>(file->stats.mean_rec_length),
+                           true);
+    table->field[7]->store(static_cast<longlong>(file->stats.data_file_length),
+                           true);
+    table->field[8]->store(static_cast<longlong>(file->stats.index_file_length),
+                           true);
+    if (file->stats.create_time) {
+      thd->time_zone()->gmt_sec_to_TIME(
+          &time, static_cast<my_time_t>(file->stats.create_time));
+      table->field[9]->store_time(&time, MYSQL_TIMESTAMP_DATETIME);
+      table->field[9]->set_notnull();
+    }
+    if (file->stats.update_time) {
+      thd->time_zone()->gmt_sec_to_TIME(
+          &time, static_cast<my_time_t>(file->stats.update_time));
+      table->field[10]->store_time(&time, MYSQL_TIMESTAMP_DATETIME);
+      table->field[10]->set_notnull();
+    }
+
+    file->ha_close();
+  }
+
+  DBUG_RETURN(schema_table_store_record(thd, table));
+}
+
+class Fill_global_temporary_tables final : public Do_THD_Impl {
+ private:
+  THD *const m_client_thd;
+  const Security_context *const m_sctx;
+  bool m_failed;
+  const Table_ref *const m_tables;
+
+ public:
+  Fill_global_temporary_tables(THD *client_thd, Table_ref *tables) noexcept
+      : m_client_thd(client_thd),
+        m_sctx(client_thd->security_context()),
+        m_failed(false),
+        m_tables(tables) {}
+
+  ~Fill_global_temporary_tables() override {}
+
+  void operator()(THD *thd) override {
+    mysql_mutex_lock(&thd->LOCK_temporary_tables);
+
+#ifndef NDEBUG
+    const char *tmp_proc_info = thd->proc_info();
+    if (tmp_proc_info &&
+        !strncmp(
+            tmp_proc_info,
+            STRING_WITH_LEN("debug sync point: fill_schema_table_stats"))) {
+      DEBUG_SYNC(m_client_thd,
+                 "fill_global_temporary_tables_thd_item_at_tables_debug_sync");
+    }
+#endif
+
+    for (TABLE *tmp = thd->temporary_tables; tmp; tmp = tmp->next) {
+      uint db_access;
+      if (test_all_bits(m_sctx->master_access(), DB_ACLS))
+        db_access = DB_ACLS;
+      else
+        db_access = (acl_get(m_client_thd, m_sctx->host().str, m_sctx->ip().str,
+                             m_sctx->priv_user().str, tmp->s->db.str, 0) |
+                     m_sctx->master_access());
+
+      if (!(db_access & DB_ACLS) &&
+          check_grant_db(m_client_thd, tmp->s->db.str)) {
+        // no access for temp tables within this db for user
+        continue;
+      }
+      DEBUG_SYNC(m_client_thd,
+                 "fill_global_temporary_tables_before_storing_rec");
+
+      if (store_temporary_table_record(thd, m_tables->table, tmp,
+                                       m_client_thd->lex->query_block->db,
+                                       m_client_thd->mem_root))
+        m_failed = true;
+    }
+    mysql_mutex_unlock(&thd->LOCK_temporary_tables);
+  }
+
+  bool failed() const noexcept { return m_failed; }
+};
+
+/**
+  @brief          Fill I_S tables with global temporary tables
+
+    @param[in]      thd                    thread handler
+    @param[in]      tables                 I_S table
+    @param[in]      cond                   'WHERE' condition
+    @return         Operation status
+    @retval       0                        success
+    @retval       1                        error
+*/
+static int fill_global_temporary_tables(THD *thd, Table_ref *tables,
+                                        Item *cond [[maybe_unused]]) {
+  DBUG_ENTER("fill_global_temporary_tables");
+
+  Fill_global_temporary_tables fill_global_temporary_tables(thd, tables);
+  Global_THD_manager::get_instance()->do_for_all_thd_copy(
+      &fill_global_temporary_tables);
+
+  if (fill_global_temporary_tables.failed()) DBUG_RETURN(1);
+  DBUG_RETURN(0);
+}
+
+/**
+  @brief          Fill I_S tables with session temporary tables
+
+  @param[in]      thd                      thread handler
+  @param[in]      tables                   I_S table
+  @param[in]      cond                     'WHERE' condition
+
+  @return         Operation status
+    @retval       0                        success
+    @retval       1                        error
+*/
+static int fill_temporary_tables(THD *thd, Table_ref *tables, Item *cond) {
+  DBUG_ENTER("fill_temporary_tables");
+
+  if (thd->lex->option_type == OPT_GLOBAL)
+    DBUG_RETURN(fill_global_temporary_tables(thd, tables, cond));
+
+  TABLE *tmp;
+
+  for (tmp = thd->temporary_tables; tmp; tmp = tmp->next) {
+    if (store_temporary_table_record(thd, tables->table, tmp,
+                                     thd->lex->query_block->db,
+                                     thd->mem_root)) {
+      DBUG_RETURN(1);
+    }
+  }
+  DBUG_RETURN(0);
+}
+
 /* Define fields' indexes for COLUMNS of temporary tables */
 #define TMP_TABLE_COLUMNS_COLUMN_NAME 0
 #define TMP_TABLE_COLUMNS_COLUMN_TYPE 1
@@ -4108,15 +5333,15 @@ static int get_schema_tmp_table_columns_record(THD *thd, Table_ref *tables,
 
     // COLUMN_KEY
     pos = pointer_cast<const uchar *>(
-        field->is_flag_set(PRI_KEY_FLAG)        ? "PRI"
-        : field->is_flag_set(UNIQUE_KEY_FLAG)   ? "UNI"
-        : field->is_flag_set(MULTIPLE_KEY_FLAG) ? "MUL"
-                                                : "");
+        field->is_flag_set(PRI_KEY_FLAG)          ? "PRI"
+        : field->is_flag_set(UNIQUE_KEY_FLAG)     ? "UNI"
+        : (field->is_flag_set(MULTIPLE_KEY_FLAG)) ? "MUL"
+                                                  : "");
     table->field[TMP_TABLE_COLUMNS_COLUMN_KEY]->store(
         (const char *)pos, strlen((const char *)pos), cs);
 
     // COLUMN_DEFAULT
-    if (print_default_clause(thd, field, &type, false)) {
+    if (print_default_clause(thd, field, &type, false, nullptr)) {
       table->field[TMP_TABLE_COLUMNS_COLUMN_DEFAULT]->store(type.ptr(),
                                                             type.length(), cs);
       table->field[TMP_TABLE_COLUMNS_COLUMN_DEFAULT]->set_notnull();
@@ -4150,7 +5375,7 @@ static int get_schema_tmp_table_columns_record(THD *thd, Table_ref *tables,
       table->field[TMP_TABLE_COLUMNS_EXTRA]->store(STRING_WITH_LEN("NULL"), cs);
 
     // PRIVILEGES
-    uint col_access;
+    Access_bitmask col_access;
     check_access(thd, SELECT_ACL, db_name.str, &tables->grant.privilege,
                  nullptr, false, tables->schema_table != nullptr);
     col_access = get_column_grant(thd, &tables->grant, db_name.str,
@@ -4594,7 +5819,6 @@ ST_SCHEMA_TABLE *get_schema_table(enum enum_schema_tables schema_table_idx) {
 
 static TABLE *create_schema_table(THD *thd, Table_ref *table_list) {
   int field_count = 0;
-  Item *item;
   TABLE *table;
   mem_root_deque<Item *> fields(thd->mem_root);
   ST_SCHEMA_TABLE *schema_table = table_list->schema_table;
@@ -4603,6 +5827,7 @@ static TABLE *create_schema_table(THD *thd, Table_ref *table_list) {
   DBUG_TRACE;
 
   for (; fields_info->field_name; fields_info++) {
+    Item *item = nullptr;
     switch (fields_info->field_type) {
       case MYSQL_TYPE_TINY:
       case MYSQL_TYPE_LONG:
@@ -4616,8 +5841,10 @@ static TABLE *create_schema_table(THD *thd, Table_ref *table_list) {
         }
         item->unsigned_flag = (fields_info->field_flags & MY_I_S_UNSIGNED);
         break;
-      case MYSQL_TYPE_DATE:
       case MYSQL_TYPE_TIME:
+      case MYSQL_TYPE_DATE:
+        assert(false);
+        return nullptr;
       case MYSQL_TYPE_TIMESTAMP:
       case MYSQL_TYPE_DATETIME: {
         const Name_string field_name(fields_info->field_name,
@@ -4657,6 +5884,7 @@ static TABLE *create_schema_table(THD *thd, Table_ref *table_list) {
       case MYSQL_TYPE_MEDIUM_BLOB:
       case MYSQL_TYPE_LONG_BLOB:
       case MYSQL_TYPE_BLOB:
+      case MYSQL_TYPE_VECTOR:
         if (!(item = new Item_blob(fields_info->field_name,
                                    fields_info->field_length))) {
           return nullptr;
@@ -4972,11 +6200,6 @@ bool do_fill_information_schema_table(THD *thd, Table_ref *table_list,
   return res;
 }
 
-struct run_hton_fill_schema_table_args {
-  Table_ref *tables;
-  Item *cond;
-};
-
 ST_FIELD_INFO engines_fields_info[] = {
     {"ENGINE", 64, MYSQL_TYPE_STRING, 0, 0, "Engine", 0},
     {"SUPPORT", 8, MYSQL_TYPE_STRING, 0, 0, "Support", 0},
@@ -4985,6 +6208,25 @@ ST_FIELD_INFO engines_fields_info[] = {
     {"XA", 3, MYSQL_TYPE_STRING, 0, 1, "XA", 0},
     {"SAVEPOINTS", 3, MYSQL_TYPE_STRING, 0, 1, "Savepoints", 0},
     {nullptr, 0, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
+
+static ST_FIELD_INFO temporary_table_fields_info[] = {
+    {"SESSION_ID", 4, MYSQL_TYPE_LONGLONG, 0, 0, "Session", 0},
+    {"TABLE_SCHEMA", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Db", 0},
+    {"TABLE_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Temp_tables_in_",
+     0},
+    {"ENGINE", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Engine", 0},
+    {"NAME", FN_REFLEN, MYSQL_TYPE_STRING, 0, 0, "Name", 0},
+    {"TABLE_ROWS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows", 0},
+    {"AVG_ROW_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Avg Row", 0},
+    {"DATA_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Data Length", 0},
+    {"INDEX_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Index Size", 0},
+    {"CREATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Create Time", 0},
+    {"UPDATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Update Time", 0},
+    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
 
 ST_FIELD_INFO tmp_table_keys_fields_info[] = {
     {"TABLE_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Table", 0},
@@ -5056,6 +6298,162 @@ ST_FIELD_INFO open_tables_fields_info[] = {
     {"Name_locked", 4, MYSQL_TYPE_LONGLONG, 0, 0, "Name_locked", 0},
     {nullptr, 0, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
 
+static ST_FIELD_INFO user_stats_fields_info[] = {
+    {"USER", USERNAME_LENGTH, MYSQL_TYPE_STRING, 0, 0, "User", 0},
+    {"TOTAL_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Total_connections", 0},
+    {"CONCURRENT_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Concurrent_connections", 0},
+    {"CONNECTED_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Connected_time", 0},
+    {"BUSY_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Busy_time", 0},
+    {"CPU_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Cpu_time", 0},
+    {"BYTES_RECEIVED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Bytes_received", 0},
+    {"BYTES_SENT", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Bytes_sent", 0},
+    {"BINLOG_BYTES_WRITTEN", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Binlog_bytes_written", 0},
+    {"ROWS_FETCHED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_fetched", 0},
+    {"ROWS_UPDATED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_updated", 0},
+    {"TABLE_ROWS_READ", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Table_rows_read", 0},
+    {"SELECT_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Select_commands", 0},
+    {"UPDATE_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Update_commands", 0},
+    {"OTHER_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Other_commands", 0},
+    {"COMMIT_TRANSACTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Commit_transactions", 0},
+    {"ROLLBACK_TRANSACTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Rollback_transactions", 0},
+    {"DENIED_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Denied_connections", 0},
+    {"LOST_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Lost_connections", 0},
+    {"ACCESS_DENIED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Access_denied", 0},
+    {"EMPTY_QUERIES", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Empty_queries", 0},
+    {"TOTAL_SSL_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Total_ssl_connections", 0},
+    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
+
+static ST_FIELD_INFO client_stats_fields_info[] = {
+    {"CLIENT", LIST_PROCESS_HOST_LEN, MYSQL_TYPE_STRING, 0, 0, "Client", 0},
+    {"TOTAL_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Total_connections", 0},
+    {"CONCURRENT_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Concurrent_connections", 0},
+    {"CONNECTED_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Connected_time", 0},
+    {"BUSY_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Busy_time", 0},
+    {"CPU_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Cpu_time", 0},
+    {"BYTES_RECEIVED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Bytes_received", 0},
+    {"BYTES_SENT", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Bytes_sent", 0},
+    {"BINLOG_BYTES_WRITTEN", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Binlog_bytes_written", 0},
+    {"ROWS_FETCHED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_fetched", 0},
+    {"ROWS_UPDATED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_updated", 0},
+    {"TABLE_ROWS_READ", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Table_rows_read", 0},
+    {"SELECT_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Select_commands", 0},
+    {"UPDATE_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Update_commands", 0},
+    {"OTHER_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Other_commands", 0},
+    {"COMMIT_TRANSACTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Commit_transactions", 0},
+    {"ROLLBACK_TRANSACTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Rollback_transactions", 0},
+    {"DENIED_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Denied_connections", 0},
+    {"LOST_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Lost_connections", 0},
+    {"ACCESS_DENIED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Access_denied", 0},
+    {"EMPTY_QUERIES", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Empty_queries", 0},
+    {"TOTAL_SSL_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Total_ssl_connections", 0},
+    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
+
+static ST_FIELD_INFO thread_stats_fields_info[] = {
+    {"THREAD_ID", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Thread_id", 0},
+    {"TOTAL_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Total_connections", 0},
+    {"CONNECTED_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Connected_time", 0},
+    {"BUSY_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Busy_time", 0},
+    {"CPU_TIME", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_DOUBLE, 0,
+     MY_I_S_UNSIGNED, "Cpu_time", 0},
+    {"BYTES_RECEIVED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Bytes_received", 0},
+    {"BYTES_SENT", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Bytes_sent", 0},
+    {"BINLOG_BYTES_WRITTEN", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Binlog_bytes_written", 0},
+    {"ROWS_FETCHED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_fetched", 0},
+    {"ROWS_UPDATED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_updated", 0},
+    {"TABLE_ROWS_READ", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Table_rows_read", 0},
+    {"SELECT_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Select_commands", 0},
+    {"UPDATE_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Update_commands", 0},
+    {"OTHER_COMMANDS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Other_commands", 0},
+    {"COMMIT_TRANSACTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Commit_transactions", 0},
+    {"ROLLBACK_TRANSACTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Rollback_transactions", 0},
+    {"DENIED_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Denied_connections", 0},
+    {"LOST_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Lost_connections", 0},
+    {"ACCESS_DENIED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Access_denied", 0},
+    {"EMPTY_QUERIES", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Empty_queries", 0},
+    {"TOTAL_SSL_CONNECTIONS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Total_ssl_connections", 0},
+    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
+
+static ST_FIELD_INFO table_stats_fields_info[] = {
+    {"TABLE_SCHEMA", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Table_schema", 0},
+    {"TABLE_NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Table_name", 0},
+    {"ROWS_READ", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_read", 0},
+    {"ROWS_CHANGED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_changed", 0},
+    {"ROWS_CHANGED_X_INDEXES", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG,
+     0, MY_I_S_UNSIGNED, "Rows_changed_x_#indexes", 0},
+    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
+
+static ST_FIELD_INFO index_stats_fields_info[] = {
+    {"TABLE_SCHEMA", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Table_schema", 0},
+    {"TABLE_NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Table_name", 0},
+    {"INDEX_NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, "Index_name", 0},
+    {"ROWS_READ", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_read", 0},
+    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
+
 ST_FIELD_INFO processlist_fields_info[] = {
     {"ID", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "Id", 0},
     {"USER", USERNAME_CHAR_LENGTH, MYSQL_TYPE_STRING, 0, 0, "User", 0},
@@ -5065,6 +6463,12 @@ ST_FIELD_INFO processlist_fields_info[] = {
     {"TIME", 7, MYSQL_TYPE_LONG, 0, 0, "Time", 0},
     {"STATE", 64, MYSQL_TYPE_STRING, 0, 1, "State", 0},
     {"INFO", PROCESS_LIST_INFO_WIDTH, MYSQL_TYPE_STRING, 0, 1, "Info", 0},
+    {"TIME_MS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0,
+     "Time_ms", 0},
+    {"ROWS_SENT", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_sent", 0},
+    {"ROWS_EXAMINED", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows_examined", 0},
     {nullptr, 0, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
 
 ST_FIELD_INFO plugin_fields_info[] = {
@@ -5113,6 +6517,13 @@ ST_SCHEMA_TABLE schema_tables[] = {
      fill_schema_column_privileges, nullptr, nullptr, false},
     {"ENGINES", engines_fields_info, fill_schema_engines, make_old_format,
      nullptr, false},
+    {"CLIENT_STATISTICS", client_stats_fields_info, fill_schema_client_stats,
+     make_old_format, nullptr, false},
+    {"INDEX_STATISTICS", index_stats_fields_info, fill_schema_index_stats,
+     make_old_format, nullptr, false},
+    {"GLOBAL_TEMPORARY_TABLES", temporary_table_fields_info,
+     fill_global_temporary_tables, make_temporary_tables_old_format, nullptr,
+     false},
     {"OPEN_TABLES", open_tables_fields_info, fill_open_tables, make_old_format,
      nullptr, true},
     {"OPTIMIZER_TRACE", optimizer_trace_info, fill_optimizer_trace_info,
@@ -5134,6 +6545,14 @@ ST_SCHEMA_TABLE schema_tables[] = {
      make_tmp_table_columns_format, get_schema_tmp_table_columns_record, true},
     {"TMP_TABLE_KEYS", tmp_table_keys_fields_info, show_temporary_tables,
      make_old_format, get_schema_tmp_table_keys_record, true},
+    {"TABLE_STATISTICS", table_stats_fields_info, fill_schema_table_stats,
+     make_old_format, nullptr, false},
+    {"TEMPORARY_TABLES", temporary_table_fields_info, fill_temporary_tables,
+     make_temporary_tables_old_format, nullptr, false},
+    {"THREAD_STATISTICS", thread_stats_fields_info, fill_schema_thread_stats,
+     make_old_format, nullptr, false},
+    {"USER_STATISTICS", user_stats_fields_info, fill_schema_user_stats,
+     make_old_format, nullptr, false},
     {"EXTENSION_REGISTRATION", villagesql_extension_registration_fields,
      fill_extension_registration, nullptr, nullptr, false},
     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
@@ -5390,6 +6809,32 @@ static bool acquire_mdl_for_table(THD *thd, const char *db_name,
 }
 
 /**
+  Helper to look up a Trigger object in a TABLE_SHARE by trigger name.
+
+  @param share TABLE_SHARE in whose list of Trigger objects the lookup
+               is to be performed.
+  @param name  Name of trigger to find.
+
+  @return Pointer to Trigger object, or nullptr if no trigger with the
+          provided name was found.
+*/
+
+static Trigger *find_trigger_in_share(TABLE_SHARE *share,
+                                      const LEX_STRING &name) {
+  Trigger *t;
+  List_iterator_fast<Trigger> it(*(share->triggers));
+
+  while ((t = it++) != nullptr) {
+    if (!my_strnncoll(dd::Trigger::name_collation(),
+                      pointer_cast<const uchar *>(t->get_trigger_name().str),
+                      t->get_trigger_name().length,
+                      pointer_cast<const uchar *>(name.str), name.length))
+      return t;
+  }
+  return nullptr;
+}
+
+/**
   SHOW CREATE TRIGGER high-level implementation.
 
   @param thd      Thread context.
@@ -5442,12 +6887,12 @@ bool show_create_trigger(THD *thd, const sp_name *trg_name) {
     /* Perform closing actions and return error status. */
   }
 
-  if (!lst->table->triggers) {
+  if (!lst->table->s->triggers) {
     my_error(ER_TRG_DOES_NOT_EXIST, MYF(0));
     goto exit;
   }
 
-  trigger = lst->table->triggers->find_trigger(trg_name->m_name);
+  trigger = find_trigger_in_share(lst->table->s, trg_name->m_name);
 
   if (!trigger) {
     my_error(ER_TRG_CORRUPTED_FILE, MYF(0), trg_name->m_db.str,
@@ -5577,11 +7022,13 @@ static void get_cs_converted_string_value(THD *thd, String *input_str,
   @param str      String to print to
   @param field_cs field's charset. When given [var]char length is printed in
                   characters, otherwise - in bytes
+  @param vector_dimensionality The dimensionality of a vector field
 
 */
 
 void show_sql_type(enum_field_types type, bool is_array, uint metadata,
-                   String *str, const CHARSET_INFO *field_cs) {
+                   String *str, const CHARSET_INFO *field_cs,
+                   unsigned int vector_dimensionality) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("type: %d, metadata: 0x%x", type, metadata));
 
@@ -5712,6 +7159,14 @@ void show_sql_type(enum_field_types type, bool is_array, uint metadata,
       else
         str->set_ascii(STRING_WITH_LEN("longtext"));
       break;
+
+    case MYSQL_TYPE_VECTOR: {
+      const CHARSET_INFO *cs = str->charset();
+      size_t length = cs->cset->snprintf(cs, str->ptr(), str->alloced_length(),
+                                         "vector(%u)", vector_dimensionality);
+      str->length(length);
+      break;
+    }
 
     case MYSQL_TYPE_BLOB:
       /*

@@ -23,18 +23,52 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
  */
 
+#include <cstring>
+
+#include <openssl/evp.h>
+#include "my_ssl_algo_cache.h"
+#include "my_sys.h"
+#include "mysql_com.h"  // octet2hex
 #include "plugin/x/src/helper/generate_hash.h"
 
-#include "password.h"
-#include "sha1.h"  // for SHA1_HASH_SIZE
+#define SHA1_HASH_SIZE 20 /* Hash size in bytes */
+
+static void compute_sha1_hash(uint8 *digest, const char *buf, size_t len) {
+  EVP_MD_CTX *sha1_context = EVP_MD_CTX_create();
+  EVP_DigestInit_ex(sha1_context, my_EVP_sha1(), nullptr);
+  EVP_DigestUpdate(sha1_context, buf, len);
+  EVP_DigestFinal_ex(sha1_context, digest, nullptr);
+  EVP_MD_CTX_destroy(sha1_context);
+  sha1_context = nullptr;
+}
+
+static void compute_two_stage_hash(const char *input, size_t input_len,
+                                   uint8 *output) {
+  uint8 hash_stage1[SHA1_HASH_SIZE];
+  /* Stage 1: hash password */
+  compute_sha1_hash(hash_stage1, input, input_len);
+
+  /* Stage 2 : hash first stage's output. */
+  compute_sha1_hash(output, (const char *)hash_stage1, SHA1_HASH_SIZE);
+}
+
+static void scrambled_input(char *output, const char *input,
+                            size_t input_length) {
+  uint8 hash_stage2[SHA1_HASH_SIZE];
+
+  /* Two stage SHA1 hash of the password. */
+  compute_two_stage_hash(input, input_length, hash_stage2);
+
+  octet2hex(output, (const char *)hash_stage2, SHA1_HASH_SIZE);
+}
 
 namespace xpl {
 
 std::string generate_hash(const std::string &input) {
   std::string hash(2 * SHA1_HASH_SIZE + 2, '\0');
-  ::make_scrambled_password(&hash[0], input.c_str());
-  hash.resize(2 * SHA1_HASH_SIZE + 1);  // strip the \0
-  return hash.substr(1);  // skip the leading '*' character from sha1 hash
+  ::scrambled_input(hash.data(), input.c_str(), input.length());
+  hash.resize(2 * SHA1_HASH_SIZE);  // strip the \0
+  return hash;
 }
 
 }  // namespace xpl

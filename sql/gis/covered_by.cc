@@ -97,8 +97,8 @@ bool mbr_covered_by(const dd::Spatial_reference_system *srs, const Geometry *g1,
 
     if ((*null = (g1->is_empty() || g2->is_empty()))) return false;
 
-    Covered_by covered_by_func(srs ? srs->semi_major_axis() : 0.0,
-                               srs ? srs->semi_minor_axis() : 0.0);
+    Covered_by const covered_by_func(srs ? srs->semi_major_axis() : 0.0,
+                                     srs ? srs->semi_minor_axis() : 0.0);
 
     switch (g1->coordinate_system()) {
       case Coordinate_system::kCartesian: {

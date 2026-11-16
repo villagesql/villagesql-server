@@ -34,6 +34,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sstream>
 
 #include <algorithm>
 #include <atomic>
@@ -41,9 +42,12 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <ranges>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 /* HAVE_PSI_*_INTERFACE */
 #include "my_psi_config.h"  // IWYU pragma: keep
@@ -52,6 +56,7 @@
 #include "mysql/psi/psi_table.h"  // IWYU pragma: keep
 
 /* PSI_TABLE_CALL() with WITH_LOCK_ORDER */
+#include "dd/object_id.h"
 #include "decimal.h"
 #include "field_types.h"  // enum_field_types
 #include "lex_string.h"
@@ -66,8 +71,6 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_io.h"
-#include "my_md5.h"
-#include "my_md5_size.h"
 #include "my_psi_config.h"
 #include "my_sqlcommand.h"
 #include "my_sys.h"
@@ -94,6 +97,7 @@
 #include "pfs_table_provider.h"
 #include "prealloced_array.h"
 #include "scope_guard.h"
+#include "sql-common/json_dom.h"
 #include "sql-common/my_decimal.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_fk_parent_table_access
@@ -106,6 +110,7 @@
 #include "sql/dd/dd_schema.h"   // dd::schema_exists
 #include "sql/dd/dd_table.h"    // dd::drop_table, dd::update_keys...
 #include "sql/dd/dictionary.h"  // dd::Dictionary
+#include "sql/dd/impl/types/index_impl.h"
 #include "sql/dd/properties.h"  // dd::Properties
 #include "sql/dd/sdi_api.h"     // dd::sdi::drop_sdis
 #include "sql/dd/string_type.h"
@@ -126,6 +131,7 @@
 #include "sql/derror.h"          // ER_THD
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // Drop_table_error_handler
+#include "sql/external_table_const.h"
 #include "sql/field.h"
 #include "sql/field_common_properties.h"
 #include "sql/filesort.h"  // Filesort
@@ -146,6 +152,8 @@
 #include "sql/mdl.h"
 #include "sql/mem_root_array.h"
 #include "sql/mysqld.h"  // lower_case_table_names
+#include "sql/mysqld_cs.h"
+#include "sql/parse_tree_nodes.h"
 #include "sql/partition_element.h"
 #include "sql/partition_info.h"                  // partition_info
 #include "sql/partitioning/partition_handler.h"  // Partition_handler
@@ -166,20 +174,24 @@
 #include "sql/sql_db.h"          // get_default_db_collation
 #include "sql/sql_error.h"
 #include "sql/sql_executor.h"  // unique_ptr_destroy_only<RowIterator>
+#include "sql/sql_foreign_key_constraint.h"
 #include "sql/sql_gipk.h"
 #include "sql/sql_handler.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
+#include "sql/sql_masking_policy.h"
 #include "sql/sql_parse.h"  // test_if_data_home_dir
 #include "sql/sql_partition.h"
 #include "sql/sql_plist.h"
 #include "sql/sql_plugin.h"
 #include "sql/sql_plugin_ref.h"
 #include "sql/sql_resolver.h"  // setup_order
+#include "sql/sql_rewrite.h"   // Consumer_type
 #include "sql/sql_show.h"
 #include "sql/sql_tablespace.h"  // validate_tablespace_name
 #include "sql/sql_time.h"        // make_truncated_value_warning
 #include "sql/sql_trigger.h"     // change_trigger_table_name
+#include "sql/sql_zip_dict.h"
 #include "sql/srs_fetcher.h"
 #include "sql/stateless_allocator.h"
 #include "sql/strfunc.h"  // find_type2
@@ -192,6 +204,7 @@
 #include "sql/trigger.h"
 #include "sql/xa.h"
 #include "sql_string.h"
+#include "sql_zip_dict.h"
 #include "string_with_len.h"
 #include "strmake.h"
 #include "strxmov.h"
@@ -457,12 +470,14 @@ const dd::Index *find_fk_parent_key(THD *thd, handlerton *hton,
 static int copy_data_between_tables(
     THD *thd, PSI_stage_progress *psi, TABLE *from, TABLE *to,
     List<Create_field> &create, ha_rows *copied, ha_rows *deleted,
-    Alter_info::enum_enable_or_disable keys_onoff, Alter_table_ctx *alter_ctx);
+    Alter_info::enum_enable_or_disable keys_onoff, Alter_table_ctx *alter_ctx,
+    bool expand_fast_index_creation);
 
 static bool prepare_blob_field(THD *thd, Create_field *sql_field,
                                bool convert_character_set);
-static bool check_engine(const char *db_name, const char *table_name,
-                         HA_CREATE_INFO *create_info);
+static bool check_engine(THD *thd, const char *db_name, const char *table_name,
+                         HA_CREATE_INFO *create_info,
+                         const Alter_info *alter_info);
 
 static bool prepare_set_field(THD *thd, Create_field *sql_field);
 static bool prepare_enum_field(THD *thd, Create_field *sql_field);
@@ -615,6 +630,13 @@ static char *add_identifier(THD *thd, char *to_p, const char *end_p,
   This should be used when something should be presented to a user in a
   diagnostic, error etc. when it would be useful to know what a particular
   file [and directory] means. Such as SHOW ENGINE STATUS, error messages etc.
+
+  Examples:
+
+    t1#P#p1                 table t1 partition p1
+    t1#P#p1#SP#sp1          table t1 partition p1 subpartition sp1
+    t1#P#p1#SP#sp1#TMP#     table t1 partition p1 subpartition sp1 temporary
+    t1#P#p1#SP#sp1#REN#     table t1 partition p1 subpartition sp1 renamed
 
    @param      thd          Thread handle
    @param      from         Path name in my_charset_filename
@@ -1017,8 +1039,8 @@ static bool rea_create_tmp_table(
   }
 
   // Create the table in the storage engine.
-  if (ha_create_table(thd, path, db, table_name, create_info, false, false,
-                      tmp_table_ptr.get())) {
+  if (ha_create_table(thd, path, db, table_name, create_info, &create_fields,
+                      false, false, tmp_table_ptr.get())) {
     return true;
   }
 
@@ -1203,8 +1225,8 @@ static bool rea_create_base_table(
       create_info->db_type->post_ddl)
     *post_ddl_ht = create_info->db_type;
 
-  if (ha_create_table(thd, path, db, table_name, create_info, false, false,
-                      table_def)) {
+  if (ha_create_table(thd, path, db, table_name, create_info, &create_fields,
+                      false, false, table_def)) {
     /*
       Remove table from data-dictionary if it was added and rollback
       won't do this automatically.
@@ -1219,6 +1241,10 @@ static bool rea_create_base_table(
         (void)trans_intermediate_ddl_commit(thd, result);
     }
     return true;
+  } else {
+    if (compression_dict::cols_table_insert(thd, *table_def)) {
+      return true;
+    }
   }
 
   /*
@@ -1550,7 +1576,7 @@ void Foreign_key_parents_invalidator::invalidate(THD *thd) {
     } else {
       assert(parent_it.second.second ==
              enum_invalidation_type::INVALIDATE_AND_MARK_FOR_REOPEN);
-      tdc_remove_table(thd, TDC_RT_MARK_FOR_REOPEN,
+      tdc_remove_table(thd, TDC_RT_MARK_FOR_REOPEN_AND_INVALIDATE_SHARE,
                        parent_it.first.first.c_str(),
                        parent_it.first.second.c_str(), false);
     }
@@ -1723,9 +1749,9 @@ bool mysql_rm_table(THD *thd, Table_ref *tables, bool if_exists,
 
     /* mark for close and remove all cached entries */
     thd->push_internal_handler(&err_handler);
-    error = mysql_rm_table_no_locks(thd, tables, if_exists, drop_temporary,
-                                    false, &not_used, &post_ddl_htons,
-                                    &fk_invalidator, &safe_to_release_mdl);
+    error = mysql_rm_table_no_locks(
+        thd, tables, if_exists, drop_temporary, false, nullptr, false,
+        &not_used, &post_ddl_htons, &fk_invalidator, &safe_to_release_mdl);
     thd->pop_internal_handler();
   }
 
@@ -1787,7 +1813,9 @@ bool mysql_rm_table(THD *thd, Table_ref *tables, bool if_exists,
     write_bin_log(thd, true, thd->query().str, thd->query().length, true);
   }
 
-  my_ok(thd);
+  if (thd_sql_command(thd) != SQLCOM_LOAD) {
+    my_ok(thd);
+  }
   return false;
 }
 
@@ -1902,6 +1930,32 @@ class Drop_tables_ctx {
   bool has_gtid_single_table_group() const {
     return gtid_and_table_groups_state == GTID_SINGLE_TABLE_GROUP;
   }
+
+  bool drop_tmp_tables(THD *thd, bool trans_tables) {
+    const auto table_list =
+        trans_tables ? tmp_trans_tables : tmp_non_trans_tables;
+    for (auto *tr : table_list) {
+      auto *table = tr->table;
+      if (table->s->has_secondary_engine()) {
+        if (secondary_engine_unload_table_inner(
+                thd, table->s->db.str, table->s->path.str,
+                table->s->secondary_engine, false, false)) {
+          return true;
+        }
+      }
+
+      /*
+        Don't check THD::killed flag. We can't rollback deletion of
+        temporary table, so aborting on KILL will make DROP TABLES
+        less atomic.
+        OTOH it is unlikely that we have many temporary tables to drop
+        so being immune to KILL is not that horrible in most cases.
+      */
+      drop_temporary_table(thd, tr);
+    }
+    thd->get_transaction()->mark_dropped_temp_table(Transaction_ctx::STMT);
+    return false;
+  }
 };
 
 /**
@@ -1993,7 +2047,7 @@ class Drop_tables_query_builder {
   }
 
   bool write_bin_log() {
-    if (m_bin_log_is_open) {
+    if (m_bin_log_is_open && thd_sql_command(m_thd) != SQLCOM_LOAD) {
       /* Chop off the last comma */
       m_built_query.chop();
       m_built_query.append(" /* generated by server */");
@@ -2311,10 +2365,12 @@ static bool rm_table_eval_gtid_and_table_groups_state(
         /*
           Normal case. Single base table in SE which don't support atomic DDL
           so it will be logged as a single-table DROP TABLES statement.
-          Other groups are empty.
+          We still can have temporary tables in this drop, but only those ones
+          which are not logged (previous 'if' would detect them).
+          Such temporary tables will be just dropped, but not logged.
         */
-        assert(!drop_ctx->has_tmp_trans_tables());
-        assert(!drop_ctx->has_tmp_non_trans_tables());
+        assert(!drop_ctx->has_tmp_trans_tables_to_binlog());
+        assert(!drop_ctx->has_tmp_non_trans_tables_to_binlog());
         assert(!drop_ctx->has_tmp_nonexistent_tables());
         drop_ctx->gtid_and_table_groups_state =
             Drop_tables_ctx::GTID_SINGLE_TABLE_GROUP;
@@ -2685,10 +2741,18 @@ static bool validate_secondary_engine_option(THD *thd,
   }
 
   // Secondary engine of a table must be set to NULL before it can be redefined.
+  // However, do not panic if same secondary engine is being set again
   if (create_info.secondary_engine.str != nullptr) {
-    my_error(ER_SECONDARY_ENGINE, MYF(0),
-             "Table already has a secondary engine defined");
-    return true;
+    if (my_strcasecmp(system_charset_info, table.s->secondary_engine.str,
+                      create_info.secondary_engine.str) == 0) {
+      push_warning_printf(
+          thd, Sql_condition::SL_WARNING, ER_SECONDARY_ENGINE_PLUGIN,
+          "Table already has the same secondary engine defined.");
+    } else {
+      my_error(ER_SECONDARY_ENGINE, MYF(0),
+               "Table already has a secondary engine defined");
+      return true;
+    }
   }
 
   // Check if this statement sets the primary engine. In this case we have to
@@ -2698,6 +2762,13 @@ static bool validate_secondary_engine_option(THD *thd,
     my_error(ER_SECONDARY_ENGINE, MYF(0),
              "Cannot change the primary engine of a table with a defined "
              "secondary engine");
+    return true;
+  }
+
+  if (table.s->tmp_table != NO_TMP_TABLE) {
+    my_printf_error(ER_SECONDARY_ENGINE,
+                    "Cannot alter temporary table with engine: %s", MYF(0),
+                    table.s->secondary_engine.str);
     return true;
   }
 
@@ -2721,7 +2792,8 @@ static bool validate_secondary_engine_option(THD *thd,
 static bool secondary_engine_load_table(THD *thd, const TABLE &table,
                                         bool *skip_metadata_update) {
   assert(thd->mdl_context.owns_equal_or_stronger_lock(
-      MDL_key::TABLE, table.s->db.str, table.s->table_name.str, MDL_EXCLUSIVE));
+      MDL_key::TABLE, table.s->db.str, table.s->table_name.str,
+      MDL_SHARED_NO_WRITE));
   assert(table.s->has_secondary_engine());
 
   // At least one column must be loaded into the secondary engine.
@@ -2796,9 +2868,37 @@ static bool secondary_engine_unload_table(THD *thd, const char *db_name,
   LEX_CSTRING secondary_engine;
   if (!table_def.options().exists("secondary_engine") ||
       table_def.options().get("secondary_engine", &secondary_engine,
-                              thd->mem_root))
+                              thd->mem_root)) {
     return false;
+  }
 
+  const bool is_partitioned = table_def.partition_type() != dd::Table::PT_NONE;
+  return secondary_engine_unload_table_inner(thd, db_name, table_name,
+                                             secondary_engine, is_partitioned,
+                                             error_if_not_loaded);
+}
+
+bool secondary_engine_unload_materialized_view(THD *thd, const Table_ref *view,
+                                               const dd::View *view_def) {
+  const dd::Properties &table_options = view_def->options();
+  if (table_options.exists("materialization_engine")) {
+    // If a materialization_engine exists for the view, unload it before the
+    // update.
+    LEX_CSTRING value{};
+    table_options.get("materialization_engine", &value, thd->mem_root);
+    if (secondary_engine_unload_table_inner(thd, view->db, view->table_name,
+                                            value, false, false)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool secondary_engine_unload_table_inner(THD *thd, const char *db_name,
+                                         const char *table_name,
+                                         LEX_CSTRING secondary_engine,
+                                         bool is_partitioned,
+                                         bool error_if_not_loaded) {
   // Get handlerton of secondary engine. It may happen that no handlerton is
   // found either if the defined secondary engine is invalid (if so, the table
   // was never loaded either) or if the secondary engine has been uninstalled
@@ -2814,24 +2914,33 @@ static bool secondary_engine_unload_table(THD *thd, const char *db_name,
     }
     return false;
   }
-  handlerton *hton = plugin_data<handlerton *>(plugin);
+  auto *hton = plugin_data<handlerton *>(plugin);
   if (hton == nullptr) {
-    if (error_if_not_loaded)
-      my_error(ER_SECONDARY_ENGINE, MYF(0),
-               "Table is not loaded on a secondary engine");
+    if (error_if_not_loaded) {
+      String err_msg;
+      err_msg.append("Table ");
+      err_msg.append(db_name);
+      err_msg.append(".");
+      err_msg.append(table_name);
+      err_msg.append(" is not loaded in secondary engine.");
+      my_error(ER_SECONDARY_ENGINE_PLUGIN, MYF(0), err_msg.c_ptr());
+    }
     return error_if_not_loaded;
   }
 
   // The defined secondary engine is a valid storage engine. However, if the
   // engine is not a valid secondary engine, no tables have been loaded and
   // there is nothing to be done.
-  if (!(hton->flags & HTON_IS_SECONDARY_ENGINE)) return false;
+  if ((hton->flags & HTON_IS_SECONDARY_ENGINE) == 0U) {
+    return false;
+  }
 
   // Get handler for table in secondary engine.
-  const bool is_partitioned = table_def.partition_type() != dd::Table::PT_NONE;
   unique_ptr_destroy_only<handler> handler(
       get_new_handler(nullptr, is_partitioned, thd->mem_root, hton));
-  if (handler == nullptr) return true;
+  if (handler == nullptr) {
+    return true;
+  }
 
   // Unload table from secondary engine.
   return handler->ha_unload_table(db_name, table_name, error_if_not_loaded) > 0;
@@ -3167,6 +3276,10 @@ static bool drop_base_table(THD *thd, const Drop_tables_ctx &drop_ctx,
   @param  drop_temporary  Only drop temporary tables
   @param  drop_database   This is DROP DATABASE statement. Drop views
                           and handle binary logging in a special way.
+  @param  database_name     Name of the database. nullptr if drop_database is
+  false.
+  @param  should_drop_schema_ddl_log should we go ahead and call
+                                     "ha_log_ddl_drop_schema"?
   @param[out] dropped_non_atomic_flag Indicates whether we have dropped some
                                       tables in SEs which don't support atomic
                                       DDL.
@@ -3201,6 +3314,8 @@ static bool drop_base_table(THD *thd, const Drop_tables_ctx &drop_ctx,
 
 bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
                              bool drop_temporary, bool drop_database,
+                             const char *database_name,
+                             const bool should_drop_schema_ddl_log,
                              bool *dropped_non_atomic_flag,
                              std::set<handlerton *> *post_ddl_htons,
                              Foreign_key_parents_invalidator *fk_invalidator,
@@ -3216,6 +3331,13 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
   *dropped_non_atomic_flag = false;
 
   if (rm_table_sort_into_groups(thd, &drop_ctx, tables)) return true;
+
+  /*
+    Go ahead only when all tables are from transactional engines.
+  */
+  if (drop_ctx.drop_database && !drop_ctx.has_base_non_atomic_tables() &&
+      should_drop_schema_ddl_log && ha_log_ddl_drop_schema(database_name))
+    return true;
 
   /*
     Figure out in which situation we are regarding GTID and different
@@ -3352,7 +3474,18 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
 
           built_query.add_table(table);
 
-          if (built_query.write_bin_log()) goto err_with_rollback;
+          if (thd->variables.binlog_ddl_skip_rewrite ||
+              thd->system_thread == SYSTEM_THREAD_SLAVE_SQL ||
+              thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER ||
+              thd->is_binlog_applier()) {
+            if (write_bin_log(thd, true, thd->query().str, thd->query().length,
+                              false)) {
+              goto err_with_rollback;
+            }
+
+          } else {
+            if (built_query.write_bin_log()) goto err_with_rollback;
+          }
         }
 
         if (drop_ctx.has_no_gtid_single_table_group() ||
@@ -3421,6 +3554,14 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
                           &safe_to_release_mdl_atomic, &foreach_table_root)) {
         goto err_with_rollback;
       }
+
+      /*
+        If DROP SCHEMA crashes here, recovery should rollback the
+        transaction, and schema should return to its Pre-DROP state.
+      */
+      DBUG_EXECUTE_IF("MAKE_SERVER_ABORT_AFTER_DROPPING_ONE_TABLE",
+                      DBUG_SUICIDE(););
+
       foreach_table_root.ClearForReuse();
     }
 
@@ -3448,6 +3589,10 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
         - No need to log anything.
       */
       assert(drop_ctx.drop_database);
+
+      if (secondary_engine_unload_materialized_view(thd, table, view)) {
+        goto err_with_rollback;
+      }
 
       if (thd->dd_client()->drop(view) ||
           mark_referencing_views_invalid(thd, table, true, false,
@@ -3526,7 +3671,18 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
 
       thd->thread_specific_used = true;
 
-      if (built_query.write_bin_log()) goto err_with_rollback;
+      if (thd->variables.binlog_ddl_skip_rewrite ||
+          thd->system_thread == SYSTEM_THREAD_SLAVE_SQL ||
+          thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER ||
+          thd->is_binlog_applier()) {
+        if (write_bin_log(thd, true, thd->query().str, thd->query().length,
+                          drop_ctx.has_base_atomic_tables())) {
+          goto err_with_rollback;
+        }
+
+      } else {
+        if (built_query.write_bin_log()) goto err_with_rollback;
+      }
 
       // VillageSQL: Write uncommitted systable entries before commit.
       // At this point, all tables have been dropped and marked for deletion,
@@ -3545,8 +3701,12 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
           This is fully atomic multi-table DROP TABLES.
           Commit changes to SEs, data-dictionary and binary log/or
           and mark GTID as executed/update slave info tables atomically.
+          If this is executed inside of the LOAD DATA query context we skip
+          the commit, we do it in the main query inside sql_load.
         */
-        error = (trans_commit_stmt(thd) || trans_commit_implicit(thd));
+        if (thd_sql_command(thd) != SQLCOM_LOAD) {
+          error = (trans_commit_stmt(thd) || trans_commit_implicit(thd));
+        }
       } else {
         /*
           We don't have GTID assigned and this is not fully-atomic DROP TABLES.
@@ -3662,17 +3822,9 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
     should be binlogged as part of transaction.
   */
   if (drop_ctx.has_tmp_non_trans_tables()) {
-    for (auto *table : drop_ctx.tmp_non_trans_tables) {
-      /*
-        Don't check THD::killed flag. We can't rollback deletion of
-        temporary table, so aborting on KILL will make DROP TABLES
-        less atomic.
-        OTOH it is unlikely that we have many temporary tables to drop
-        so being immune to KILL is not that horrible in most cases.
-      */
-      drop_temporary_table(thd, table);
+    if (drop_ctx.drop_tmp_tables(thd, false)) {
+      return true;
     }
-    thd->get_transaction()->mark_dropped_temp_table(Transaction_ctx::STMT);
   }
 
   if (drop_ctx.has_tmp_non_trans_tables_to_binlog()) {
@@ -3769,17 +3921,9 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
   }
 
   if (drop_ctx.has_tmp_trans_tables()) {
-    for (auto *table : drop_ctx.tmp_trans_tables) {
-      /*
-        Don't check THD::killed flag. We can't rollback deletion of
-        temporary table, so aborting on KILL will make DROP TABLES
-        less atomic.
-        OTOH it is unlikely that we have many temporary tables to drop
-        so being immune to KILL is not that horrible in most cases.
-      */
-      drop_temporary_table(thd, table);
+    if (drop_ctx.drop_tmp_tables(thd, true)) {
+      return true;
     }
-    thd->get_transaction()->mark_dropped_temp_table(Transaction_ctx::STMT);
   }
 
   if (drop_ctx.has_tmp_trans_tables_to_binlog() ||
@@ -3852,7 +3996,7 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
     }
   }
 
-  if (!drop_ctx.drop_database) {
+  if (!drop_ctx.drop_database && thd_sql_command(thd) != SQLCOM_LOAD) {
     for (handlerton *hton : *post_ddl_htons) hton->post_ddl(thd);
   }
 
@@ -4125,6 +4269,7 @@ bool prepare_pack_create_field(THD *thd, Create_field *sql_field,
       }
       [[fallthrough]];
     case MYSQL_TYPE_BLOB:
+    case MYSQL_TYPE_VECTOR:
     case MYSQL_TYPE_MEDIUM_BLOB:
     case MYSQL_TYPE_TINY_BLOB:
     case MYSQL_TYPE_LONG_BLOB:
@@ -4295,6 +4440,12 @@ const CHARSET_INFO *get_sql_field_charset(const Create_field *sql_field,
     my_charset_bin to something else.
   */
   if (sql_field->is_array || cs == &my_charset_bin) return cs;
+
+  /*
+    Temporal types always use my_charset_numeric.
+    Ensure that it is not changed when altering table charset.
+  */
+  if (is_temporal_real_type(sql_field->sql_type)) return &my_charset_numeric;
 
   /*
     table_charset is set only in ALTER TABLE t1 CONVERT TO CHARACTER SET csname
@@ -4549,7 +4700,7 @@ static bool prepare_set_field(THD *thd, Create_field *sql_field) {
     if (sql_field->charset->coll->strstr(sql_field->charset,
                                          sql_field->interval->type_names[i],
                                          sql_field->interval->type_lengths[i],
-                                         comma_buf, comma_length, nullptr, 0)) {
+                                         comma_buf, comma_length, nullptr)) {
       const ErrConvString err(sql_field->interval->type_names[i],
                               sql_field->interval->type_lengths[i],
                               sql_field->charset);
@@ -4685,7 +4836,7 @@ bool prepare_create_field(THD *thd, const char *error_schema_name,
       stored procedure statement.
     */
     sql_field->constant_default =
-        sql_field->constant_default->safe_charset_converter(thd, save_cs);
+        sql_field->constant_default->convert_charset(thd, save_cs);
 
     if (sql_field->constant_default == nullptr) {
       /* Could not convert */
@@ -4784,12 +4935,11 @@ bool prepare_create_field(THD *thd, const char *error_schema_name,
         // we don't bother checking those here.
         if ((is_field_for_functional_index(dup_field) !=
              is_field_for_functional_index(sql_field))) {
-          std::string error_description;
+          String error_description;
           error_description.append("The column name '");
           error_description.append(sql_field->field_name);
           error_description.append("' is already in use by a hidden column");
-
-          my_error(ER_INTERNAL_ERROR, MYF(0), error_description.c_str());
+          my_error(ER_INTERNAL_ERROR, MYF(0), error_description.c_ptr());
           return true;
         }
 
@@ -4842,6 +4992,7 @@ bool prepare_create_field(THD *thd, const char *error_schema_name,
         sql_field->interval = dup_field->interval;
         sql_field->gcol_info = dup_field->gcol_info;
         sql_field->m_default_val_expr = dup_field->m_default_val_expr;
+        sql_field->m_masking_policy_name = dup_field->m_masking_policy_name;
         sql_field->stored_in_db = dup_field->stored_in_db;
         sql_field->hidden = dup_field->hidden;
         it.remove();  // Remove first (create) definition
@@ -5012,6 +5163,12 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
     return true;
   }
 
+  if (sql_field->m_masking_policy_name.length > 0) {
+    my_error(ER_MASKING_POLICY_INCOMPATIBLE_COLUMN_FEATURE, MYF(0),
+             sql_field->field_name, "have an index");
+    return true;
+  }
+
   Functional_index_error_handler functional_index_error_handler(
       sql_field, {key->name.str, key->name.length}, thd);
 
@@ -5058,6 +5215,12 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
     return true;
   }
 
+  // VECTOR columns cannot be used as keys
+  if (sql_field->sql_type == MYSQL_TYPE_VECTOR) {
+    my_error(ER_NON_SCALAR_USED_AS_KEY, MYF(0), column->get_field_name());
+    return true;
+  }
+
   if (sql_field->auto_flags & Field::NEXT_NUMBER) {
     if (column_nr == 0 || (file->ha_table_flags() & HA_AUTO_PART_KEY))
       (*auto_increment)--;  // Field is used
@@ -5073,6 +5236,15 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
       my_error(ER_DUP_FIELDNAME, MYF(0), column->get_field_name());
       return true;
     }
+  }
+
+  /* compressed column is not allowed to be defined as a key part */
+  DBUG_EXECUTE_IF("remove_compressed_attributes_for_keys",
+                  sql_field->set_column_format(COLUMN_FORMAT_TYPE_DEFAULT););
+  if (sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED) {
+    my_error(ER_COMPRESSED_COLUMN_USED_AS_KEY, MYF(0),
+             column->get_field_name());
+    return true;
   }
 
   uint column_length;
@@ -5281,7 +5453,7 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
             min(file->max_key_length(), file->max_key_part_length(create_info));
         if (max_field_size)
           key_part_length = min(key_part_length, max_field_size);
-        if (key->type == KEYTYPE_MULTIPLE) {
+        if (key->type & KEYTYPE_MULTIPLE) {
           /* not a critical problem */
           push_warning_printf(thd, Sql_condition::SL_WARNING, ER_TOO_LONG_KEY,
                               ER_THD(thd, ER_TOO_LONG_KEY),
@@ -5343,7 +5515,7 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
       key->type != KEYTYPE_FULLTEXT &&
       !key->key_create_info.is_custom_index()) {
     key_part_length = file->max_key_part_length(create_info);
-    if (key->type == KEYTYPE_MULTIPLE) {
+    if (key->type & KEYTYPE_MULTIPLE) {
       /* not a critical problem */
       push_warning_printf(thd, Sql_condition::SL_WARNING, ER_TOO_LONG_KEY,
                           ER_THD(thd, ER_TOO_LONG_KEY),
@@ -6823,6 +6995,16 @@ static bool prepare_foreign_key(THD *thd, HA_CREATE_INFO *create_info,
     return true;
   }
 
+  bool is_self_referencing_fk =
+      my_strcasecmp(table_alias_charset, fk_key->ref_db.str, db) == 0 &&
+      my_strcasecmp(table_alias_charset, fk_key->ref_table.str, table_name) ==
+          0;
+
+  if (fk_key->ref_columns.empty() &&
+      fk_key->set_ref_columns_for_implicit_pk(thd, is_self_referencing_fk,
+                                              alter_info->key_list))
+    return true;
+
   // Validate checks (among other things) that index prefixes are
   // not used and that generated columns are not used with
   // SET NULL and ON UPDATE CASCASE. Since this cannot change once
@@ -7011,9 +7193,7 @@ static bool prepare_foreign_key(THD *thd, HA_CREATE_INFO *create_info,
       return true;
     }
 
-    if (my_strcasecmp(table_alias_charset, fk_info->ref_db.str, db) == 0 &&
-        my_strcasecmp(table_alias_charset, fk_info->ref_table.str,
-                      table_name) == 0) {
+    if (is_self_referencing_fk) {
       // FK which references the same table on which it is defined.
       for (uint i = 0; i < fk_info->key_parts; i++) {
         List_iterator_fast<Create_field> field_it(alter_info->create_list);
@@ -7547,7 +7727,7 @@ static bool prepare_key(
 #ifndef NDEBUG
   const decltype(key_info->flags) flags_before_switch = key_info->flags;
 #endif /* NDEBUG */
-  switch (key->type) {
+  switch (static_cast<int>(key->type)) {
     case KEYTYPE_MULTIPLE:
       break;
     case KEYTYPE_FULLTEXT:
@@ -7626,15 +7806,7 @@ static bool prepare_key(
             algorithm as explicitly specified in those cases.
           */
           key_info->algorithm = file->get_default_index_algorithm();
-          if (Overlaps(file->ht->flags, HTON_SUPPORTS_EXTERNAL_SOURCE)) {
-            push_warning_printf(
-                thd, Sql_condition::SL_NOTE,
-                ER_EXTERNAL_UNSUPPORTED_INDEX_ALGORITHM,
-                ER_THD(thd, ER_EXTERNAL_UNSUPPORTED_INDEX_ALGORITHM),
-                ((key->key_create_info.algorithm == HA_KEY_ALG_HASH)
-                     ? "HASH"
-                     : "BTREE"));
-          } else {
+          if (!Overlaps(file->ht->flags, HTON_SUPPORTS_EXTERNAL_SOURCE)) {
             push_warning_printf(
                 thd, Sql_condition::SL_NOTE, ER_UNSUPPORTED_INDEX_ALGORITHM,
                 ER_THD(thd, ER_UNSUPPORTED_INDEX_ALGORITHM),
@@ -7810,6 +7982,10 @@ bool Item_field::replace_field_processor(uchar *arg) {
   if (create_field) {
     field = new (targ->thd()->mem_root) Create_field_wrapper(create_field);
     switch (create_field->sql_type) {
+      case MYSQL_TYPE_VECTOR:
+        my_error(ER_INCORRECT_TYPE, MYF(0), create_field->field_name,
+                 "GENERATED COLUMN");
+        return true;
       case MYSQL_TYPE_TINY_BLOB:
       case MYSQL_TYPE_MEDIUM_BLOB:
       case MYSQL_TYPE_LONG_BLOB:
@@ -8209,6 +8385,22 @@ static bool column_exists_in_create_list(const char *column_name,
   return false;
 }
 
+static bool is_candidate_key(const KEY *key) {
+  KEY_PART_INFO *key_part;
+  KEY_PART_INFO *key_part_end = key->key_part + key->user_defined_key_parts;
+
+  if (!(key->flags & HA_NOSAME) || (key->flags & HA_NULL_PART_KEY))
+    return false;
+
+  if (key->flags & HA_VIRTUAL_GEN_KEY) return false;
+
+  for (key_part = key->key_part; key_part < key_part_end; key_part++) {
+    if (key_part->key_part_flag & HA_PART_KEY_SEG) return false;
+  }
+
+  return true;
+}
+
 // Prepares the table and key structures for table creation.
 bool mysql_prepare_create_table(
     THD *thd, const char *error_schema_name, const char *error_table_name,
@@ -8309,6 +8501,9 @@ bool mysql_prepare_create_table(
   if (create_info->row_type == ROW_TYPE_DYNAMIC)
     create_info->table_options |= HA_OPTION_PACK_RECORD;
 
+  if (create_info->options & HA_LEX_CREATE_EXTERNAL_TABLE)
+    create_info->table_options |= HA_OPTION_CREATE_EXTERNAL_TABLE;
+
   /*
     Prepare fields, which must be done before calling
     add_functional_index_to_create_list(). The reason is that
@@ -8376,10 +8571,59 @@ bool mysql_prepare_create_table(
   int blob_columns = 0;
   it.rewind();
   while ((sql_field = it++)) {
+    /*
+      Check if the column is compressible.
+      VIRTUAL generated columns cannot have COMPRESSED attribute.
+    */
+    if ((sql_field->sql_type == MYSQL_TYPE_TINY_BLOB ||
+         sql_field->sql_type == MYSQL_TYPE_MEDIUM_BLOB ||
+         sql_field->sql_type == MYSQL_TYPE_BLOB ||
+         sql_field->sql_type == MYSQL_TYPE_LONG_BLOB ||
+         sql_field->sql_type == MYSQL_TYPE_VARCHAR ||
+         sql_field->sql_type == MYSQL_TYPE_JSON) &&
+        (sql_field->gcol_info == nullptr ||
+         sql_field->gcol_info->get_field_stored())) {
+      DBUG_EXECUTE_IF(
+          "enforce_all_compressed_columns",
+          sql_field->set_column_format(COLUMN_FORMAT_TYPE_COMPRESSED););
+
+    } else {
+      if (sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED) {
+        my_error(ER_UNSUPPORTED_COMPRESSED_COLUMN_TYPE, MYF(0),
+                 sql_field->field_name);
+        return true;
+      }
+    }
+
+    /* Verify if the compression dictionary entry exists. Open compression
+       dictionary table with MDL_SHARED_READ mode. If the entry exists,
+       do not release the MDL lock. This is because we don't want a concurrent
+       DROP COMPRESSION_DICTIONARY to remove the dictionary entry
+    */
+
+    if (sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED &&
+        sql_field->zip_dict_name.str != nullptr &&
+        sql_field->zip_dict_name.length != 0) {
+      if (compression_dict::acquire_dict_mdl(thd, MDL_SHARED_READ)) {
+        return true;
+      }
+
+      uint64 zip_dict_id =
+          compression_dict::get_id_for_name(thd, sql_field->zip_dict_name);
+
+      if (zip_dict_id == 0) {
+        my_error(ER_COMPRESSION_DICTIONARY_DOES_NOT_EXIST, MYF(0),
+                 sql_field->zip_dict_name.str);
+        return true;
+      }
+      sql_field->zip_dict_id = zip_dict_id;
+    }
+
     if (sql_field->auto_flags & Field::NEXT_NUMBER) auto_increment++;
     switch (sql_field->sql_type) {
       case MYSQL_TYPE_GEOMETRY:
       case MYSQL_TYPE_BLOB:
+      case MYSQL_TYPE_VECTOR:
       case MYSQL_TYPE_MEDIUM_BLOB:
       case MYSQL_TYPE_TINY_BLOB:
       case MYSQL_TYPE_LONG_BLOB:
@@ -8437,6 +8681,12 @@ bool mysql_prepare_create_table(
 
   if (!*key_info_buffer || !key_part_info) return true;  // Out of memory
 
+  alter_info->delayed_key_count = 0;
+  if (alter_info->delayed_key_list.size() > 0) {
+    alter_info->delayed_key_info =
+        static_cast<KEY *>(sql_calloc(sizeof(KEY) * (*key_count)));
+  }
+
   Mem_root_array<const KEY *> keys_to_check(thd->mem_root);
   if (keys_to_check.reserve(*key_count)) return true;  // Out of memory
 
@@ -8464,20 +8714,16 @@ bool mysql_prepare_create_table(
                       &key_part_info, keys_to_check, key_number, file,
                       &auto_increment))
         return true;
+      for (const auto &it2 : alter_info->delayed_key_list) {
+        if (it2 == key) {
+          alter_info->delayed_key_info[alter_info->delayed_key_count++] =
+              *key_info;
+          break;
+        }
+      }
       key_info++;
       key_number++;
     }
-  }
-  // If the table is created without PK, we must check if this has
-  // been disabled and return error. Limit the effect of sql_require_primary_key
-  // to only those SEs that can participate in replication.
-  if (!primary_key && !thd->is_dd_system_thread() &&
-      !thd->is_initialize_system_thread() &&
-      (file->ha_table_flags() &
-       (HA_BINLOG_ROW_CAPABLE | HA_BINLOG_STMT_CAPABLE)) != 0 &&
-      thd->variables.sql_require_primary_key) {
-    my_error(ER_TABLE_WITHOUT_PK, MYF(0));
-    return true;
   }
 
   /*
@@ -8491,6 +8737,25 @@ bool mysql_prepare_create_table(
                             *dup_check_key, *key_info_buffer, *key_count,
                             alter_info))
       return true;
+  }
+
+  // If the table is created without PK, we must check if this has
+  // been disabled and return error. Limit the effect of sql_require_primary_key
+  // to only those SEs that can participate in replication.
+  if (!primary_key && !thd->is_dd_system_thread() &&
+      !thd->is_initialize_system_thread() &&
+      thd->lex->get_not_supported_in_primary_reason() !=
+          TEMPORARY_TABLE_CREATION &&
+      (file->ha_table_flags() &
+       (HA_BINLOG_ROW_CAPABLE | HA_BINLOG_STMT_CAPABLE)) != 0 &&
+      thd->variables.sql_require_primary_key &&
+      !(create_info->options & HA_LEX_CREATE_TMP_TABLE)) {
+    // Check if there is a UNIQUE NOT NULL (cf. PKE), as PK fallback
+    if (std::none_of(keys_to_check.begin(), keys_to_check.end(),
+                     is_candidate_key)) {
+      my_error(ER_TABLE_WITHOUT_PK, MYF(0));
+      return true;
+    }
   }
 
   if (!primary_key && check_promoted_index(file, *key_info_buffer, *key_count))
@@ -8935,6 +9200,539 @@ static Table_exists_result check_if_table_exists(
   return {false, false};
 }
 
+bool validate_secondary_engine_temporary_table(THD *thd,
+                                               HA_CREATE_INFO *create_info) {
+  /*
+    Secondary engine for temporary tables leads to materialized
+    temporary table creation.
+  */
+  assert(create_info != nullptr && create_info->db_type != nullptr);
+
+  if (is_temp_table(*create_info) &&
+      hton_is_secondary_engine(create_info->db_type)) {
+    if (!secondary_engine_supports_temporary_tables(create_info->db_type)) {
+      my_error(ER_SECONDARY_ENGINE, MYF(0),
+               "Temporary table creation with unsupported secondary engine");
+      return true;
+    } else {
+      LEX *const lex = thd->lex;
+      if (lex->query_block->field_list_is_empty()) {
+        // Temporary table with a secondary engine requires a select query.
+        my_error(ER_SECONDARY_ENGINE, MYF(0),
+                 "Temporary tables without a SELECT query are not supported");
+        return true;
+      }
+      lex->set_execute_only_in_secondary_engine(true, TEMPORARY_TABLE_CREATION);
+      const auto *pname = ha_resolve_storage_engine_name(create_info->db_type);
+      create_info->secondary_engine = {.str = pname, .length = strlen(pname)};
+      lex->create_info->secondary_engine = create_info->secondary_engine;
+    }
+  }
+
+  return false;
+}
+
+/**
+   If any table option for external tables have been specified,
+   return the text for one of them.
+
+   The text is for use in error messages.
+
+   @param  create_info          Create information
+   @param  dialect_options_only Only consider options that map to the dialect
+                                object.
+
+   @return The text for one of the specified table options
+*/
+static std::string find_one_external_table_option(HA_CREATE_INFO *create_info,
+                                                  bool dialect_options_only) {
+  if (create_info->file_format != nullptr) {
+    return "FILE_FORMAT";
+  }
+  if ((create_info->used_fields & HA_CREATE_USED_ALLOW_MISSING_FILES) != 0) {
+    return "ALLOW_MISSING_FILES";
+  }
+  if ((create_info->used_fields & HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS) != 0) {
+    return "VERIFY_KEY_CONSTRAINTS";
+  }
+  if ((create_info->used_fields & HA_CREATE_USED_STRICT_LOAD) != 0) {
+    return "STRICT_LOAD";
+  }
+  if (!dialect_options_only) {
+    if (create_info->external_files != nullptr) {
+      return "FILES";
+    }
+    if ((create_info->used_fields & HA_CREATE_USED_AUTO_REFRESH) != 0) {
+      return "AUTO_REFRESH";
+    }
+    if (create_info->auto_refresh_event_source.length > 0) {
+      return "AUTO_REFRESH_SOURCE";
+    }
+  }
+  return {};
+}
+
+static void add_ternary_option(Json_object *obj, HA_CREATE_INFO *ci,
+                               uint64_t used_flag, uint64_t option_flag,
+                               uint64_t no_option_flag, std::string_view key) {
+  if ((ci->used_fields & used_flag) != 0) {
+    if ((ci->table_options & option_flag) != 0) {
+      Json_boolean bool_value(true);
+      obj->add_clone(key, &bool_value);
+    } else if ((ci->table_options & no_option_flag) != 0) {
+      Json_boolean bool_value(false);
+      obj->add_clone(key, &bool_value);
+    }
+    // Clear the options since they should not be persisted as is
+    ci->table_options &= ~(option_flag | no_option_flag);
+  }
+}
+
+/**
+   Create a JSON object from the FILE_FORMAT clause.
+
+   @param file_format The parse tree object for the FILE_FORMAT clause.
+
+   @param[out] file_format_obj A JSON object to fill with the
+                               specified file format. If the statement
+                               does not contain a FILE_FORMAT clause,
+                               the object will be unchanged.
+*/
+static void create_file_format_object(
+    PT_create_external_file_format *file_format, Json_object &file_format_obj) {
+  if (file_format == nullptr) {
+    return;
+  }
+
+  // General options
+  File_information *file_info = file_format->file_info;
+  if (file_info != nullptr) {
+    if (file_info->filetype_str != nullptr) {
+      // Format name should be lower case
+      const auto max_format_length = 20;
+      char format[max_format_length + 1];
+      assert(strlen(file_info->filetype_str) <= max_format_length);
+      my_stpncpy(format, file_info->filetype_str, max_format_length);
+      my_casedn_str(system_charset_info, format);
+
+      Json_string str_value(format);
+      file_format_obj.add_clone(external_table::kFormatParam, &str_value);
+    }
+
+    if (file_info->compression != nullptr) {
+      Json_string str_value(file_info->compression->ptr());
+      file_format_obj.add_clone(external_table::kCompressionParam, &str_value);
+    }
+
+    if (file_info->cs != nullptr) {
+      Json_string str_value(file_info->cs->csname);
+      file_format_obj.add_clone(external_table::kEncodingParam, &str_value);
+    }
+
+    switch (file_info->with_header) {
+      case enum_with_header::WITHOUT_HEADER: {
+        Json_boolean bool_value(false);
+        file_format_obj.add_clone(external_table::kHasHeaderParam, &bool_value);
+        break;
+      }
+      case enum_with_header::WITH_HEADER: {
+        Json_boolean bool_value(true);
+        file_format_obj.add_clone(external_table::kHasHeaderParam, &bool_value);
+        break;
+      }
+      case enum_with_header::DEFAULT_HEADER:
+        break;
+    }
+  }
+
+  // Field options
+  const Field_separators *field_term = file_format->field_term;
+  if (field_term != nullptr) {
+    // DATE format
+    if (field_term->date_format != nullptr) {
+      Json_string str_value(field_term->date_format->ptr());
+      file_format_obj.add_clone(external_table::kDateFormatParam, &str_value);
+    }
+    // TIME format
+    if (field_term->time_format != nullptr) {
+      Json_string str_value(field_term->time_format->ptr());
+      file_format_obj.add_clone(external_table::kTimeFormatParam, &str_value);
+    }
+    // DATETIME format
+    if (field_term->datetime_format != nullptr) {
+      Json_string str_value(field_term->datetime_format->ptr());
+      file_format_obj.add_clone(external_table::kDatetimeFormatParam,
+                                &str_value);
+    }
+
+    // NULL value
+    if (field_term->null_value != nullptr) {
+      Json_string str_value(field_term->null_value->ptr());
+      file_format_obj.add_clone(external_table::kNullValueParam, &str_value);
+    }
+    // EMPTY value
+    if (field_term->empty_value != nullptr) {
+      Json_string str_value(field_term->empty_value->ptr());
+      file_format_obj.add_clone(external_table::kEmptyValueParam, &str_value);
+    }
+    // TERMINATED BY
+    if (field_term->field_term != nullptr) {
+      Json_string str_value(field_term->field_term->ptr());
+      file_format_obj.add_clone(external_table::kFieldDelimiterParam,
+                                &str_value);
+    }
+    // [OPTIONALLY] ENCLOSED BY
+    if (field_term->enclosed != nullptr) {
+      Json_string str_value(field_term->enclosed->ptr());
+      file_format_obj.add_clone(external_table::kQuotationMarksParam,
+                                &str_value);
+    }
+    // NOT ENCLOSED is not supported
+    // ESCAPED BY
+    if (field_term->escaped != nullptr) {
+      Json_string str_value(field_term->escaped->ptr());
+      file_format_obj.add_clone(external_table::kEscapeCharacterParam,
+                                &str_value);
+    }
+  }
+  // LINES TERMINATED BY
+  const Line_separators *line_term = file_format->line_term;
+  if (line_term != nullptr && line_term->line_term != nullptr) {
+    Json_string str_value(line_term->line_term->ptr());
+    file_format_obj.add_clone(external_table::kRecordDelimiterParam,
+                              &str_value);
+  }
+  // STARTING BY is not supported
+  // IGNORE
+  ulong ignore_lines = file_format->ignore_lines;
+  if (ignore_lines > 0) {
+    Json_uint value(ignore_lines);
+    file_format_obj.add_clone(external_table::kSkipRowsParam, &value);
+  }
+}
+
+template <typename T>
+static void add_ternary_file_option(Json_object *obj, std::string_view key,
+                                    T option) {
+  if (option != Ternary_option::DEFAULT) {
+    Json_boolean bool_value(option == Ternary_option::ON);
+    obj->add_clone(key, &bool_value);
+  }
+}
+
+/**
+   Create a JSON array from the FILES clause.
+
+   @param files The parse tree object for the FILES clause.
+
+   @param[out] files_array A JSON array with the file
+                           specifications. If the statement does not
+                           contain a FILES clause, the array will be
+                           unchanged.
+*/
+static void create_files_array(PT_create_external_files *files,
+                               Json_array &files_array) {
+  if (files == nullptr) {
+    return;
+  }
+
+  for (auto *file : files->external_files->files) {
+    Json_object file_section;
+
+    // Check whether the uri/url contains the entire file spec
+    bool incomplete_uri = file->name != nullptr || file->pattern != nullptr ||
+                          file->prefix != nullptr;
+
+    if (file->uri != nullptr) {
+      Json_string str_value(file->uri->ptr());
+      // URI only supports complete file specs. If not, it must be a PAR.
+      if (incomplete_uri) {
+        file_section.add_clone(external_table::kParParam, &str_value);
+      } else {
+        file_section.add_clone(external_table::kUriParam, &str_value);
+      }
+    }
+
+    if (file->name != nullptr) {
+      Json_string str_value(file->name->ptr());
+      file_section.add_clone(external_table::kNameParam, &str_value);
+    }
+
+    if (file->pattern != nullptr) {
+      Json_string str_value(file->pattern->ptr());
+      file_section.add_clone(external_table::kPatternParam, &str_value);
+    }
+
+    if (file->prefix != nullptr) {
+      Json_string str_value(file->prefix->ptr());
+      file_section.add_clone(external_table::kPrefixParam, &str_value);
+    }
+
+    add_ternary_file_option(&file_section, external_table::kAllowMissingParam,
+                            file->allow_missing_files);
+    add_ternary_file_option(&file_section, external_table::kIsStrictModeParam,
+                            file->strict_load);
+
+    files_array.append_clone(&file_section);
+  }
+
+  return;
+}
+
+/**
+  Convert table options for external tables to settings in ENGINE_ATTRIBUTE
+
+  @param      thd                 Thread object
+  @param      create_info         Create information
+  @param[out] engine_attr_buffer  Buffer to store the ENINGE_ATTRIBUTE content
+
+  @return false on success, true, otherwise
+*/
+static bool convert_to_engine_attribute(THD *thd, HA_CREATE_INFO *create_info,
+                                        String &engine_attr_buffer) {
+  if (create_info->file_format != nullptr ||
+      create_info->external_files != nullptr ||
+      create_info->auto_refresh_event_source.length > 0 ||
+      (create_info->used_fields & HA_CREATE_USED_ALLOW_MISSING_FILES) != 0 ||
+      (create_info->used_fields & HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS) != 0 ||
+      (create_info->used_fields & HA_CREATE_USED_STRICT_LOAD) != 0 ||
+      (create_info->used_fields & HA_CREATE_USED_AUTO_REFRESH) != 0) {
+    // Verify that storage engine supports external tables and engine attributes
+    if ((create_info->db_type->flags & HTON_SUPPORTS_EXTERNAL_SOURCE) == 0 ||
+        (create_info->db_type->flags & HTON_SUPPORTS_ENGINE_ATTRIBUTE) == 0) {
+      my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+               ha_resolve_storage_engine_name(create_info->db_type),
+               find_one_external_table_option(create_info, false).c_str());
+      return true;
+    }
+
+    Json_object *file_format_obj = nullptr;
+
+    // Declared here to avoid that the result of the parsing is deallocated too
+    // early.
+    Json_dom_ptr parsed_engine_attr;
+    Json_object *engine_attr_obj = nullptr;
+    // If there is an existing ENGINE_ATTRIBUTE option, it could either have
+    // been specified in this statement, or if this is ALTER TABLE,
+    // it may be the existing ENGINE_ATTRIBUTE for this table.
+    if (create_info->engine_attribute.length > 0) {
+      // For ALTER TABLE, we want to know if the statement contains a
+      // replacement for ENGINE_ATTRIBUTE or this is the existing one.
+      bool new_engine_attribute =
+          (create_info->used_fields & HA_CREATE_USED_ENGINE_ATTRIBUTE) != 0;
+      parsed_engine_attr = Json_dom::parse(
+          create_info->engine_attribute.str,
+          create_info->engine_attribute.length, [](const char *, size_t) {},
+          JsonDepthErrorHandler);
+      if (parsed_engine_attr == nullptr ||
+          parsed_engine_attr->json_type() != enum_json_type::J_OBJECT) {
+        // This is not a valid ENGINE_ATTRIBUTE object, but we will ignore
+        // this error here.  It will fail later when validated by the engine.
+        // So we will just ignore any SQL options and return.
+        return false;
+      }
+      engine_attr_obj = down_cast<Json_object *>(parsed_engine_attr.get());
+      if (create_info->file_format != nullptr ||
+          (create_info->used_fields & HA_CREATE_USED_ALLOW_MISSING_FILES) !=
+              0 ||
+          (create_info->used_fields & HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS) !=
+              0 ||
+          (create_info->used_fields & HA_CREATE_USED_STRICT_LOAD) != 0) {
+        // Check if engine attribute already contains a dialect object.
+        Json_dom *dialect_dom =
+            engine_attr_obj->get(external_table::kDialectParam);
+        if (dialect_dom != nullptr) {
+          if (!new_engine_attribute) {
+            // This is ALTER_TABLE. We will delete the existing parts,
+            // in order to replace it with a new one.
+            auto *dialect_obj = down_cast<Json_object *>(dialect_dom);
+
+            // We first need to record table options that are specified
+            // as stand-alone table options in SQL, and that are not
+            // redefined here. We do that by pretending they are set in
+            // this statement.
+            Json_wrapper dialect(dialect_dom, true);
+            if ((create_info->used_fields &
+                 HA_CREATE_USED_ALLOW_MISSING_FILES) == 0) {
+              Json_wrapper bool_value =
+                  dialect.lookup(external_table::kAllowMissingParam);
+              if (!bool_value.empty()) {
+                create_info->used_fields |= HA_CREATE_USED_ALLOW_MISSING_FILES;
+                if (bool_value.get_boolean()) {
+                  create_info->table_options |= HA_OPTION_ALLOW_MISSING_FILES;
+                } else {
+                  create_info->table_options |=
+                      HA_OPTION_NO_ALLOW_MISSING_FILES;
+                }
+              }
+            } else {  // Remove the existing setting since there is a new one
+              dialect_obj->remove(external_table::kAllowMissingParam);
+            }
+            if ((create_info->used_fields &
+                 HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS) == 0) {
+              Json_wrapper bool_value =
+                  dialect.lookup(external_table::kConstraintCheckParam);
+              if (!bool_value.empty()) {
+                create_info->used_fields |=
+                    HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS;
+                if (bool_value.get_boolean()) {
+                  create_info->table_options |=
+                      HA_OPTION_VERIFY_KEY_CONSTRAINTS;
+                } else {
+                  create_info->table_options |=
+                      HA_OPTION_NO_VERIFY_KEY_CONSTRAINTS;
+                }
+              }
+            } else {  // Remove the existing setting since there is a new one
+              dialect_obj->remove(external_table::kConstraintCheckParam);
+            }
+
+            if ((create_info->used_fields & HA_CREATE_USED_STRICT_LOAD) == 0) {
+              Json_wrapper bool_value =
+                  dialect.lookup(external_table::kIsStrictModeParam);
+              if (!bool_value.empty()) {
+                create_info->used_fields |= HA_CREATE_USED_STRICT_LOAD;
+                if (bool_value.get_boolean()) {
+                  create_info->table_options |= HA_OPTION_STRICT_LOAD;
+                } else {
+                  create_info->table_options |= HA_OPTION_NO_STRICT_LOAD;
+                }
+              }
+            } else {  // Remove the existing setting since there is a new one
+              dialect_obj->remove(external_table::kIsStrictModeParam);
+            }
+
+            if (create_info->file_format != nullptr ||
+                dialect_obj->cardinality() == 0) {
+              // If there is a FILE_FORMAT clause in the current ALTER
+              // statement, or the existing dialect object is empty, we can
+              // delete the existing one.
+              engine_attr_obj->remove(external_table::kDialectParam);
+            } else {
+              // There is no new FILE_FORMAT clause, use the existing dialect
+              // object.
+              file_format_obj = dialect_obj;
+            }
+          } else {
+            my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "table option",
+                     find_one_external_table_option(create_info, true).c_str());
+            return true;
+          }
+        }
+      }
+      if (create_info->external_files != nullptr) {
+        // Check if engine attribute already contains a file array.
+        if (engine_attr_obj->get(external_table::kFileParam) != nullptr) {
+          if (!new_engine_attribute) {
+            // This is ALTER_TABLE. We will delete the existing array,
+            // in order to replace it with a new one.
+            engine_attr_obj->remove(external_table::kFileParam);
+          } else {
+            my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "table option",
+                     "FILES");
+            return true;
+          }
+        }
+      }
+      if ((create_info->used_fields & HA_CREATE_USED_AUTO_REFRESH) != 0) {
+        // Check if engine attribute already contains this entry.
+        if (engine_attr_obj->get("auto_refresh") != nullptr) {
+          if (!new_engine_attribute) {
+            // This is ALTER_TABLE. We will delete the existing entry,
+            // in order to replace it with a new one.
+            engine_attr_obj->remove("auto_refresh");
+          } else {
+            my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "table option",
+                     "AUTO_REFRESH");
+            return true;
+          }
+        }
+      }
+      if (create_info->auto_refresh_event_source.length > 0) {
+        // Check if engine attribute already contains this entry.
+        if (engine_attr_obj->get("auto_refresh_event_source") != nullptr) {
+          if (!new_engine_attribute) {
+            // This is ALTER_TABLE. We will delete the existing entry,
+            // in order to replace it with a new one.
+            engine_attr_obj->remove("auto_refresh_event_source");
+          } else {
+            my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "table option",
+                     "AUTO_REFRESH_SOURCE");
+            return true;
+          }
+        }
+      }
+    }
+
+    Json_object dialect_obj;
+    create_file_format_object(create_info->file_format, dialect_obj);
+    if (file_format_obj == nullptr) {
+      file_format_obj = &dialect_obj;
+    }
+    // Add additional options to the file_format object
+    add_ternary_option(
+        file_format_obj, create_info, HA_CREATE_USED_ALLOW_MISSING_FILES,
+        HA_OPTION_ALLOW_MISSING_FILES, HA_OPTION_NO_ALLOW_MISSING_FILES,
+        external_table::kAllowMissingParam);
+    add_ternary_option(
+        file_format_obj, create_info, HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS,
+        HA_OPTION_VERIFY_KEY_CONSTRAINTS, HA_OPTION_NO_VERIFY_KEY_CONSTRAINTS,
+        external_table::kConstraintCheckParam);
+    add_ternary_option(file_format_obj, create_info, HA_CREATE_USED_STRICT_LOAD,
+                       HA_OPTION_STRICT_LOAD, HA_OPTION_NO_STRICT_LOAD,
+                       external_table::kIsStrictModeParam);
+
+    Json_object engine_attr;
+    if (engine_attr_obj == nullptr) {
+      engine_attr_obj = &engine_attr;
+    }
+
+    if (file_format_obj->cardinality() > 0) {
+      engine_attr_obj->add_clone(external_table::kDialectParam,
+                                 file_format_obj);
+    }
+    if (create_info->external_files != nullptr) {
+      Json_array files_array;
+      create_files_array(create_info->external_files, files_array);
+      engine_attr_obj->add_clone(external_table::kFileParam, &files_array);
+    }
+    if ((create_info->used_fields & HA_CREATE_USED_AUTO_REFRESH) != 0) {
+      // TODO: See Bug#38068196
+      // WL#16513 will not support "auto_refresh" key.
+      // For now, we will just ignore this option.
+      // if ((create_info->table_options & HA_OPTION_AUTO_REFRESH) != 0) {
+      //   Json_boolean bool_value(true);
+      //   engine_attr_obj->add_clone("auto_refresh", &bool_value);
+      // } else if ((create_info->table_options & HA_OPTION_NO_AUTO_REFRESH) !=
+      //            0) {
+      //   Json_boolean bool_value(false);
+      //   engine_attr_obj->add_clone("auto_refresh", &bool_value);
+      // }
+      // Clear the options since they should not persisted separately
+      create_info->table_options &=
+          ~(HA_OPTION_AUTO_REFRESH | HA_OPTION_NO_AUTO_REFRESH);
+    }
+    if (create_info->auto_refresh_event_source.length > 0) {
+      Json_string str_value(create_info->auto_refresh_event_source.str,
+                            create_info->auto_refresh_event_source.length);
+      engine_attr_obj->add_clone("auto_refresh_event_source", &str_value);
+    }
+    // Convert JSON object to string
+    Json_wrapper wrapper(engine_attr_obj, true);
+    if (wrapper.to_string(&engine_attr_buffer, true, "create_table_impl()",
+                          JsonDepthErrorHandler)) {
+      return true;
+    }
+    // ENGINE_ATTRIBUTE should use system charset
+    LEX_STRING engine_attribute;
+    thd->convert_string(&engine_attribute, system_charset_info,
+                        engine_attr_buffer.ptr(), engine_attr_buffer.length(),
+                        thd->charset());
+    create_info->engine_attribute = to_lex_cstring(engine_attribute);
+  }
+  return false;
+}
+
 /**
   Create a table
 
@@ -9018,12 +9816,14 @@ static bool create_table_impl(
   DBUG_PRINT("enter", ("db: '%s'  table: '%s'  tmp: %d", db, table_name,
                        internal_tmp_table));
 
-  if (check_engine(db, table_name, create_info)) return true;
+  if (check_engine(thd, db, table_name, create_info, alter_info)) return true;
 
-  // Secondary engine cannot be defined for temporary tables.
-  if (create_info->secondary_engine.str != nullptr &&
-      create_info->options & HA_LEX_CREATE_TMP_TABLE) {
-    my_error(ER_SECONDARY_ENGINE, MYF(0), "Temporary tables not supported");
+  if (is_temp_table(*create_info) &&
+      create_info->secondary_engine.str != nullptr &&
+      !hton_is_secondary_engine(create_info->db_type)) {
+    my_printf_error(ER_SECONDARY_ENGINE,
+                    "Secondary engine %s cannot be set for temporary table.",
+                    MYF(0), create_info->secondary_engine.str);
     return true;
   }
 
@@ -9174,6 +9974,14 @@ static bool create_table_impl(
       }
       create_info->db_type = engine_type;
     }
+    if (alter_info->has_compressed_columns() &&
+        !ha_check_storage_engine_flag(part_info->default_engine_type,
+                                      HTON_SUPPORTS_COMPRESSED_COLUMNS)) {
+      my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+               ha_resolve_storage_engine_name(part_info->default_engine_type),
+               "COMPRESSED COLUMNS");
+      return true;
+    }
   }
 
   const Table_exists_result ter = check_if_table_exists(
@@ -9273,6 +10081,11 @@ static bool create_table_impl(
   if (thd->variables.keep_files_on_create)
     create_info->options |= HA_CREATE_KEEP_FILES;
 
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> engine_attr_buffer;
+  if (convert_to_engine_attribute(thd, create_info, engine_attr_buffer)) {
+    return true;
+  }
+
   /*
     Create table definitions.
     If "no_ha_table" is false also create table in storage engine.
@@ -9319,10 +10132,14 @@ static bool create_table_impl(
 
   @returns true on failure, false on success.
 */
+
+extern bool srv_sys_tablespace_encrypt;
 static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
+  DBUG_TRACE;
   // Study if this table uses general tablespaces and if any one is encrypted.
   bool uses_general_tablespace = false;
   bool uses_encrypted_tablespace = false;
+  bool uses_system_tablespace = false;
   dd::Encrypt_result result =
       dd::is_tablespace_encrypted(thd, create_info, &uses_general_tablespace);
   if (result.error) return true;
@@ -9341,7 +10158,14 @@ static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
             create_info->tablespace, &tt)) {
       return true;
     }
-    uses_general_tablespace = (tt != Tablespace_type::SPACE_TYPE_IMPLICIT);
+    uses_general_tablespace = (tt != Tablespace_type::SPACE_TYPE_IMPLICIT &&
+                               tt != Tablespace_type::SPACE_TYPE_SHARED);
+    uses_system_tablespace = tt == Tablespace_type::SPACE_TYPE_SYSTEM;
+    if (uses_system_tablespace) {
+      dd::Encrypt_result result2 = dd::is_system_tablespace_encrypted(thd);
+      if (result2.error) return true;
+      uses_encrypted_tablespace = result2.value;
+    }
   }
 
   /*
@@ -9349,7 +10173,8 @@ static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
     type does not match the general tablespace encryption type.
   */
   const bool requested_type = dd::is_encrypted(create_info->encrypt_type);
-  if (uses_general_tablespace && requested_type != uses_encrypted_tablespace) {
+  if ((uses_general_tablespace || uses_system_tablespace) &&
+      ((requested_type != uses_encrypted_tablespace))) {
     my_error(ER_INVALID_ENCRYPTION_REQUEST, MYF(0),
              requested_type ? "'encrypted'" : "'unencrypted'",
              uses_encrypted_tablespace ? "'encrypted'" : "'unencrypted'");
@@ -9455,14 +10280,16 @@ bool mysql_create_table_no_lock(THD *thd, const char *db,
     return true;
   }
 
-  // Do not accept ENCRYPTION and AUTOEXTEND_SIZE clauses for
+  // Fix create_info->explicit_encryption. For alter it is retrieved
+  // from share.
+  if (!(create_info->options & HA_LEX_CREATE_INTERNAL_TMP_TABLE) &&
+      (create_info->used_fields & HA_CREATE_USED_ENCRYPT)) {
+    create_info->explicit_encryption = true;
+  }
+
+  // Do not accept AUTOEXTEND_SIZE clauses for
   // temporary table.
   if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
-    if (create_info->encrypt_type.length) {
-      my_error(ER_CANNOT_USE_ENCRYPTION_CLAUSE, MYF(0), "temporary");
-      return true;
-    }
-
     if (create_info->m_implicit_tablespace_autoextend_size > 0) {
       my_error(ER_CANNOT_USE_AUTOEXTEND_SIZE_CLAUSE, MYF(0), "temporary");
       return true;
@@ -10536,8 +11363,19 @@ bool mysql_create_table(THD *thd, Table_ref *create_table,
           }
         }
       } else {
-        result = write_bin_log(thd, true, thd->query().str, thd->query().length,
-                               is_trans);
+        const char *query_str = thd->query().str;
+        size_t query_length = thd->query().length;
+
+        // if CREATE EXTERNAL TABLE, then rewrite for binlog
+        if ((create_info->options & HA_LEX_CREATE_EXTERNAL_TABLE) != 0) {
+          mysql_rewrite_query_for_binlog(thd);
+          const String &rewritten_query = thd->rewritten_query();
+          if (rewritten_query.length() > 0) {
+            query_str = rewritten_query.ptr();
+            query_length = rewritten_query.length();
+          }
+        }
+        result = write_bin_log(thd, true, query_str, query_length, is_trans);
       }
     }
   }
@@ -11129,7 +11967,8 @@ bool mysql_rename_table(THD *thd, handlerton *base, const char *old_db,
 */
 
 bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
-                             HA_CREATE_INFO *create_info) {
+                             HA_CREATE_INFO *create_info, uint open_flags,
+                             bool skip_post_ddl_operations) {
   Alter_info local_alter_info(thd->mem_root);
   Alter_table_ctx local_alter_ctx;  // Not used
   bool is_trans = false;
@@ -11154,7 +11993,7 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
     CREATE LIKE needs to have the logging format determined if in
     MIXED mode and creating LIKE a TEMP table.
   */
-  if (open_tables(thd, &thd->lex->query_tables, &not_used, 0) ||
+  if (open_tables(thd, &thd->lex->query_tables, &not_used, open_flags) ||
       thd->decide_logging_format(thd->lex->query_tables))
     return true;
   src_table->table->use_all_columns();
@@ -11185,6 +12024,9 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
                                 &local_create_info, &local_alter_info,
                                 &local_alter_ctx))
     return true;
+
+  /* reset secondary_load information copied from source table */
+  local_create_info.secondary_load = false;
 
   if (prepare_check_constraints_for_create_like_table(thd, src_table, table,
                                                       &local_alter_info))
@@ -11272,15 +12114,6 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
   */
   if (src_table_obj && !src_table_obj->is_explicit_tablespace()) {
     local_create_info.tablespace = nullptr;
-  }
-
-  /*
-    Do not keep ENCRYPTION clause for unencrypted table.
-    We raise error if we are creating encrypted temporary table later.
-  */
-  if (local_create_info.encrypt_type.str &&
-      !dd::is_encrypted(local_create_info.encrypt_type)) {
-    local_create_info.encrypt_type = {nullptr, 0};
   }
 
   /*
@@ -11421,9 +12254,11 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
 
           /*
             As the reference table is temporary and may not exist on slave, we
-            must force the ENGINE to be present into CREATE TABLE.
+            must force the ENGINE and CHARSET to be present into CREATE TABLE.
           */
           create_info->used_fields |= HA_CREATE_USED_ENGINE;
+          create_info->used_fields |= HA_CREATE_USED_DEFAULT_CHARSET;
+          create_info->used_fields |= HA_CREATE_USED_EXPLICIT_ENGINE;
 
           const bool result [[maybe_unused]] = store_create_info(
               thd, table, &query, create_info, true /* show_database */,
@@ -11505,12 +12340,19 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
         trans_commit_implicit(thd))
       goto err;
 
-    if (post_ddl_ht) post_ddl_ht->post_ddl(thd);
+    /* When this function is used in the bulk load statement context we commit
+     and rollback in the main statement in sql_load. Same goes for post_ddl,
+     skip it here. */
+    if (!skip_post_ddl_operations) {
+      if (trans_commit_stmt(thd) || trans_commit_implicit(thd)) goto err;
+      if (post_ddl_ht) post_ddl_ht->post_ddl(thd);
+    }
   }
   return false;
 
 err:
-  if (!(create_info->options & HA_LEX_CREATE_TMP_TABLE)) {
+  if (!(create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
+      !skip_post_ddl_operations) {
     trans_rollback_stmt(thd);
     /*
       Full rollback in case we have THD::transaction_rollback_request
@@ -11638,10 +12480,18 @@ bool Sql_cmd_discard_import_tablespace::mysql_discard_or_import_tablespace(
        missing tablespace.
   */
 
-  const bool discard =
-      (m_alter_info->flags & Alter_info::ALTER_DISCARD_TABLESPACE);
-  error = table_list->table->file->ha_discard_or_import_tablespace(discard,
-                                                                   table_def);
+  if (table_list->table->has_compressed_columns()) {
+    /*
+      ALTER TABLE ... DISCARD/IMPORT TABLESPACE is not supported for tables
+      with compressed columns.
+    */
+    error = HA_ERR_WRONG_COMMAND;
+  } else {
+    const bool discard =
+        (m_alter_info->flags & Alter_info::ALTER_DISCARD_TABLESPACE);
+    error = table_list->table->file->ha_discard_or_import_tablespace(discard,
+                                                                     table_def);
+  }
 
   THD_STAGE_INFO(thd, stage_end);
 
@@ -11774,7 +12624,13 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
   assert(m_alter_info->requested_algorithm ==
          Alter_info::ALTER_TABLE_ALGORITHM_DEFAULT);
 
-  table_list->mdl_request.set_type(MDL_EXCLUSIVE);
+  const bool is_load = m_alter_info->flags & Alter_info::ALTER_SECONDARY_LOAD;
+  // SECONDARY_LOAD operation requires SNW MDL for its initial phase, which is
+  // downgraded to SU lock (by RAPID SE) and eventually upgraded to X lock (by
+  // SQL-layer) before updating Table Definition Cache.
+  const enum_mdl_type mdl_type = is_load ? MDL_SHARED_NO_WRITE : MDL_EXCLUSIVE;
+
+  table_list->mdl_request.set_type(mdl_type);
 
   // Always use isolation level READ_COMMITTED to ensure consistent view of
   // table data during entire load operation. Higher isolation levels provide no
@@ -11793,6 +12649,35 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
     return true;
   auto after_lock_acquire = std::chrono::steady_clock::now();
 
+  // SECONDARY_LOAD/SECONDARY_UNLOAD requires a secondary engine.
+  if (!table_list->table->s->has_secondary_engine()) {
+    my_error(ER_SECONDARY_ENGINE, MYF(0), "No secondary engine defined");
+    return true;
+  }
+  // SECONDARY_LOAD/SECONDARY_UNLOAD cannot be performed on temporary tables.
+  if (table_list->table->s->tmp_table != NO_TMP_TABLE) {
+    my_error(ER_SECONDARY_ENGINE, MYF(0),
+             "No explicit load/unload possible for temporary tables with "
+             "secondary engine");
+    return true;
+  }
+  if (!is_load && secondary_engine_lock_tables_mode(*thd)) {
+    if (thd->mdl_context.upgrade_shared_lock(table_list->table->mdl_ticket,
+                                             mdl_type,
+                                             thd->variables.lock_wait_timeout))
+      return true;
+  }
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(
+      MDL_key::TABLE, table_list->db, table_list->table_name, mdl_type));
+  MDL_ticket *mdl_ticket = table_list->table->mdl_ticket;
+  auto downgrade_guard = create_scope_guard([mdl_ticket, thd] {
+    // Under LOCK TABLES, downgrade to MDL_SHARED_NO_READ_WRITE after all
+    // operations have completed.
+    if (secondary_engine_lock_tables_mode(*thd)) {
+      mdl_ticket->downgrade_lock(MDL_SHARED_NO_READ_WRITE);
+    }
+  });
+
   // Omit hidden generated columns and columns marked as NOT SECONDARY from
   // read_set. It is the responsibility of the secondary engine handler to load
   // only the columns included in the read_set.
@@ -11809,16 +12694,6 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
     // Mark column as eligible for loading.
     table_list->table->mark_column_used(*field, MARK_COLUMNS_READ);
   }
-
-  // SECONDARY_LOAD/SECONDARY_UNLOAD requires a secondary engine.
-  if (!table_list->table->s->has_secondary_engine()) {
-    my_error(ER_SECONDARY_ENGINE, MYF(0), "No secondary engine defined");
-    return true;
-  }
-
-  // It should not have been possible to define a temporary table with a
-  // secondary engine.
-  assert(table_list->table->s->tmp_table == NO_TMP_TABLE);
 
   handlerton *hton = table_list->table->s->db_type();
   assert(hton->flags & HTON_SUPPORTS_ATOMIC_DDL &&
@@ -11837,19 +12712,6 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
   dd::Table *table_def = nullptr;
   if (thd->dd_client()->acquire_for_modification(
           table_list->db, table_list->table_name, &table_def))
-    return true;
-
-  MDL_ticket *mdl_ticket = table_list->table->mdl_ticket;
-
-  auto downgrade_guard = create_scope_guard([mdl_ticket, thd] {
-    // Under LOCK TABLES, downgrade to MDL_SHARED_NO_READ_WRITE after all
-    // operations have completed.
-    if (secondary_engine_lock_tables_mode(*thd)) {
-      mdl_ticket->downgrade_lock(MDL_SHARED_NO_READ_WRITE);
-    }
-  });
-  if (thd->mdl_context.upgrade_shared_lock(mdl_ticket, MDL_EXCLUSIVE,
-                                           thd->variables.lock_wait_timeout))
     return true;
 
   // Cleanup that must be done regardless of commit or rollback.
@@ -11875,20 +12737,52 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
 
   // TODO: undo handling of secondary engine operation
 
-  // Load if SECONDARY_LOAD, unload if SECONDARY_UNLOAD
-  const bool is_load = m_alter_info->flags & Alter_info::ALTER_SECONDARY_LOAD;
-
   /* If set, secondary_load value will not be updated, and also no bin log
    * entries will be recorded. */
   bool skip_metadata_update = false;
 
-  // Partitioned Load/Unload
-  if (table_list->table->part_info != nullptr) {
-    table_list->partition_names = nullptr;
+  /* If set, we don't update the secondary_load flag of the table in DD. Used in
+   * partition unload, where we may unload a few partitions but not the entire
+   * table */
+  bool skip_table_dd_update = false;
 
+  // Partitioned Load/Unload
+  table_list->partition_names = nullptr;
+  std::set<std::string_view> modified_parts;
+  std::stringstream modified_parts_ss;
+  if (table_list->table->part_info != nullptr) {
     if (m_alter_info->partition_names.elements > 0 &&
         !(m_alter_info->flags & Alter_info::ALTER_ALL_PARTITION)) {
       table_list->partition_names = &m_alter_info->partition_names;
+      if (table_def->subpartition_type() ==
+          dd::Table::enum_subpartition_type::ST_NONE) {
+        for (auto pname : *table_list->partition_names) {
+          modified_parts_ss << pname.c_ptr() << " ";
+          modified_parts.emplace(pname.c_ptr());
+        }
+      } else {
+        /* In case of a sub-partitioned table, by requesting to load/unload a
+         * top-level partition, we should also mark as to-be-(un)loaded all of
+         * its subpartitions*/
+        for (auto pname : *table_list->partition_names) {
+          bool part_with_subpart = false;
+          modified_parts_ss << pname.c_ptr() << " ";
+          for (auto &part_obj : *table_def->partitions()) {
+            if (strcmp(part_obj->name().c_str(), pname.c_ptr()) == 0 &&
+                part_obj->parent_partition_id() == dd::INVALID_OBJECT_ID &&
+                !part_obj->subpartitions()->empty()) {
+              for (auto &sub_part_obj : *part_obj->subpartitions()) {
+                modified_parts.emplace(sub_part_obj->name());
+              }
+              part_with_subpart = true;
+              break;
+            }
+          }
+          if (!part_with_subpart) {
+            modified_parts.emplace(pname.c_ptr());
+          }
+        }
+      }
     }
   }
 
@@ -11896,6 +12790,10 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
   std::chrono::steady_clock::time_point se_operation_end;
   // Initiate loading into or unloading from secondary engine.
   if (is_load) {
+    assert(m_alter_info->validation_only
+               ? m_alter_info->validate_num_rows > 0
+               : m_alter_info->validate_num_rows == 0);
+
     DEBUG_SYNC(thd, "before_secondary_engine_load_table");
     if (DBUG_EVALUATE_IF("sim_secload_fail", true, false)) {
       my_error(ER_SECONDARY_ENGINE, MYF(0),
@@ -11909,7 +12807,21 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
     if (retval) return true;
   } else {
     if (table_list->partition_names != nullptr) {
-      skip_metadata_update = true;
+      // Find already loaded partitions and skip unsetting the table's
+      // secondary_load flag if not all partitions are unloaded
+      for (auto &part_obj : *table_def->leaf_partitions()) {
+        bool is_part_loaded = false;
+        assert(part_obj->options().exists("secondary_load"));
+        if (part_obj->options().get("secondary_load", &is_part_loaded)) {
+          LogErr(ERROR_LEVEL, ER_SECONDARY_ENGINE_DDL_FAILED, full_tab_name,
+                 "secondary_unload", "getting partition metadata failed");
+          return true;
+        }
+        if (is_part_loaded && !modified_parts.contains(part_obj->name())) {
+          skip_table_dd_update = true;
+          break;
+        }
+      }
     }
     if (DBUG_EVALUATE_IF("sim_secunload_fail", true, false)) {
       my_error(ER_SECONDARY_ENGINE, MYF(0),
@@ -11936,14 +12848,42 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
         "sec_load_unload",
         ("secondary_load flag update is skipped for table %s", full_tab_name));
   } else {
+    // Upgrade to XMDL in order to update DD
+    DEBUG_SYNC(thd, "secload_upgrade_mdl_x");
+    if (thd->mdl_context.upgrade_shared_lock(
+            mdl_ticket, MDL_EXCLUSIVE, thd->variables.lock_wait_timeout)) {
+      return true;
+    }
+
+    // update partitions' secondary load flag
+    for (auto &part_obj : *table_def->leaf_partitions()) {
+      if (table_list->partition_names == nullptr ||
+          modified_parts.contains(part_obj->name())) {
+        if (part_obj->options().set("secondary_load", is_load)) {
+          LogErr(ERROR_LEVEL, ER_SECONDARY_ENGINE_DDL_FAILED, full_tab_name,
+                 (is_load ? "secondary_load" : "secondary_unload"),
+                 "setting partition metadata failed for partitions ",
+                 modified_parts_ss.str().c_str());
+          return true;
+        }
+      }
+    }
+
+    auto update_dd = [&thd, &table_def, skip_table_dd_update, is_load]() {
+      auto update_tbl_secondary_flag =
+          skip_table_dd_update
+              ? false
+              : table_def->options().set("secondary_load", is_load);
+      return update_tbl_secondary_flag || thd->dd_client()->update(table_def);
+    };
+
     // Update the secondary_load flag based on the current operation.
     if (DBUG_EVALUATE_IF("sim_fail_metadata_update",
                          (my_error(ER_SECONDARY_ENGINE, MYF(0),
                                    "Simulated failure during metadata update"),
                           true),
                          false) ||
-        table_def->options().set("secondary_load", is_load) ||
-        thd->dd_client()->update(table_def)) {
+        update_dd()) {
       LogErr(ERROR_LEVEL, ER_SECONDARY_ENGINE_DDL_FAILED, full_tab_name,
              (is_load ? "secondary_load" : "secondary_unload"),
              "metadata update failed");
@@ -11987,8 +12927,14 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
     });
   }
 
+  modified_parts.clear();
+
   // Close primary table.
-  close_all_tables_for_name(thd, table_list->table->s, false, nullptr);
+  if (skip_metadata_update) {
+    close_thread_tables(thd);
+  } else {
+    close_all_tables_for_name(thd, table_list->table->s, false, nullptr);
+  }
   table_list->table = nullptr;
 
   // Commit transaction if no errors.
@@ -12040,27 +12986,6 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
 
   my_ok(thd);
   return false;
-}
-
-/**
-  Check if key is a candidate key, i.e. a unique index with no index
-  fields partial, nullable or virtual generated.
-*/
-
-static bool is_candidate_key(KEY *key) {
-  KEY_PART_INFO *key_part;
-  KEY_PART_INFO *key_part_end = key->key_part + key->user_defined_key_parts;
-
-  if (!(key->flags & HA_NOSAME) || (key->flags & HA_NULL_PART_KEY))
-    return false;
-
-  if (key->flags & HA_VIRTUAL_GEN_KEY) return false;
-
-  for (key_part = key->key_part; key_part < key_part_end; key_part++) {
-    if (key_part->key_part_flag & HA_PART_KEY_SEG) return false;
-  }
-
-  return true;
 }
 
 /**
@@ -12357,6 +13282,9 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table,
         Alter_inplace_info::SUSPEND_CHECK_CONSTRAINT;
   if (alter_info->flags & Alter_info::ALTER_COLUMN_VISIBILITY)
     ha_alter_info->handler_flags |= Alter_inplace_info::ALTER_COLUMN_VISIBILITY;
+
+  if (alter_info->flags & Alter_info::ALTER_COLUMN_MASKING)
+    ha_alter_info->handler_flags |= Alter_inplace_info::ALTER_COLUMN_MASKING;
 
   /*
     Go through fields in old version of table and detect changes to them.
@@ -13974,6 +14902,9 @@ static bool mysql_inplace_alter_table(
     close_all_tables_for_name(thd, table->s, false, nullptr);
     table_list->table = table = nullptr;
     reopen_tables = true;
+
+    DEBUG_SYNC(thd, "alter_before_close_temp_tables");
+
     close_temporary_table(thd, altered_table, true, false);
     rollback_needs_dict_cache_reset = true;
 
@@ -14005,6 +14936,13 @@ static bool mysql_inplace_alter_table(
       we call update on the new table definition.
     */
     altered_table_def->copy_triggers(table_def);
+
+    /* About the remove the old table definition, if there any columns
+    with compression dictionary, remove the entries from
+    mysql.compression_dictionary_cols table */
+    if (compression_dict::cols_table_delete(thd, *table_def)) {
+      goto cleanup2;
+    }
 
     if (thd->dd_client()->drop(table_def)) goto cleanup2;
     table_def = nullptr;
@@ -14672,9 +15610,22 @@ static bool check_if_field_used_by_partitioning_func(
 }
 
 /**
-  Sets column default, drops default, renames or alters visibility.
+  Applies changes to column attributes for ALTER TABLE ... RENAME COLUMN or
+  ALTER TABLE ... ALTER COLUMN.
+
+  The following attributes may be changed by this function:
+
+  - The name of the column (RENAME COLUMN).
+  - The DEFAULT value or expression of the column (SET/DROP DEFAULT).
+  - The visibility of the column (SET VISIBLE/INVISIBLE).
+  - The masking policy of the column (SET/DROP MASKING POLICY).
+
+  Updates the supplied Create_field in-place and removes the processed
+  Alter_column entry from alter_list.
+
+  Returns true if an error was reported, otherwise false.
 */
-static bool alter_column_name_default_or_visibility(
+static bool apply_alter_column_attributes(
     const Alter_info *alter_info,
     Prealloced_array<const Alter_column *, 1> *alter_list, Create_field *def) {
   DBUG_TRACE;
@@ -14776,7 +15727,12 @@ static bool alter_column_name_default_or_visibility(
     case Alter_column::Type::SET_COLUMN_INVISIBLE:
       def->hidden = dd::Column::enum_hidden_type::HT_HIDDEN_USER;
       break;
-
+    case Alter_column::Type::SET_MASKING_POLICY:
+      def->m_masking_policy_name = alter->new_masking_policy_name();
+      break;
+    case Alter_column::Type::DROP_MASKING_POLICY:
+      def->m_masking_policy_name = EMPTY_CSTR;
+      break;
     default:
       assert(0);
       my_error(ER_UNKNOWN_ERROR, MYF(0));
@@ -14799,9 +15755,10 @@ static bool alter_column_name_default_or_visibility(
   @param alter_info   Alter_info describing which columns, defaults or
                       indexes are dropped or modified.
 
-  @return
+  @retval
     true     The field is used by generated column/default or functional
              index, error was reported.
+  @retval
     false    Otherwise.
 
 */
@@ -14937,6 +15894,8 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
       PSI_INSTRUMENT_ME, alter_info->alter_index_visibility_list.cbegin(),
       alter_info->alter_index_visibility_list.cend());
 
+  /* List with secondary keys which should be created after copying the data */
+  Mem_root_array<const Key_spec *> delayed_key_list(thd->mem_root);
   /*
     Alter_info::alter_list is used by fill_alter_inplace_info() call as well.
     So this function works on its copy rather than original list.
@@ -15088,8 +16047,9 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         new_create_list.push_back(def);
       }
 
-      if (alter_column_name_default_or_visibility(alter_info, &alter_list, def))
+      if (apply_alter_column_attributes(alter_info, &alter_list, def)) {
         return true;
+      }
     }
   }
   def_it.rewind();
@@ -15231,7 +16191,32 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
   /*
     Collect all keys which isn't in drop list. Add only those
     for which some fields exists.
+
+    We also store secondary keys in delayed_key_list to make use of
+    the InnoDB fast index creation. The following conditions must be
+    met:
+
+    - fast_index_creation is enabled for the current session
+    - expand_fast_index_creation is enabled for the current session;
+    - we are going to create an InnoDB table (this is checked later when the
+      target engine is known);
+    - the key most be a non-UNIQUE one;
+    - there are no foreign keys. This can be optimized later to exclude only
+      those keys which are a part of foreign key constraints. Currently we
+      simply disable this optimization for all keys if there are any foreign
+      key constraints in the table.
+    - there are no partitions involved in the operation
   */
+
+  const dd::Table *obj =
+      (table->s->tmp_table ? table->s->tmp_table_def : src_table);
+  const bool modifies_partitioning =
+      alter_info->flags &
+      (Alter_info::ALTER_PARTITION | Alter_info::ALTER_REMOVE_PARTITIONING);
+  bool skip_secondary =
+      thd->variables.expand_fast_index_creation &&
+      (obj == nullptr || obj->foreign_key_parents().empty()) &&
+      !modifies_partitioning;
 
   for (uint i = 0; i < table->s->keys; i++, key_info++) {
     const char *key_name = key_info->name;
@@ -15437,16 +16422,34 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         If we have dropped a column associated with an index,
         this warrants a check for duplicate indexes
       */
-      new_key_list.push_back(new (thd->mem_root) Key_spec(
-          thd->mem_root, key_type, to_lex_cstring(key_name), &key_create_info,
-          (key_info->flags & HA_GENERATED_KEY), index_column_dropped,
-          key_parts));
+      Key_spec *const key = new (thd->mem_root)
+          Key_spec(thd->mem_root, key_type, to_lex_cstring(key_name),
+                   &key_create_info, (key_info->flags & HA_GENERATED_KEY),
+                   index_column_dropped, key_parts);
+      new_key_list.push_back(key);
+      if (skip_secondary && key_type & KEYTYPE_MULTIPLE) {
+        delayed_key_list.push_back(key);
+      }
     }
   }
   {
     new_key_list.reserve(new_key_list.size() + alter_info->key_list.size());
-    for (size_t i = 0; i < alter_info->key_list.size(); i++)
-      new_key_list.push_back(alter_info->key_list[i]);  // Add new keys
+    for (size_t i = 0; i < alter_info->key_list.size(); i++) {
+      Key_spec *const key = alter_info->key_list[i];
+      new_key_list.push_back(key);  // Add new keys
+      if (key->type != KEYTYPE_FOREIGN) {
+        if (skip_secondary && key->type & KEYTYPE_MULTIPLE) {
+          delayed_key_list.push_back(key);
+        }
+      } else if (skip_secondary) {
+        /*
+          We are adding a foreign key so disable the secondary keys
+          optimization.
+        */
+        skip_secondary = false;
+        delayed_key_list.clear();
+      }
+    }
   }
 
   /*
@@ -15519,10 +16522,16 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
   }
 
   alter_info->create_list.swap(new_create_list);
-  alter_info->key_list.clear();
-  alter_info->key_list.resize(new_key_list.size());
-  std::copy(new_key_list.begin(), new_key_list.end(),
-            alter_info->key_list.begin());
+  if (alter_info->key_list.resize(new_key_list.size())) {
+    return true;
+  }
+  std::ranges::copy(new_key_list, alter_info->key_list.begin());
+  alter_info->delayed_key_list.clear();
+  if (alter_info->delayed_key_list.resize(delayed_key_list.size())) {
+    return true;
+  }
+  std::copy(delayed_key_list.cbegin(), delayed_key_list.cend(),
+            alter_info->delayed_key_list.begin());
 
   return false;
 }
@@ -15583,6 +16592,14 @@ bool mysql_prepare_alter_table(THD *thd, const dd::Table *src_table,
 
   // Prepare data in HA_CREATE_INFO shared by ALTER and upgrade code.
   create_info->init_create_options_from_share(table->s, used_fields);
+
+  if (((create_info->used_fields & HA_CREATE_USED_SECONDARY_ENGINE) != 0U) &&
+      create_info->secondary_engine.str == nullptr) {
+    /* when removing the secondary_engine, remove also part_info from
+     * HA_CREATE_INFO */
+    create_info->part_info = nullptr;
+    create_info->secondary_load = false;
+  }
 
   if (!(used_fields & HA_CREATE_USED_AUTO) && table->found_next_number_field) {
     /* Table has an autoincrement, copy value to new table */
@@ -15666,11 +16683,12 @@ static const Create_field *get_field_by_old_name(Alter_info *alter_info,
 
 /** Type of change to foreign key column, */
 
-enum fk_column_change_type {
-  FK_COLUMN_NO_CHANGE,
-  FK_COLUMN_DATA_CHANGE,
-  FK_COLUMN_RENAMED,
-  FK_COLUMN_DROPPED
+enum class fk_column_change_type {
+  NO_CHANGE,
+  DATA_CHANGE,
+  RENAMED,
+  DROPPED,
+  SAFE_FOR_PARENT
 };
 
 /**
@@ -15694,13 +16712,15 @@ enum fk_column_change_type {
   @note This function takes into account value of @@foreign_key_checks
         setting.
 
-  @retval FK_COLUMN_NO_CHANGE    No significant changes are to be done on
+  @retval NO_CHANGE              No significant changes are to be done on
                                  foreign key columns.
-  @retval FK_COLUMN_DATA_CHANGE  ALTER TABLE might result in value
+  @retval DATA_CHANGE            ALTER TABLE might result in value
                                  change in foreign key column (and
                                  foreign_key_checks is on).
-  @retval FK_COLUMN_RENAMED      Foreign key column is renamed.
-  @retval FK_COLUMN_DROPPED      Foreign key column is dropped.
+  @retval ENAMED                 Foreign key column is renamed.
+  @retval DROPPED                Foreign key column is dropped.
+  @retval SAFE_FOR_PARENT        The column change is safe if this is a
+                                 referenced column.
 */
 
 template <class F>
@@ -15725,12 +16745,14 @@ static fk_column_change_type fk_check_column_changes(
           like it happens in case of in-place algorithm.
         */
         *bad_column_name = column;
-        return FK_COLUMN_RENAMED;
+        return fk_column_change_type::RENAMED;
       }
 
-      if ((old_field->is_equal(new_field) == IS_EQUAL_NO) ||
-          ((new_field->flags & NOT_NULL_FLAG) &&
-           !old_field->is_flag_set(NOT_NULL_FLAG))) {
+      const auto fields_differ =
+          (old_field->is_equal(new_field) == IS_EQUAL_NO);
+
+      if (fields_differ || ((new_field->flags & NOT_NULL_FLAG) &&
+                            !old_field->is_flag_set(NOT_NULL_FLAG))) {
         if (!(thd->variables.option_bits & OPTION_NO_FOREIGN_KEY_CHECKS)) {
           /*
             Column in a FK has changed significantly. Unless
@@ -15739,7 +16761,9 @@ static fk_column_change_type fk_check_column_changes(
             and thus referential integrity might be broken,
           */
           *bad_column_name = column;
-          return FK_COLUMN_DATA_CHANGE;
+          /* NULL to NOT NULL column change is safe for referenced columns */
+          return fields_differ ? fk_column_change_type::DATA_CHANGE
+                               : fk_column_change_type::SAFE_FOR_PARENT;
         }
       }
       assert(old_field->is_gcol() == new_field->is_gcol() &&
@@ -15756,11 +16780,11 @@ static fk_column_change_type fk_check_column_changes(
         integrity in this case.
       */
       *bad_column_name = column;
-      return FK_COLUMN_DROPPED;
+      return fk_column_change_type::DROPPED;
     }
   }
 
-  return FK_COLUMN_NO_CHANGE;
+  return fk_column_change_type::NO_CHANGE;
 }
 
 /**
@@ -15853,10 +16877,11 @@ static bool fk_check_copy_alter_table(THD *thd, Table_ref *table_list,
                                         fk_columns_lambda, &bad_column_name);
 
       switch (changes) {
-        case FK_COLUMN_NO_CHANGE:
+        case fk_column_change_type::SAFE_FOR_PARENT:
+        case fk_column_change_type::NO_CHANGE:
           /* No significant changes. We can proceed with ALTER! */
           break;
-        case FK_COLUMN_DATA_CHANGE: {
+        case fk_column_change_type::DATA_CHANGE: {
           char buff[NAME_LEN * 2 + 2];
           strxnmov(buff, sizeof(buff) - 1, fk_p->child_schema_name().c_str(),
                    ".", fk_p->child_table_name().c_str(), NullS);
@@ -15864,13 +16889,13 @@ static bool fk_check_copy_alter_table(THD *thd, Table_ref *table_list,
                    fk->name().c_str(), buff);
           return true;
         }
-        case FK_COLUMN_RENAMED:
+        case fk_column_change_type::RENAMED:
           my_error(
               ER_ALTER_OPERATION_NOT_SUPPORTED_REASON, MYF(0), "ALGORITHM=COPY",
               ER_THD(thd, ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_FK_RENAME),
               "ALGORITHM=INPLACE");
           return true;
-        case FK_COLUMN_DROPPED:
+        case fk_column_change_type::DROPPED:
           /*
             Should already have been checked in
             transfer_preexisting_foreign_keys().
@@ -15910,27 +16935,26 @@ static bool fk_check_copy_alter_table(THD *thd, Table_ref *table_list,
                                       fk_columns_lambda, &bad_column_name);
 
     switch (changes) {
-      case FK_COLUMN_NO_CHANGE:
+      case fk_column_change_type::NO_CHANGE:
         /* No significant changes. We can proceed with ALTER! */
         break;
-      case FK_COLUMN_DATA_CHANGE:
+      case fk_column_change_type::SAFE_FOR_PARENT:
+      case fk_column_change_type::DATA_CHANGE:
         my_error(ER_FK_COLUMN_CANNOT_CHANGE, MYF(0), bad_column_name,
                  fk->name().c_str());
         return true;
-      case FK_COLUMN_RENAMED:
+      case fk_column_change_type::RENAMED:
         my_error(ER_ALTER_OPERATION_NOT_SUPPORTED_REASON, MYF(0),
                  "ALGORITHM=COPY",
                  ER_THD(thd, ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_FK_RENAME),
                  "ALGORITHM=INPLACE");
         return true;
-      case FK_COLUMN_DROPPED:
+      case fk_column_change_type::DROPPED:
         /*
           Should already have been checked in
           transfer_preexisting_foreign_keys().
         */
         assert(false);
-      default:
-        assert(0);
     }
   }
 
@@ -16320,6 +17344,173 @@ static bool simple_rename_or_index_change(
   return error != 0 || reopen_error;
 }
 
+/*
+  Temporarily remove secondary keys previously stored in
+  alter_info->delayed_key_info.
+*/
+static bool remove_secondary_keys(
+    THD *thd, HA_CREATE_INFO *create_info, TABLE *table, Alter_info *alter_info,
+    const dd::Table *table_def, dd::Table *altered_table_def,
+    std::vector<dd::Index *> *dd_disabled_sec_keys) {
+  uint i;
+  DBUG_TRACE;
+  assert(alter_info->delayed_key_count > 0);
+
+  /*
+    We need to mark all fields for read and write as being done in
+    mysql_alter_table.
+  */
+  table->use_all_columns();
+
+  /*
+    Create Alter_info for the table and fill create_list with fields
+    definitions. Note that fields not changed, so we set field==orig_field.
+  */
+  Alter_info alter_info_new(thd->mem_root);
+  Field **f_ptr, *field;
+
+  for (f_ptr = table->field; (field = *f_ptr); f_ptr++) {
+    Create_field *new_field = new (thd->mem_root) Create_field(field, field);
+    alter_info_new.create_list.push_back(new_field);
+  }
+
+  /* table->key_info cannot be passed to ha_alter_info constructor,
+     because it has 1-based fieldnr in key_parts while ha_alter_info
+     expect them to be 0-based */
+  KEY *key_buf = (KEY *)thd->alloc(sizeof(KEY) * table->s->keys);
+  for (uint key_idx = 0; key_idx < table->s->keys; key_idx++) {
+    KEY *key = table->key_info + key_idx;
+    KEY_PART_INFO *key_parts_buf = (KEY_PART_INFO *)thd->alloc(
+        sizeof(KEY_PART_INFO) * key->user_defined_key_parts);
+    for (uint key_part_idx = 0; key_part_idx < key->user_defined_key_parts;
+         key_part_idx++) {
+      key_parts_buf[key_part_idx] = key->key_part[key_part_idx];
+      key_parts_buf[key_part_idx].fieldnr--;
+    }
+    key_buf[key_idx] = *key;
+    key_buf[key_idx].key_part = key_parts_buf;
+  }
+
+  Alter_inplace_info ha_alter_info(create_info, &alter_info_new, false, key_buf,
+                                   table->s->keys, thd->work_part_info);
+
+  ha_alter_info.handler_flags = Alter_inplace_info::DROP_INDEX;
+  ha_alter_info.index_drop_count = alter_info->delayed_key_count;
+
+  /* Fill index_drop_buffer with keys to drop */
+  ha_alter_info.index_drop_buffer =
+      (KEY **)thd->alloc(sizeof(KEY *) * alter_info->delayed_key_count);
+  for (i = 0; i < alter_info->delayed_key_count; i++)
+    ha_alter_info.index_drop_buffer[i] = &(alter_info->delayed_key_info[i]);
+
+  if (table->file->check_if_supported_inplace_alter(table, &ha_alter_info) ==
+      HA_ALTER_INPLACE_NOT_SUPPORTED)
+    return true;
+
+  for (const auto index : *altered_table_def->indexes()) {
+    const char *dd_index_name = index->name().c_str();
+    for (i = 0; i < alter_info->delayed_key_count; i++) {
+      if (strcmp(alter_info->delayed_key_info[i].name, dd_index_name) == 0) {
+        dd_disabled_sec_keys->push_back(index);
+        assert(index->type() == dd::Index::IT_MULTIPLE);
+        index->set_disabled(true);
+      }
+    }
+  }
+
+  /* Clone old Table and disable indexes we want to remove
+     (they are also disabled in altered_table_def) */
+  auto td = std::unique_ptr<dd::Table>(table_def->clone());
+  for (const auto index : *td->indexes()) {
+    const char *dd_index_name = index->name().c_str();
+    for (i = 0; i < alter_info->delayed_key_count; i++) {
+      if (strcmp(alter_info->delayed_key_info[i].name, dd_index_name) == 0) {
+        index->set_disabled(true);
+      }
+    }
+  }
+
+  if (table->file->ha_prepare_inplace_alter_table(table, &ha_alter_info,
+                                                  table_def, td.get()) ||
+      table->file->ha_inplace_alter_table(table, &ha_alter_info, table_def,
+                                          td.get()) ||
+      table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, true,
+                                                 table_def, td.get())) {
+    table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, false,
+                                               table_def, td.get());
+    return true;
+  }
+
+  return false;
+}
+
+/*
+  Restore secondary keys previously removed in remove_secondary_keys.
+*/
+
+static bool restore_secondary_keys(
+    THD *thd, HA_CREATE_INFO *create_info, TABLE *table, Alter_info *alter_info,
+    dd::Table *altered_table_def,
+    std::vector<dd::Index *> *dd_disabled_sec_keys) {
+  uint i;
+  DBUG_ENTER("restore_secondary_keys");
+  assert(alter_info->delayed_key_count > 0);
+
+  THD_STAGE_INFO(thd, stage_restoring_secondary_keys);
+
+  /*
+    Create Alter_info for the table and fill create_list with fields
+    definitions. Not that fields not changed, so we set field==ogrig_field.
+  */
+  Alter_info alter_info_new(thd->mem_root);
+  Field **f_ptr, *field;
+
+  for (f_ptr = table->field; (field = *f_ptr); f_ptr++) {
+    Create_field *new_field = new (thd->mem_root) Create_field(field, field);
+    alter_info_new.create_list.push_back(new_field);
+  }
+
+  Alter_inplace_info ha_alter_info(create_info, &alter_info_new, false,
+                                   alter_info->delayed_key_info, table->s->keys,
+                                   thd->work_part_info);
+
+  ha_alter_info.handler_flags = Alter_inplace_info::ADD_INDEX;
+  ha_alter_info.index_add_count = alter_info->delayed_key_count;
+
+  ha_alter_info.index_add_buffer =
+      (uint *)thd->alloc(sizeof(uint) * alter_info->delayed_key_count);
+
+  /* Clone current version of table def */
+  auto td = std::unique_ptr<dd::Table>(altered_table_def->clone());
+
+  for (const auto index : *dd_disabled_sec_keys) {
+    index->set_disabled(false);
+  }
+
+  /* Fill index_add_buffer with key indexes from key_info_buffer */
+  for (i = 0; i < alter_info->delayed_key_count; i++)
+    ha_alter_info.index_add_buffer[i] = i;
+
+  if (table->file->check_if_supported_inplace_alter(table, &ha_alter_info) ==
+      HA_ALTER_INPLACE_NOT_SUPPORTED)
+    DBUG_RETURN(-1);
+
+  /* Use previously clonned altered_table_def (the one with disabled keys)
+     and enable keys */
+
+  if (table->file->ha_prepare_inplace_alter_table(
+          table, &ha_alter_info, td.get(), altered_table_def) ||
+      table->file->ha_inplace_alter_table(table, &ha_alter_info, td.get(),
+                                          altered_table_def) ||
+      table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, true,
+                                                 td.get(), altered_table_def)) {
+    table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, false,
+                                               td.get(), altered_table_def);
+    DBUG_RETURN(true);
+  }
+  DBUG_RETURN(false);
+}
+
 /**
   Check if we are changing the SRID specification on a geometry column that
   has a spatial index. If that is the case, reject the change since allowing
@@ -16465,8 +17656,8 @@ static bool handle_drop_functional_index(THD *thd, Alter_info *alter_info,
   This function will check if we are renaming a functional index. In that case,
   the function will add a "change column" operation to the create list that
   renames any affected hidden generated column(s). The reason is that the hidden
-  generated column name is generated by MD5(key name + key part number), so a
-  change in the index name will change the name of the column.
+  generated column name is generated by make_functional_index_column_name(), so
+  a change in the index name will change the name of the column.
 
   @param thd thread handler
   @param alter_info the changes to be carried out.
@@ -16523,6 +17714,31 @@ static bool handle_rename_functional_index(THD *thd, Alter_info *alter_info,
   return false;
 }
 
+class Diagnostics_area_man {
+  THD *m_thd;
+  Diagnostics_area *da_prev;
+  Diagnostics_area da;
+
+ public:
+  Diagnostics_area_man(THD *thd)
+      : m_thd(thd), da_prev(thd->get_stmt_da()), da(false) {
+    // Don't copy existing conditions from the old DA so we don't get them
+    // twice when we call copy_non_errors_from_da below.
+    m_thd->push_diagnostics_area(&da, false);
+  }
+
+  ~Diagnostics_area_man() {
+    m_thd->pop_diagnostics_area();
+
+    if (da.is_error()) {
+      da_prev->set_error_status(da.mysql_errno(), da.message_text(),
+                                da.returned_sqlstate());
+      da_prev->push_warning(m_thd, da.mysql_errno(), da.returned_sqlstate(),
+                            Sql_condition::SL_ERROR, da.message_text());
+    }
+  }
+};
+
 /**
   Alter table
 
@@ -16563,6 +17779,16 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                        Alter_info *alter_info) {
   DBUG_TRACE;
 
+  /*
+   This change is necessary for MyRocks at
+   https://github.com/facebook/mysql-5.6/commit/1046d4f7074
+
+   Populate the actual user table name which is getting altered.
+   This flag will be used to put some additional constraints on user tables.*/
+  if (!dd::get_dictionary()->is_system_table_name(table_list->db,
+                                                  table_list->table_name)) {
+    create_info->actual_user_table_name = table_list->table_name;
+  }
   /*
     Check if we attempt to alter mysql.slow_log or
     mysql.general_log table and return an error if
@@ -16939,7 +18165,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       create_info->db_type = table->s->db_type();
   }
 
-  if (check_engine(alter_ctx.new_db, alter_ctx.new_name, create_info))
+  if (check_engine(thd, alter_ctx.new_db, alter_ctx.new_name, create_info,
+                   alter_info))
     return true;
 
   /*
@@ -17183,6 +18410,14 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       return true;
     }
   }
+  if (new_part_info != nullptr && alter_info->has_compressed_columns() &&
+      !ha_check_storage_engine_flag(new_part_info->default_engine_type,
+                                    HTON_SUPPORTS_COMPRESSED_COLUMNS)) {
+    my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+             ha_resolve_storage_engine_name(new_part_info->default_engine_type),
+             "COMPRESSED COLUMNS");
+    return true;
+  }
 
   if ((alter_info->flags & Alter_info::ALTER_DROP_PARTITION) != 0U) {
     auto mdl_type = mdl_ticket->get_type();
@@ -17198,10 +18433,13 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                   &table_def))
       return true;
 
-    table_list->partition_names = &alter_info->partition_names;
-    if (secondary_engine_unload_table(
-            thd, table_list->db, table_list->table_name, *table_def, false))
-      return true;
+    const auto old_partition_names = std::exchange(
+        table_list->partition_names, &alter_info->partition_names);
+    auto unload_res = secondary_engine_unload_table(
+        thd, table_list->db, table_list->table_name, *table_def, false);
+    table_list->partition_names = old_partition_names;
+
+    if (unload_res) return true;
   }
 
   /*
@@ -17252,6 +18490,33 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
   // Prepare check constraints for alter table operation.
   if (prepare_check_constraints_for_alter(thd, table, alter_info, &alter_ctx))
     return true;
+
+  if ((alter_info->flags & Alter_info::ALTER_ADD_COLUMN) != 0 &&
+      alter_info->has_compressed_columns()) {
+    switch (alter_info->requested_algorithm) {
+      case Alter_info::ALTER_TABLE_ALGORITHM_DEFAULT:
+
+        DBUG_LOG("zip_dict",
+                 "ALTER query "
+                     << thd->query().str
+                     << " is using INPLACE for add column"
+                        " because one of the ADD COLUMN is compressed column");
+
+        alter_info->requested_algorithm =
+            Alter_info::ALTER_TABLE_ALGORITHM_INPLACE;
+        break;
+      case Alter_info::ALTER_TABLE_ALGORITHM_INSTANT:
+        // Not possible, error out.
+        my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), "ALGORITHM=INSTANT",
+                 "ALGORITHM=INPLACE/COPY");
+        return true;
+      case Alter_info::ALTER_TABLE_ALGORITHM_COPY:
+      case Alter_info::ALTER_TABLE_ALGORITHM_INPLACE:
+        break;
+      default:
+        return 0;
+    }
+  }
 
   if (mysql_prepare_alter_table(thd, old_table_def, table, create_info,
                                 alter_info, &alter_ctx)) {
@@ -17719,8 +18984,19 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
               alter_ctx.tmp_name, true, false, *table_def)))
       goto err_new_table_cleanup;
 
+    DEBUG_SYNC(thd, "after_open_altered_table");
+
     /* Set markers for fields in TABLE object for altered table. */
     update_altered_table(ha_alter_info, altered_table);
+
+    /*
+    Updating field definitions in 'altered_table' with zip_dict_name values
+    from 'ha_alter_info.alter_info->create_list'
+    */
+    if (ha_alter_info.alter_info != 0 && altered_table != 0) {
+      altered_table->update_compressed_columns_info(
+          ha_alter_info.alter_info->create_list);
+    }
 
     /*
       Mark all columns in 'altered_table' as used to allow usage
@@ -17852,6 +19128,21 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                     fk_key_count, &fk_invalidator)) {
         return true;
       }
+
+      const dd::Table *new_table_def = nullptr;
+      if (thd->dd_client()->acquire(alter_ctx.new_db, alter_ctx.new_name,
+                                    &new_table_def)) {
+        DBUG_LOG("zip_dict",
+                 "Acquiring dictionary table object failed "
+                 " for query "
+                     << thd->query().str << " table_db: " << alter_ctx.new_db
+                     << " table_name: " << alter_ctx.new_name);
+        return true;
+      }
+      /* New table is successfully created, check if any columns have
+      compression dictionary and add entry for them in
+      mysql.compression_dictionary_cols table */
+      if (compression_dict::cols_table_insert(thd, *new_table_def)) return true;
 
       goto end_inplace;
     } else {
@@ -17996,8 +19287,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
 
   {
     if (ha_create_table(thd, alter_ctx.get_tmp_path(), alter_ctx.new_db,
-                        alter_ctx.tmp_name, create_info, false, true,
-                        table_def))
+                        alter_ctx.tmp_name, create_info,
+                        &alter_info->create_list, false, true, table_def))
       goto err_new_table_cleanup;
 
     /* Mark that we have created table in storage engine. */
@@ -18047,6 +19338,16 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     MERGE tables have HA_NO_COPY_ON_ALTER set.
   */
   if (!(new_table->file->ha_table_flags() & HA_NO_COPY_ON_ALTER)) {
+    /*
+      Check if we can temporarily remove secondary indexes from the table
+      before copying the data and recreate them later to utilize InnoDB fast
+      index creation.
+      TODO: is there a better way to check for InnoDB?
+    */
+    const bool optimize_keys =
+        (alter_info->delayed_key_count > 0) &&
+        !my_strcasecmp(system_charset_info, new_table->file->table_type(),
+                       "InnoDB");
     new_table->next_number_field = new_table->found_next_number_field;
     THD_STAGE_INFO(thd, stage_copy_to_tmp_table);
     DBUG_EXECUTE_IF("abort_copy_table", {
@@ -18054,10 +19355,42 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
     });
 
-    if (copy_data_between_tables(thd, thd->m_stage_progress_psi, table,
-                                 new_table, alter_info->create_list, &copied,
-                                 &deleted, alter_info->keys_onoff, &alter_ctx))
+    /* List of dd::Indexes (secondary non-unique) in table_def that are marked
+    as hidden. These indexes are temporarily disabled */
+    std::vector<dd::Index *> dd_disabled_sec_keys;
+    bool err_remove_keys = false;
+
+    if (optimize_keys) new_table->file->ha_extra(HA_EXTRA_BEGIN_ALTER_COPY);
+    if (optimize_keys) {
+      err_remove_keys = remove_secondary_keys(
+          thd, create_info, new_table, alter_info,
+          is_tmp_table ? table->s->tmp_table_def : old_table_def, table_def,
+          &dd_disabled_sec_keys);
+    }
+
+    bool err_copy = copy_data_between_tables(
+        thd, thd->m_stage_progress_psi, table, new_table,
+        alter_info->create_list, &copied, &deleted, alter_info->keys_onoff,
+        &alter_ctx, optimize_keys);
+
+    bool err_restore_keys = false;
+    if (optimize_keys && !err_remove_keys) {
+      // Use a clean diagnostic area so restore_secondary_keys can be executed
+      // whatever the previous results
+      auto da_man = thd->is_error()
+                        ? std::make_optional<Diagnostics_area_man>(thd)
+                        : std::nullopt;
+
+      err_restore_keys =
+          restore_secondary_keys(thd, create_info, new_table, alter_info,
+                                 table_def, &dd_disabled_sec_keys);
+    }
+
+    if (optimize_keys) new_table->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
+
+    if (err_copy || err_restore_keys) {
       goto err_new_table_cleanup;
+    }
 
     DEBUG_SYNC(thd, "alter_after_copy_table");
   } else {
@@ -18311,6 +19644,22 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_with_mdl;
 
     if (thd->dd_client()->store(non_dd_table_def.get())) goto err_with_mdl;
+
+    const dd::Table *stored_table = nullptr;
+
+    if (thd->dd_client()->acquire(alter_ctx.new_db, alter_ctx.tmp_name,
+                                  &stored_table)) {
+      DBUG_LOG("zip_dict",
+               "Acquiring dictionary table object failed "
+               " for query "
+                   << thd->query().str << " table_db: " << alter_ctx.new_db
+                   << " table_name: " << alter_ctx.tmp_name);
+
+      goto err_with_mdl;
+    }
+
+    if (compression_dict::cols_table_insert(thd, *stored_table))
+      goto err_with_mdl;
 
     // Safety, in-memory dd::Table is no longer totally correct.
     non_dd_table_def.reset();
@@ -18739,6 +20088,7 @@ bool mysql_trans_prepare_alter_copy_data(THD *thd) {
 bool mysql_trans_commit_alter_copy_data(THD *thd) {
   bool error = false;
   DBUG_TRACE;
+
   /*
     Ensure that ha_commit_trans() which is implicitly called by
     ha_enable_transaction() doesn't update GTID and slave info states.
@@ -18762,7 +20112,8 @@ bool mysql_trans_commit_alter_copy_data(THD *thd) {
 static int copy_data_between_tables(
     THD *thd, PSI_stage_progress *psi [[maybe_unused]], TABLE *from, TABLE *to,
     List<Create_field> &create, ha_rows *copied, ha_rows *deleted,
-    Alter_info::enum_enable_or_disable keys_onoff, Alter_table_ctx *alter_ctx) {
+    Alter_info::enum_enable_or_disable keys_onoff, Alter_table_ctx *alter_ctx,
+    bool expand_fast_index_creation) {
   DBUG_TRACE;
 
   int error;
@@ -18935,8 +20286,9 @@ static int copy_data_between_tables(
 
   set_column_static_defaults(to, create);
 
-  to->file->ha_extra(HA_EXTRA_BEGIN_ALTER_COPY);
-
+  if (!expand_fast_index_creation) {
+    to->file->ha_extra(HA_EXTRA_BEGIN_ALTER_COPY);
+  }
   while (!(error = iterator->Read())) {
     if (thd->killed) {
       thd->send_kill_message();
@@ -19004,6 +20356,12 @@ static int copy_data_between_tables(
     error = invoke_table_check_constraints(thd, to);
     if (error) break;
 
+    if (use_sql_fk_checks_for_table(thd, to) &&
+        check_all_parent_fk_ref(thd, to, enum_fk_dml_type::FK_INSERT)) {
+      error = 1;
+      break;
+    }
+
     error = to->file->ha_write_row(to->record[0]);
     to->autoinc_field_has_explicit_non_null_value = false;
     if (error) {
@@ -19011,7 +20369,7 @@ static int copy_data_between_tables(
         /* Not a duplicate key error. */
         to->file->print_error(error, MYF(0));
         break;
-      } else {
+      } else if (!to->file->continue_partition_copying_on_error(error)) {
         /* Report duplicate key error. */
         const uint key_nr = to->file->get_dup_key(error);
         if ((int)key_nr >= 0) {
@@ -19036,16 +20394,34 @@ static int copy_data_between_tables(
   iterator.reset();
   free_io_cache(from);
 
+  DEBUG_SYNC(thd, "after_copy_data_between_tables");
+
   if (to->file->ha_end_bulk_insert() && error <= 0) {
     to->file->print_error(my_errno(), MYF(0));
     error = 1;
   }
 
-  to->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
+  if (!expand_fast_index_creation) {
+    to->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
+  }
 
   DBUG_EXECUTE_IF("crash_copy_before_commit", DBUG_SUICIDE(););
+
+  /* This code commits the entire transaction (both trans_commit_stmt()
+  and trans_commit_implicit()) for engines that don't support atomic DDL
+  and for all temporary tables(independent of engine type)
+
+  When expanded fast index creation is enabled, after copy data stage,
+  there are inplace alters to add removed secondary indexes. Thus we
+  need to commit the transaction again. A full commit here would make
+  all future trans_commit_stmt() and trans_commit_implicit() to be dummy
+  and we would leave transaction open.
+
+  With 8.0, this code looks irrevelant for temporary tables but we play
+  safe and disable intermediate commit only for temporary tables when
+  expanded fast index creation is enabled */
   if ((!(to->file->ht->flags & HTON_SUPPORTS_ATOMIC_DDL) ||
-       from->s->tmp_table) &&
+       (from->s->tmp_table && !expand_fast_index_creation)) &&
       mysql_trans_commit_alter_copy_data(thd))
     error = 1;
 
@@ -19211,6 +20587,7 @@ bool mysql_checksum_table(THD *thd, Table_ref *tables,
               */
               switch (f->type()) {
                 case MYSQL_TYPE_BLOB:
+                case MYSQL_TYPE_VECTOR:
                 case MYSQL_TYPE_VARCHAR:
                 case MYSQL_TYPE_GEOMETRY:
                 case MYSQL_TYPE_JSON:
@@ -19275,10 +20652,42 @@ err:
   @retval true  Engine not available/supported, error has been reported.
   @retval false Engine available/supported.
 */
-static bool check_engine(const char *db_name, const char *table_name,
-                         HA_CREATE_INFO *create_info) {
+static bool check_engine(THD *thd, const char *db_name, const char *table_name,
+                         HA_CREATE_INFO *create_info,
+                         const Alter_info *alter_info) {
   DBUG_TRACE;
   handlerton **new_engine = &create_info->db_type;
+  handlerton *req_engine = *new_engine;
+
+  if (enforce_storage_engine && !opt_initialize && !opt_noacl) {
+    /*
+      Storage engine enforcement must be forbidden:
+      1. for "OPTIMIZE TABLE" statements.
+      2. for "ALTER TABLE" statements without explicit "... ENGINE=xxx" part
+      3. Transactional data dictionary (DD) tables
+    */
+    bool no_substitution = (!is_engine_substitution_allowed(thd));
+
+    bool enforcement_forbidden =
+        ((thd->lex->sql_command == SQLCOM_ALTER_TABLE) &&
+         (create_info->used_fields & HA_CREATE_USED_ENGINE) == 0) ||
+        (thd->lex->sql_command == SQLCOM_OPTIMIZE) ||
+        dd::get_dictionary()->is_dd_table_name(db_name, table_name)
+        // Allow creation of the new redo log table
+        || (strcmp(db_name, "performance_schema") == 0);
+
+    if (!enforcement_forbidden) {
+      handlerton *enf_engine = ha_enforce_handlerton(thd);
+      if (enf_engine) {
+        if (enf_engine != *new_engine && no_substitution) {
+          const char *engine_name = ha_resolve_storage_engine_name(req_engine);
+          my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), engine_name, engine_name);
+          return true;
+        }
+        *new_engine = enf_engine;
+      }
+    }
+  }
 
   /*
     Check, if the given table name is system table, and if the storage engine
@@ -19291,10 +20700,29 @@ static bool check_engine(const char *db_name, const char *table_name,
     *new_engine = nullptr;
     return true;
   }
+  /*
+    Check if the given table has compressed columns, and if the storage engine
+    does support it.
+  */
+  partition_info *part_info = thd->work_part_info;
+  bool check_compressed_columns =
+      part_info == 0 &&
+      !(create_info->db_type->partition_flags &&
+        (create_info->db_type->partition_flags() & HA_USE_AUTO_PARTITION));
+
+  if (check_compressed_columns && alter_info->has_compressed_columns() &&
+      !ha_check_storage_engine_flag(*new_engine,
+                                    HTON_SUPPORTS_COMPRESSED_COLUMNS)) {
+    my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+             ha_resolve_storage_engine_name(*new_engine), "COMPRESSED COLUMNS");
+    *new_engine = 0;
+    return true;
+  }
 
   // The storage engine must support secondary engines.
   if (create_info->used_fields & HA_CREATE_USED_SECONDARY_ENGINE &&
-      !((*new_engine)->flags & HTON_SUPPORTS_SECONDARY_ENGINE)) {
+      !(((*new_engine)->flags & HTON_SUPPORTS_SECONDARY_ENGINE) ||
+        ((*new_engine)->flags & HTON_IS_SECONDARY_ENGINE))) {
     my_error(ER_CHECK_NOT_IMPLEMENTED, MYF(0), "SECONDARY_ENGINE");
     return true;
   }
@@ -19420,7 +20848,8 @@ bool prepare_check_constraints_for_create(THD *thd, const char *db_name,
       return true;
   }
 
-  // Make sure fields used by the check constraint exists in the create list.
+  // Make sure fields used by the check constraint exists in the create list,
+  // and that they do not have a masking policy.
   mem_root_deque<Item_field *> fields(thd->mem_root);
   for (auto &cc_spec : alter_info->check_constraint_spec_list) {
     cc_spec->check_expr->walk(&Item::collect_item_field_processor,
@@ -19441,6 +20870,13 @@ bool prepare_check_constraints_for_create(THD *thd, const char *db_name,
       if (cur_fld == nullptr) {
         my_error(ER_CHECK_CONSTRAINT_REFERS_UNKNOWN_COLUMN, MYF(0),
                  cc_spec->name.str, cur_item_fld->field_name);
+        return true;
+      }
+
+      if (cur_fld->m_masking_policy_name.length > 0) {
+        my_error(ER_MASKING_POLICY_INCOMPATIBLE_COLUMN_FEATURE, MYF(0),
+                 cur_item_fld->field_name,
+                 "be referenced by a CHECK constraint");
         return true;
       }
     }
@@ -19923,10 +21359,12 @@ static bool prepare_check_constraints_for_alter(
     }
   }
 
-  alter_info->check_constraint_spec_list.clear();
-  alter_info->check_constraint_spec_list.resize(new_check_cons_list.size());
-  std::move(new_check_cons_list.begin(), new_check_cons_list.end(),
-            alter_info->check_constraint_spec_list.begin());
+  if (alter_info->check_constraint_spec_list.resize(
+          new_check_cons_list.size())) {
+    return true;
+  }
+  std::ranges::move(new_check_cons_list,
+                    alter_info->check_constraint_spec_list.begin());
 
   return false;
 }

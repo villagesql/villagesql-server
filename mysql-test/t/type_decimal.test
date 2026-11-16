@@ -615,3 +615,55 @@ SELECT CAST(9.9 AS SIGNED INTEGER) AS f;
 SELECT 1 < ALL(VALUES ROW(2),ROW(CAST(3 AS DECIMAL))) FROM DUAL;
 SELECT 1 < ALL(VALUES ROW(2),ROW(3.0)) FROM DUAL;
 
+--echo #
+--echo # Bug#34361287: Select with CAST and having differs between OO and HG
+--echo #
+
+# The first equality should be true, and the second equality should be
+# false, because INT/INT gives a DECIMAL with four digits after the
+# decimal point.
+SELECT 1/3, 1/3 = 0.3333, 1/3 = 0.333333333;
+SELECT 2/3, 2/3 = 0.6667, 2/3 = 0.666666666;
+
+# When the DECIMALs from a derived table were not passed through a
+# temporary table, they used to have higher precision than their
+# resolved type.
+--sorted_result
+WITH t AS (SELECT x, x/100000 AS y FROM (VALUES ROW(4), ROW(5), ROW(6)) AS v(x))
+SELECT /*+ MERGE(t) */ x, y, CAST(y AS DOUBLE), y = 0 FROM t;
+
+# When they were passed through a temporary table (thanks to
+# NO_MERGE), they had the expected precision. Verify that they still
+# have.
+--sorted_result
+WITH t AS (SELECT x, x/100000 AS y FROM (VALUES ROW(4), ROW(5), ROW(6)) AS v(x))
+SELECT /*+ NO_MERGE(t) */ x, y, CAST(y AS DOUBLE), y = 0 FROM t;
+
+--echo #
+--echo # Bug#38831745: IN operator returns unexpected result when one of
+--echo #                values in the list is NULL
+--echo #
+
+CREATE TABLE t1(c0 DECIMAL);
+INSERT INTO t1(c0) VALUES(123);
+SELECT c0 IN (1, - (NULL > CAST(-1147964344 AS DECIMAL))) FROM t1;
+SELECT c0 IN (1, - (NULL > -1147964344)) FROM t1;
+SELECT c0 IN (1, - (NULL > 1.0E0)) FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#39444505: A negated 'IS TRUE' guard can still match a DECIMAL row
+--echo #               for which the guarded predicate is true.
+--echo #
+
+CREATE TABLE t2(c0 DECIMAL(10,0) UNIQUE);
+INSERT INTO t2(c0) VALUES(0.010117779858519138), (NULL);
+
+SELECT c0
+FROM t2
+WHERE NOT ((c0 BETWEEN c0 AND c0) IS TRUE) AND
+      c0 <> IFNULL(-2022419930, c0)
+ORDER BY c0 IS NULL, c0;
+
+DROP TABLE t2;

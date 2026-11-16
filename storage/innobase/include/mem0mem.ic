@@ -108,6 +108,7 @@ static inline ulint mem_block_get_start(mem_block_t *block) {
 /** Checks that an object is a memory heap (or a block of it)
 @param[in]      block   Memory heap to check */
 static inline void mem_block_validate(const mem_block_t *block) {
+  ut_ad(block != nullptr);
   if (block->magic_n != MEM_BLOCK_MAGIC_N) {
     ib::fatal error(UT_LOCATION_HERE);
     error << "Memory block is invalid (correctness field value"
@@ -491,7 +492,7 @@ static inline size_t mem_heap_get_size(mem_heap_t *heap) /*!< in: heap */
 }
 
 /** Duplicates a NUL-terminated string.
- @return own: a copy of the string, must be deallocated with ut_free */
+ @return own: a copy of the string, must be deallocated with ut::free */
 static inline char *mem_strdup(const char *str) /*!< in: string to be copied */
 {
   ulint len = strlen(str) + 1;
@@ -500,7 +501,7 @@ static inline char *mem_strdup(const char *str) /*!< in: string to be copied */
 }
 
 /** Makes a NUL-terminated copy of a nonterminated string.
- @return own: a copy of the string, must be deallocated with ut_free */
+ @return own: a copy of the string, must be deallocated with ut::free */
 static inline char *mem_strdupl(const char *str, /*!< in: string to be copied */
                                 ulint len) /*!< in: length of str, in bytes */
 {

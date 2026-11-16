@@ -526,8 +526,8 @@ class NdbScanOperation : public NdbOperation {
                           Uint32 sizeOfPartInfo, Ndb::PartitionSpec &partValue);
   int getPartValueFromInfo(const Ndb::PartitionSpec *partInfo,
                            const NdbTableImpl *table, Uint32 *partValue);
-  int generatePackedReadAIs(const NdbRecord *reseult_record, bool &haveBlob,
-                            const Uint32 *readMask);
+  int generatePackedReadAIs(const NdbRecord *result_record,
+                            bool &usesBlobHandles, const Uint32 *readMask);
   int scanImpl(const NdbScanOperation::ScanOptions *options,
                const Uint32 *readMask);
   int scanTableImpl(const NdbRecord *result_record,

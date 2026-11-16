@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0dd.h"
 #include "dict0dict.h"
 #include "fil0fil.h"
+#include "page0zip.h"
 #include "scope_guard.h"
 
 #define CALL_MEMBER_FN(object, ptrToMember) ((object).*(ptrToMember))
@@ -186,8 +187,8 @@ Ret_t Tester::open_table(std::vector<std::string> &tokens) noexcept {
   std::string table_name = tokens[1];
   dict_table_t *table = is_table_open(table_name);
   if (table == nullptr) {
-    table = dict_table_open_on_name(table_name.c_str(), false, false,
-                                    DICT_ERR_IGNORE_NONE);
+    table = dd_table_open_on_name(nullptr, nullptr, table_name.c_str(), false,
+                                  DICT_ERR_IGNORE_NONE);
   }
   if (table == nullptr) {
     XLOG("FAIL: Could not open table: " << table_name);
@@ -577,7 +578,13 @@ DISPATCH_FUNCTION_DEF(Tester::make_page_dirty) {
           << "Dirtying page: " << page_id
           << ", page_type=" << fil_get_page_type_str(page_type);
 
-      mlog_write_ulint(page + FIL_PAGE_TYPE, page_type, MLOG_2BYTES, &mtr);
+      auto page_zip = buf_block_get_page_zip(block);
+      if (page_zip != nullptr && fil_page_index_page_check(page)) {
+        mach_write_to_2(page + FIL_PAGE_TYPE, page_type);
+        page_zip_write_header(page_zip, page + FIL_PAGE_TYPE, 2, &mtr);
+      } else {
+        mlog_write_ulint(page + FIL_PAGE_TYPE, page_type, MLOG_2BYTES, &mtr);
+      }
     }
   }
 
@@ -600,15 +607,16 @@ DISPATCH_FUNCTION_DEF(Tester::print_tree) {
 
   std::string table_name = tokens[1];
 
-  dict_table_t *table = dict_table_open_on_name(table_name.c_str(), false,
-                                                false, DICT_ERR_IGNORE_NONE);
+  MDL_ticket *mdl;
+  dict_table_t *table = dd_table_open_on_name(
+      current_thd, &mdl, table_name.c_str(), false, DICT_ERR_IGNORE_NONE);
   if (table == nullptr) {
     TLOG("Could not open table: " << table_name);
     return RET_FAIL;
   }
 
-  auto guard =
-      create_scope_guard([table]() { dict_table_close(table, false, false); });
+  auto guard = create_scope_guard(
+      [table, &mdl]() { dd_table_close(table, current_thd, &mdl, false); });
 
   const dict_index_t *clust_index = table->first_index();
   BFT::Callback cb;

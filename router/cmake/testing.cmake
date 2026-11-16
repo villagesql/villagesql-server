@@ -124,6 +124,9 @@ FUNCTION(_ADD_TEST_FILE FILE)
 
   ADD_DEPENDENCIES(mysqlrouter_all ${test_target})
 
+  # ZSTD_generateSequences generates -Werror=alloc-size-larger-than=
+  DOWNGRADE_STRINGOP_WARNINGS(${test_target})
+
   FOREACH(libtarget ${TEST_LIB_DEPENDS})
     #add_dependencies(${test_target} ${libtarget})
     TARGET_LINK_LIBRARIES(${test_target} ${libtarget})
@@ -150,7 +153,9 @@ FUNCTION(_ADD_TEST_FILE FILE)
     STRING_APPEND(TEST_ENV_PREFIX ";WITH_VALGRIND=1;VALGRIND_EXE=${VALGRIND}")
   ENDIF()
 
-  IF(WITH_ASAN)
+  # For Visual Studio: AddressSanitizer: ERROR: expected '=' in ASAN_OPTIONS
+  # Our asan.supp is empty anyways, and LSAN is not supported on Windows.
+  IF(WITH_ASAN AND NOT WIN32_VS)
     STRING_APPEND(TEST_ENV_PREFIX
       ";ASAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/mysql-test/asan.supp")
     STRING_APPEND(TEST_ENV_PREFIX
@@ -165,6 +170,10 @@ FUNCTION(_ADD_TEST_FILE FILE)
       ENVIRONMENT
       "${TEST_ENV_PREFIX};PATH=$<TARGET_FILE_DIR:harness-library>\;$<TARGET_FILE_DIR:http_common>\;$<TARGET_FILE_DIR:duktape>\;${ESC_ENV_PATH};${TEST_ENVIRONMENT}")
   ELSE()
+    # longer timeout for routertest_integration_routing_sharing
+    IF(${test_name} STREQUAL "routertest_integration_routing_sharing")
+      SET_TESTS_PROPERTIES(${test_name} PROPERTIES TIMEOUT 3000)
+    ENDIF()
     SET_TESTS_PROPERTIES(${test_name} PROPERTIES
       ENVIRONMENT
       "${TEST_ENV_PREFIX};LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH};DYLD_LIBRARY_PATH=$ENV{DYLD_LIBRARY_PATH};TSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/router/tsan.supp;${TEST_ENVIRONMENT}")

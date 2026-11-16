@@ -30,10 +30,10 @@
   @file mysys/my_chmod.cc
 */
 
-#include <errno.h>
-#include <fcntl.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <cerrno>
 
 #include "my_dbug.h"
 #include "my_inttypes.h"
@@ -104,5 +104,5 @@ bool my_chmod(const char *filename, ulong perm_flags, myf MyFlags) {
     MyOsError(my_errno(), EE_CHANGE_PERMISSIONS, MYF(0), filename);
   }
 
-  return ret_val ? true : false;
+  return ret_val != 0;
 }

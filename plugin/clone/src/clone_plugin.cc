@@ -31,10 +31,12 @@ Clone Plugin: Plugin interface
 #include <mysql/plugin.h>
 #include <mysql/plugin_clone.h>
 
+#include "include/sql_string.h"
 #include "plugin/clone/include/clone_client.h"
 #include "plugin/clone/include/clone_local.h"
 #include "plugin/clone/include/clone_server.h"
 #include "plugin/clone/include/clone_status.h"
+#include "sql/sql_error.h"
 
 #include <algorithm>
 #include <cctype>
@@ -69,6 +71,10 @@ uint clone_max_io_bandwidth;
 /** Clone system variable: If network compression is enabled */
 bool clone_enable_compression;
 
+ulong clone_compression_algorithm;
+
+uint clone_zstd_compression_level;
+
 /** Clone system variable: valid list of donor addresses. */
 static char *clone_valid_donor_list;
 
@@ -86,6 +92,19 @@ uint clone_restart_timeout;
 
 /** Clone system variable: time delay after removing data */
 uint clone_delay_after_data_drop;
+
+/** Clone system variable: list of plugins that will not be matched on
+recipient */
+char *clone_exclude_plugins_list;
+
+/** List of plugins that cannot be excluded by clone_exclude_plugins_list */
+static std::vector<std::string> disallow_list{"daemon_keyring_proxy_plugin",
+                                              "binlog",
+                                              "performance_schema",
+                                              "memory",
+                                              "innodb",
+                                              "keyring_file",
+                                              "keyring_vault"};
 
 /** Key for registering clone allocations with performance schema */
 PSI_memory_key clone_mem_key;
@@ -184,19 +203,19 @@ using Donor_Callback = std::function<bool(std::string &, uint32_t)>;
 @param[in]	callback	callback function
 @return true, if scan is successful or match is found. */
 static bool scan_donor_list(const std::string &donor_list,
-                            Donor_Callback callback) {
+                            const Donor_Callback &callback) {
   size_t comma_pos = 0;
   size_t begin_pos = 0;
 
   try {
     /* Don't allow space in donor list. */
-    auto space_pos = donor_list.find(" ");
+    auto space_pos = donor_list.find(' ');
     if (space_pos != std::string::npos) {
       return (false);
     }
     /* Scan through all entries. */
     while (comma_pos != std::string::npos) {
-      comma_pos = donor_list.find(",", begin_pos);
+      comma_pos = donor_list.find(',', begin_pos);
       auto entry_len = comma_pos;
 
       if (entry_len != std::string::npos) {
@@ -208,7 +227,7 @@ static bool scan_donor_list(const std::string &donor_list,
       }
 
       const std::string entry = donor_list.substr(begin_pos, entry_len);
-      auto colon_pos = entry.find(":");
+      auto colon_pos = entry.find(':');
 
       /* Bad entry if no separator is found or found in beginning. */
       if (colon_pos == std::string::npos || colon_pos == 0) {
@@ -217,7 +236,7 @@ static bool scan_donor_list(const std::string &donor_list,
 
       auto port_str = entry.substr(colon_pos + 1);
       /* Allow only decimal digit in PORT. */
-      for (char &digit : port_str) {
+      for (char const &digit : port_str) {
         if (std::isdigit(digit) == 0) {
           return (false);
         }
@@ -225,7 +244,7 @@ static bool scan_donor_list(const std::string &donor_list,
       auto valid_port = static_cast<uint32_t>(std::stoi(port_str));
       auto valid_host = entry.substr(0, colon_pos);
 
-      bool match = callback(valid_host, valid_port);
+      bool const match = callback(valid_host, valid_port);
 
       if (match) {
         return (true);
@@ -259,7 +278,8 @@ static int match_valid_donor_address(MYSQL_THD thd, const char *host,
   auto &valid_str = configs[0].second;
   bool found = false;
 
-  Donor_Callback callback = [&](std::string &valid_host, uint32_t valid_port) {
+  Donor_Callback const callback = [&](std::string &valid_host,
+                                      uint32_t valid_port) {
     /* Host in MySQL is case insensitive and converted to lower case. */
     auto transform_lower = [](unsigned char c) {
       return static_cast<unsigned char>(std::tolower(c));
@@ -268,7 +288,7 @@ static int match_valid_donor_address(MYSQL_THD thd, const char *host,
                    transform_lower);
 
     /* Check if input matches with configured host and port. */
-    if (0 == valid_host.compare(host) && port == valid_port) {
+    if (host == valid_host && port == valid_port) {
       found = true;
     }
     return (found);
@@ -303,7 +323,7 @@ static int check_donor_addr_format(MYSQL_THD thd, SYS_VAR *var [[maybe_unused]],
   char temp_buffer[STRING_BUFFER_USUAL_SIZE];
   auto buf_len = static_cast<int>(sizeof(temp_buffer));
 
-  auto addrs_cstring = value->val_str(value, temp_buffer, &buf_len);
+  const auto *addrs_cstring = value->val_str(value, temp_buffer, &buf_len);
 
   if (addrs_cstring && (addrs_cstring == temp_buffer)) {
     addrs_cstring = thd_strmake(thd, addrs_cstring, buf_len);
@@ -319,9 +339,11 @@ static int check_donor_addr_format(MYSQL_THD thd, SYS_VAR *var [[maybe_unused]],
 
   const std::string addrs(addrs_cstring);
 
-  Donor_Callback callback = [](std::string, uint32_t) { return (false); };
+  const Donor_Callback callback = [](const std::string &, uint32_t) {
+    return (false);
+  };
 
-  bool success = scan_donor_list(addrs_cstring, callback);
+  bool const success = scan_donor_list(addrs_cstring, callback);
 
   if (!success) {
     (*(const char **)save) = nullptr;
@@ -520,6 +542,62 @@ static int plugin_clone_remote_server(THD *thd, MYSQL_SOCKET socket) {
   return (err);
 }
 
+static const char *val_strmake(MYSQL_THD thd,
+                               struct st_mysql_value *mysql_val) {
+  char buf[STRING_BUFFER_USUAL_SIZE];
+  int len = sizeof(buf);
+  const char *val = mysql_val->val_str(mysql_val, buf, &len);
+
+  if (val != NULL) val = thd_strmake(thd, val, len);
+
+  return val;
+}
+
+static bool plugin_is_ignorable(std::string const &plugin_name) {
+  return (std::find(disallow_list.begin(), disallow_list.end(), plugin_name) ==
+          disallow_list.end());
+}
+
+static int clone_exclude_plugins_list_validate(MYSQL_THD thd,
+                                               SYS_VAR *var [[maybe_unused]],
+                                               void *save,
+                                               st_mysql_value *value) {
+  const char *input = val_strmake(thd, value);
+  std::stringstream exclude_list(input);
+
+  // Disallow InnoDB, keyring_*, GR plugins to be excluded
+
+  std::ostringstream err_strm;
+  err_strm << "Clone: The following plugins cannot be excluded: ";
+  bool bad = false;
+  while (exclude_list.good()) {
+    std::string substr;
+    getline(exclude_list, substr, ',');
+    // remove all spaces in string
+    substr.erase(remove(substr.begin(), substr.end(), ' '), substr.end());
+    if (substr.empty()) continue;
+
+    std::transform(substr.begin(), substr.end(), substr.begin(), ::tolower);
+    if (!plugin_is_ignorable(substr)) {
+      err_strm << substr << ",";
+      bad = true;
+    }
+  }
+
+  if (bad) {
+    std::string error(err_strm.str());
+    error.erase(remove(error.end() - 1, error.end(), ','), error.end());
+
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), error.c_str());
+
+    *static_cast<const char **>(save) = nullptr;
+    return 1;
+  }
+
+  *static_cast<const char **>(save) = input;
+  return 0;
+}
+
 /** clone plugin interfaces */
 struct Mysql_clone clone_descriptor = {
     MYSQL_CLONE_INTERFACE_VERSION, plugin_clone_local,
@@ -590,6 +668,28 @@ static MYSQL_SYSVAR_BOOL(enable_compression, clone_enable_compression,
                          "If compression is done at network", nullptr, nullptr,
                          false); /* Disable compression by default */
 
+enum enum_clone_compression_algorithm { ZLIB = 0, ZSTD };
+const char *clone_compression_lib_names[] = {COMPRESSION_ALGORITHM_ZLIB,
+                                             COMPRESSION_ALGORITHM_ZSTD, NullS};
+
+static TYPELIB clone_compression_algorithms_typelib = {
+    array_elements(clone_compression_lib_names) - 1,
+    "clone_compression_algorithms_typelib", clone_compression_lib_names,
+    nullptr};
+
+static MYSQL_SYSVAR_ENUM(compression_algorithm, clone_compression_algorithm,
+                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_MEMALLOC,
+                         "compression algorithm used in clone", nullptr,
+                         nullptr, enum_clone_compression_algorithm::ZSTD,
+                         &clone_compression_algorithms_typelib);
+
+static MYSQL_SYSVAR_UINT(zstd_compression_level, clone_zstd_compression_level,
+                         PLUGIN_VAR_NOCMDARG, "zstd compression level", nullptr,
+                         nullptr, 3, /* Default */
+                         1,          /* Minimum */
+                         10,         /* Maximum */
+                         1);
+
 /** List of valid donor addresses allowed to clone from. */
 static MYSQL_SYSVAR_STR(valid_donor_list, clone_valid_donor_list,
                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_MEMALLOC,
@@ -643,6 +743,16 @@ static MYSQL_SYSVAR_UINT(delay_after_data_drop, clone_delay_after_data_drop,
                          60 * 60,             /* Maximum =  1 hour */
                          1);                  /* Step    =  1 sec */
 
+/**  Remote cloning insists on the same list of plugins to be installed on
+recipient. These list of plugins are not required to be installed on recipient.
+*/
+static MYSQL_SYSVAR_STR(exclude_plugins_list, clone_exclude_plugins_list,
+                        PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_MEMALLOC,
+                        "Comma separated plugin names that are not installed "
+                        "on recipient. Clone will not error out if these are "
+                        "active on donor but not installed on recipient",
+                        clone_exclude_plugins_list_validate, nullptr, nullptr);
+
 /** Clone system variables */
 static SYS_VAR *clone_system_variables[] = {
     MYSQL_SYSVAR(buffer_size),
@@ -659,6 +769,9 @@ static SYS_VAR *clone_system_variables[] = {
     MYSQL_SYSVAR(ssl_ca),
     MYSQL_SYSVAR(donor_timeout_after_network_failure),
     MYSQL_SYSVAR(delay_after_data_drop),
+    MYSQL_SYSVAR(exclude_plugins_list),
+    MYSQL_SYSVAR(compression_algorithm),
+    MYSQL_SYSVAR(zstd_compression_level),
     nullptr};
 
 /** Declare clone plugin */

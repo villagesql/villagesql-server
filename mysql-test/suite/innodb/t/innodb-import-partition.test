@@ -1,5 +1,7 @@
 --source include/no_valgrind_without_big.inc
 
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
 
 let $partitioning= 1;
 
@@ -353,6 +355,8 @@ DROP TABLE t1;
 
 
 --disable_query_log
+call mtr.add_suppression("Trying to access missing tablespace");
+call mtr.add_suppression("Cannot save statistics for table `test`\.`t1` .* because the \.ibd file is missing\.");
 call mtr.add_suppression("Cannot calculate statistics for table .* because the \.ibd file is missing");
 call mtr.add_suppression("Cannot delete tablespace .* in DISCARD TABLESPACE. Tablespace not found");
 call mtr.add_suppression("Cannot delete tablespace .* because it is not found in the tablespace memory cache.");
@@ -365,3 +369,5 @@ call mtr.add_suppression("Missing \.ibd file for table .test...t1. .. Partition"
 
 --remove_files_wildcard $MYSQLTEST_VARDIR/tmp t1*.ibd
 --remove_files_wildcard $MYSQLTEST_VARDIR/tmp t1*.cfg
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

@@ -25,7 +25,7 @@
 
 #include "my_config.h"
 
-#include <stdio.h>
+#include <cstdio>
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -181,22 +181,21 @@ bool str_set_decimal(uint mask, const my_decimal *val, String *str,
     my_decimal2string(mask, val, str);
     str->set_charset(cs);
     return false;
-  } else {
-    /*
-      For ASCII-incompatible character sets (like UCS2) we
-      call my_decimal2string() on a temporary buffer first,
-      and then convert the result to the target character
-      with help of str->copy().
-    */
-    StringBuffer<DECIMAL_MAX_STR_LENGTH + 1> tmp(&my_charset_latin1);
-    if (static_cast<int>(decimals) < val->frac) {
-      my_decimal_round(E_DEC_FATAL_ERROR, val, decimals, false, &dec_buf);
-      val = &dec_buf;
-    }
-    my_decimal2string(mask, val, &tmp);
-    uint errors;
-    return str->copy(tmp.ptr(), tmp.length(), &my_charset_latin1, cs, &errors);
   }
+  /*
+  For ASCII-incompatible character sets (like UCS2) we
+  call my_decimal2string() on a temporary buffer first,
+  and then convert the result to the target character
+  with help of str->copy().
+  */
+  StringBuffer<DECIMAL_MAX_STR_LENGTH + 1> tmp(&my_charset_latin1);
+  if (static_cast<int>(decimals) < val->frac) {
+    my_decimal_round(E_DEC_FATAL_ERROR, val, decimals, false, &dec_buf);
+    val = &dec_buf;
+  }
+  my_decimal2string(mask, val, &tmp);
+  uint errors;
+  return str->copy(tmp.ptr(), tmp.length(), &my_charset_latin1, cs, &errors);
 }
 
 /*
@@ -304,35 +303,56 @@ static my_decimal *lldiv_t2my_decimal(const lldiv_t *lld, bool neg,
 }
 
 /**
-  Convert datetime value to my_decimal in format YYYYMMDDhhmmss.ffffff
-  @param ltime  Date value to convert from.
-  @param dec    Decimal value to convert to.
+  Convert date value to my_decimal in format YYYYMMDD
+
+  @param      date  Date value to convert from.
+  @param[out] dec   Decimal value to convert to.
+
+  @returns pointer to decimal value
 */
-my_decimal *date2my_decimal(const MYSQL_TIME *ltime, my_decimal *dec) {
+my_decimal *date_to_decimal(const Date_val date, my_decimal *dec) {
   lldiv_t lld;
-  lld.quot = ltime->time_type > MYSQL_TIMESTAMP_DATE
-                 ? TIME_to_ulonglong_datetime(*ltime)
-                 : TIME_to_ulonglong_date(*ltime);
-  lld.rem = (longlong)ltime->second_part * 1000;
-  return lldiv_t2my_decimal(&lld, ltime->neg, dec);
+  lld.quot = date.to_int();
+  lld.rem = 0;
+  return lldiv_t2my_decimal(&lld, false, dec);
+}
+
+/**
+  Convert datetime value to my_decimal in format YYYYMMDDhhmmss.ffffff
+
+  @param      dt  Datetime value to convert from.
+  @param[out] dec Decimal value to convert to.
+
+  @returns pointer to decimal value
+*/
+my_decimal *datetime_to_decimal(const Datetime_val *dt, my_decimal *dec) {
+  lldiv_t lld;
+  assert(dt->time_type == MYSQL_TIMESTAMP_DATETIME ||
+         dt->time_type == MYSQL_TIMESTAMP_DATETIME_TZ);
+  lld.quot = TIME_to_ulonglong_datetime(*dt);
+  lld.rem = (longlong)dt->second_part * 1000;
+  return lldiv_t2my_decimal(&lld, dt->neg, dec);
 }
 
 /**
   Convert time value to my_decimal in format hhmmss.ffffff
-  @param ltime  Date value to convert from.
+  @param time   Time value to convert from.
   @param dec    Decimal value to convert to.
 */
-my_decimal *time2my_decimal(const MYSQL_TIME *ltime, my_decimal *dec) {
+my_decimal *time_to_decimal(const Time_val time, my_decimal *dec) {
   lldiv_t lld;
-  lld.quot = TIME_to_ulonglong_time(*ltime);
-  lld.rem = (longlong)ltime->second_part * 1000;
-  return lldiv_t2my_decimal(&lld, ltime->neg, dec);
+  lld.quot = time.to_int_truncated();
+  if (time.is_negative()) {
+    lld.quot = -lld.quot;
+  }
+  lld.rem = static_cast<longlong>(time.microsecond() * 1000);
+  return lldiv_t2my_decimal(&lld, time.is_negative(), dec);
 }
 
 /**
   Convert timeval value to my_decimal.
 */
-my_decimal *timeval2my_decimal(const my_timeval *tm, my_decimal *dec) {
+my_decimal *timeval_to_decimal(const my_timeval *tm, my_decimal *dec) {
   lldiv_t lld;
   lld.quot = tm->m_tv_sec;
   lld.rem = tm->m_tv_usec * 1000;

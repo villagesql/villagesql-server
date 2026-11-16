@@ -35,7 +35,7 @@ void angel_run(const char *progname, const Vector<BaseString> &original_args,
                bool daemon, int connnect_retries, int connect_delay,
                const char *tls_search_path, int mgm_tls_level);
 
-void angel_stop(void);
+void angel_stop();
 
 #undef JAM_FILE_ID
 

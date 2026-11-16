@@ -37,7 +37,7 @@ std::unique_ptr<dd::Spatial_reference_system_impl> get_srs(
   switch (coordinate_system) {
     case gis::Coordinate_system::kCartesian: {
       // Use SRID 0.
-      return std::unique_ptr<dd::Spatial_reference_system_impl>();
+      return {};
     }
     case gis::Coordinate_system::kGeographic: {
       // EPSG 4326, but with long-lat axes (E-N).

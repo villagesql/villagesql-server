@@ -142,7 +142,7 @@ int NdbTick_GetMonotonicClockId(clockid_t *clk) {
 }
 #endif
 
-const NDB_TICKS NdbTick_getCurrentTicks(void) {
+NDB_TICKS NdbTick_getCurrentTicks() {
   assert(isInited);
 
 #if defined(HAVE_CLOCK_GETTIME)

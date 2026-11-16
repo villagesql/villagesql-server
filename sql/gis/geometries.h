@@ -43,6 +43,7 @@
 /// @see geometries_cs.h
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 namespace gis {

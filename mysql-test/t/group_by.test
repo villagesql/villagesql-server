@@ -55,7 +55,7 @@ INSERT INTO t2 VALUES (5,'name','pass','mail','Y','v','n','adr','1','1','1');
 ANALYZE TABLE t1,t2;
 
 # Tests printing of TemptableAggregateIterator.
---skip_if_hypergraph  # TemptableAggregateIterator not supported.
+--skip_if_hypergraph  # Uses streaming aggregation instead of temp table aggregation.
 EXPLAIN FORMAT=tree SELECT t2.userid, MIN(t1.score) FROM t1, t2 WHERE t1.userID=t2.userID GROUP BY t2.userid;
 
 --sorted_result
@@ -603,6 +603,7 @@ delete from t2  where a = 2 and b = 'val-2' order by a,b,c,d limit 30;
 ANALYZE TABLE t1, t2;
 --replace_column 10 6
 explain select c from t2 where a = 2 and b = 'val-2' group by c;
+--sorted_result
 select c from t2 where a = 2 and b = 'val-2' group by c;
 drop table t1,t2;
 
@@ -849,7 +850,7 @@ SELECT 1 FROM t1 as t1_outer GROUP BY a
 --error ER_WRONG_FIELD_WITH_GROUP 
 SELECT (SELECT t1_outer.a FROM t1 AS t1_inner LIMIT 1) 
   FROM t1 AS t1_outer GROUP BY t1_outer.b;
---error ER_BAD_FIELD_ERROR 
+--error ER_WRONG_FIELD_WITH_GROUP
 SELECT 1 FROM t1 as t1_outer GROUP BY a 
   HAVING (SELECT t1_outer.b FROM t1 AS t1_inner LIMIT 1);
 SELECT (SELECT SUM(t1_inner.a) FROM t1 AS t1_inner LIMIT 1) 
@@ -889,10 +890,16 @@ SELECT 1 FROM t1 GROUP BY b HAVING a = 2;
 --error ER_INVALID_GROUP_FUNC_USE
 SELECT 1 FROM t1 GROUP BY SUM(b);
 # I deleted pk from table, as it was making query below become valid.
---error ER_WRONG_FIELD_WITH_GROUP 
-SELECT b FROM t1 AS t1_outer GROUP BY a HAVING t1_outer.a IN 
-  (SELECT SUM(t1_inner.b)+t1_outer.b FROM t1 AS t1_inner GROUP BY t1_inner.a
-   HAVING SUM(t1_inner.b)+t1_outer.b > 5);
+--error ER_BAD_FIELD_ERROR
+SELECT b
+FROM t1 AS t1_outer
+GROUP BY a
+HAVING t1_outer.a IN
+  (SELECT SUM(t1_inner.b) + t1_outer.b
+   FROM t1 AS t1_inner
+   GROUP BY t1_inner.a
+   HAVING SUM(t1_inner.b) + t1_outer.b > 5
+  );
 DROP TABLE t1;
 SET SQL_MODE = '';
 #
@@ -1116,7 +1123,7 @@ FLUSH STATUS;
 --disable_result_log
 --eval $query
 --enable_result_log
---skip_if_hypergraph  # Does not support this hint yet.
+--skip_if_hypergraph  # Different plan.
 SHOW SESSION STATUS LIKE 'Sort_scan%';
 --let $query=SELECT a FROM t1 IGNORE INDEX FOR ORDER BY (PRIMARY,i2) ORDER BY a
 --eval EXPLAIN $query
@@ -1124,7 +1131,6 @@ FLUSH STATUS;
 --disable_result_log
 --eval $query
 --enable_result_log
---skip_if_hypergraph  # Does not support this hint yet.
 SHOW SESSION STATUS LIKE 'Sort_scan%';
 SELECT a FROM t1 IGNORE INDEX FOR ORDER BY (PRIMARY,i2) ORDER BY a;
 EXPLAIN SELECT a FROM t1 IGNORE INDEX FOR ORDER BY (PRIMARY)
@@ -1171,9 +1177,11 @@ EXPLAIN SELECT 1 FROM t1 WHERE a IN
 
 CREATE TABLE t2 (a INT, b INT, KEY(a));
 INSERT INTO t2 VALUES (1, 1), (2, 2), (3,3), (4,4);
-EXPLAIN SELECT a, SUM(b) FROM t2 GROUP BY a LIMIT 2; 
-EXPLAIN SELECT a, SUM(b) FROM t2 IGNORE INDEX (a) GROUP BY a LIMIT 2;
+
 ANALYZE TABLE t2;
+EXPLAIN SELECT a, SUM(b) FROM t2 GROUP BY a LIMIT 2;
+--replace_result 4 ROWS 5 ROWS
+EXPLAIN SELECT a, SUM(b) FROM t2 IGNORE INDEX (a) GROUP BY a LIMIT 2;
 EXPLAIN SELECT 1 FROM t2 WHERE a IN
   (SELECT a FROM t1 USE INDEX (i2) IGNORE INDEX (i2));
 
@@ -1455,7 +1463,6 @@ DROP TABLE t1;
 SET BIG_TABLES=1;
 CREATE TABLE t1(a INT);
 INSERT INTO t1 VALUES (0),(0);
---skip_if_hypergraph  # Does not use MyISAM temp tables, so no such restriction.
 SELECT 1 FROM t1 GROUP BY IF(`a`,'','');
 SELECT 1 FROM t1 GROUP BY TRIM(LEADING RAND() FROM '');
 --skip_if_hypergraph  # Different warnings.
@@ -2902,6 +2909,7 @@ ANALYZE TABLE t1;
 # plan to make sure it doesn't change in a way that would mask the bug.
 #
 --skip_if_hypergraph   # Chooses a different query plan.
+--replace_regex $elide_costs
 EXPLAIN FORMAT=tree SELECT f1, f1 + 1, COUNT(DISTINCT f2) AS x FROM t1 GROUP BY f1 ORDER BY x;
 SELECT f1, f1 + 1, COUNT(DISTINCT f2) AS x FROM t1 GROUP BY f1 ORDER BY x;
 
@@ -3484,6 +3492,7 @@ SELECT b, COUNT(*) FROM t1 LEFT JOIN t2 USING (b) LEFT JOIN t3 USING (b)
 GROUP BY b;
 
 --replace_regex $elide_costs
+--skip_if_hypergraph   # Chooses a different query plan.
 --eval EXPLAIN FORMAT=TREE $query
 
 FLUSH STATUS;
@@ -3492,6 +3501,7 @@ FLUSH STATUS;
 
 --echo # Expect around 500 index reads. 250 from t2 and 250 from t3.
 --echo # It used to be around 16000 index reads.
+--skip_if_hypergraph   # Chooses a different query plan.
 SHOW STATUS LIKE 'Handler_read_key';
 
 DROP TABLE t1, t2, t3;
@@ -3531,6 +3541,15 @@ SELECT t1.x, dt.* FROM t1, LATERAL (
 # Verify that the results are correct.
 --sorted_result
 --eval $query
+
+# Variant of the above that still gave wrong results with hypergraph
+# after the original fix. Fixed in bug#37057380.
+--sorted_result
+SELECT t1.x, dt.* FROM t1, LATERAL (
+  SELECT SQL_BIG_RESULT t2.y, SUM(t3.x)
+  FROM t2 LEFT JOIN t3 ON t2.x = t3.id AND t2.y + t3.y < t1.y AND t3.x < 100
+  GROUP BY t2.y
+) AS dt;
 
 DROP TABLE t1, t2, t3;
 
@@ -3626,6 +3645,63 @@ FROM ( SELECT ANY_VALUE(value)
 DROP PROCEDURE BatchInsert;
 DROP TABLE product;
 
+--echo # Bug#36556725: failure in Group_check::do_ident_check
+
+CREATE TABLE t1(f1 INTEGER);
+SELECT (SELECT f1) FROM t1 GROUP BY f1 HAVING f1 < 1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#36625752 View with ORDER BY misses a row
+--echo #
+CREATE TABLE t1(c0 INT PRIMARY KEY);
+let $query =
+SELECT 1 FROM t1 ORDER BY COUNT(*) OVER (PARTITION BY MIN(t1.c0));
+--echo # returns one row as expected
+eval $query;
+eval CREATE VIEW v AS $query;
+--echo # used to return zero rows
+SELECT 1 AS one FROM v;
+SHOW CREATE VIEW v;
+DROP VIEW v;
+
+let $query=
+(SELECT 1 AS one FROM t1 ORDER BY COUNT(*) OVER (PARTITION BY MIN(t1.c0)))
+UNION ALL
+(SELECT 1        FROM t1 ORDER BY COUNT(*) OVER (PARTITION BY MIN(t1.c0)));
+--echo # returns two rows as expected
+eval $query;
+eval CREATE VIEW v AS $query;
+--echo # used to return zero rows
+SELECT v.one AS one FROM v;
+SHOW CREATE VIEW v;
+DROP VIEW v;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#37309915 ER_DUP_KEY on temporary table 
+--echo #
+CREATE TABLE t1(pk INTEGER PRIMARY KEY, i INT, c VARCHAR(1));
+CREATE TABLE t2(pk INTEGER PRIMARY KEY, i INT, c VARCHAR(1));
+
+INSERT INTO t1 VALUES (0, 1433358016,'9');
+
+INSERT INTO t2 VALUES (0, -1877116806,'X'),
+                      (1, -1089884900,'䩎');
+
+SELECT  ( SELECT MIN(t1_alias1.i)
+           FROM t1 AS t1_alias1, t1
+           WHERE t1_alias1.i > t1_outer.i ) AS field1,
+        COUNT(t2.i) AS field2,
+        t1_outer.c AS field3,
+        ( SELECT SUM(t2.i)
+          FROM t2 AS t2_a, t2 ) AS field4
+FROM t1 AS t1_outer, t2
+GROUP BY field1, field3, field4;
+
+DROP TABLE t1, t2;
+
 --echo #
 --echo # Bug#37415167 ERROR 1022 (23000): Can't write; duplicate key in
 --echo # table '/tmp/#sqlxxxxxxx'
@@ -3684,3 +3760,26 @@ FROM t AS t1,
 DROP TABLE t;
 
 --echo #
+--echo # Bug#38989845: Assertion '!thd->is_error()' failed with GROUPING SETS
+--echo #
+
+--error ER_DATA_OUT_OF_RANGE
+SELECT 1
+GROUP BY GROUPING SETS((ST_LONGFROMGEOHASH(ST_GEOHASH(POINT(79, 146), 107))));
+
+--echo #
+--echo # Bug#39269995: Failure with update_item_cache_if_changed()
+--echo #
+
+--error ER_INVALID_JSON_TEXT_IN_PARAM
+SELECT INET_NTOA(0xebc0345def74e1f6715ab1f55f1a4a3e99f9)
+GROUP BY (@c :=JSON_REMOVE(CONCAT_WS('', '$.', 'ab'), 'BB*(e&'));
+
+CREATE TABLE t (a INTEGER);
+
+--error ER_DATA_OUT_OF_RANGE
+SELECT (SELECT PI() FROM t)
+        GROUP BY (@b:= MULTIPOINT(POINT(25698,-4724), POINT(1215,-15494))),
+                 ST_POINTFROMGEOHASH(ST_GEOHASH(POINT(1,2), 129), 0);
+
+DROP TABLE t;

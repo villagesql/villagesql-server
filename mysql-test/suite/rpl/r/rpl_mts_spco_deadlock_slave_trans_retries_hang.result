@@ -13,17 +13,11 @@ CREATE TABLE t1(c1 INT PRIMARY KEY, c2 INT, INDEX(c2)) ENGINE = InnoDB;
 INSERT INTO t1 VALUES(1, NULL),(2, 2), (3, NULL), (4, 4), (5, NULL), (6, 6);
 include/rpl/sync_to_replica.inc
 include/rpl/stop_applier.inc
-SET @saved_replica_parallel_type = @@GLOBAL.replica_parallel_type;
-Warnings:
-Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET @saved_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
 SET @saved_replica_preserve_commit_order = @@GLOBAL.replica_preserve_commit_order;
 SET @saved_innodb_lock_wait_timeout = @@GLOBAL.innodb_lock_wait_timeout;
 SET @saved_replica_transaction_retries = @@GLOBAL.replica_transaction_retries;
 SET GLOBAL replica_transaction_retries = 0;
-SET GLOBAL replica_parallel_type = "LOGICAL_CLOCK";
-Warnings:
-Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET GLOBAL replica_parallel_workers = 8;
 SET GLOBAL replica_preserve_commit_order = ON;
 SET GLOBAL innodb_lock_wait_timeout = 1000;
@@ -40,7 +34,7 @@ SET GLOBAL innodb_lock_wait_timeout = 1000;
 INSERT INTO t1 VALUES(10, 10);
 # Adding debug point 'set_commit_parent_100' to @@GLOBAL.debug
 INSERT INTO t1 VALUES(11, NULL);
-DELETE FROM t1 WHERE c2 <= 3;
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 3;
 INSERT INTO t1 VALUES(21, 21);
 INSERT INTO t1 VALUES(22, 22);
 INSERT INTO t1 VALUES(23, 23);
@@ -83,7 +77,7 @@ INSERT INTO t1 VALUES(20, NULL);
 INSERT INTO t1 VALUES(21, NULL);
 BEGIN;
 INSERT INTO t1 VALUES(22, 22);
-DELETE FROM t1 WHERE c2 <= 3;
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 3;
 INSERT INTO t1 VALUES(23, 23);
 INSERT INTO t1 VALUES(24, NULL);
 INSERT INTO t1 VALUES(25, 25);
@@ -121,9 +115,6 @@ include/rpl/sync_to_replica.inc
 CALL mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state.");
 include/rpl/stop_replica.inc
 SET GLOBAL replica_transaction_retries = @saved_replica_transaction_retries;
-SET GLOBAL replica_parallel_type = @saved_replica_parallel_type;
-Warnings:
-Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET GLOBAL replica_parallel_workers = @saved_replica_parallel_workers;
 SET GLOBAL replica_preserve_commit_order = @saved_replica_preserve_commit_order;
 SET GLOBAL innodb_lock_wait_timeout = @saved_innodb_lock_wait_timeout;

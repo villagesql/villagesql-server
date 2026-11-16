@@ -25,10 +25,10 @@
 
 #include "portlib/ndb_password.h"
 
-#include <assert.h>
-#include <errno.h>
-#include <limits.h>
-#include <stdio.h>
+#include <cassert>
+#include <cerrno>
+#include <climits>
+#include <cstdio>
 
 #if !defined(_WIN32)
 #include <fcntl.h>
@@ -39,7 +39,7 @@
 #include <windows.h>
 #endif
 
-#include <string.h>
+#include <cstring>
 /*
  * ndb_get_password_read_line
  * ndb_get_password_read_line_from_tty

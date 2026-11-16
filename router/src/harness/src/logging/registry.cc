@@ -46,8 +46,6 @@
 #include "dim.h"
 #include "harness_assert.h"
 
-using mysql_harness::Path;
-using mysql_harness::serial_comma;
 using mysql_harness::logging::Logger;
 using mysql_harness::logging::LogLevel;
 using mysql_harness::logging::Record;
@@ -57,8 +55,8 @@ namespace {
 using mysql_harness::logging::LogLevel;
 using mysql_harness::logging::LogTimestampPrecision;
 
-constexpr const std::array<std::pair<std::string_view, LogLevel>, 7> kLogLevels{
-    {
+constexpr auto kLogLevels =
+    std::to_array<std::pair<std::string_view, LogLevel>>({
         {"fatal", LogLevel::kFatal},
         {"system", LogLevel::kSystem},
         {"error", LogLevel::kError},
@@ -66,11 +64,10 @@ constexpr const std::array<std::pair<std::string_view, LogLevel>, 7> kLogLevels{
         {"info", LogLevel::kInfo},
         {"note", LogLevel::kNote},
         {"debug", LogLevel::kDebug},
-    }};
+    });
 
-constexpr const std::array<std::pair<std::string_view, LogTimestampPrecision>,
-                           12>
-    kLogTimestampPrecisions{{
+constexpr auto kLogTimestampPrecisions =
+    std::to_array<std::pair<std::string_view, LogTimestampPrecision>>({
         {"second", LogTimestampPrecision::kSec},
         {"sec", LogTimestampPrecision::kSec},
         {"s", LogTimestampPrecision::kSec},
@@ -83,7 +80,7 @@ constexpr const std::array<std::pair<std::string_view, LogTimestampPrecision>,
         {"nanosecond", LogTimestampPrecision::kNanoSec},
         {"nsec", LogTimestampPrecision::kNanoSec},
         {"ns", LogTimestampPrecision::kNanoSec},
-    }};
+    });
 }  // namespace
 
 namespace mysql_harness {
@@ -241,6 +238,10 @@ bool Registry::is_handled(LogLevel level) const {
 
 static std::string g_main_app_log_domain;
 
+Logger Registry::get_logger_or_default(const std::string &name) const {
+  return get_logger_or_default(name, g_main_app_log_domain);
+}
+
 void attach_handler_to_all_loggers(Registry &registry,
                                    std::string handler_name) {
   for (const std::string &logger_name : registry.get_logger_names()) {
@@ -256,6 +257,15 @@ void set_log_level_for_all_loggers(Registry &registry, LogLevel level) {
     Logger logger = registry.get_logger(logger_name);
     logger.set_level(level);
     registry.update_logger(logger_name, logger);
+  }
+}
+
+void set_log_level_for_handler(std::string name, LogLevel level) {
+  auto &registry = DIM::instance().get_LoggingRegistry();
+  try {
+    auto handler = registry.get_handler(name);
+    handler->set_level(level);
+  } catch (std::logic_error &) {
   }
 }
 
@@ -496,6 +506,12 @@ void unregister_handler(std::string name) {
   mysql_harness::logging::Registry &registry =
       mysql_harness::DIM::instance().get_LoggingRegistry();
   registry.remove_handler(name);
+}
+
+bool handler_registered(std::string name) {
+  mysql_harness::logging::Registry &registry =
+      mysql_harness::DIM::instance().get_LoggingRegistry();
+  return registry.get_handler_names().count(name) > 0;
 }
 
 void set_log_level_for_all_loggers(LogLevel level) {

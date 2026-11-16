@@ -29,8 +29,8 @@
 #include <utility>  // std::pair
 #include <vector>
 
-#include "digest.h"
 #include "mcf_error.h"
+#include "mysqlrouter/digest.h"
 #include "mysqlrouter/http_auth_backend_lib_export.h"
 
 /**

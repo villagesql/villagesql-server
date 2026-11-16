@@ -133,10 +133,10 @@ class ScanFragReq {
   static Uint32 getMultiFragFlag(const Uint32 &requestInfo);
 
   static void setFirstMatchFlag(Uint32 &requestInfo, Uint32 val);
-  static Uint32 getFirstMatchFlag(const Uint32 requestInfo);
+  static Uint32 getFirstMatchFlag(Uint32 requestInfo);
 
   static void setQueryThreadFlag(Uint32 &requestInfo, Uint32 val);
-  static Uint32 getQueryThreadFlag(const Uint32 requestInfo);
+  static Uint32 getQueryThreadFlag(Uint32 requestInfo);
 };
 
 /*

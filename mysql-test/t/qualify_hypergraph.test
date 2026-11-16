@@ -1,5 +1,6 @@
 # Run with hypergraph optimizer
 --source include/have_hypergraph.inc
+--source include/elide_costs.inc
 
 CREATE TABLE t1 (
   a int NOT NULL,
@@ -10,9 +11,15 @@ INSERT INTO t1 VALUES (1,1,5),(1,1,2),(1,2,5),(2,1,4),(2,1,1),(2,2,2),(2,2,3),
 (2,3,1),(2,3,1),(3,3,3),(3,3,5),(3,4,5),(4,4,5),(4,4,3),(5,3,1);
 ANALYZE TABLE t1;
 
---sorted_result
+let query =
 SELECT a, b, c, ROW_NUMBER() OVER (PARTITION BY a ORDER BY a,b,c) AS rnk
 FROM t1 QUALIFY rnk>1;
+
+--replace_regex $elide_costs
+eval EXPLAIN FORMAT=TREE $query;
+
+--sorted_result
+eval $query;
 
 --sorted_result
 SELECT a, b, c
@@ -387,3 +394,19 @@ CREATE TABLE t1 (f1 INTEGER);
 SELECT NTILE(1) OVER() FROM (SELECT * FROM t1) as dt QUALIFY f1 AND FALSE;
 
 DROP TABLE t1;
+
+--echo #
+--echo # Bug#37293786: Wrong result with QUALIFY in table-less query
+--echo #
+
+SELECT 1 AS res QUALIFY ROW_NUMBER() OVER () > 10;
+SELECT (SELECT 1 QUALIFY ROW_NUMBER() OVER () > 10) AS res;
+SELECT 1 AS res QUALIFY ROW_NUMBER() OVER () < 10;
+SELECT (SELECT 1 QUALIFY ROW_NUMBER() OVER () < 10) AS res;
+SELECT 1 AS res QUALIFY FALSE AND ROW_NUMBER() OVER () < 10;
+SELECT (SELECT 1 QUALIFY FALSE AND ROW_NUMBER() OVER () < 10) AS res;
+SELECT 1 AS res WHERE 1 IN (SELECT 1 QUALIFY ROW_NUMBER() OVER () > 10);
+SELECT 1 AS res
+WHERE 1 IN (SELECT 1 QUALIFY FALSE AND ROW_NUMBER() OVER () > 10);
+
+--source include/disable_hypergraph.inc

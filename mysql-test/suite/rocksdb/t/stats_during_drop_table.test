@@ -1,0 +1,11 @@
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_rocksdb.inc
+
+set global rocksdb_enable_delete_range_for_drop_index=0;
+--source stats_during_drop_table.inc
+
+set global rocksdb_enable_delete_range_for_drop_index=1;
+--source stats_during_drop_table.inc
+
+set @@global.rocksdb_enable_delete_range_for_drop_index = default;

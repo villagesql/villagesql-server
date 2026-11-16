@@ -37,6 +37,7 @@
 #include "mysql/components/services/bits/mysql_mutex_bits.h"
 #include "prealloced_array.h"        // Prealloced_array
 #include "sql/auth/auth_acls.h"      // Access_bitmask
+#include "sql/key.h"                 // KEY
 #include "sql/locked_tables_list.h"  // enum_locked_tables_mode
 #include "sql/mdl.h"                 // MDL_savepoint
 #include "sql/sql_array.h"           // Bounds_checked_array
@@ -90,20 +91,22 @@ class Table;
 */
 #define SKIP_NEW_HANDLER 32768
 
-enum find_item_error_report_type {
-  REPORT_ALL_ERRORS,
-  REPORT_EXCEPT_NOT_FOUND,
-  IGNORE_ERRORS,
-  REPORT_EXCEPT_NON_UNIQUE,
-  IGNORE_EXCEPT_NON_UNIQUE
-};
+constexpr int REPORT_NO_ERRORS = 0x00;
+constexpr int REPORT_NON_UNIQUE = 0x01;
+constexpr int REPORT_UNKNOWN_TABLE = 0x02;
+constexpr int REPORT_BAD_FIELD = 0x04;
+constexpr int REPORT_ALL_ERRORS =
+    REPORT_NON_UNIQUE | REPORT_UNKNOWN_TABLE | REPORT_BAD_FIELD;
+
+enum Find_field_result { FIELD_NOT_FOUND, BASE_FIELD_FOUND, VIEW_FIELD_FOUND };
 
 enum enum_tdc_remove_table_type {
   TDC_RT_REMOVE_ALL,
   TDC_RT_REMOVE_NOT_OWN,
   TDC_RT_REMOVE_UNUSED,
   TDC_RT_REMOVE_NOT_OWN_KEEP_SHARE,
-  TDC_RT_MARK_FOR_REOPEN
+  TDC_RT_MARK_FOR_REOPEN,
+  TDC_RT_MARK_FOR_REOPEN_AND_INVALIDATE_SHARE
 };
 
 extern mysql_mutex_t LOCK_open;
@@ -183,6 +186,8 @@ TABLE *open_ltable(THD *thd, Table_ref *table_list, thr_lock_type update,
    MYSQL_OPEN_IGNORE_KILLED | MYSQL_OPEN_GET_NEW_TABLE |            \
    MYSQL_OPEN_HAS_MDL_LOCK)
 
+struct ORDER;
+
 bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx);
 
 TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
@@ -244,22 +249,21 @@ bool check_record(THD *thd, Field **ptr);
 */
 bool invoke_table_check_constraints(THD *thd, const TABLE *table);
 
-Field *find_field_in_tables(THD *thd, Item_ident *item, Table_ref *first_table,
-                            Table_ref *last_table, Item **ref,
-                            find_item_error_report_type report_error,
-                            Access_bitmask want_privilege,
-                            bool register_tree_change);
-Field *find_field_in_table_ref(THD *thd, Table_ref *table_list,
-                               const char *name, size_t length,
-                               const char *item_name, const char *db_name,
-                               const char *table_name, Item **ref,
-                               Access_bitmask want_privilege, bool allow_rowid,
-                               uint *cached_field_index_ptr,
-                               bool register_tree_change,
-                               Table_ref **actual_table);
-Field *find_field_in_table(TABLE *table, const char *name, bool allow_rowid,
-                           uint *cached_field_index_ptr);
-Field *find_field_in_table_sef(TABLE *table, const char *name);
+bool find_field_in_tables(THD *thd, Item_ident *item, Table_ref *first_table,
+                          Table_ref *last_table, int report_error,
+                          Access_bitmask want_privilege,
+                          Find_field_result *result, Field **base_field,
+                          Item_ident **ref_field);
+bool find_field_in_table_ref(THD *thd, Table_ref *tr, const char *field_name,
+                             size_t length, const char *alias,
+                             const char *db_name, const char *table_name,
+                             Access_bitmask want_privilege, bool allow_rowid,
+                             Find_field_result *result, Field **base_field,
+                             Item_ident **ref_field);
+Field *find_field_in_table(TABLE *table, const char *field_name,
+                           bool allow_rowid, uint *field_index);
+Field *find_field_in_table_sef(TABLE *table, const char *field_name);
+
 bool find_item_in_list(THD *thd, Item *item, mem_root_deque<Item *> *items,
                        Item ***found, uint *counter,
                        enum_resolution_type *resolution);
@@ -309,6 +313,11 @@ bool rename_temporary_table(THD *thd, TABLE *table, const char *new_db,
                             const char *table_name);
 bool open_temporary_tables(THD *thd, Table_ref *tl_list);
 bool open_temporary_table(THD *thd, Table_ref *tl);
+
+bool is_equal(const LEX_CSTRING *a, const LEX_CSTRING *b) noexcept;
+bool is_order_deterministic(const mem_root_deque<Table_ref *> *join_list,
+                            Item *cond, ORDER *order);
+bool is_order_deterministic(Table_ref *table, Item *cond, ORDER *order);
 
 /* Functions to work with system tables. */
 bool open_trans_system_tables_for_read(THD *thd, Table_ref *table_list);
@@ -381,6 +390,39 @@ extern malloc_unordered_map<std::string,
 
 Table_ref *find_table_in_global_list(Table_ref *table, const char *db_name,
                                      const char *table_name);
+
+/**
+  The maximum length of a key in the table definition cache.
+
+  The key consists of the schema name, a '\0' character, the table
+  name and a '\0' character. Hence NAME_LEN * 2 + 1 + 1.
+
+  Additionally, the key can be suffixed with either 4 + 4 extra bytes
+  for slave tmp tables, or with a single extra byte for tables in a
+  secondary storage engine. Add 4 + 4 to account for either of these
+  suffixes.
+*/
+constexpr const size_t MAX_DBKEY_LENGTH{NAME_LEN * 2 + 1 + 1 + 4 + 4};
+
+/**
+  Create a table cache/table definition cache key for a table. The
+  table is neither a temporary table nor a table in a secondary
+  storage engine.
+
+  @note
+    The table cache_key is created from:
+
+        db_name + \0
+        table_name + \0
+
+  @param[in]  db_name     the database name
+  @param[in]  table_name  the table name
+  @param[out] key         buffer for the key to be created (must be of
+                          size MAX_DBKEY_LENGTH)
+  @return the length of the key
+*/
+size_t create_table_def_key(const char *db_name, const char *table_name,
+                            char *key);
 
 /**
   An abstract class for a strategy specifying how the prelocking

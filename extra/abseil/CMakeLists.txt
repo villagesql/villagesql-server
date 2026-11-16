@@ -67,12 +67,14 @@ IF(HAS_WARN_FLAG)
   STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
 ENDIF()
 
+# Clang 21:
 # absl/meta/type_traits.h:511:36:
 # warning: builtin __is_trivially_relocatable is deprecated; use
-#    511 |   __builtin_is_cpp_trivially_relocatable instead [-Wdeprecated-builtins]
+# __builtin_is_cpp_trivially_relocatable instead [-Wdeprecated-builtins]
+#   511 |     : std::integral_constant<bool, __is_trivially_relocatable(T)> {};
 MY_CHECK_CXX_COMPILER_WARNING("-Wdeprecated-builtins" HAS_WARN_FLAG)
 IF(HAS_WARN_FLAG)
-  ADD_COMPILE_OPTIONS("${HAS_WARN_FLAG}")
+  STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
 ENDIF()
 
 IF(FREEBSD)
@@ -87,6 +89,7 @@ SET(ABSL_PROPAGATE_CXX_STD ON)
 # note: due to ..... being dllexported
 IF(MSVC AND NOT WIN32_CLANG)
   SET(absl_BUILD_SHARED_LIBS ON)
+  SET(absl_BUILD_SHARED_LIBS ON CACHE INTERNAL "" FORCE)
 ENDIF()
 IF(LINUX)
   SET(absl_BUILD_SHARED_LIBS ON)
@@ -121,4 +124,4 @@ IF(UNIX)
 #  STRING_APPEND(CMAKE_CXX_FLAGS " -fvisibility=hidden")
 ENDIF()
 
-ADD_SUBDIRECTORY(abseil-cpp-20230802.1)
+ADD_SUBDIRECTORY(abseil-cpp-20250814.1)

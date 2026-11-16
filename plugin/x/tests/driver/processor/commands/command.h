@@ -71,6 +71,8 @@ class Command {
   std::list<Loop_do> m_loop_stack;
   static xpl::chrono::Time_point m_start_measure;
 
+  Result cmd_debug_stmt(std::istream &input, Execution_context *context,
+                        const std::string &args);
   Result cmd_echo(std::istream &input, Execution_context *context,
                   const std::string &args);
   Result cmd_title(std::istream &input, Execution_context *context,
@@ -228,7 +230,11 @@ class Command {
                                    const std::string &args);
   Result cmd_env(std::istream &input, Execution_context *context,
                  const std::string &args);
+  // Mysqltest basic compatibility methods
+  Result cmd_eval(std::istream &input, Execution_context *context,
+                  const std::string &args);
 
+  // Generic methods
   Result do_newsession(std::istream &input, Execution_context *context,
                        const std::string &args,
                        const std::vector<std::string> &auth_methods);
@@ -244,7 +250,8 @@ class Command {
   static void try_result(Result result);
 
   template <typename Equal_operator>
-  Result cmd_assert_generic(std::istream &input, Execution_context *context,
+  Result cmd_assert_generic(std::istream & /*input*/,
+                            Execution_context *context,
                             const std::string &args) {
     std::vector<std::string> vargs;
 

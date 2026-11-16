@@ -30,8 +30,8 @@
 #include "my_config.h"
 
 #include <gtest/gtest.h>
-#include <stddef.h>
 #include <sys/types.h>
+#include <cstddef>
 
 #include "lf.h"
 #include "my_byteorder.h"
@@ -200,12 +200,9 @@ TEST(Mysys, LockFree) {
 extern "C" {
 
 static uint test_hash(const LF_HASH *, const uchar *key, size_t length) {
-  if (length < sizeof(uint32))
-    return 0;
-  else {
-    /* We use ulongget() to avoid potential problems with alignment. */
-    return ulongget(key);
-  }
+  if (length < sizeof(uint32)) return 0;
+  /* We use ulongget() to avoid potential problems with alignment. */
+  return ulongget(key);
 }
 
 static int test_match(const uchar *arg, void *match_arg [[maybe_unused]]) {

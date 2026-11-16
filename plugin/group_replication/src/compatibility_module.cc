@@ -24,8 +24,9 @@
 #include "plugin/group_replication/include/compatibility_module.h"
 #include "plugin/group_replication/include/plugin_constants.h"
 
-#include <assert.h>
-#include <stddef.h>
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
 
 Compatibility_module::Compatibility_module() : local_version(nullptr) {}
 
@@ -66,22 +67,22 @@ Compatibility_type Compatibility_module::check_local_incompatibility(
 
 bool Compatibility_module::check_version_range_incompatibility(
     Member_version &from, unsigned int to_min, unsigned int to_max) {
-  unsigned int to_max_major_version = to_max >> 16;
-  unsigned int to_min_major_version = to_min >> 16;
+  unsigned int const to_max_major_version = to_max >> 16;
+  unsigned int const to_min_major_version = to_min >> 16;
   // if it is outside the range of the major version
   if (from.get_major_version() > to_max_major_version ||
       from.get_major_version() < to_min_major_version)
     return false;
 
-  unsigned int to_max_minor_version = (to_max >> 8) & 0xff;
-  unsigned int to_min_minor_version = (to_min >> 8) & 0xff;
+  unsigned int const to_max_minor_version = (to_max >> 8) & 0xff;
+  unsigned int const to_min_minor_version = (to_min >> 8) & 0xff;
   // if it is outside the range of the minor version
   if (from.get_minor_version() > to_max_minor_version ||
       from.get_minor_version() < to_min_minor_version)
     return false; /* purecov: inspected */
 
-  unsigned int to_max_patch_version = to_max & 0xff;
-  unsigned int to_min_patch_version = to_min & 0xff;
+  unsigned int const to_max_patch_version = to_max & 0xff;
+  unsigned int const to_min_patch_version = to_min & 0xff;
   // if it is outside the range of the patch version
   if (from.get_patch_version() > to_max_patch_version ||
       from.get_patch_version() < to_min_patch_version)
@@ -103,10 +104,7 @@ Compatibility_type Compatibility_module::check_incompatibility(
       search_its;
 
   search_its = this->incompatibilities.equal_range(from.get_version());
-  for (std::multimap<unsigned int,
-                     std::pair<unsigned int, unsigned int>>::iterator it =
-           search_its.first;
-       it != search_its.second; ++it) {
+  for (auto it = search_its.first; it != search_its.second; ++it) {
     if (check_version_range_incompatibility(to, it->second.first,
                                             it->second.second)) {
       return INCOMPATIBLE;
@@ -140,32 +138,18 @@ bool Compatibility_module::do_all_versions_belong_to_the_same_lts(
     return false;
   }
 
-  // 8.4 LTS
-  bool is_8_4_lts = true;
-  for (const Member_version &version : all_members_versions) {
-    is_8_4_lts &= is_version_8_4_lts(version);
-    if (!is_8_4_lts) {
-      break;
-    }
-  }
-  if (is_8_4_lts) {
-    return true;
-  }
-
-  return false;
+  const auto &first = *all_members_versions.begin();
+  return std::all_of(
+      all_members_versions.begin(), all_members_versions.end(),
+      [&](const Member_version &version) {
+        return is_lts_version(version) &&
+               version.get_major_version() == first.get_major_version() &&
+               version.get_minor_version() == first.get_minor_version();
+      });
 }
 
-bool Compatibility_module::is_version_8_4_lts(const Member_version &version) {
-  const Member_version member_8_4_lts_version(MEMBER_8_4_LTS_VERSION);
-
-  if (version.get_major_version() ==
-          member_8_4_lts_version.get_major_version() &&
-      version.get_minor_version() ==
-          member_8_4_lts_version.get_minor_version()) {
-    return true;
-  }
-
-  return false;
+bool Compatibility_module::is_lts_version(const Member_version &version) {
+  return version.get_major_version() == 9 && version.get_minor_version() == 7;
 }
 
 /* Compatibility_module is independent, we cannot use local_member_info or

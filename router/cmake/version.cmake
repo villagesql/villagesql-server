@@ -21,10 +21,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-# Version information of MySQL Router
-# we use MySQL server version
-INCLUDE(${CMAKE_SOURCE_DIR}/cmake/mysql_version.cmake)
-
 # Project version, has to be an X.Y.Z number since it is used with the
 # "project" CMake command
 SET(PROJECT_VERSION_TEXT ${MYSQL_NO_DASH_VERSION})

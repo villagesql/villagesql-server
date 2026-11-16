@@ -28,8 +28,8 @@
  *
  */
 
-#include <assert.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
 
 #include "hrt_gstopwatch.h"
 #include "hrt_stopwatch.h"
@@ -38,14 +38,14 @@
  * High-Resolution Time Stopwatch Utility -- Test
  */
 
-static void do_something(void) {
+static void do_something() {
   const unsigned long loop = 1000000000L;
   unsigned long i;
   static volatile unsigned long dummy;
   for (i = 0; i < loop; i++) dummy = i;
 }
 
-int main(int argc, const char *argv[]) {
+int main(int /*argc*/, const char * /*argv*/[]) {
   printf("--> main()\n");
 
   printf("init stopwatches...\n");

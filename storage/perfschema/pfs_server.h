@@ -85,7 +85,7 @@
 #define PFS_STATEMENTS_STACK_SIZE 10
 #endif
 #ifndef PFS_MAX_MEMORY_CLASS
-#define PFS_MAX_MEMORY_CLASS 470
+#define PFS_MAX_MEMORY_CLASS 530
 #endif
 #ifndef PFS_MAX_METER_CLASS
 #define PFS_MAX_METER_CLASS 30
@@ -141,9 +141,6 @@ struct PFS_global_param {
   bool m_consumer_global_instrumentation_enabled;
   bool m_consumer_thread_instrumentation_enabled;
   bool m_consumer_statement_digest_enabled;
-
-  /** True if SHOW PROCESSLIST is enabeld in the performance schema. */
-  bool m_processlist_enabled;
 
   /** Default instrument configuration option. */
   char *m_pfs_instrument;

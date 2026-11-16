@@ -61,7 +61,7 @@ void print(ConfigValues &_cf) {
   }
 }
 
-int main(void) {
+int main() {
   ndb_init();
   ConfigValuesFactory cvf;
   cvf.begin();

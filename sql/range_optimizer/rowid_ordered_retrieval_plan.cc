@@ -240,7 +240,7 @@ void find_intersect_order(Mem_root_array<ROR_SCAN_INFO *> *ror_scans,
     for (uint i : BitsSetIn((*ror_scans)[index]->covered_fields))
       fields_to_be_covered.ClearBit(i);
     needed_fields = std::move(fields_to_be_covered);
-    if (needed_fields.empty()) break;
+    if (IsEmpty(needed_fields)) break;
   }
 }
 
@@ -250,7 +250,7 @@ ROR_intersect_plan::ROR_intersect_plan(const RANGE_OPT_PARAM *param,
       m_ror_scans(param->return_mem_root, 0),
       m_out_rows(m_param->table->file->stats.records),
       m_covered_fields(
-          MutableOverflowBitset(param->temp_mem_root, num_fields)) {}
+          OverflowBitset::EmptySet(param->temp_mem_root, num_fields)) {}
 
 ROR_intersect_plan &ROR_intersect_plan::operator=(
     const ROR_intersect_plan &plan) {
@@ -849,7 +849,9 @@ AccessPath *get_best_ror_intersect(THD *thd, const RANGE_OPT_PARAM *param,
     // Create AccessPaths from the ROR child scans.
     auto *children = new (param->return_mem_root)
         Mem_root_array<AccessPath *>(param->return_mem_root);
-    children->resize(num_scans);
+    if (children == nullptr || children->resize(num_scans)) {
+      return nullptr;
+    }
     for (unsigned i = 0; i < num_scans; ++i) {
       (*children)[i] = MakeRowIdOrderedIndexScanAccessPath(
           best_plan.m_ror_scans[i], table,

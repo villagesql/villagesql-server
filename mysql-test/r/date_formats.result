@@ -428,7 +428,6 @@ f1	f2	f3
 Warnings:
 Warning	1292	Truncated incorrect datetime value: '2003-01-02 10:11:12.0012ABCD'
 Warning	1292	Truncated incorrect time value: '-01:01:01.01 GGG'
-Warning	4096	Delimiter ' ' in position 12 in datetime value '-01:01:01.01 GGG' at row 1 is superfluous and is deprecated. Please remove.
 Warning	1292	Truncated incorrect time value: '1997-12-31 23:59:59.01XXXX'
 select str_to_date("2003-04-05  g", "%Y-%m-%d") as f1,
 str_to_date("2003-04-05 10:11:12.101010234567", "%Y-%m-%d %H:%i:%S.%f") as f2;
@@ -698,3 +697,12 @@ STR_TO_DATE('0000-00-00','%Y-%m-%d')
 NULL
 Warnings:
 Warning	1411	Incorrect datetime value: '0000-00-00' for function str_to_date
+#
+# Bug#39135197: failing Item_func_str_to_temporal::eval_datetime
+#
+SELECT STR_TO_DATE(IFNULL(PERIOD_ADD('*(+(', 0xa0),
+BIT_OR(OCT(18446744073709551616))), '%i%m%T%V%U');
+ERROR HY000: Incorrect arguments to period_add
+SELECT (ST_SIMPLIFY(PERIOD_DIFF(15898334837425003442, -9223372036854775807),
+10) <> CURRENT_TIMESTAMP);
+ERROR HY000: Incorrect arguments to period_diff

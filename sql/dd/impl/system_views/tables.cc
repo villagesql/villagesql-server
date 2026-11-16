@@ -27,8 +27,7 @@
 
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Tables_base &Tables::instance() {
   static Tables_base *s_instance = new Tables();
@@ -192,5 +191,4 @@ Tables::Tables() {
       "AND sch.name=stat.schema_name");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

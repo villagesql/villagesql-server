@@ -38,12 +38,14 @@
 
 #include "lex_string.h"
 #include "my_dbug.h"
+#include "my_sys.h"
 #include "my_thread_local.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/strings/m_ctype.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "nulls.h"
+#include "sql/debug_sync.h"
 #include "sql/derror.h"  // ER_THD
 #include "sql/item.h"
 #include "sql/item_func.h"
@@ -55,6 +57,7 @@
 #include "sql/sql_const.h"
 #include "sql/sql_error.h"
 #include "sql/sql_exchange.h"
+#include "sql/sql_outfile_defaults.h"
 #include "sql/system_variables.h"
 #include "sql/visible_fields.h"
 #include "sql_string.h"
@@ -107,6 +110,8 @@ bool Query_result_send::send_data(THD *thd,
   }
 
   thd->inc_sent_row_count(1);
+  thd->sent_row_count_2++;
+  DEBUG_SYNC(thd, "sent_row");
   return protocol->end_row();
 }
 
@@ -121,27 +126,318 @@ bool Query_result_send::send_eof(THD *thd) {
   return false;
 }
 
-static const String default_line_term("\n", default_charset_info);
-static const String default_escaped("\\", default_charset_info);
-static const String default_field_term("\t", default_charset_info);
-static const String default_xml_row_term("<row>", default_charset_info);
-static const String my_empty_string("", default_charset_info);
-
-sql_exchange::sql_exchange(const char *name, bool flag,
-                           enum enum_filetype filetype_arg)
-    : file_name(name), dumpfile(flag), skip_lines(0) {
-  field.opt_enclosed = false;
-  filetype = filetype_arg;
-  field.field_term = &default_field_term;
-  field.enclosed = line.line_start = &my_empty_string;
-  line.line_term =
-      filetype == FILETYPE_CSV ? &default_line_term : &default_xml_row_term;
-  field.escaped = &default_escaped;
-  cs = nullptr;
+bool File_information::do_contextualize() {
+  if (filetype_str != nullptr) {
+    if (my_strcasecmp(system_charset_info, filetype_str, "csv") == 0) {
+      filetype = FILETYPE_CSV;
+    } else if (my_strcasecmp(system_charset_info, filetype_str, "text") == 0) {
+      filetype = FILETYPE_TEXT;
+    } else if (my_strcasecmp(system_charset_info, filetype_str, "json") == 0) {
+      filetype = FILETYPE_JSON;
+    } else if (my_strcasecmp(system_charset_info, filetype_str, "parquet") ==
+               0) {
+      filetype = FILETYPE_PARQUET;
+    } else if (my_strcasecmp(system_charset_info, filetype_str, "xml") == 0) {
+      filetype = FILETYPE_XML;
+    } else {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), filetype_str,
+               "exporting query result to object storage");
+      return true;
+    }
+  }
+  return false;
 }
 
+void File_information::assign_default_values() {
+  if (filetype == FILETYPE_PARQUET && compression == nullptr) {
+    compression = &default_compression;
+  }
+}
+
+void Line_separators::assign_default_values(enum_destination dumpfile,
+                                            enum_filetype filetype_arg) {
+  if (dumpfile != OBJECT_STORE_DEST && line_start == nullptr) {
+    line_start = &my_empty_string;
+  }
+  if (line_term == nullptr) {
+    if (filetype_arg == FILETYPE_TEXT || filetype_arg == FILETYPE_CSV) {
+      line_term = &default_line_term_text_csv;
+    } else if (filetype_arg == FILETYPE_XML) {
+      line_term = &default_xml_row_term;
+    }
+  }
+}
+
+void Field_separators::assign_default_values(enum_filetype filetype_arg) {
+  if (escaped == nullptr &&
+      (filetype_arg == FILETYPE_TEXT || filetype_arg == FILETYPE_CSV ||
+       filetype_arg == FILETYPE_XML)) {
+    escaped = &default_escaped;
+  }
+  if (enclosed == nullptr) {
+    if (filetype_arg == FILETYPE_TEXT || filetype_arg == FILETYPE_CSV ||
+        filetype_arg == FILETYPE_XML) {
+      enclosed = &my_empty_string;
+    } else if (filetype_arg == FILETYPE_CSV) {
+      enclosed = &default_enclosed_csv;
+    }
+  }
+  if (field_term == nullptr) {
+    if (filetype_arg == FILETYPE_TEXT || filetype_arg == FILETYPE_XML) {
+      field_term = &default_field_term_text;
+    } else if (filetype_arg == FILETYPE_CSV) {
+      field_term = &default_field_term_csv;
+    }
+  }
+}
+
+sql_exchange::sql_exchange(const char *name,
+                           enum enum_destination dumpfile_flag)
+    : field(),
+      line(),
+      uri_info(),
+      file_info(dumpfile_flag),
+      file_name(name),
+      dumpfile(dumpfile_flag) {}
+
+sql_exchange::sql_exchange(const char *name,
+                           enum enum_destination dumpfile_flag,
+                           enum_filetype filetype)
+    : field(),
+      line(),
+      uri_info(),
+      file_info(filetype),
+      file_name(name),
+      dumpfile(dumpfile_flag) {}
+
+sql_exchange::sql_exchange(enum enum_destination dumpfile_flag)
+    : field(),
+      line(),
+      uri_info(),
+      file_info(dumpfile_flag),
+      dumpfile(dumpfile_flag) {}
+
 bool sql_exchange::escaped_given(void) {
-  return field.escaped != &default_escaped;
+  return (field.escaped != &default_escaped);
+}
+
+void sql_exchange::assign_default_values() {
+  file_info.assign_default_values();
+  field.assign_default_values(file_info.filetype);
+  line.assign_default_values(dumpfile, file_info.filetype);
+}
+
+bool sql_exchange::do_contextualize(Parse_context *pc) {
+  if (file_info.do_contextualize()) {
+    return true;
+  }
+
+  if (file_info.filetype == FILETYPE_PARQUET ||
+      file_info.filetype == FILETYPE_JSON) {
+    std::string file_format_msg(file_info.filetype_str);
+    file_format_msg += " format";
+    if (field.field_term != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0),
+               "COLUMNS or FIELDS TERMINATED BY", file_format_msg.c_str());
+      return true;
+    }
+    if (field.enclosed != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0),
+               "COLUMNS or FIELDS ENCLOSED BY", file_format_msg.c_str());
+      return true;
+    }
+    if (field.escaped != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0),
+               "COLUMNS or FIELDS ESCAPED BY", file_format_msg.c_str());
+      return true;
+    }
+    if (field.date_format != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "DATE FORMAT",
+               file_format_msg.c_str());
+      return true;
+    }
+    if (field.time_format != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "TIME FORMAT",
+               file_format_msg.c_str());
+      return true;
+    }
+    if (field.trim_spaces != enum_trim_spaces::DEFAULT_TRIM_SPACES) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "TRIM SPACES",
+               file_format_msg.c_str());
+      return true;
+    }
+    if (file_info.with_header != enum_with_header::DEFAULT_HEADER) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "HEADER",
+               file_format_msg.c_str());
+      return true;
+    }
+    if (field.null_value != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "NULL AS",
+               file_format_msg.c_str());
+      return true;
+    }
+    if (field.empty_value != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "EMPTY VALUE",
+               file_format_msg.c_str());
+      return true;
+    }
+    if (field.not_enclosed) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0),
+               "COLUMNS or FIELDS NOT ENCLOSED", file_format_msg.c_str());
+      return true;
+    }
+  }
+  if (file_info.filetype == FILETYPE_PARQUET) {
+    if (line.line_term != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "LINES TERMINATED BY",
+               "PARQUET format");
+      return true;
+    }
+    if (file_info.cs != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "CHARACTER SET",
+               "PARQUET format");
+      return true;
+    }
+  }
+  auto *thd = pc->thd;
+  if (dumpfile == OBJECT_STORE_DEST) {
+    if (file_info.filetype == FILETYPE_CSV ||
+        file_info.filetype == FILETYPE_TEXT ||
+        file_info.filetype == FILETYPE_JSON) {
+      if (file_info.compression != nullptr) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED), "COMPRESSION",
+                            "OUTFILE");
+      }
+      if (file_info.cs != nullptr) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED), "CHARACTER SET",
+                            "OUTFILE");
+      }
+    }
+    if (file_info.filetype == FILETYPE_CSV ||
+        file_info.filetype == FILETYPE_TEXT) {
+      if (field.empty_value != nullptr) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED), "EMPTY VALUE",
+                            "OUTFILE");
+      }
+      if (field.not_enclosed) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED), "NOT ENCLOSED BY",
+                            "OUTFILE");
+      }
+      if (field.enclosed != nullptr) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED),
+                            "ENCLOSED BY or OPTIONALLY ENCLOSED BY", "OUTFILE");
+      }
+      if (field.escaped != nullptr) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED), "ESCAPED BY",
+                            "OUTFILE");
+      }
+      if (field.trim_spaces != enum_trim_spaces::DEFAULT_TRIM_SPACES) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED), "TRIM SPACES",
+                            "OUTFILE");
+      }
+      if (field.date_format != nullptr) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED), "DATE FORMAT",
+                            "OUTFILE");
+      }
+
+      if (field.time_format != nullptr) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CLAUSE_IGNORED,
+                            ER_THD(thd, ER_CLAUSE_IGNORED), "TIME FORMAT",
+                            "OUTFILE");
+      }
+    }
+    if (line.line_start != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "LINES STARTING BY",
+               "exporting query result to object storage");
+      return true;
+    }
+
+    if (file_info.filetype == FILETYPE_XML) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "XML",
+               "exporting query result to object storage");
+      return true;
+    }
+  } else {
+    if (field.not_enclosed) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "NOT ENCLOSED",
+               "exporting query result to disk");
+      return true;
+    }
+
+    if (field.date_format != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "DATE FORMAT",
+               "exporting query result to disk");
+      return true;
+    }
+
+    if (field.time_format != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "TIME FORMAT",
+               "exporting query result to disk");
+      return true;
+    }
+    if (field.trim_spaces != enum_trim_spaces::DEFAULT_TRIM_SPACES) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "TRIM SPACES",
+               "exporting query result to disk");
+      return true;
+    }
+    if (file_info.with_header != enum_with_header::DEFAULT_HEADER) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "HEADER",
+               "exporting query result to disk");
+      return true;
+    }
+    if (field.null_value != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "NULL AS",
+               "exporting query result to disk");
+      return true;
+    }
+
+    if (field.empty_value != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "EMPTY VALUE",
+               "exporting query result to disk");
+      return true;
+    }
+    if (file_info.compression != nullptr) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "COMPRESSION",
+               "exporting query result to disk");
+      return true;
+    }
+    if (file_info.filetype == FILETYPE_CSV) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "CSV FORMAT",
+               "exporting query result to disk");
+      return true;
+    }
+    if (file_info.filetype == FILETYPE_PARQUET) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "PARQUET",
+               "exporting query result to disk");
+      return true;
+    }
+    if (file_info.filetype == FILETYPE_JSON) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "JSON format",
+               "exporting query result to disk");
+      return true;
+    }
+    if (file_info.filetype == FILETYPE_XML) {
+      my_error(ER_INVALID_CLAUSE_IN_CONTEXT, MYF(0), "XML format",
+               "exporting query result to disk");
+      return true;
+    }
+  }
+
+  if (field.not_enclosed && field.enclosed != nullptr) {
+    my_error(ER_INVALID_CLAUSE_COMBINATION, MYF(0), "NOT ENCLOSED",
+             "OPTIONALLY ENCLOSED BY");
+    return true;
+  }
+
+  return false;
 }
 
 /************************************************************************
@@ -179,6 +475,22 @@ void Query_result_to_file::cleanup() {
   row_count = 0;
 }
 
+/**
+ * \brief Returns true incase of an error.
+ */
+bool Query_result_to_object_store::send_eof(THD *thd) {
+  if (thd->is_error()) return true;
+  ::my_ok(thd, thd->current_found_rows);
+  return false;
+}
+
+/**
+ * \brief Reset the number of affected rows
+ */
+void Query_result_to_object_store::cleanup() {
+  current_thd->set_sent_row_count(0);
+}
+
 /***************************************************************************
 ** Export of select to textfile
 ***************************************************************************/
@@ -207,7 +519,6 @@ void Query_result_to_file::cleanup() {
 
 static File create_file(THD *thd, char *path, sql_exchange *exchange,
                         IO_CACHE *cache) {
-  File file;
   const uint option = MY_UNPACK_FILENAME | MY_RELATIVE_PATH;
 
   if (!dirname_length(exchange->file_name)) {
@@ -224,25 +535,40 @@ static File create_file(THD *thd, char *path, sql_exchange *exchange,
     return -1;
   }
 
-  if (!access(path, F_OK)) {
-    my_error(ER_FILE_EXISTS_ERROR, MYF(0), exchange->file_name);
-    return -1;
-  }
-  /* Create the file world readable */
-  if ((file = mysql_file_create(key_select_to_file, path,
-                                S_IRUSR | S_IWUSR | S_IRGRP, O_WRONLY | O_EXCL,
-                                MYF(MY_WME))) < 0)
-    return file;
-#ifdef HAVE_FCHMOD
-  (void)fchmod(file, S_IRUSR | S_IWUSR | S_IRGRP);  // Because of umask()
-#else
-  (void)chmod(path, S_IRUSR | S_IWUSR | S_IRGRP);
+  bool new_file_created = false;
+  MY_STAT stat_arg;
+  File file = -1;
+  if (my_stat(path, &stat_arg, MYF(0))) {
+    /* Check if file is named pipe or unix socket */
+    if (MY_S_ISFIFO(stat_arg.st_mode))
+      file = mysql_file_open(key_select_to_file, path, O_WRONLY, MYF(MY_WME));
+#ifndef __WIN__
+    if (MY_S_ISSOCK(stat_arg.st_mode))
+      file = mysql_unix_socket_connect(key_select_to_file, path, MYF(MY_WME));
 #endif
+    if (file < 0) {
+      if (!(MY_S_ISFIFO(stat_arg.st_mode) || MY_S_ISSOCK(stat_arg.st_mode)))
+        my_error(ER_FILE_EXISTS_ERROR, MYF(0), exchange->file_name);
+      return -1;
+    }
+  } else {
+    /* Create the file world readable */
+    if ((file = mysql_file_create(key_select_to_file, path,
+                                  S_IRUSR | S_IWUSR | S_IRGRP,
+                                  O_WRONLY | O_EXCL, MYF(MY_WME))) < 0)
+      return file;
+    new_file_created = true;
+#ifdef HAVE_FCHMOD
+    (void)fchmod(file, S_IRUSR | S_IWUSR | S_IRGRP);  // Because of umask()
+#else
+    (void)chmod(path, S_IRUSR | S_IWUSR | S_IRGRP);
+#endif
+  }
   if (init_io_cache(cache, file, thd->variables.select_into_buffer_size,
                     WRITE_CACHE, 0L, true, MYF(MY_WME))) {
     mysql_file_close(file, MYF(0));
     /* Delete file on error, it was just created */
-    mysql_file_delete(key_select_to_file, path, MYF(0));
+    if (new_file_created) mysql_file_delete(key_select_to_file, path, MYF(0));
     return -1;
   }
   if (thd->variables.select_into_disk_sync) {
@@ -261,7 +587,8 @@ bool Query_result_export::prepare(THD *thd, const mem_root_deque<Item *> &list,
   if (strlen(exchange->file_name) + NAME_LEN >= FN_REFLEN)
     strmake(path, exchange->file_name, FN_REFLEN - 1);
 
-  write_cs = exchange->cs ? exchange->cs : &my_charset_bin;
+  write_cs = (exchange->file_info.cs != nullptr) ? exchange->file_info.cs
+                                                 : &my_charset_bin;
 
   /* Check if there is any blobs in data */
   for (Item *item : VisibleFields(list)) {
@@ -370,6 +697,10 @@ bool Query_result_export::send_data(THD *thd,
     goto err;
   for (Item *item : VisibleFields(items)) {
     Item_result result_type = item->result_type();
+    if (item->actual_data_type() == MYSQL_TYPE_BIT) {
+      /* BIT is output as binary string */
+      result_type = STRING_RESULT;
+    }
     bool enclosed =
         (exchange->field.enclosed->length() &&
          (!exchange->field.opt_enclosed || result_type == STRING_RESULT));
@@ -643,6 +974,7 @@ err:
 
 void Query_result_export::cleanup() {
   current_thd->set_sent_row_count(row_count);
+  current_thd->sent_row_count_2 = row_count;
   Query_result_to_file::cleanup();
 }
 
@@ -728,7 +1060,7 @@ bool Query_dumpvar::send_data(THD *thd, const mem_root_deque<Item *> &items) {
     } else {
       Item_func_set_user_var *suv = new Item_func_set_user_var(mv->name, item);
       if (suv->fix_fields(thd, nullptr)) return true;
-      suv->save_item_result(item);
+      if (suv->save_item_result(item)) return true;
       if (suv->update()) return true;
       /*
         Note that this variable isn't added to LEX::set_var_list, as it's not
@@ -738,7 +1070,8 @@ bool Query_dumpvar::send_data(THD *thd, const mem_root_deque<Item *> &items) {
       */
     }
   }
-  return thd->is_error();
+  assert(!thd->is_error());
+  return false;
 }
 
 bool Query_dumpvar::send_eof(THD *thd) {

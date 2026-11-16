@@ -416,99 +416,6 @@ const byte *mlog_parse_string(
   return (ptr + len);
 }
 
-const byte *mlog_parse_index_8027(const byte *ptr, const byte *end_ptr,
-                                  bool comp, dict_index_t **index) {
-  ulint i;
-  dict_table_t *table;
-  dict_index_t *ind;
-  bool instant = false;
-  uint16_t n, n_uniq;
-  uint16_t n_inst_cols = 0;
-
-  if (comp) {
-    if (end_ptr < ptr + 4) {
-      return (nullptr);
-    }
-    n = mach_read_from_2(ptr);
-    ptr += 2;
-    if ((n & 0x8000) != 0) {
-      /* This is instant fields,
-      see also mlog_open_and_write_index() */
-      instant = true;
-      n_inst_cols = n & ~0x8000;
-      n = mach_read_from_2(ptr);
-      ptr += 2;
-      ut_ad((n & 0x8000) == 0);
-      ut_ad(n_inst_cols <= n);
-
-      if (end_ptr < ptr + 2) {
-        return (nullptr);
-      }
-    }
-    n_uniq = mach_read_from_2(ptr);
-    ptr += 2;
-    ut_ad(n_uniq <= n);
-    if (end_ptr < ptr + n * 2) {
-      return (nullptr);
-    }
-  } else {
-    n = n_uniq = 1;
-  }
-  table = dict_mem_table_create("LOG_DUMMY", DICT_HDR_SPACE, n, 0, 0,
-                                comp ? DICT_TF_COMPACT : 0, 0);
-  if (instant) {
-    table->set_instant_cols(n_inst_cols);
-  }
-
-  ind = dict_mem_index_create("LOG_DUMMY", "LOG_DUMMY", DICT_HDR_SPACE, 0, n);
-  ind->table = table;
-  ind->n_uniq = (unsigned int)n_uniq;
-  if (n_uniq != n) {
-    ut_a(n_uniq + DATA_ROLL_PTR <= n);
-    ind->type = DICT_CLUSTERED;
-  }
-  if (comp) {
-    for (i = 0; i < n; i++) {
-      ulint len = mach_read_from_2(ptr);
-      ptr += 2;
-      /* The high-order bit of len is the NOT NULL flag;
-      the rest is 0 or 0x7fff for variable-length fields,
-      and 1..0x7ffe for fixed-length fields. */
-      dict_mem_table_add_col(
-          table, nullptr, nullptr,
-          ((len + 1) & 0x7fff) <= 1 ? DATA_BINARY : DATA_FIXBINARY,
-          len & 0x8000 ? DATA_NOT_NULL : 0, len & 0x7fff, true);
-
-      /* The is_ascending flag does not matter during
-      redo log apply, because we do not compare for
-      "less than" or "greater than". */
-      dict_index_add_col(ind, table, table->get_col(i), 0, true);
-    }
-    dict_table_add_system_columns(table, table->heap);
-    if (n_uniq != n) {
-      /* Identify DB_TRX_ID and DB_ROLL_PTR in the index. */
-      ut_a(DATA_TRX_ID_LEN == ind->get_col(DATA_TRX_ID - 1 + n_uniq)->len);
-      ut_a(DATA_ROLL_PTR_LEN == ind->get_col(DATA_ROLL_PTR - 1 + n_uniq)->len);
-      ind->fields[DATA_TRX_ID - 1 + n_uniq].col = &table->cols[n + DATA_TRX_ID];
-      ind->fields[DATA_ROLL_PTR - 1 + n_uniq].col =
-          &table->cols[n + DATA_ROLL_PTR];
-    }
-
-    if (ind->is_clustered() && ind->table->has_instant_cols()) {
-      ind->instant_cols = true;
-      ind->n_instant_nullable =
-          ind->get_n_nullable_before(ind->get_instant_fields());
-    } else {
-      ind->instant_cols = false;
-      ind->n_instant_nullable = ind->n_nullable;
-    }
-  }
-  /* avoid ut_ad(index->cached) in dict_index_get_n_unique_in_tree */
-  ind->cached = true;
-  *index = ind;
-  return (ptr);
-}
-
 #ifndef UNIV_HOTBACKUP
 /* logical_pos 2 bytes, phy_pos 2 bytes, v_added 1 byte, v_dropped 1 byte */
 constexpr size_t inst_col_info_size = 6;
@@ -949,12 +856,12 @@ static const byte *read_2_bytes(const byte *ptr, const byte *end_ptr,
   return ptr;
 }
 
-/** Read 1 bytes from log buffer.
+/** Read 1 byte from log buffer.
 @param[in]   ptr      pointer to buffer
 @param[in]   end_ptr  pointer to end of buffer
-@param[out]  val      read 2 bytes value */
-static const byte *read_1_bytes(const byte *ptr, const byte *end_ptr,
-                                uint8_t &val) {
+@param[out]  val      read 1 byte value */
+static const byte *read_1_byte(const byte *ptr, const byte *end_ptr,
+                               uint8_t &val) {
   if (end_ptr < ptr + 1) {
     return (nullptr);
   }
@@ -1034,8 +941,8 @@ static const byte *parse_index_fields(const byte *ptr, const byte *end_ptr,
     }
 
     uint32_t phy_pos = UINT32_UNDEFINED;
-    uint8_t v_added = UINT8_UNDEFINED;
-    uint8_t v_dropped = UINT8_UNDEFINED;
+    row_version_t v_added = INVALID_ROW_VERSION;
+    row_version_t v_dropped = INVALID_ROW_VERSION;
 
     /* The high-order bit of len is the NOT NULL flag;
     the rest is 0 or 0x7fff for variable-length fields,
@@ -1076,8 +983,8 @@ static const byte *parse_index_fields(const byte *ptr, const byte *end_ptr,
 struct Field_instant_info {
   uint16_t logical_pos{UINT16_UNDEFINED};
   uint16_t phy_pos{UINT16_UNDEFINED};
-  uint8_t v_added{UINT8_UNDEFINED};
-  uint8_t v_dropped{UINT8_UNDEFINED};
+  row_version_t v_added{INVALID_ROW_VERSION};
+  row_version_t v_dropped{INVALID_ROW_VERSION};
 };
 
 using instant_fields_list_t = std::vector<Field_instant_info>;
@@ -1110,21 +1017,29 @@ static const byte *parse_index_versioned_fields(const byte *ptr,
     if ((info.phy_pos & 0x8000) != 0) {
       info.phy_pos &= ~0x8000;
 
+      uint8_t version{0};
       /* Read v_added */
-      ptr = read_1_bytes(ptr, end_ptr, info.v_added);
-      if (ptr == nullptr) return (nullptr);
-      ut_ad(info.v_added != UINT8_UNDEFINED);
-      crv = std::max(crv, (uint16_t)info.v_added);
+      ptr = read_1_byte(ptr, end_ptr, version);
+      if (ptr == nullptr) {
+        return nullptr;
+      }
+
+      info.v_added = static_cast<row_version_t>(version);
+      crv = std::max(crv, info.v_added);
     }
 
     if ((info.phy_pos & 0x4000) != 0) {
       info.phy_pos &= ~0x4000;
 
+      uint8_t version{0};
       /* Read v_dropped */
-      ptr = read_1_bytes(ptr, end_ptr, info.v_dropped);
-      if (ptr == nullptr) return (nullptr);
-      ut_ad(info.v_dropped != UINT8_UNDEFINED);
-      crv = std::max(crv, (uint16_t)info.v_dropped);
+      ptr = read_1_byte(ptr, end_ptr, version);
+      if (ptr == nullptr) {
+        return nullptr;
+      }
+
+      info.v_dropped = static_cast<row_version_t>(version);
+      crv = std::max(crv, info.v_dropped);
       n_dropped++;
     }
 
@@ -1150,8 +1065,8 @@ static void update_instant_info(instant_fields_list_t f, dict_index_t *index) {
   size_t n_dropped = 0;
 
   for (auto field : f) {
-    bool is_added = field.v_added != UINT8_UNDEFINED;
-    bool is_dropped = field.v_dropped != UINT8_UNDEFINED;
+    bool is_added = field.v_added != INVALID_ROW_VERSION;
+    bool is_dropped = field.v_dropped != INVALID_ROW_VERSION;
 
     dict_col_t *col = index->fields[field.logical_pos].col;
 
@@ -1188,8 +1103,8 @@ static void populate_dummy_fields(dict_index_t *index, dict_table_t *table,
   ut_ad(!is_comp);
 
   uint32_t phy_pos = UINT32_UNDEFINED;
-  uint8_t v_added = UINT8_UNDEFINED;
-  uint8_t v_dropped = UINT8_UNDEFINED;
+  row_version_t v_added = INVALID_ROW_VERSION;
+  row_version_t v_dropped = INVALID_ROW_VERSION;
   size_t dummy_len = 10;
 
   for (size_t i = 0; i < n; i++) {
@@ -1204,18 +1119,12 @@ static void populate_dummy_fields(dict_index_t *index, dict_table_t *table,
 
 static const byte *parse_index_log_version(const byte *ptr, const byte *end_ptr,
                                            uint8_t &version) {
-  ptr = read_1_bytes(ptr, end_ptr, version);
-  if (ptr == nullptr) return nullptr;
-
-  return ptr;
+  return read_1_byte(ptr, end_ptr, version);
 }
 
 static const byte *parse_index_flag(const byte *ptr, const byte *end_ptr,
                                     uint8_t &flag) {
-  ptr = read_1_bytes(ptr, end_ptr, flag);
-  if (ptr == nullptr) return nullptr;
-
-  return ptr;
+  return read_1_byte(ptr, end_ptr, flag);
 }
 
 const byte *mlog_parse_index(const byte *ptr, const byte *end_ptr,

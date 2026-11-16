@@ -46,6 +46,7 @@
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/create_field.h"
 #include "sql/mem_root_array.h"  // Mem_root_array
+#include "sql/sql_cmd_ddl.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/system_variables.h"
@@ -311,6 +312,11 @@ class sp_parser_data {
   */
   void do_cont_backpatch(uint dest);
 
+  /// Returns pointer to the topmost lex object.
+  LEX *get_top_lex() {
+    return m_lex_stack.is_empty() ? nullptr : m_lex_stack.head();
+  }
+
  private:
   /// Start of the current statement's query string.
   const char *m_current_stmt_start_ptr;
@@ -382,7 +388,7 @@ struct SP_TABLE;
 
 /**
   sp_head represents one instance of a stored program. It might be of any type
-  (stored procedure, function, trigger, event).
+  (stored procedure, function, library, trigger, event).
 */
 class sp_head {
  public:
@@ -835,8 +841,6 @@ class sp_head {
   bool is_not_allowed_in_function(const char *where) {
     if (m_flags & CONTAINS_DYNAMIC_SQL)
       my_error(ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, MYF(0), "Dynamic SQL");
-    else if (m_flags & MULTI_RESULTS)
-      my_error(ER_SP_NO_RETSET, MYF(0), where);
     else if (m_flags & HAS_SET_AUTOCOMMIT_STMT)
       my_error(ER_SP_CANT_SET_AUTOCOMMIT, MYF(0));
     else if (m_flags & HAS_COMMIT_OR_ROLLBACK)
@@ -845,6 +849,8 @@ class sp_head {
       my_error(ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, MYF(0), "RESET");
     else if (m_flags & HAS_SQLCOM_FLUSH)
       my_error(ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, MYF(0), "FLUSH");
+    else if (m_flags & MULTI_RESULTS)
+      my_error(ER_SP_NO_RETSET, MYF(0), where);
 
     return (m_flags &
             (CONTAINS_DYNAMIC_SQL | MULTI_RESULTS | HAS_SET_AUTOCOMMIT_STMT |
@@ -889,6 +895,13 @@ class sp_head {
   */
   sp_pcontext *get_root_parsing_context() const {
     return const_cast<sp_pcontext *>(m_root_parsing_ctx);
+  }
+
+  /**
+    @return instructions for this stored program.
+  */
+  const Mem_root_array<sp_instr *> &get_instructions() const {
+    return m_instructions;
   }
 
   /**
@@ -1016,7 +1029,7 @@ class sp_head {
      @returns false on success; true on failure
   */
   bool init_external_routine(
-      my_service<SERVICE_TYPE(external_program_execution)> &service);
+      my_service<SERVICE_TYPE(external_program_execution)> *service);
 
  private:
   /// Copy sp name from parser.
@@ -1082,6 +1095,9 @@ class sp_head {
 
   friend sp_head *sp_start_parsing(THD *thd, enum_sp_type sp_type,
                                    sp_name *sp_name);
+
+  // Sql_cmd_create_library::execute() creates stand-alone sp_head object
+  friend Sql_cmd_create_library;
 
   // Prevent use of copy constructor and assignment operator.
   sp_head(const sp_head &);

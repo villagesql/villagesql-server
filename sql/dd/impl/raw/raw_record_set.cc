@@ -138,7 +138,7 @@ bool Raw_record_set::next(Raw_record *&r) {
 
 Raw_record_set::~Raw_record_set() {
   if (m_table->file->inited != handler::NONE) {
-    int rc = m_table->file->ha_index_end();
+    int const rc = m_table->file->ha_index_end();
 
     if (rc) {
       /* purecov: begin inspected */

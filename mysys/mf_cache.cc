@@ -32,7 +32,7 @@
 */
 
 #include <fcntl.h>
-#include <stddef.h>
+#include <cstddef>
 
 #include "my_dbug.h"
 #include "my_inttypes.h"

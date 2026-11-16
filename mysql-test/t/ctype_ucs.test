@@ -78,8 +78,20 @@ DROP TABLE t1;
 --echo #   and reverse() function
 --echo #
 
+# In 5.7 default 'sql_mode' now also includes 'STRICT_TRANS_TABLES' which will prevent
+# "LOAD DATA INFILE" from loading invalid data. For the following test we need to
+# disable it.
+SET @sql_mode_save = @@sql_mode;
+SET sql_mode = _latin1 'ONLY_FULL_GROUP_BY,NO_ENGINE_SUBSTITUTION';
+
+# Because of the Oracle Bug #79989, there is no guarantee that after
+# including "ctype_common.inc" current value of the @@character_set_database
+# session variable will be 'latin1' and string literals without prefixes in the
+# following "SELECT" statement ('00' and '01') will have this charset.
+# As a workaround, we add "_latin1" prefix here.
+
 --echo # Problem # 1 (original report): wrong parsing of ucs2 data
-SELECT '00' UNION SELECT '10' INTO OUTFILE 'tmpp.txt';
+SELECT _latin1 '00' UNION SELECT _latin1 '10' INTO OUTFILE 'tmpp.txt';
 CREATE TABLE t1(a INT);
 LOAD DATA INFILE 'tmpp.txt' INTO TABLE t1 CHARACTER SET ucs2
 (@b) SET a=REVERSE(@b);
@@ -92,7 +104,7 @@ remove_file $MYSQLD_DATADIR/test/tmpp.txt;
 
 
 --echo # Problem # 2 : if you write and read ucs2 data to a file they're lost
-SELECT '00' UNION SELECT '10' INTO OUTFILE 'tmpp2.txt' CHARACTER SET ucs2;
+SELECT _latin1 '00' UNION SELECT _latin1 '10' INTO OUTFILE 'tmpp2.txt' CHARACTER SET ucs2;
 CREATE TABLE t1(a INT);
 LOAD DATA INFILE 'tmpp2.txt' INTO TABLE t1 CHARACTER SET ucs2
 (@b) SET a=REVERSE(@b);
@@ -103,6 +115,8 @@ DROP TABLE t1;
 let $MYSQLD_DATADIR= `select @@datadir`;
 remove_file $MYSQLD_DATADIR/test/tmpp2.txt;
 
+# restoring 'sql_mode'
+SET sql_mode = @sql_mode_save;
 
 
 #
@@ -371,7 +385,7 @@ set names latin1;
 create table bug20536 (id bigint not null auto_increment primary key, name
 varchar(255) character set ucs2 not null);
 insert into `bug20536` (`id`,`name`) values (1, _latin1 x'7465737431'), (2, "'test\\_2'");
-select sha1(name) from bug20536;
+select sha2(name,256) from bug20536;
 select make_set(3, name, upper(name)) from bug20536;
 select export_set(5, name, upper(name)) from bug20536;
 select export_set(5, name, upper(name), ",", 5) from bug20536;
@@ -517,13 +531,11 @@ select * from t1 where a=if(b>10,_ucs2 0x0061,_ucs2 0x0062);
 # Conversion from UCS2 to ASCII is not possible if 
 # the UCS2 string has non-ASCII characters
 #
---error ER_CANT_AGGREGATE_2COLLATIONS
+--error ER_CANNOT_CONVERT_STRING
 select concat(a,if(b<10,_ucs2 0x00C0,_ucs2 0x0062)) from t1;
---error ER_CANT_AGGREGATE_2COLLATIONS
 select concat(a,if(b>10,_ucs2 0x00C0,_ucs2 0x0062)) from t1;
---error ER_CANT_AGGREGATE_2COLLATIONS
 select concat(a,if(b<10,_ucs2 0x0062,_ucs2 0x00C0)) from t1;
---error ER_CANT_AGGREGATE_2COLLATIONS
+--error ER_CANNOT_CONVERT_STRING
 select concat(a,if(b>10,_ucs2 0x0062,_ucs2 0x00C0)) from t1;
 --error ER_CANNOT_CONVERT_STRING
 select * from t1 where a=if(b<10,_ucs2 0x00C0,_ucs2 0x0062);

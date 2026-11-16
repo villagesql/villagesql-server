@@ -63,8 +63,8 @@ struct Ndb_free_list_t {
 
  private:
   /** No copying.*/
-  Ndb_free_list_t(const Ndb_free_list_t &);
-  Ndb_free_list_t &operator=(const Ndb_free_list_t &);
+  Ndb_free_list_t(const Ndb_free_list_t &) = delete;
+  Ndb_free_list_t &operator=(const Ndb_free_list_t &) = delete;
 
   /**
    * update_stats() is called whenever a new local peak of 'm_used_cnt'
@@ -209,7 +209,6 @@ class NdbImpl : public trp_client {
   */
   static inline void setNdbError(Ndb &ndb, int code) {
     ndb.theError.code = code;
-    return;
   }
 
   bool forceShortRequests;

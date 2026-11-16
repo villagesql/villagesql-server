@@ -24,6 +24,7 @@
  */
 
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <stdexcept>
 
@@ -33,10 +34,12 @@
 #include "violite.h"            // NOLINT(build/include_subdir)
 
 #include "plugin/x/tests/driver/driver_command_line_options.h"
+#include "plugin/x/tests/driver/processor/sql_stmt_processor.h"
 #include "plugin/x/tests/driver/processor/stream_processor.h"
 
-static void ignore_traces_from_libraries(enum loglevel ll, uint32_t ecode,
-                                         va_list args) {}
+static void ignore_traces_from_libraries(enum loglevel /*ll*/,
+                                         uint32_t /*ecode*/, va_list /*args*/) {
+}
 
 bool parse_mysql_connstring(const std::string &connstring,
                             std::string *protocol, std::string *user,
@@ -131,7 +134,16 @@ int client_connect_and_process(const Driver_command_line_options &options,
     int result_code =
         process_client_input(input, &eaters, &context.m_script_stack, console);
 
-    if (!options.m_run_without_auth) cm.close_active(true);
+    if (!options.m_run_without_auth) {
+      if (result_code != 0) {
+        std::vector<Block_processor_ptr> eaters_at_error =
+            create_block_processors(&context);
+        std::istringstream inbuf(context.m_debug);
+        process_client_input(inbuf, &eaters_at_error, &context.m_script_stack,
+                             console);
+      }
+      cm.close_active(true);
+    }
 
     return result_code;
   } catch (const xcl::XError &e) {
@@ -203,6 +215,26 @@ static void daemonize() {
 #endif
 }
 
+#ifndef _WIN32
+extern char **environ;
+#endif
+
+static void import_env_into(std::map<std::string, std::string> *out_variables) {
+  char **env = IF_WIN(_environ, environ);
+
+  for (char **variable_name = env; *variable_name != nullptr; ++variable_name) {
+    std::string name = *variable_name;
+
+    std::size_t pos = name.find('=');
+    if (pos != std::string::npos) {
+      std::string key = name.substr(0, pos);
+      std::string value = name.substr(pos + 1);
+
+      out_variables->emplace("$" + key, value);
+    }
+  }
+}
+
 int main(int argc, char **argv) {
   MY_INIT(argv[0]);
   DBUG_TRACE;
@@ -214,6 +246,10 @@ int main(int argc, char **argv) {
   if (options.exit_code != 0) return options.exit_code;
 
   if (options.m_daemon) daemonize();
+
+  if (options.m_import_env) {
+    import_env_into(&options.m_variables);
+  }
 
   std::cout << std::unitbuf;
   std::ifstream fs;

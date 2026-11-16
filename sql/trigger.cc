@@ -47,7 +47,7 @@
 #include "sql/sql_error.h"  // Sql_condition
 #include "sql/sql_lex.h"
 #include "sql/sql_parse.h"  // parse_sql
-#include "sql/sql_show.h"   // append_identifier
+#include "sql/sql_show.h"   // append_identifier_*
 #include "sql/strfunc.h"
 #include "sql/system_variables.h"
 #include "sql/trigger_creation_ctx.h"  // Trigger_creation_ctx
@@ -321,6 +321,22 @@ Trigger *Trigger::create_from_dd(
 }
 
 /**
+  Create a new Trigger object as a shallow clone of existing Trigger object.
+
+  @note Allows to produce Trigger objects to be associated with specific TABLE
+        instance from Trigger objects associated with TABLE_SHARE.
+*/
+Trigger *Trigger::clone_shallow(MEM_ROOT *mem_root) const {
+  // Do not create shallow clones of Trigger objects associated with TABLE.
+  assert(m_sp == nullptr);
+  return new (mem_root) Trigger(
+      m_trigger_name, mem_root, m_db_name, m_subject_table_name, m_definition,
+      m_definition_utf8, m_sql_mode, m_definer_user, m_definer_host,
+      m_client_cs_name, m_connection_cl_name, m_db_cl_name, m_event,
+      m_action_time, m_action_order, m_created_timestamp);
+}
+
+/**
   Trigger constructor.
 */
 Trigger::Trigger(
@@ -350,9 +366,7 @@ Trigger::Trigger(
       m_action_order(action_order),
       m_trigger_name(trigger_name),
       m_sp(nullptr),
-      m_has_parse_error(false) {
-  m_parse_error_message[0] = 0;
-
+      m_parse_error_message(nullptr) {
   construct_definer_value(mem_root, &m_definer, definer_user, definer_host);
 }
 
@@ -372,13 +386,19 @@ Trigger::~Trigger() { sp_head::destroy(m_sp); }
 */
 
 bool Trigger::execute(THD *thd) {
-  if (m_has_parse_error) return true;
+  if (has_parse_error()) return true;
 
   bool err_status;
   Sub_statement_state statement_state;
   Query_block *save_current_query_block;
 
   thd->reset_sub_statement_state(&statement_state, SUB_STMT_TRIGGER);
+
+  Secondary_engine_optimization saved_state =
+      thd->secondary_engine_optimization();
+
+  thd->set_secondary_engine_optimization(
+      Secondary_engine_optimization::PRIMARY_TENTATIVELY);
 
   /*
     Reset current_query_block before call execute_trigger() and
@@ -392,6 +412,8 @@ bool Trigger::execute(THD *thd) {
   thd->lex->set_current_query_block(save_current_query_block);
 
   thd->restore_sub_statement_state(&statement_state);
+
+  thd->set_secondary_engine_optimization(saved_state);
 
   return err_status;
 }
@@ -672,4 +694,14 @@ void Trigger::print_upgrade_warning(THD *thd) {
       thd, Sql_condition::SL_WARNING, ER_WARN_TRIGGER_DOESNT_HAVE_CREATED,
       ER_THD(thd, ER_WARN_TRIGGER_DOESNT_HAVE_CREATED), get_db_name().str,
       get_subject_table_name().str, get_trigger_name().str);
+}
+
+/**
+  Mark trigger as having a parse error and remember the message for future use.
+*/
+
+void Trigger::set_parse_error_message(const char *error_message) {
+  m_parse_error_message = strdup_root(m_mem_root, error_message);
+  // Play safe even in case of OOM.
+  if (!m_parse_error_message) m_parse_error_message = ER_DEFAULT(ER_DA_OOM);
 }

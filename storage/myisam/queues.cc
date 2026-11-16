@@ -33,9 +33,9 @@
 
 #include "storage/myisam/queues.h"
 
-#include <stddef.h>
-#include <stdio.h>
 #include <sys/types.h>
+#include <cstddef>
+#include <cstdio>
 
 #include <algorithm>
 
@@ -44,6 +44,7 @@
 #include "my_sys.h"
 #include "my_systime.h"
 #include "mysql/service_mysql_alloc.h"
+#include "storage/myisam/array.h"
 #include "storage/myisam/myisamdef.h"
 
 static int resize_queue(QUEUE *queue, PSI_memory_key key, uint max_elements);
@@ -211,7 +212,7 @@ void _downheap(QUEUE *queue, uint idx) {
   uchar *element;
   uint elements, half_queue, offset_to_key, next_index;
   bool first = true;
-  uint start_idx = idx;
+  uint const start_idx = idx;
 
   offset_to_key = queue->offset_to_key;
   element = queue->root[idx];

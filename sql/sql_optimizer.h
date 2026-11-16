@@ -54,16 +54,16 @@
 #include "sql/temp_table_param.h"
 
 enum class Subquery_strategy : int;
-class COND_EQUAL;
+class Item_multi_eq;
 class Item_subselect;
 class Item_sum;
 class Opt_trace_context;
 class THD;
 class Window;
 struct AccessPath;
+struct COND_EQUAL;
 struct MYSQL_LOCK;
 
-class Item_equal;
 template <class T>
 class mem_root_deque;
 
@@ -235,8 +235,6 @@ class JOIN {
   bool streaming_aggregation{false};
   /// If query contains GROUP BY clause
   bool grouped;
-  /// If true, send produced rows using query_result
-  bool do_send_rows{true};
   /// Set of tables contained in query
   table_map all_table_map{0};
   table_map const_table_map;  ///< Set of tables found to be const
@@ -705,17 +703,16 @@ class JOIN {
   /**
     Return whether the caller should send a row even if the join
     produced no rows if:
-     - there is an aggregate function (sum_func_count!=0), and
-     - the query is not grouped, and
+     - the query is implicitly grouped
+     - OR if the query has ROLLUP and
      - a possible HAVING clause evaluates to TRUE.
 
     @note: if there is a having clause, it must be evaluated before
     returning the row.
   */
   bool send_row_on_empty_set() const {
-    return (do_send_rows && tmp_table_param.sum_func_count != 0 &&
-            group_list.empty() && !group_optimized_away &&
-            query_block->having_value != Item::COND_FALSE);
+    return (implicit_grouping || rollup_state != JOIN::RollupState::NONE) &&
+           query_block->having_value != Item::COND_FALSE;
   }
 
  public:
@@ -807,6 +804,11 @@ class JOIN {
   void refresh_base_slice();
 
   /**
+    Similar to refresh_base_slice(), but refreshes only the specified slice.
+   */
+  void assign_fields_to_slice(int sliceno);
+
+  /**
     Whether this query block needs finalization (see
     FinalizePlanForQueryBlock()) before it can be actually used.
     This only happens when using the hypergraph join optimizer.
@@ -851,13 +853,14 @@ class JOIN {
     @param save_sum_fields  If true, do not replace Item_sum items in
                             @c tmp_fields list with Item_field items referring
                             to fields in temporary table.
-
+    @param alias            alias name for temporary file
     @returns false on success, true on failure
   */
   bool create_intermediate_table(QEP_TAB *tab,
                                  const mem_root_deque<Item *> &tmp_table_fields,
                                  ORDER_with_src &tmp_table_group,
-                                 bool save_sum_fields);
+                                 bool save_sum_fields,
+                                 const char *alias = nullptr);
 
   /**
     Optimize distinct when used on a subset of the tables.
@@ -1056,7 +1059,8 @@ class JOIN {
 
   /** @{ Helpers for create_access_paths. */
   AccessPath *create_root_access_path_for_join();
-  AccessPath *attach_access_paths_for_having_and_limit(AccessPath *path) const;
+  AccessPath *attach_access_paths_for_having_qualify_limit(
+      AccessPath *path) const;
   AccessPath *attach_access_path_for_update_or_delete(AccessPath *path) const;
   /** @} */
 
@@ -1100,6 +1104,8 @@ class Switch_ref_item_slice {
   ~Switch_ref_item_slice() { join->set_ref_item_slice(saved); }
 };
 
+uint get_tmp_table_rec_length(const mem_root_deque<Item *> &items,
+                              bool include_hidden, bool can_skip_aggs);
 bool uses_index_fields_only(Item *item, TABLE *tbl, uint keyno,
                             bool other_tbls_ok);
 bool remove_eq_conds(THD *thd, Item *cond, Item **retcond,
@@ -1135,7 +1141,6 @@ ORDER *create_order_from_distinct(THD *thd, Ref_item_array ref_item_array,
                                   ORDER *order_list,
                                   mem_root_deque<Item *> *fields,
                                   bool skip_aggregates,
-                                  bool convert_bit_fields_to_long,
                                   bool *all_order_by_fields_used);
 
 /**
@@ -1222,11 +1227,12 @@ bool evaluate_during_optimization(const Item *item, const Query_block *select);
                              cond_equal)
 
   @return
-    - Item_equal for the found multiple equality predicate if a success;
+    - Item_multi_eq for the found multiple equality predicate if a success;
     - nullptr otherwise.
 */
-Item_equal *find_item_equal(COND_EQUAL *cond_equal,
-                            const Item_field *item_field, bool *inherited_fl);
+Item_multi_eq *find_item_equal(COND_EQUAL *cond_equal,
+                               const Item_field *item_field,
+                               bool *inherited_fl);
 
 /**
   Find an artificial cap for ref access. This is mostly a crutch to mitigate
@@ -1299,5 +1305,10 @@ double EstimateRowAccesses(const AccessPath *path, double num_evaluations,
 */
 bool IsHashEquijoinCondition(const Item_eq_base *item, table_map left_side,
                              table_map right_side);
+
+/**
+  Simply counts the ORDER elements.
+*/
+size_t CountOrderElements(const ORDER *order);
 
 #endif /* SQL_OPTIMIZER_INCLUDED */

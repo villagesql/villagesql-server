@@ -1,5 +1,4 @@
 /* Copyright (c) 2007, 2026, Oracle and/or its affiliates.
-   Use is subject to license terms
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,7 +30,7 @@ bool printDROP_TRIG_IMPL_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTrigImplReq *sig = (const DropTrigImplReq *)theData;
+  const auto *sig = (const DropTrigImplReq *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, " requestType: %u", sig->requestType);
@@ -55,7 +54,7 @@ bool printDROP_TRIG_IMPL_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTrigImplConf *sig = (const DropTrigImplConf *)theData;
+  const auto *sig = (const DropTrigImplConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
@@ -72,7 +71,7 @@ bool printDROP_TRIG_IMPL_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTrigImplRef *sig = (const DropTrigImplRef *)theData;
+  const auto *sig = (const DropTrigImplRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");

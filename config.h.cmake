@@ -120,7 +120,10 @@
 #cmakedefine HAVE_MEMALIGN 1
 #cmakedefine HAVE_NL_LANGINFO 1
 #cmakedefine HAVE_HTONLL 1
+#cmakedefine HAVE_MEMSET_S 1
 #cmakedefine HAVE_EPOLL 1
+#cmakedefine HAVE_X509_CHECK_HOST 1
+#cmakedefine HAVE_X509_CHECK_IP 1
 
 /* WL2373 */
 #cmakedefine HAVE_SYS_TIME_H 1
@@ -174,6 +177,7 @@
 #cmakedefine HAVE_BUILTIN_STPCPY 1
 #cmakedefine HAVE_GCC_SYNC_BUILTINS 1
 #cmakedefine HAVE_VALGRIND
+#cmakedefine HAVE_PERCONA_TELEMETRY
 #cmakedefine HAVE_SYS_GETTID 1
 #cmakedefine HAVE_PTHREAD_GETTHREADID_NP 1
 #cmakedefine HAVE_PTHREAD_THREADID_NP 1
@@ -188,6 +192,7 @@
  * Platform specific CMake files
  */
 #define MACHINE_TYPE "@MYSQL_MACHINE_TYPE@"
+#cmakedefine TARGET_OS_LINUX 1
 #cmakedefine LINUX_ALPINE 1
 #cmakedefine LINUX_SUSE
 #cmakedefine LINUX_RHEL6
@@ -216,9 +221,7 @@
 #cmakedefine ENABLED_LOCAL_INFILE 1
 #cmakedefine KERBEROS_LIB_CONFIGURED
 #cmakedefine SCRAM_LIB_CONFIGURED
-#cmakedefine WITH_HYPERGRAPH_OPTIMIZER
 #cmakedefine KERBEROS_LIB_SSPI
-#cmakedefine WITH_SHOW_PARSE_TREE
 
 /* Lock Order */
 #cmakedefine WITH_LOCK_ORDER 1
@@ -251,7 +254,6 @@
 #cmakedefine USE_NEW_EDITLINE_INTERFACE 1
 #cmakedefine EDITLINE_HAVE_COMPLETION_CHAR 1
 #cmakedefine EDITLINE_HAVE_COMPLETION_INT 1
-
 
 /*
  * Libedit
@@ -351,7 +353,21 @@
 /* For default value of --partial_revokes */
 #define DEFAULT_PARTIAL_REVOKES @DEFAULT_PARTIAL_REVOKES@
 
+/* Default storage engine for external tables */
+#cmakedefine DEFAULT_EXTERNAL_TABLE_ENGINE "@DEFAULT_EXTERNAL_TABLE_ENGINE@"
+#ifndef DEFAULT_EXTERNAL_TABLE_ENGINE
+#define DEFAULT_EXTERNAL_TABLE_ENGINE nullptr
+#endif
+
+/* Default secondary storage engine for external tables */
+#cmakedefine DEFAULT_EXTERNAL_TABLE_SECONDARY_ENGINE "@DEFAULT_EXTERNAL_TABLE_SECONDARY_ENGINE@"
+#ifndef DEFAULT_EXTERNAL_TABLE_SECONDARY_ENGINE
+#define DEFAULT_EXTERNAL_TABLE_SECONDARY_ENGINE nullptr
+#endif
+
 #define SO_EXT "@CMAKE_SHARED_MODULE_SUFFIX@"
+/* coredumper library */
+#cmakedefine01 HAVE_LIBCOREDUMPER
 
 
 /* From libmysql/CMakeLists.txt */
@@ -363,8 +379,5 @@
 
 /* sasl_client_done support */
 #cmakedefine SASL_CLIENT_DONE_SUPPORTED @SASL_CLIENT_DONE_SUPPORTED@
-
-/* mysql native password support */
-#cmakedefine WITHOUT_MYSQL_NATIVE_PASSWORD @WITHOUT_MYSQL_NATIVE_PASSWORD@
 
 #endif

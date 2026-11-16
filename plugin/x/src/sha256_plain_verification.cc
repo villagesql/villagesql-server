@@ -34,7 +34,8 @@ const size_t SHA256_PASSWORD_MAX_PASSWORD_LENGTH = MAX_PLAINTEXT_LENGTH;
 
 bool Sha256_plain_verification::verify_authentication_string(
     const std::string &user, const std::string &host,
-    const std::string &client_string, const std::string &db_string) const {
+    const std::string &client_string, const std::string &db_string,
+    const bool can_update_cache) const {
   if (client_string.length() > SHA256_PASSWORD_MAX_PASSWORD_LENGTH)
     return false;
 
@@ -47,11 +48,11 @@ bool Sha256_plain_verification::verify_authentication_string(
   bool client_string_matches = client_string.empty() && db_string.empty();
 
   if (!client_string_matches) {
-    std::string::size_type b = db_string.find('$', 1);
+    std::string::size_type const b = db_string.find('$', 1);
 
     if (b == std::string::npos) return false;
 
-    std::string salt = db_string.substr(b + 1, CRYPT_SALT_LENGTH);
+    std::string const salt = db_string.substr(b + 1, CRYPT_SALT_LENGTH);
 
     if (salt.size() != CRYPT_SALT_LENGTH) return false;
 
@@ -60,7 +61,7 @@ bool Sha256_plain_verification::verify_authentication_string(
     }
   }
 
-  if (client_string_matches && m_sha256_password_cache) {
+  if (client_string_matches && m_sha256_password_cache && can_update_cache) {
     m_sha256_password_cache->upsert(user, host, client_string);
   }
 

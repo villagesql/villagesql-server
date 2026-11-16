@@ -57,7 +57,7 @@
 #include "sql/sql_const.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
-#include "sql/sql_show.h"   // append_identifier()
+#include "sql/sql_show.h"   // append_identifier_*
 #include "sql/sql_table.h"  // write_bin_log
 #include "sql/system_variables.h"
 #include "sql/table.h"        // TABLE
@@ -91,13 +91,14 @@ static const char *fk_info_str(const THD *thd,
     `db`.`tbl`, CONSTRAINT `id`
   */
 
-  append_identifier(&str, fk_p->child_schema_name().c_str(),
-                    fk_p->child_schema_name().length());
+  append_identifier_with_backtick(&str, fk_p->child_schema_name().c_str(),
+                                  fk_p->child_schema_name().length());
   res |= str.append(".");
-  append_identifier(&str, fk_p->child_table_name().c_str(),
-                    fk_p->child_table_name().length());
+  append_identifier_with_backtick(&str, fk_p->child_table_name().c_str(),
+                                  fk_p->child_table_name().length());
   res |= str.append(", CONSTRAINT ");
-  append_identifier(&str, fk_p->fk_name().c_str(), fk_p->fk_name().length());
+  append_identifier_with_backtick(&str, fk_p->fk_name().c_str(),
+                                  fk_p->fk_name().length());
 
   return res ? nullptr : thd->strmake(str.ptr(), str.length());
 }
@@ -563,7 +564,7 @@ void Sql_cmd_truncate_table::truncate_base(THD *thd, Table_ref *table_ref) {
 
     // Attempt to reconstruct the table
     if (ha_create_table(thd, path, table_ref->db, table_ref->table_name,
-                        &create_info, true, false, table_def) != 0) {
+                        &create_info, nullptr, true, false, table_def) != 0) {
       return;
     }
 
@@ -695,8 +696,8 @@ void Sql_cmd_truncate_table::truncate_temporary(THD *thd,
     // Create a clone of the tdef which can be manipulated by ha_create_table
     Up_table tdef_clone = Up_table{tdef_holder->clone()};
     m_error = ha_create_table(thd, saved_norm_path.c_str(), table_ref->db,
-                              table_ref->table_name, &create_info, true, true,
-                              tdef_clone.get());
+                              table_ref->table_name, &create_info, nullptr,
+                              true, true, tdef_clone.get());
 
     assert(
         !thd->get_transaction()->cannot_safely_rollback(Transaction_ctx::STMT));

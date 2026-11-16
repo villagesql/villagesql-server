@@ -438,6 +438,12 @@ void ibuf_close(void) {
   ibuf = nullptr;
 }
 
+/** Function to pass ibuf status variables */
+void ibuf_export_ibuf_status(ulint *free_list, ulint *segment_size) {
+  *free_list = ibuf->free_list_len;
+  *segment_size = ibuf->seg_size;
+}
+
 /** Updates the size information of the ibuf, assuming the segment size has not
  changed. */
 static void ibuf_size_update(const page_t *root) /*!< in: ibuf tree root */
@@ -943,7 +949,7 @@ static inline bool ibuf_fixed_addr_page(const page_id_t &page_id,
 }
 
 /** Checks if a page is a level 2 or 3 page in the ibuf hierarchy of pages.
-Must not be called when recv_no_ibuf_operations==true.
+Must not be called when recv_recovery_is_on().
 @param[in]      page_id         page id
 @param[in]      page_size       page size
 @param[in]      x_latch         false if relaxed check (avoid latching the
@@ -959,7 +965,7 @@ bool ibuf_page_low(const page_id_t &page_id, const page_size_t &page_size,
   mtr_t local_mtr;
   page_t *bitmap_page;
 
-  ut_ad(!recv_no_ibuf_operations);
+  ut_ad(!recv_recovery_is_on());
   ut_ad(x_latch || mtr == nullptr);
 
   if (ibuf_fixed_addr_page(page_id, page_size)) {
@@ -2441,6 +2447,8 @@ ulint ibuf_merge_in_background(bool full) {
 
     sum_bytes += n_bytes;
     sum_pages += n_pag2;
+
+    srv_inc_activity_count(true);
   }
 
   return (sum_bytes);

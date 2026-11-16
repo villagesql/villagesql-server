@@ -33,8 +33,8 @@
  *    HA_READ_PREFIX_LAST => SEARCH_SMALLER
  */
 
-#include <stddef.h>
 #include <sys/types.h>
+#include <cstddef>
 
 #include "my_dbug.h"
 #include "my_inttypes.h"

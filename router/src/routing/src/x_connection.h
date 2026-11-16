@@ -35,6 +35,7 @@
 
 #include "basic_protocol_splicer.h"
 #include "connection.h"  // MySQLRoutingConnectionBase
+#include "mysql/harness/destination.h"
 
 class XProtocolState {
  public:
@@ -69,15 +70,12 @@ class MysqlRoutingXConnection
   //
   // use ::create() instead.
   MysqlRoutingXConnection(
-      MySQLRoutingContext &context, RouteDestination *route_destination,
+      MySQLRoutingContext &context, DestinationManager *destination_manager,
       std::unique_ptr<ConnectionBase> client_connection,
       std::unique_ptr<RoutingConnectionBase> client_routing_connection,
       std::function<void(MySQLRoutingConnectionBase *)> remove_callback)
       : MySQLRoutingConnectionBase{context, std::move(remove_callback)},
-        route_destination_{route_destination},
-        destinations_{route_destination_->destinations()},
-        connector_{client_connection->io_ctx(), route_destination,
-                   destinations_},
+        connector_{client_connection->io_ctx(), context, destination_manager},
         client_conn_{std::move(client_connection),
                      std::move(client_routing_connection),
                      context.source_ssl_mode(),
@@ -85,6 +83,10 @@ class MysqlRoutingXConnection
         server_conn_{nullptr, context.dest_ssl_mode(),
                      ServerSideConnection::protocol_state_type{}} {
     client_address(client_conn_.connection()->endpoint());
+
+    if (destination_manager->routing_guidelines_session_rand_used()) {
+      set_routing_guidelines_session_rand();
+    }
   }
 
  public:
@@ -735,12 +737,37 @@ class MysqlRoutingXConnection
   ServerSideConnection &server_conn() { return server_conn_; }
   const ServerSideConnection &server_conn() const { return server_conn_; }
 
-  std::string get_destination_id() const override {
+  std::optional<mysql_harness::Destination> get_destination_id()
+      const override {
     return connector().destination_id();
   }
 
-  std::optional<net::ip::tcp::endpoint> destination_endpoint() const override {
+  std::optional<mysql_harness::DestinationEndpoint> destination_endpoint()
+      const override {
     return std::nullopt;
+  }
+
+  std::string get_routing_source() const override {
+    return connector().routing_source();
+  }
+
+  void set_routing_source(std::string name) override {
+    return connector().set_routing_source(std::move(name));
+  }
+
+  void wait_until_completed() override {
+    is_completed_.wait([](auto ready) { return ready == true; });
+  }
+
+  void completed() override {
+    is_completed_.serialize_with_cv([](auto &ready, auto &cv) {
+      ready = true;
+      cv.notify_all();
+    });
+  }
+
+  routing_guidelines::Server_info get_server_info() const override {
+    return connector().server_info();
   }
 
  private:
@@ -756,12 +783,12 @@ class MysqlRoutingXConnection
   connector_type &connector() { return connector_; }
   const connector_type &connector() const { return connector_; }
 
-  RouteDestination *route_destination_;
-  Destinations destinations_;
   connector_type connector_;
 
   ClientSideConnection client_conn_;
   ServerSideConnection server_conn_;
+
+  WaitableMonitor<bool> is_completed_{false};
 };
 
 #endif

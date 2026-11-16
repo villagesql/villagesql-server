@@ -49,7 +49,7 @@ void BM_Unhex(size_t num_iterations, size_t string_size) {
 
   StartBenchmarkTiming();
   for (size_t n = 0; n < num_iterations; n++) {
-    (void)unhex(s.data(), s.data() + s.size(), &output[0]);
+    (void)unhex(s.data(), s.data() + s.size(), output.data());
   }
   StopBenchmarkTiming();
   SetBytesProcessed(num_iterations * s.size());

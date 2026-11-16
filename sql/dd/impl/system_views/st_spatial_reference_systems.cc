@@ -23,12 +23,10 @@
 
 #include "sql/dd/impl/system_views/st_spatial_reference_systems.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const St_spatial_reference_systems &St_spatial_reference_systems::instance() {
-  static St_spatial_reference_systems *s_instance =
-      new St_spatial_reference_systems();
+  static auto *s_instance = new St_spatial_reference_systems();
   return *s_instance;
 }
 
@@ -47,5 +45,4 @@ St_spatial_reference_systems::St_spatial_reference_systems() {
   m_target_def.add_from("mysql.st_spatial_reference_systems");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

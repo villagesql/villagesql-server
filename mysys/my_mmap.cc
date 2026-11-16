@@ -32,13 +32,12 @@
 
 #include "my_config.h"
 
-#include <stddef.h>
+#include <cstddef>
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
 #endif
 
-#include "my_config.h"
-#include "my_dbug.h"
+#include "my_dbug.h"  // IWYU pragma: keep
 #include "my_inttypes.h"
 #include "my_sys.h"
 

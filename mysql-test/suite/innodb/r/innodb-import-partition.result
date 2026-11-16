@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 SET @old_innodb_file_per_table = @@innodb_file_per_table;
 SET GLOBAL innodb_file_per_table = 1;
 SELECT @@innodb_file_per_table;
@@ -982,10 +983,10 @@ c1
 61
 64
 Warnings:
-Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
-Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
+Warning	1814	InnoDB: Tablespace is discarded for table, 't1'
+Warning	1814	InnoDB: Tablespace is discarded for table, 't1'
 SELECT * FROM t1 ORDER BY c1;
-ERROR HY000: Tablespace has been discarded for table 't1'
+ERROR HY000: Tablespace is discarded for table, 't1'
 ALTER TABLE t1 DISCARD PARTITION TABLESPACE;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1
 ALTER TABLE t1 IMPORT PARTITION TABLESPACE;
@@ -1131,13 +1132,13 @@ c1
 161
 164
 Warnings:
-Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
-Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
-Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
-Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
-Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
+Warning	1814	InnoDB: Tablespace is discarded for table, 't1'
+Warning	1814	InnoDB: Tablespace is discarded for table, 't1'
+Warning	1814	InnoDB: Tablespace is discarded for table, 't1'
+Warning	1814	InnoDB: Tablespace is discarded for table, 't1'
+Warning	1814	InnoDB: Tablespace is discarded for table, 't1'
 SELECT * FROM t1 ORDER BY c1;
-ERROR HY000: Tablespace has been discarded for table 't1'
+ERROR HY000: Tablespace is discarded for table, 't1'
 ALTER TABLE t1 DISCARD PARTITION p1sp2 TABLESPACE;
 restore: t1#p#p1#sp#p1sp2 .ibd and .cfg files
 ALTER TABLE t1 DISCARD PARTITION all TABLESPACE;
@@ -1411,3 +1412,4 @@ CHECK TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
 DROP TABLE t1;
+include/rpl/set_gtid_mode_on.inc

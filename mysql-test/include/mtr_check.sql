@@ -122,6 +122,9 @@ BEGIN
   SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ * FROM performance_schema.persisted_variables
     ORDER BY VARIABLE_NAME;
 
+  SELECT * FROM performance_schema.session_variables
+    WHERE variable_name = 'debug_sync';
+
   -- Dump all databases, there should be none
   -- except those that was created during bootstrap
   SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
@@ -140,10 +143,13 @@ BEGIN
     FROM INFORMATION_SCHEMA.TABLES
       WHERE table_schema='mysql' AND table_name != 'ndb_apply_status'
         ORDER BY tables_in_mysql;
-  -- Both hints protect MTR's own state-check query from test server settings:
-  -- use_secondary_engine=OFF keeps it on the primary engine, and
-  -- sql_big_selects=1 keeps a capped max_join_size from rejecting it.
-  SELECT /*+SET_VAR(use_secondary_engine=OFF) SET_VAR(sql_big_selects=1)*/ CONCAT(table_schema, '.', table_name) AS columns_in_mysql,
+  -- Always use the old optimizer until bug#36553075 is fixed.
+  -- sql_big_selects=1 keeps a capped max_join_size from rejecting
+  -- MTR's own state-check query.
+  SELECT /*+SET_VAR(use_secondary_engine=OFF)
+            SET_VAR(optimizer_switch='hypergraph_optimizer=off')
+            SET_VAR(sql_big_selects=1)*/
+         CONCAT(table_schema, '.', table_name) AS columns_in_mysql,
        column_name, ordinal_position, column_default, is_nullable,
        data_type, character_maximum_length, character_octet_length,
        numeric_precision, numeric_scale, character_set_name,
@@ -157,7 +163,10 @@ BEGIN
 
   -- Dump all triggers except mtr internals, only those in the sys schema should exist
   -- do not select the CREATED column however, as tests like mysqldump.test / mysql_ugprade.test update this
-  SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ TRIGGER_CATALOG, TRIGGER_SCHEMA, TRIGGER_NAME, EVENT_MANIPULATION,
+  -- Always use the old optimizer until bug#36553075 is fixed.
+  SELECT /*+SET_VAR(use_secondary_engine=OFF)
+            SET_VAR(optimizer_switch='hypergraph_optimizer=off')*/
+         TRIGGER_CATALOG, TRIGGER_SCHEMA, TRIGGER_NAME, EVENT_MANIPULATION,
          EVENT_OBJECT_CATALOG, EVENT_OBJECT_SCHEMA, EVENT_OBJECT_TABLE, ACTION_ORDER, ACTION_CONDITION,
          ACTION_STATEMENT, ACTION_ORIENTATION, ACTION_TIMING ACTION_REFERENCE_OLD_TABLE, ACTION_REFERENCE_NEW_TABLE,
          ACTION_REFERENCE_OLD_ROW, ACTION_REFERENCE_NEW_ROW, SQL_MODE, DEFINER CHARACTER_SET_CLIENT,
@@ -168,7 +177,10 @@ BEGIN
 
   -- Dump all created procedures, only those in the sys schema should exist
   -- do not select the CREATED or LAST_ALTERED columns however, as tests like mysqldump.test / mysql_ugprade.test update this
-  SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ SPECIFIC_NAME,ROUTINE_CATALOG,ROUTINE_SCHEMA,ROUTINE_NAME,ROUTINE_TYPE,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,
+  -- Always use the old optimizer until bug#36553075 is fixed.
+  SELECT /*+SET_VAR(use_secondary_engine=OFF)
+            SET_VAR(optimizer_switch='hypergraph_optimizer=off')*/
+         SPECIFIC_NAME,ROUTINE_CATALOG,ROUTINE_SCHEMA,ROUTINE_NAME,ROUTINE_TYPE,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,
          CHARACTER_OCTET_LENGTH,NUMERIC_PRECISION,NUMERIC_SCALE,DATETIME_PRECISION,CHARACTER_SET_NAME,COLLATION_NAME,
          DTD_IDENTIFIER,ROUTINE_BODY,ROUTINE_DEFINITION,EXTERNAL_NAME,EXTERNAL_LANGUAGE,PARAMETER_STYLE,
          IS_DETERMINISTIC,SQL_DATA_ACCESS,SQL_PATH,SECURITY_TYPE,SQL_MODE,ROUTINE_COMMENT,DEFINER,
@@ -176,7 +188,10 @@ BEGIN
     FROM INFORMATION_SCHEMA.ROUTINES ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME, ROUTINE_TYPE;
 
   -- Dump all views, only those in the sys schema should exist
-  SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ * FROM INFORMATION_SCHEMA.VIEWS
+  -- Always use the old optimizer until bug#36553075 is fixed.
+  SELECT /*+SET_VAR(use_secondary_engine=OFF)
+            SET_VAR(optimizer_switch='hypergraph_optimizer=off')*/
+         * FROM INFORMATION_SCHEMA.VIEWS
     ORDER BY TABLE_SCHEMA, TABLE_NAME;
 
   -- Dump all plugins, loaded with plugin-loading options or through
@@ -186,6 +201,9 @@ BEGIN
   -- Leave InnoDB metrics in the same state
   SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ name, status FROM INFORMATION_SCHEMA.INNODB_METRICS
     ORDER BY name;
+
+  -- Dump all created compression dictionaries
+  SELECT * FROM INFORMATION_SCHEMA.COMPRESSION_DICTIONARY ORDER BY DICT_NAME;
 
   SHOW GLOBAL STATUS LIKE 'replica_open_temp_tables';
 
@@ -203,8 +221,33 @@ BEGIN
   --
   SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ USER, HOST, DB, COMMAND, INFO FROM INFORMATION_SCHEMA.PROCESSLIST
     WHERE COMMAND NOT IN ('Sleep', 'Daemon', 'Killed')
-      AND USER NOT IN ('unauthenticated user','mysql.session', 'event_scheduler')
+      AND USER NOT IN ('unauthenticated user','mysql.session', 'event_scheduler', 'mysqlrouter')
         ORDER BY COMMAND;
+
+  -- Ensure that libraries are all dropped at the end of test-runs.
+  SELECT * FROM INFORMATION_SCHEMA.LIBRARIES
+  ORDER BY LIBRARY_CATALOG, LIBRARY_SCHEMA, LIBRARY_NAME;
+  -- Ensure that stored program imports are also cleared at the end of test-runs.
+  SELECT * FROM INFORMATION_SCHEMA.ROUTINE_LIBRARIES
+  ORDER BY ROUTINE_CATALOG, ROUTINE_SCHEMA, ROUTINE_NAME, ROUTINE_TYPE, LIBRARY_CATALOG, LIBRARY_SCHEMA, LIBRARY_NAME, LIBRARY_VERSION;
+
+  -- During the installation of Percona Telemetry Component we create 'percona.telemetry'.
+  -- It happens during the server startup, so servers started during the test will have the same user
+  -- with different password_last_changed timestamps.
+  -- Some tests (e.g. clone plugin related) restore the clone instance state by cloning the donor. In such a case restored
+  -- instance will have different timestamps at the beginning and the end of the test and MTR check will complain because of
+  -- different tables checksums.
+  -- Workaround this problem by excluding mysql.user from checksum calculation. 
+  -- Instead, dump the table but without password_last_changed column.
+  -- This is the same approach as for INFORMATION_SCHEMA.ROUTINES above.
+  SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ Host, User, Select_priv, Insert_priv, Update_priv, Delete_priv, Create_priv,
+    Drop_priv, Reload_priv, Shutdown_priv, Process_priv, File_priv, Grant_priv, References_priv, Index_priv, Alter_priv,
+    Show_db_priv, Super_priv, Create_tmp_table_priv, Lock_tables_priv, Execute_priv, Repl_slave_priv, Repl_client_priv,
+    Create_view_priv, Show_view_priv, Create_routine_priv, Alter_routine_priv, Create_user_priv, Event_priv, Trigger_priv,
+    Create_tablespace_priv, ssl_type, ssl_cipher, x509_issuer, x509_subject, max_questions, max_updates, max_connections,
+    max_user_connections, plugin, authentication_string, password_expired, password_lifetime, account_locked, Create_role_priv,
+    Drop_role_priv, Password_reuse_history, Password_reuse_time, Password_require_current, User_attributes 
+  FROM mysql.user ORDER BY Host, User;
 
   -- Checksum system tables to make sure they have been properly
   -- restored after test.
@@ -239,8 +282,7 @@ BEGIN
     mysql.time_zone_leap_second,
     mysql.time_zone_name,
     mysql.time_zone_transition,
-    mysql.time_zone_transition_type,
-    mysql.user;
+    mysql.time_zone_transition_type;
 
   -- Check that Replica IO Monitor thread state is the same before
   -- and after the test run, which is not running.

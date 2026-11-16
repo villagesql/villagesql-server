@@ -28,6 +28,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lob0pages_h
 
 #include "lob0first.h"
+#include "lob0impl.h"
 
 namespace lob {
 
@@ -148,11 +149,6 @@ struct data_page_t : public basic_page_t {
   @param[in,out]        len     length of data.
   @return number of bytes appended. */
   ulint append(trx_id_t trxid, byte *&data, ulint &len);
-
-  std::pair<ulint, byte *> insert_middle(trx_t *trx, ulint offset, byte *&data,
-                                         ulint &len, buf_block_t *&new_block);
-
-  buf_block_t *remove_middle(trx_t *trx, ulint offset, ulint &len);
 
   ulint max_space_available() const { return (payload()); }
 

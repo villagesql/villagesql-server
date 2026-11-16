@@ -189,9 +189,9 @@ class mpmc_bq {
     T m_data;
   };
 
-  using Aligned =
-      typename std::aligned_storage<sizeof(Cell),
-                                    std::alignment_of<Cell>::value>::type;
+  struct Aligned {
+    alignas(Cell) char buffer[sizeof(Cell)];
+  };
 
   Pad m_pad0;
   Cell *const m_ring;

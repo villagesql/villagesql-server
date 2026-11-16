@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,7 +56,7 @@ bool printCOPY_GCI_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CopyGCIReq *sig = (const CopyGCIReq *)theData;
+  const auto *sig = (const CopyGCIReq *)theData;
 
   static char buf[255];
   print(buf, sizeof(buf), (CopyGCIReq::CopyReason)sig->copyReason);

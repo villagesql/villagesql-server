@@ -418,7 +418,7 @@ class NdbIndexStat {
  private:
   int addKeyPartInfo(const NdbRecord *record, const char *keyRecordData,
                      Uint32 keyPartNum,
-                     const NdbIndexScanOperation::BoundType boundType,
+                     NdbIndexScanOperation::BoundType boundType,
                      Uint32 *keyStatData, Uint32 &keyLength);
 
   // stored stats

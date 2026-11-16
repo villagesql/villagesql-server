@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/innodb_foreign_cols.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Innodb_foreign_cols &Innodb_foreign_cols::instance() {
-  static Innodb_foreign_cols *s_instance = new Innodb_foreign_cols();
+  static auto *s_instance = new Innodb_foreign_cols();
   return *s_instance;
 }
 
@@ -58,5 +57,4 @@ Innodb_foreign_cols::Innodb_foreign_cols() {
   m_target_def.add_where("AND tbl.engine='INNODB'");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

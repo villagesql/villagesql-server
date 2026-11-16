@@ -1103,10 +1103,6 @@ struct lock_sys_t {
   Protected by lock_sys->wait_mutex. */
   srv_slot_t *last_slot;
 
-  /** true if rollback of all recovered transactions is complete.
-  Protected by exclusive global lock_sys latch. */
-  bool rollback_complete;
-
   /** Max lock wait time observed, for innodb_row_lock_time_max reporting. */
   std::chrono::steady_clock::duration n_lock_max_wait_time;
 

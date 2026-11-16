@@ -26,6 +26,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <deque>
+#include <ranges>
 #include <vector>
 
 #include "mem_root_deque.h"
@@ -204,7 +205,7 @@ TEST(MemRootDequeTest, Copy) {
   d.push_back(1);
   d.push_back(2);
   d.push_back(3);
-  mem_root_deque<int> e(d);
+  mem_root_deque<int> const e(d);
   e[0] = 5;
   EXPECT_THAT(d, ElementsAre(1, 2, 3));
   EXPECT_THAT(e, ElementsAre(5, 2, 3));
@@ -237,22 +238,22 @@ TEST(MemRootDequeTest, ReverseIteration) {
   d.push_back(2);
   d.push_back(3);
   mem_root_deque<int> e(&mem_root);
-  for (auto it = d.rbegin(); it != d.rend(); ++it) {
-    e.push_back(*it);
+  for (int &it : std::ranges::reverse_view(d)) {
+    e.push_back(it);
   }
   EXPECT_THAT(e, ElementsAre(3, 2, 1));
 
   const mem_root_deque<int> &d_ref = d;
-  for (auto it = d_ref.rbegin(); it != d_ref.rend(); ++it) {
-    e.push_back(*it);
+  for (int it : std::ranges::reverse_view(d_ref)) {
+    e.push_back(it);
   }
 }
 
 TEST(MemRootDequeTest, ConvertIterators) {
   MEM_ROOT mem_root;
   mem_root_deque<int> d(&mem_root);
-  mem_root_deque<int>::iterator i = d.begin();
-  mem_root_deque<int>::const_iterator j{i};
+  mem_root_deque<int>::iterator const i = d.begin();
+  mem_root_deque<int>::const_iterator const j{i};
 }
 
 // Test that exponential growth works correctly for both directions.
@@ -281,10 +282,11 @@ TEST(MemRootDequeTest, ExponentialGrowth) {
   }
 
   // Check exponential growth occurred (not linear).
-  // With ~256 elements per block (1024 bytes / 4 bytes per int),
-  // 1000 elements need ~4 blocks.
-  // Growth sequence: 1 -> 2 -> 4 blocks allocated, exp goes 0 -> 1 -> 2
-  EXPECT_GE(d.back_growth_exp(), 2);   // At least 2 growth events
+  // With ~64 elements per block (256 bytes / 4 bytes per int),
+  // 1000 elements need ~16 blocks.
+  // Growth sequence: 1 -> 2 -> 4 -> 8 -> 16 blocks allocated,
+  // exp goes 0 -> 1 -> 2 -> 3 -> 4
+  EXPECT_GE(d.back_growth_exp(), 4);   // At least 4 growth events
   EXPECT_EQ(0, d.front_growth_exp());  // Front not grown yet
   EXPECT_EQ(0, d.first_block_idx());   // Blocks start at index 0
 
@@ -307,7 +309,7 @@ TEST(MemRootDequeTest, ExponentialGrowth) {
   }
 
   // Check front exponential growth occurred independently
-  EXPECT_GE(d.front_growth_exp(), 2);  // At least 2 growth events
+  EXPECT_GE(d.front_growth_exp(), 4);  // At least 4 growth events
   // Back exponent should not have changed (back didn't need more blocks)
   EXPECT_EQ(back_exp_after_push_back, d.back_growth_exp());
   // first_block_idx should have moved to accommodate front spare slots
@@ -319,7 +321,7 @@ TEST(MemRootDequeTest, ExponentialGrowth) {
   // blocks_allocated should be at most ~3x the minimum needed
   // (due to spare slots for future growth)
   size_t min_blocks_needed =
-      (d.size() + 255) / 256;  // ~8 blocks for 2000 elements
+      (d.size() + 63) / 64;  // ~32 blocks for 2000 elements
   EXPECT_LE(d.block_slots(), min_blocks_needed * 3);  // Allow 3x for spare
 }
 
@@ -356,6 +358,12 @@ TEST(MemRootDequeTest, MemoryEfficiency) {
 // Verifies exponential growth pattern (not quadratic).
 TEST(MemRootDequeTest, MemoryGrowthPushBack) {
   MEM_ROOT mem_root;
+  // Set MEM_ROOT block size low enough to avoid situation when two
+  // mem_root_deque blocks fit into a single MEM_ROOT block (this is
+  // necessary because MEM_ROOT::allocated_size() returns total size
+  // of memory used by MEM_ROOT blocks, and not the net size of memory
+  // allocated on it).
+  mem_root.set_block_size(128);
   mem_root_deque<int> d(&mem_root);
 
   std::vector<size_t> memory_at_growth;
@@ -456,7 +464,7 @@ using std_mem_root_deque = std::deque<T, Mem_root_allocator<T>>;
 static void BM_EmptyConstruct(size_t num_iterations) {
   MEM_ROOT mem_root;
   for (size_t i = 0; i < num_iterations; ++i) {
-    { mem_root_deque<int> d(&mem_root); }
+    { mem_root_deque<int> const d(&mem_root); }
     mem_root.ClearForReuse();
   }
 }
@@ -465,7 +473,7 @@ BENCHMARK(BM_EmptyConstruct)
 static void BM_EmptyConstructStdDeque(size_t num_iterations) {
   MEM_ROOT mem_root;
   for (size_t i = 0; i < num_iterations; ++i) {
-    { std_mem_root_deque<int> d{Mem_root_allocator<int>(&mem_root)}; }
+    { std_mem_root_deque<int> const d{Mem_root_allocator<int>(&mem_root)}; }
     mem_root.ClearForReuse();
   }
 }
@@ -563,7 +571,7 @@ static void BM_Iteration(size_t num_iterations) {
 
   unsigned sum = 0;  // To prevent it from being optimized away.
   for (size_t i = 0; i < num_iterations; ++i) {
-    for (unsigned x : d) {
+    for (unsigned const x : d) {
       sum += x;
     }
   }
@@ -585,7 +593,7 @@ static void BM_IterationStdDeque(size_t num_iterations) {
 
   unsigned sum = 0;  // To prevent it from being optimized away.
   for (size_t i = 0; i < num_iterations; ++i) {
-    for (unsigned x : d) {
+    for (unsigned const x : d) {
       sum += x;
     }
   }

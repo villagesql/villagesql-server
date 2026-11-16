@@ -43,6 +43,7 @@
 #include "sql-common/json_dom.h"
 #include "sql-common/json_error_handler.h"
 #include "sql-common/json_path.h"
+#include "sql-common/json_schema.h"
 #include "sql-common/my_decimal.h"
 #include "sql_string.h"
 #include "template_utils.h"
@@ -63,6 +64,16 @@ class CoutSerializationErrorHandler : public JsonSerializationErrorHandler {
     std::cout << "Checking stack\n";
     return false;
   }
+};
+
+class CoutJsonSchemaDefaultErrorHandler final : public JsonSchemaErrorHandler {
+ public:
+  void InvalidJsonText(size_t, const char *, size_t) const override {
+    std::cout << "Invalid JSON text";
+  }
+  void InvalidJsonType() const override { std::cout << "Invalid JSON type"; }
+  void HandleStdExceptions() const override { std::cout << "Std exception"; }
+  void NotSupported() const override { std::cout << "Not supported "; }
 };
 
 }  // namespace
@@ -158,13 +169,8 @@ int main() {
 
   {
     /* DATETIME scalar */
-    MYSQL_TIME dt;
-    std::memset(&dt, 0, sizeof dt);
-    dt.year = 1988;
-    dt.month = 12;
-    dt.day = 15;
-    dt.time_type = MYSQL_TIMESTAMP_DATE;
-    const Json_datetime jd(dt, MYSQL_TYPE_DATETIME);
+    Datetime_val dt{1988, 12, 15};
+    const Json_datetime jd{dt, MYSQL_TYPE_DATETIME};
 
     if (json_binary::serialize(&jd, CoutSerializationErrorHandler(), &buf))
       std::cout << "ERRROR!!" << std::endl;
@@ -264,20 +270,20 @@ int main() {
     {
       Json_wrapper jw = Json_wrapper(
           create_dom_ptr<Json_string>("2015-01-15 23:24:25.000000"));
-      MYSQL_TIME ltime;
-      bool res = jw.coerce_date(
+      Datetime_val dt;
+      bool res = jw.coerce_datetime(
           [](const char *, int) { std::cout << "9.1. ERROR \n"; },
-          [](MYSQL_TIME_STATUS &) { std::cout << "9.1. checking \n"; }, &ltime);
+          [](MYSQL_TIME_STATUS &) { std::cout << "9.1. checking \n"; }, &dt);
       std::cout << "9.1. 2015-01-15 23:24:25.000000 is" << (res ? " NOT " : " ")
                 << "a valid DATE \n";
     }
     {
       Json_wrapper jw = Json_wrapper(
           create_dom_ptr<Json_string>("2015-99-15 23:24:25.000000"));
-      MYSQL_TIME ltime;
-      bool res = jw.coerce_date(
+      Datetime_val dt;
+      bool res = jw.coerce_datetime(
           [](const char *, int) { std::cout << "9.2. ERROR \n"; },
-          [](MYSQL_TIME_STATUS &) { std::cout << "9.2. checking \n"; }, &ltime);
+          [](MYSQL_TIME_STATUS &) { std::cout << "9.2. checking \n"; }, &dt);
       std::cout << "9.2. 2015-99-15 23:24:25.000000 is" << (res ? " NOT " : " ")
                 << "a valid DATE \n";
     }
@@ -309,12 +315,53 @@ int main() {
     {
       Json_wrapper jw = Json_wrapper(
           create_dom_ptr<Json_string>("2015-01-15 23:24:25.000000"));
-      MYSQL_TIME ltime;
+      Time_val ltime;
       bool res = jw.coerce_time(
           [](const char *, int) { std::cout << "9.6. ERROR \n"; },
           [](MYSQL_TIME_STATUS &) { std::cout << "9.6. checking \n"; }, &ltime);
       std::cout << "9.6. 2023-12-11 09:23:00.360900 is" << (res ? " NOT " : " ")
                 << "a valid TIME \n";
+    }
+    {
+      const std::string json_schema{
+          "{"
+          "\"type\": \"object\","
+          "         \"properties\": {"
+          " \"a_string\": {"
+          "   \"type\": \"string\","
+          "            \"pattern\": \"^[5-9]$\""
+          "  }"
+          " }"
+          "}"};
+      const std::string valid_doc{"{ \"a_string\": \"8\" }"};
+      const std::string invalid_doc{"{ \"a_string\": \"a8\" }"};
+
+      bool is_valid{false};
+      Json_schema_validation_report report;
+      const CoutJsonSchemaDefaultErrorHandler error_handler;
+
+      if (is_valid_json_schema(valid_doc.c_str(), valid_doc.length(),
+                               json_schema.c_str(), json_schema.length(),
+                               error_handler, CoutDefaultDepthHandler,
+                               &is_valid, &report)) {
+        std::cout << "ERROR";
+        assert(false);
+      }
+      if (!is_valid) {
+        std::cout << "ERROR";
+        assert(false);
+      }
+
+      if (is_valid_json_schema(invalid_doc.c_str(), invalid_doc.length(),
+                               json_schema.c_str(), json_schema.length(),
+                               error_handler, CoutDefaultDepthHandler,
+                               &is_valid, &report)) {
+        std::cout << "ERROR";
+        assert(false);
+      }
+      if (!is_valid) {
+        std::cout << "10.1 " << report.human_readable_reason() << "\n";
+      }
     }
   }
 

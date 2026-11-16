@@ -28,8 +28,8 @@
 */
 
 #include <fcntl.h>
-#include <stdio.h>
 #include <sys/types.h>
+#include <cstdio>
 
 #include "errmsg.h"
 #include "m_string.h"

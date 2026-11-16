@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
-  @file control_events.h
+  @file
 
   @brief Contains the classes representing events operating in the replication
   stream properties. Each event is represented as a byte sequence with logical
@@ -42,9 +42,10 @@
 
 #include "mysql/binlog/event/binlog_event.h"
 #include "mysql/binlog/event/compression/base.h"  // mysql::binlog::event::compression::type
-#include "mysql/binlog/event/compression/buffer/buffer_sequence_view.h"  // Buffer_sequence_view
+#include "mysql/containers/buffers/buffer_sequence_view.h"  // Buffer_sequence_view
 #include "mysql/gtid/gtid_constants.h"
-#include "mysql/gtid/tsid.h"
+#include "mysql/gtid/tsid.h"        // Tsid
+#include "mysql/gtid/tsid_plain.h"  // Tsid_plain
 #include "mysql/gtid/uuid.h"
 #include "mysql/serialization/field_definition_helpers.h"
 #include "mysql/serialization/field_functor.h"
@@ -735,7 +736,7 @@ struct gtid_info {
 class Transaction_payload_event : public Binary_log_event {
  public:
   using Buffer_sequence_view_t =
-      mysql::binlog::event::compression::buffer::Buffer_sequence_view<>;
+      mysql::containers::buffers::Buffer_sequence_view<>;
 
  private:
   Transaction_payload_event &operator=(const Transaction_payload_event &) =

@@ -88,7 +88,7 @@ void Plugin_gcs_message::encode_header(
   int8store(slider, m_msg_len);
   slider += WIRE_MSG_LEN_SIZE;
 
-  unsigned short s_cargo_type = (unsigned short)m_cargo_type;
+  auto s_cargo_type = (unsigned short)m_cargo_type;
   int2store(slider, s_cargo_type);
   slider += WIRE_CARGO_TYPE_SIZE;
 
@@ -133,7 +133,6 @@ void Plugin_gcs_message::decode(const unsigned char *buffer, size_t length) {
   }
 
   const unsigned char *end = buffer + length;
-
   decode_header(&slider);
   if (m_cargo_type <= CT_UNKNOWN || m_cargo_type >= CT_MAX) {
     set_error("gr::Plugin_gcs_message", __FILE__, __LINE__,
@@ -200,8 +199,7 @@ bool Plugin_gcs_message::get_payload_item_type_raw_data(
   uint16 payload_item_type_aux{0};
   unsigned long long payload_item_length_aux{0};
 
-  while (slider <= end &&
-         static_cast<size_t>(end - slider) >= WIRE_PAYLOAD_ITEM_HEADER_SIZE) {
+  while (slider + WIRE_PAYLOAD_ITEM_HEADER_SIZE <= end) {
     // Read payload item header to find payload item length.
     decode_payload_item_type_and_length(&slider, &payload_item_type_aux,
                                         &payload_item_length_aux);
@@ -265,7 +263,7 @@ int64_t Plugin_gcs_message::get_sent_timestamp(
 
     if (timestamp_payload_item_type == payload_item_type) {
       if (payload_item_length != 8) return 0;
-      uint64 sent_timestamp = uint8korr(slider);
+      uint64 const sent_timestamp = uint8korr(slider);
       assert(0 != sent_timestamp);
       return sent_timestamp;
     }

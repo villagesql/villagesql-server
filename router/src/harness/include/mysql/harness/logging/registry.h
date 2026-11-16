@@ -43,6 +43,7 @@ namespace mysql_harness {
 namespace logging {
 
 class Handler;
+class ExternalHandler;
 
 class HARNESS_EXPORT Registry {
  public:
@@ -101,6 +102,18 @@ class HARNESS_EXPORT Registry {
    */
   Logger get_logger_or_default(const std::string &name,
                                const std::string &default_name) const;
+
+  /**
+   * Return logger for particular module.
+   *
+   * if it doesn't exist, get the default logger.
+   *
+   * @param name Logger id (log domain it services)
+   *
+   * @throws std::logic_error if neither logger is registered for given module
+   * name
+   */
+  Logger get_logger_or_default(const std::string &name) const;
 
   /**
    * Update logger for particular module
@@ -267,6 +280,15 @@ HARNESS_EXPORT
 void set_log_level_for_all_loggers(Registry &registry, LogLevel level);
 
 /**
+ * Set log level for selected handler to specified value
+ *
+ * @param name Name of the registry in the singleton (DIM)
+ * @param level Log level for handler
+ */
+HARNESS_EXPORT
+void set_log_level_for_handler(std::string name, LogLevel level);
+
+/**
  * Set log levels for all handlers to specified value
  *
  * @param registry Registry object, typically managed by DIM
@@ -336,7 +358,7 @@ void clear_registry(Registry &registry);
  * @param main_app_log_domain Log domain (logger id) to be used as the main
  *                            program logger. This logger must exist, because
  *                            log_*() functions might fail
- * @throws std::logic_error
+ * @throws std::logic_error On error.
  */
 HARNESS_EXPORT
 void create_module_loggers(Registry &registry, const LogLevel level,
@@ -352,7 +374,7 @@ void create_module_loggers(Registry &registry, const LogLevel level,
  * @param log_level The log level of the logger
  * @param logger_name The name under which the logger is registered
  *
- * @throws std::logic_error
+ * @throws std::logic_error if there is an error
  */
 HARNESS_EXPORT
 void create_logger(Registry &registry, const LogLevel level,
@@ -441,6 +463,14 @@ void register_handler(std::string name, std::shared_ptr<Handler> handler);
  */
 HARNESS_EXPORT
 void unregister_handler(std::string name);
+
+/**
+ * Returns true if a given handler is in the registry, false otherwise.
+ *
+ * @param name name of the handler to check.
+ */
+HARNESS_EXPORT
+bool handler_registered(std::string name);
 
 /**
  * Returns pointer to the default logger sink stream.

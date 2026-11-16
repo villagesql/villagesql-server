@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 drop table if exists t1;
 create table t1 (
 a1 char(64), a2 char(64), b char(16), c char(16) not null, d char(16), dummy char(248) default ' '
@@ -1519,7 +1520,7 @@ EXPLAIN
 -> Group aggregate: min(t1.c), max(t1.c)  (rows=16)
     -> Nested loop inner join  (rows=20992)
         -> Covering index scan on t1 using idx_t1_1  (rows=128)
-        -> Single-row index lookup on <subquery2> using <auto_distinct_key> (c=t1.c)  (rows=1)
+        -> Single-row index lookup on <subquery2> using <auto_distinct_key> (c = t1.c)  (rows=1)
             -> Materialize with deduplication  (rows=164)
                 -> Filter: (t2.c is not null)  (rows=164)
                     -> Covering index scan on t2 using idx_t2_1  (rows=164)
@@ -1532,7 +1533,7 @@ group by a1,a2,b;
 EXPLAIN
 -> Table scan on <temporary>
     -> Aggregate using temporary table
-        -> Inner hash join (no condition)  (rows=128)
+        -> Inner hash join (FirstMatch)  (rows=128)
             -> Covering index scan on t1 using idx_t1_1  (rows=128)
             -> Hash
                 -> Limit: 1 row(s)  (rows=1)
@@ -1772,7 +1773,7 @@ a1	a2	b	c
 a	b	a	i121
 select a1,a2,b from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
 a1	a2	b
-explain format=tree select distinct a1,a2,b from t1;
+explain format=tree select sql_big_result distinct a1,a2,b from t1;
 EXPLAIN
 -> Covering index skip scan for deduplication on t1 using idx_t1_1  (rows=17)
 
@@ -1798,11 +1799,11 @@ EXPLAIN
     -> Filter: ((t1.b = 'a') and (t1.a2 >= 'b'))  (rows=4.27)
         -> Covering index scan on t1 using idx_t1_2  (rows=128)
 
-explain format=tree select distinct a1,a2,b from t2;
+explain format=tree select sql_big_result distinct a1,a2,b from t2;
 EXPLAIN
 -> Covering index skip scan for deduplication on t2 using idx_t2_1  (rows=33)
 
-explain format=tree select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a');
+explain format=tree select sql_big_result distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a');
 EXPLAIN
 -> Filter: ((t2.b = 'a') and (t2.a2 >= 'b'))  (rows=33)
     -> Covering index skip scan for deduplication on t2 using idx_t2_1  (rows=33)
@@ -1824,7 +1825,7 @@ EXPLAIN
     -> Filter: ((t2.b = 'a') and (t2.a2 >= 'b'))  (rows=5.47)
         -> Covering index scan on t2 using idx_t2_2  (rows=164)
 
-select distinct a1,a2,b from t1;
+select sql_big_result distinct a1,a2,b from t1;
 a1	a2	b
 a	a	a
 a	a	b
@@ -1842,7 +1843,7 @@ d	a	a
 d	a	b
 d	b	a
 d	b	b
-select distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a');
+select sql_big_result distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a');
 a1	a2	b
 a	b	a
 b	b	a
@@ -1856,7 +1857,7 @@ a1	a2	b
 select distinct b from t1 where (a2 >= 'b') and (b = 'a');
 b
 a
-select distinct a1,a2,b from t2;
+select sql_big_result distinct a1,a2,b from t2;
 a1	a2	b
 a	a	NULL
 a	a	a
@@ -1938,7 +1939,7 @@ d	b
 d	c
 d	d
 d	e
-explain format=tree select distinct a1,a2,b from t1;
+explain format=tree select sql_big_result distinct a1,a2,b from t1;
 EXPLAIN
 -> Covering index skip scan for deduplication on t1 using idx_t1_1  (rows=17)
 
@@ -1965,7 +1966,7 @@ EXPLAIN
             -> Filter: ((t1.b = 'a') and (t1.a2 >= 'b'))  (rows=17)
                 -> Covering index skip scan for deduplication on t1 using idx_t1_1  (rows=17)
 
-explain format=tree select distinct a1,a2,b from t2;
+explain format=tree select sql_big_result distinct a1,a2,b from t2;
 EXPLAIN
 -> Covering index skip scan for deduplication on t2 using idx_t2_1  (rows=33)
 
@@ -1992,7 +1993,7 @@ EXPLAIN
             -> Filter: ((t2.b = 'a') and (t2.a2 >= 'b'))  (rows=33)
                 -> Covering index skip scan for deduplication on t2 using idx_t2_1  (rows=33)
 
-select distinct a1,a2,b from t1;
+select distinct sql_big_result a1,a2,b from t1;
 a1	a2	b
 a	a	a
 a	a	b
@@ -2024,7 +2025,7 @@ a1	a2	b
 select distinct b from t1 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 b
 a
-select distinct a1,a2,b from t2;
+select sql_big_result distinct a1,a2,b from t2;
 a1	a2	b
 a	a	NULL
 a	a	a
@@ -2282,13 +2283,14 @@ EXPLAIN
     -> Filter: (t1.a1 > 'a')  (rows=102)
         -> Covering index range scan on t1 using idx_t1_2 over ('a' < a1)  (rows=102)
 
-explain format=tree select distinct(a1) from t1 where ord(a2) = 98;
+explain format=tree select sql_big_result distinct(a1) from t1 where ord(a2) = 98;
 EXPLAIN
 -> Group (no aggregates)  (rows=4)
-    -> Filter: (ord(t1.a2) = 98)  (rows=128)
-        -> Covering index scan on t1 using idx_t1_2  (rows=128)
+    -> Sort: t1.a1  (rows=128)
+        -> Filter: (ord(t1.a2) = 98)  (rows=128)
+            -> Covering index scan on t1 using idx_t1_2  (rows=128)
 
-select distinct(a1) from t1 where ord(a2) = 98;
+select sql_big_result distinct(a1) from t1 where ord(a2) = 98;
 a1
 a
 b
@@ -2369,7 +2371,7 @@ EXPLAIN
 EXPLAIN FORMAT=TREE SELECT a FROM t1 WHERE a='BB' GROUP BY a;
 EXPLAIN
 -> Group (no aggregates)  (rows=1)
-    -> Covering index lookup on t1 using PRIMARY (a='BB')  (rows=1)
+    -> Covering index lookup on t1 using PRIMARY (a = 'BB')  (rows=1)
 
 SELECT DISTINCT a FROM t1 WHERE a='BB';
 a
@@ -2608,7 +2610,7 @@ EXPLAIN
     -> Select #2 (subquery in condition; run only once)
         -> Filter: ((t1_outer.a = `<materialized_subquery>`.`max(b)`))  (rows=1)
             -> Limit: 1 row(s)  (rows=1)
-                -> Index lookup on <materialized_subquery> using <auto_distinct_key> (max(b)=t1_outer.a)
+                -> Index lookup on <materialized_subquery> using <auto_distinct_key> (max(b) = t1_outer.a)
                     -> Materialize with deduplication  (rows=11)
                         -> Filter: (t1.a < 2)  (rows=11)
                             -> Covering index skip scan for grouping on t1 using a  (rows=11)
@@ -2629,7 +2631,7 @@ EXPLAIN
 -> Inner hash join (t1_outer2.b = t1_outer1.b)  (rows=10)
     -> Covering index scan on t1_outer2 using a  (rows=20)
     -> Hash
-        -> Covering index lookup on t1_outer1 using a (a=(select #2))  (rows=5)
+        -> Covering index lookup on t1_outer1 using a (a = (select #2))  (rows=5)
 
 EXPLAIN FORMAT=TREE SELECT (SELECT (SELECT max(b) FROM t1 GROUP BY a HAVING a < 2) x
 FROM t1 AS t1_outer) x2 FROM t1 AS t1_outer2;
@@ -2854,10 +2856,13 @@ INSERT INTO t1 VALUES (1, 1, 1, 1), (1, 1, 1, 2), (1, 1, 1, 3), (1, 1, 1, 4);
 INSERT INTO t1 SELECT * FROM t1;
 INSERT INTO t1 SELECT * FROM t1;
 INSERT INTO t1 SELECT a,b,c+1,d FROM t1;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 EXPLAIN FORMAT=TREE SELECT DISTINCT c FROM t1 WHERE d=4;
 EXPLAIN
--> Filter: (t1.d = 4)  (rows=10)
-    -> Covering index skip scan for deduplication on t1 using foo  (rows=10)
+-> Filter: (t1.d = 4)  (rows=3)
+    -> Covering index skip scan for deduplication on t1 using foo  (rows=3)
 
 SELECT DISTINCT c FROM t1 WHERE d=4;
 c
@@ -2975,10 +2980,14 @@ INSERT INTO t2 VALUES (1,1,1,1,1,1), (1,2,1,1,1,1), (1,3,1,1,1,1),
 INSERT INTO t2 SELECT a, b + 4, c,d,e,f FROM t2;
 INSERT INTO t2 SELECT a + 1, b, c,d,e,f FROM t2;
 INSERT INTO t2 SELECT a + 2, b + 8, c,d,e,f FROM t2;
+ANALYZE TABLE t1,t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a) FROM t1;
 EXPLAIN
 -> Aggregate: count(distinct t1.a)  (rows=1)
-    -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+    -> Covering index skip scan for deduplication on t1 using a  (rows=5)
 
 SELECT COUNT(DISTINCT a) FROM t1;
 COUNT(DISTINCT a)
@@ -2986,7 +2995,7 @@ COUNT(DISTINCT a)
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a,b) FROM t1;
 EXPLAIN
 -> Aggregate: count(distinct t1.a,t1.b)  (rows=1)
-    -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+    -> Covering index skip scan for deduplication on t1 using a  (rows=33)
 
 SELECT COUNT(DISTINCT a,b) FROM t1;
 COUNT(DISTINCT a,b)
@@ -2994,7 +3003,7 @@ COUNT(DISTINCT a,b)
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT b,a) FROM t1;
 EXPLAIN
 -> Aggregate: count(distinct t1.b,t1.a)  (rows=1)
-    -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+    -> Covering index skip scan for deduplication on t1 using a  (rows=33)
 
 SELECT COUNT(DISTINCT b,a) FROM t1;
 COUNT(DISTINCT b,a)
@@ -3009,8 +3018,8 @@ COUNT(DISTINCT b)
 16
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a) FROM t1 GROUP BY a;
 EXPLAIN
--> Group aggregate: count(distinct t1.a)  (rows=5.66)
-    -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+-> Group aggregate: count(distinct t1.a)  (rows=2.24)
+    -> Covering index skip scan for deduplication on t1 using a  (rows=5)
 
 SELECT COUNT(DISTINCT a) FROM t1 GROUP BY a;
 COUNT(DISTINCT a)
@@ -3020,8 +3029,8 @@ COUNT(DISTINCT a)
 1
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT b) FROM t1 GROUP BY a;
 EXPLAIN
--> Group aggregate: count(distinct t1.b)  (rows=5.66)
-    -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+-> Group aggregate: count(distinct t1.b)  (rows=4)
+    -> Covering index skip scan for deduplication on t1 using a  (rows=33)
 
 SELECT COUNT(DISTINCT b) FROM t1 GROUP BY a;
 COUNT(DISTINCT b)
@@ -3056,7 +3065,7 @@ COUNT(DISTINCT a)
 EXPLAIN FORMAT=TREE SELECT DISTINCT COUNT(DISTINCT a) FROM t1;
 EXPLAIN
 -> Aggregate: count(distinct t1.a)  (rows=1)
-    -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+    -> Covering index skip scan for deduplication on t1 using a  (rows=5)
 
 SELECT DISTINCT COUNT(DISTINCT a) FROM t1;
 COUNT(DISTINCT a)
@@ -3091,16 +3100,16 @@ EXPLAIN FORMAT=TREE SELECT 1 FROM t1 HAVING COUNT(DISTINCT a) < 10;
 EXPLAIN
 -> Filter: (count(distinct t1.a) < 10)  (rows=1)
     -> Aggregate: count(distinct t1.a)  (rows=1)
-        -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+        -> Covering index skip scan for deduplication on t1 using a  (rows=5)
 
 SELECT 1 FROM t1 HAVING COUNT(DISTINCT a) < 10;
 1
 1
 EXPLAIN FORMAT=TREE SELECT 1 FROM t1 GROUP BY a HAVING COUNT(DISTINCT b) > 1;
 EXPLAIN
--> Filter: (count(distinct t1.b) > 1)  (rows=5.66)
-    -> Group aggregate: count(distinct t1.b)  (rows=5.66)
-        -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+-> Filter: (count(distinct t1.b) > 1)  (rows=4)
+    -> Group aggregate: count(distinct t1.b)  (rows=4)
+        -> Covering index skip scan for deduplication on t1 using a  (rows=33)
 
 SELECT 1 FROM t1 GROUP BY a HAVING COUNT(DISTINCT b) > 1;
 1
@@ -3127,7 +3136,7 @@ COUNT(DISTINCT t1_1.a)
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a), 12 FROM t1;
 EXPLAIN
 -> Aggregate: count(distinct t1.a)  (rows=1)
-    -> Covering index skip scan for deduplication on t1 using a  (rows=10)
+    -> Covering index skip scan for deduplication on t1 using a  (rows=5)
 
 SELECT COUNT(DISTINCT a), 12 FROM t1;
 COUNT(DISTINCT a)	12
@@ -3135,7 +3144,7 @@ COUNT(DISTINCT a)	12
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a, b, c) FROM t2;
 EXPLAIN
 -> Aggregate: count(distinct t2.a,t2.b,t2.c)  (rows=1)
-    -> Covering index skip scan for deduplication on t2 using a  (rows=10)
+    -> Covering index skip scan for deduplication on t2 using a  (rows=33)
 
 SELECT COUNT(DISTINCT a, b, c) FROM t2;
 COUNT(DISTINCT a, b, c)
@@ -3143,7 +3152,7 @@ COUNT(DISTINCT a, b, c)
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a), SUM(DISTINCT a), AVG(DISTINCT a) FROM t2;
 EXPLAIN
 -> Aggregate: count(distinct t2.a), sum(distinct t2.a), avg(distinct t2.a)  (rows=1)
-    -> Covering index skip scan for deduplication on t2 using a  (rows=10)
+    -> Covering index skip scan for deduplication on t2 using a  (rows=5)
 
 SELECT COUNT(DISTINCT a), SUM(DISTINCT a), AVG(DISTINCT a) FROM t2;
 COUNT(DISTINCT a)	SUM(DISTINCT a)	AVG(DISTINCT a)
@@ -3159,7 +3168,7 @@ COUNT(DISTINCT a)	SUM(DISTINCT a)	AVG(DISTINCT f)
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a, b), COUNT(DISTINCT b, a) FROM t2;
 EXPLAIN
 -> Aggregate: count(distinct t2.a,t2.b), count(distinct t2.b,t2.a)  (rows=1)
-    -> Covering index skip scan for deduplication on t2 using a  (rows=10)
+    -> Covering index skip scan for deduplication on t2 using a  (rows=33)
 
 SELECT COUNT(DISTINCT a, b), COUNT(DISTINCT b, a) FROM t2;
 COUNT(DISTINCT a, b)	COUNT(DISTINCT b, a)
@@ -3182,8 +3191,8 @@ COUNT(DISTINCT a, b)	COUNT(DISTINCT b, d)
 32	16
 EXPLAIN FORMAT=TREE SELECT a, c, COUNT(DISTINCT c, a, b) FROM t2 GROUP BY a, b, c;
 EXPLAIN
--> Group aggregate: count(distinct t2.c,t2.a,t2.b)  (rows=8.65)
-    -> Covering index skip scan for deduplication on t2 using a  (rows=10)
+-> Group aggregate: count(distinct t2.c,t2.a,t2.b)  (rows=32)
+    -> Covering index skip scan for deduplication on t2 using a  (rows=33)
 
 SELECT a, c, COUNT(DISTINCT c, a, b) FROM t2 GROUP BY a, b, c;
 a	c	COUNT(DISTINCT c, a, b)
@@ -3233,15 +3242,15 @@ EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 WHERE a = 
 GROUP BY b;
 EXPLAIN
 -> Group aggregate: count(distinct t2.b), sum(distinct t2.b)  (rows=1)
-    -> Covering index lookup on t2 using a (a=5)  (rows=1)
+    -> Covering index lookup on t2 using a (a = 5)  (rows=1)
 
 SELECT COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 WHERE a = 5
 GROUP BY b;
 COUNT(DISTINCT b)	SUM(DISTINCT b)
 EXPLAIN FORMAT=TREE SELECT a, COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 GROUP BY a;
 EXPLAIN
--> Group aggregate: count(distinct t2.b), sum(distinct t2.b)  (rows=5.66)
-    -> Covering index skip scan for deduplication on t2 using a  (rows=10)
+-> Group aggregate: count(distinct t2.b), sum(distinct t2.b)  (rows=4)
+    -> Covering index skip scan for deduplication on t2 using a  (rows=33)
 
 SELECT a, COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 GROUP BY a;
 a	COUNT(DISTINCT b)	SUM(DISTINCT b)
@@ -3251,8 +3260,8 @@ a	COUNT(DISTINCT b)	SUM(DISTINCT b)
 4	8	100
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 GROUP BY a;
 EXPLAIN
--> Group aggregate: count(distinct t2.b), sum(distinct t2.b)  (rows=5.66)
-    -> Covering index skip scan for deduplication on t2 using a  (rows=10)
+-> Group aggregate: count(distinct t2.b), sum(distinct t2.b)  (rows=4)
+    -> Covering index skip scan for deduplication on t2 using a  (rows=33)
 
 SELECT COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 GROUP BY a;
 COUNT(DISTINCT b)	SUM(DISTINCT b)
@@ -3272,9 +3281,9 @@ COUNT(DISTINCT a, b)
 EXPLAIN FORMAT=TREE SELECT a, COUNT(DISTINCT a), SUM(DISTINCT a) FROM t2
 WHERE b = 13 AND c = 42 GROUP BY a;
 EXPLAIN
--> Group aggregate: count(distinct t2.a), sum(distinct t2.a)  (rows=5.66)
-    -> Filter: ((t2.c = 42) and (t2.b = 13))  (rows=10)
-        -> Covering index skip scan for deduplication on t2 using a  (rows=10)
+-> Group aggregate: count(distinct t2.a), sum(distinct t2.a)  (rows=2.24)
+    -> Filter: ((t2.c = 42) and (t2.b = 13))  (rows=5)
+        -> Covering index skip scan for deduplication on t2 using a  (rows=5)
 
 SELECT a, COUNT(DISTINCT a), SUM(DISTINCT a) FROM t2
 WHERE b = 13 AND c = 42 GROUP BY a;
@@ -3292,7 +3301,7 @@ COUNT(DISTINCT a, b)	SUM(DISTINCT a)
 0	NULL
 EXPLAIN FORMAT=TREE SELECT SUM(DISTINCT a), MAX(b) FROM t2 GROUP BY a;
 EXPLAIN
--> Group aggregate: sum(distinct t2.a), max(t2.b)  (rows=5.66)
+-> Group aggregate: sum(distinct t2.a), max(t2.b)  (rows=4)
     -> Covering index scan on t2 using a  (rows=32)
 
 SELECT SUM(DISTINCT a), MAX(b) FROM t2 GROUP BY a;
@@ -3303,8 +3312,8 @@ SUM(DISTINCT a)	MAX(b)
 4	16
 EXPLAIN FORMAT=TREE SELECT 42 * (a + c + COUNT(DISTINCT c, a, b)) FROM t2 GROUP BY a, b, c;
 EXPLAIN
--> Group aggregate: count(distinct t2.c,t2.a,t2.b)  (rows=8.65)
-    -> Covering index skip scan for deduplication on t2 using a  (rows=10)
+-> Group aggregate: count(distinct t2.c,t2.a,t2.b)  (rows=32)
+    -> Covering index skip scan for deduplication on t2 using a  (rows=33)
 
 SELECT 42 * (a + c + COUNT(DISTINCT c, a, b)) FROM t2 GROUP BY a, b, c;
 42 * (a + c + COUNT(DISTINCT c, a, b))
@@ -3342,7 +3351,7 @@ SELECT 42 * (a + c + COUNT(DISTINCT c, a, b)) FROM t2 GROUP BY a, b, c;
 252
 EXPLAIN FORMAT=TREE SELECT (SUM(DISTINCT a) + MAX(b)) FROM t2 GROUP BY a;
 EXPLAIN
--> Group aggregate: max(t2.b), sum(distinct t2.a)  (rows=5.66)
+-> Group aggregate: max(t2.b), sum(distinct t2.a)  (rows=4)
     -> Covering index scan on t2 using a  (rows=32)
 
 SELECT (SUM(DISTINCT a) + MAX(b)) FROM t2 GROUP BY a;
@@ -3626,7 +3635,7 @@ EXPLAIN
     -> Filter: (t2.k is not null)  (rows=3)
         -> Table scan on t2  (rows=3)
     -> Filter: ((out1.pk <> 3) and (out1.nk = (select #2)))  (rows=1)
-        -> Single-row index lookup on out1 using k (k=t2.k)  (rows=1)
+        -> Single-row index lookup on out1 using k (k = t2.k)  (rows=1)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate: max(out1.k)  (rows=1)
                 -> Covering index scan on t1 using PRIMARY  (rows=3)
@@ -3648,7 +3657,7 @@ EXPLAIN
     -> Filter: (t2.k is not null)  (rows=3)
         -> Table scan on t2  (rows=3)
     -> Filter: (out1.pk = (select #2))  (rows=1)
-        -> Single-row index lookup on out1 using k (k=t2.k)  (rows=1)
+        -> Single-row index lookup on out1 using k (k = t2.k)  (rows=1)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate: max(out1.k)  (rows=1)
                 -> Covering index scan on t1 using PRIMARY  (rows=3)
@@ -3703,7 +3712,7 @@ EXPLAIN
     -> Filter: (t2.k is not null)  (rows=3)
         -> Table scan on t2  (rows=3)
     -> Filter: (out1.pk = (select #2))  (rows=1)
-        -> Single-row index lookup on out1 using k (k=t2.k)  (rows=1)
+        -> Single-row index lookup on out1 using k (k = t2.k)  (rows=1)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate: min((out1.k + t1.k))  (rows=1)
                 -> Covering index scan on t1 using k  (rows=3)
@@ -3723,7 +3732,7 @@ EXPLAIN
     -> Filter: (t2.k is not null)  (rows=3)
         -> Table scan on t2  (rows=3)
     -> Filter: (out1.pk = (select #2))  (rows=1)
-        -> Single-row index lookup on out1 using k (k=t2.k)  (rows=1)
+        -> Single-row index lookup on out1 using k (k = t2.k)  (rows=1)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate:   (rows=1)
                 -> Covering index scan on t1 using k  (rows=3)
@@ -3743,7 +3752,7 @@ EXPLAIN
     -> Filter: (t2.k is not null)  (rows=3)
         -> Table scan on t2  (rows=3)
     -> Filter: (out1.pk = (select #2))  (rows=1)
-        -> Single-row index lookup on out1 using k (k=t2.k)  (rows=1)
+        -> Single-row index lookup on out1 using k (k = t2.k)  (rows=1)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate: min(out1.k)  (rows=1)
                 -> Covering index scan on t1 using k  (rows=3)
@@ -3763,7 +3772,7 @@ EXPLAIN
     -> Filter: (t2.k is not null)  (rows=3)
         -> Table scan on t2  (rows=3)
     -> Filter: (out1.pk = (select #2))  (rows=1)
-        -> Single-row index lookup on out1 using k (k=t2.k)  (rows=1)
+        -> Single-row index lookup on out1 using k (k = t2.k)  (rows=1)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate: count(t1.k), sum(out1.k)  (rows=1)
                 -> Covering index scan on t1 using k  (rows=3)
@@ -3783,7 +3792,7 @@ EXPLAIN
     -> Filter: (t2.k is not null)  (rows=3)
         -> Table scan on t2  (rows=3)
     -> Filter: (out1.pk = (select #2))  (rows=1)
-        -> Single-row index lookup on out1 using k (k=t2.k)  (rows=1)
+        -> Single-row index lookup on out1 using k (k = t2.k)  (rows=1)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate: count(0), sum(out1.k)  (rows=1)
                 -> Covering index scan on t1 using PRIMARY  (rows=3)
@@ -3803,7 +3812,7 @@ EXPLAIN
     -> Filter: (t2.k is not null)  (rows=3)
         -> Table scan on t2  (rows=3)
     -> Filter: (out1.pk = (select #2))  (rows=1)
-        -> Single-row index lookup on out1 using k (k=t2.k)  (rows=1)
+        -> Single-row index lookup on out1 using k (k = t2.k)  (rows=1)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate: avg(out1.k)  (rows=1)
                 -> Covering index scan on t1 using PRIMARY  (rows=3)
@@ -4315,10 +4324,8 @@ INSERT INTO t1 VALUES (NULL, 1);
 INSERT INTO t1 VALUES (NULL, 2);
 EXPLAIN FORMAT=TREE SELECT MIN(f2) FROM t1 WHERE f1 IS NULL GROUP BY f1;
 EXPLAIN
--> Table scan on <temporary>  (rows=1)
-    -> Temporary table with deduplication  (rows=1)
-        -> Filter: (t1.f1 is null)  (rows=1)
-            -> Covering index skip scan for grouping on t1 using f1 over (f1 = NULL)  (rows=1)
+-> Filter: (t1.f1 is null)  (rows=1)
+    -> Covering index skip scan for grouping on t1 using f1 over (f1 = NULL)  (rows=1)
 
 SELECT MIN(f2) FROM t1 WHERE f1 IS NULL GROUP BY f1;
 MIN(f2)
@@ -4408,7 +4415,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val FROM t1 WHERE EXISTS
 EXPLAIN
 -> Nested loop inner join  (rows=31)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row covering index lookup on t2 using ix_val (val=t1.val)  (rows=1)
+    -> Single-row covering index lookup on t2 using ix_val (val = t1.val)  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.val' of SELECT #2 was resolved in SELECT #1
@@ -4449,7 +4456,7 @@ EXPLAIN FORMAT=TREE SELECT val FROM t1 WHERE EXISTS
 EXPLAIN
 -> Nested loop inner join  (rows=31)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row covering index lookup on t2 using ix_val (val=t1.val)  (rows=1)
+    -> Single-row covering index lookup on t2 using ix_val (val = t1.val)  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.val' of SELECT #2 was resolved in SELECT #1
@@ -4489,7 +4496,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val FROM t1 WHERE val IN (SELECT val FROM t2
 EXPLAIN
 -> Nested loop inner join  (rows=31)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row covering index lookup on t2 using ix_val (val=t1.val)  (rows=1)
+    -> Single-row covering index lookup on t2 using ix_val (val = t1.val)  (rows=1)
 
 SELECT DISTINCT val FROM t1 WHERE val IN (SELECT val FROM t2);
 val
@@ -4527,7 +4534,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val FROM t1 WHERE val IN
 EXPLAIN
 -> Nested loop inner join  (rows=31)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row covering index lookup on t2 using ix_val (val=t1.val)  (rows=1)
+    -> Single-row covering index lookup on t2 using ix_val (val = t1.val)  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.val' of SELECT #2 was resolved in SELECT #1
@@ -4567,7 +4574,7 @@ EXPLAIN FORMAT=TREE SELECT val FROM t1 WHERE val IN (SELECT val FROM t2 ) GROUP 
 EXPLAIN
 -> Nested loop inner join  (rows=31)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row covering index lookup on t2 using ix_val (val=t1.val)  (rows=1)
+    -> Single-row covering index lookup on t2 using ix_val (val = t1.val)  (rows=1)
 
 SELECT val FROM t1 WHERE val IN (SELECT val FROM t2 ) GROUP BY val;
 val
@@ -4605,7 +4612,7 @@ EXPLAIN FORMAT=TREE SELECT val FROM t1 WHERE val IN
 EXPLAIN
 -> Nested loop inner join  (rows=31)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row covering index lookup on t2 using ix_val (val=t1.val)  (rows=1)
+    -> Single-row covering index lookup on t2 using ix_val (val = t1.val)  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.val' of SELECT #2 was resolved in SELECT #1
@@ -4722,7 +4729,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val FROM t1 WHERE val NOT IN (SELECT val FRO
 EXPLAIN
 -> Nested loop antijoin  (rows=930)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val=t1.val)  (rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val = t1.val)  (rows=1)
         -> Materialize with deduplication  (rows=30)
             -> Filter: (t2.val is not null)  (rows=30)
                 -> Covering index scan on t2 using ix_val  (rows=30)
@@ -4735,7 +4742,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val FROM t1 WHERE val NOT IN
 EXPLAIN
 -> Nested loop antijoin  (rows=930)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val=t1.val, val=t1.val)  (rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val = t1.val, val = t1.val)  (rows=1)
         -> Materialize with deduplication  (rows=30)
             -> Filter: ((t2.val is not null) and (t2.val is not null))  (rows=30)
                 -> Covering index scan on t2 using ix_val  (rows=30)
@@ -4751,7 +4758,7 @@ EXPLAIN FORMAT=TREE SELECT val FROM t1 WHERE val NOT IN
 EXPLAIN
 -> Nested loop antijoin  (rows=930)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val=t1.val)  (rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val = t1.val)  (rows=1)
         -> Materialize with deduplication  (rows=30)
             -> Filter: (t2.val is not null)  (rows=30)
                 -> Covering index scan on t2 using ix_val  (rows=30)
@@ -4765,7 +4772,7 @@ EXPLAIN FORMAT=TREE SELECT val FROM t1 WHERE val NOT IN
 EXPLAIN
 -> Nested loop antijoin  (rows=930)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val=t1.val, val=t1.val)  (rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val = t1.val, val = t1.val)  (rows=1)
         -> Materialize with deduplication  (rows=30)
             -> Filter: ((t2.val is not null) and (t2.val is not null))  (rows=30)
                 -> Covering index scan on t2 using ix_val  (rows=30)
@@ -4781,7 +4788,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val FROM t1 WHERE NOT EXISTS
 EXPLAIN
 -> Nested loop antijoin  (rows=930)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val=t1.val)  (rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val = t1.val)  (rows=1)
         -> Materialize with deduplication  (rows=30)
             -> Filter: (t2.val is not null)  (rows=30)
                 -> Covering index scan on t2 using ix_val  (rows=30)
@@ -4797,7 +4804,7 @@ EXPLAIN FORMAT=TREE SELECT val FROM t1 WHERE NOT EXISTS
 EXPLAIN
 -> Nested loop antijoin  (rows=930)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val=t1.val)  (rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val = t1.val)  (rows=1)
         -> Materialize with deduplication  (rows=30)
             -> Filter: (t2.val is not null)  (rows=30)
                 -> Covering index scan on t2 using ix_val  (rows=30)
@@ -4813,7 +4820,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val FROM t1 WHERE EXISTS (SELECT * FROM t2);
 EXPLAIN
 -> Table scan on <temporary>  (rows=31)
     -> Temporary table with deduplication  (rows=31)
-        -> Inner hash join (no condition)  (rows=31)
+        -> Inner hash join (FirstMatch)  (rows=31)
             -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
             -> Hash
                 -> Limit: 1 row(s)  (rows=1)
@@ -4855,7 +4862,7 @@ EXPLAIN FORMAT=TREE SELECT val FROM t1 WHERE EXISTS (SELECT * FROM t2) GROUP BY 
 EXPLAIN
 -> Table scan on <temporary>  (rows=31)
     -> Temporary table with deduplication  (rows=31)
-        -> Inner hash join (no condition)  (rows=31)
+        -> Inner hash join (FirstMatch)  (rows=31)
             -> Covering index skip scan for deduplication on t1 using ix_val  (rows=31)
             -> Hash
                 -> Limit: 1 row(s)  (rows=1)
@@ -4942,7 +4949,7 @@ EXPLAIN
 -> Group aggregate: min(t1.b_id), max(t1.b_id)  (rows=30.3)
     -> Nested loop antijoin  (rows=30000)
         -> Covering index scan on t1 using ix_val  (rows=1000)
-        -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val=t1.val)  (rows=1)
+        -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val = t1.val)  (rows=1)
             -> Materialize with deduplication  (rows=30)
                 -> Filter: (t2.val is not null)  (rows=30)
                     -> Covering index scan on t2 using ix_val  (rows=30)
@@ -4956,7 +4963,7 @@ EXPLAIN FORMAT=TREE SELECT val, MIN(b_id), MAX(b_id) FROM t1 WHERE EXISTS
 EXPLAIN
 -> Table scan on <temporary>
     -> Aggregate using temporary table
-        -> Inner hash join (no condition)  (rows=1000)
+        -> Inner hash join (FirstMatch)  (rows=1000)
             -> Covering index scan on t1 using ix_val  (rows=1000)
             -> Hash
                 -> Limit: 1 row(s)  (rows=1)
@@ -5003,7 +5010,7 @@ EXPLAIN
 -> Nested loop inner join  (rows=33)
     -> Filter: (t1.val_n is not null)  (rows=33)
         -> Covering index skip scan for deduplication on t1 using ix_val_n  (rows=33)
-    -> Single-row covering index lookup on t2 using ix_val_n (val_n=t1.val_n)  (rows=1)
+    -> Single-row covering index lookup on t2 using ix_val_n (val_n = t1.val_n)  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.val_n' of SELECT #2 was resolved in SELECT #1
@@ -5042,7 +5049,7 @@ EXPLAIN
 -> Nested loop inner join  (rows=33)
     -> Filter: (t1.val_n is not null)  (rows=33)
         -> Covering index skip scan for deduplication on t1 using ix_val_n  (rows=33)
-    -> Single-row covering index lookup on t2 using ix_val_n (val_n=t1.val_n)  (rows=1)
+    -> Single-row covering index lookup on t2 using ix_val_n (val_n = t1.val_n)  (rows=1)
 
 SELECT DISTINCT val_n FROM t1 WHERE val_n IN (SELECT val_n FROM t2);
 val_n
@@ -5121,7 +5128,7 @@ EXPLAIN
     -> Select #2 (subquery in condition; run only once)
         -> Filter: ((t1.val_n = `<materialized_subquery>`.val_n))  (rows=1)
             -> Limit: 1 row(s)  (rows=1)
-                -> Index lookup on <materialized_subquery> using <auto_distinct_key> (val_n=t1.val_n)
+                -> Index lookup on <materialized_subquery> using <auto_distinct_key> (val_n = t1.val_n)
                     -> Materialize with deduplication  (rows=30)
                         -> Covering index scan on t2 using ix_val_n  (rows=30)
 
@@ -5137,7 +5144,7 @@ EXPLAIN
         -> Limit: 1 row(s)  (rows=1)
             -> Filter: <if>(outer_field_is_not_null, <is_not_null_test>(t2.val_n), true)  (rows=1)
                 -> Filter: <if>(outer_field_is_not_null, ((<cache>(t1.val_n) = t2.val_n) or (t2.val_n is null)), true)  (rows=1)
-                    -> Single-row covering index lookup on t2 using ix_val_n (val_n=t1.val_n)  (rows=1)
+                    -> Single-row covering index lookup on t2 using ix_val_n (val_n = t1.val_n)  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.val_n' of SELECT #2 was resolved in SELECT #1
@@ -5153,7 +5160,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val_n FROM t1 WHERE NOT EXISTS
 EXPLAIN
 -> Nested loop antijoin  (rows=990)
     -> Covering index skip scan for deduplication on t1 using ix_val_n  (rows=33)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val_n=t1.val_n)  (rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val_n = t1.val_n)  (rows=1)
         -> Materialize with deduplication  (rows=30)
             -> Filter: (t2.val_n is not null)  (rows=30)
                 -> Covering index scan on t2 using ix_val_n  (rows=30)
@@ -5172,7 +5179,7 @@ EXPLAIN FORMAT=TREE SELECT val_n FROM t1 WHERE NOT EXISTS
 EXPLAIN
 -> Nested loop antijoin  (rows=990)
     -> Covering index skip scan for deduplication on t1 using ix_val_n  (rows=33)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val_n=t1.val_n)  (rows=1)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (val_n = t1.val_n)  (rows=1)
         -> Materialize with deduplication  (rows=30)
             -> Filter: (t2.val_n is not null)  (rows=30)
                 -> Covering index scan on t2 using ix_val_n  (rows=30)
@@ -5191,7 +5198,7 @@ EXPLAIN FORMAT=TREE SELECT DISTINCT val_n FROM t1 WHERE EXISTS (SELECT * FROM t2
 EXPLAIN
 -> Table scan on <temporary>  (rows=33)
     -> Temporary table with deduplication  (rows=33)
-        -> Inner hash join (no condition)  (rows=33)
+        -> Inner hash join (FirstMatch)  (rows=33)
             -> Covering index skip scan for deduplication on t1 using ix_val_n  (rows=33)
             -> Hash
                 -> Limit: 1 row(s)  (rows=1)
@@ -5283,7 +5290,7 @@ EXPLAIN
         -> Select #2 (subquery in condition; run only once)
             -> Filter: ((t1.val_n = `<materialized_subquery>`.val_n))  (rows=1)
                 -> Limit: 1 row(s)  (rows=1)
-                    -> Index lookup on <materialized_subquery> using <auto_distinct_key> (val_n=t1.val_n)
+                    -> Index lookup on <materialized_subquery> using <auto_distinct_key> (val_n = t1.val_n)
                         -> Materialize with deduplication  (rows=30)
                             -> Covering index scan on t2 using ix_val_n  (rows=30)
 
@@ -5295,7 +5302,7 @@ EXPLAIN FORMAT=TREE SELECT val_n, MIN(b_id), MAX(b_id) FROM t1 WHERE EXISTS
 EXPLAIN
 -> Table scan on <temporary>
     -> Aggregate using temporary table
-        -> Inner hash join (no condition)  (rows=1000)
+        -> Inner hash join (FirstMatch)  (rows=1000)
             -> Covering index scan on t1 using ix_val_n  (rows=1000)
             -> Hash
                 -> Limit: 1 row(s)  (rows=1)
@@ -5630,3 +5637,4 @@ SELECT MIN( a ) FROM t1 WHERE a IS NULL;
 MIN( a )
 NULL
 DROP TABLE t1;
+include/rpl/set_gtid_mode_on.inc

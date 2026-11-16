@@ -27,6 +27,7 @@
 #define MYSQLROUTER_MOCK_SERVER_TESTUTILS_H_INCLUDED
 
 #include <chrono>
+#include <optional>
 
 #ifdef RAPIDJSON_NO_SIZETYPEDEFINE
 #include "my_rapidjson_size_t.h"
@@ -36,6 +37,7 @@
 #include <rapidjson/pointer.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/schema.h>
+
 #include "mysqlrouter/cluster_metadata.h"
 
 // AddressSanitizer gets confused by the default, MemoryPoolAllocator
@@ -164,7 +166,7 @@ JsonValue mock_GR_metadata_as_json(
     const std::string &gr_node_host = "127.0.0.1",
     const std::string &router_options = "",
     const mysqlrouter::MetadataSchemaVersion &metadata_version =
-        mysqlrouter::MetadataSchemaVersion{2, 2, 0},
+        mysqlrouter::MetadataSchemaVersion{2, 3, 0},
     const std::string &cluster_name = "test");
 
 /**

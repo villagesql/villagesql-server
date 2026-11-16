@@ -35,7 +35,7 @@ DEFINE_BOOL_METHOD(mysql_audit_api_message_imp::emit,
                     size_t message_length,
                     mysql_event_message_key_value_t *key_value_map,
                     size_t key_value_map_length)) {
-  std::unique_ptr<mysql_event_tracking_message_key_value_t[]>
+  std::unique_ptr<mysql_event_tracking_message_key_value_t[]> const
       local_key_value_map(key_value_map_length > 0
                               ? new mysql_event_tracking_message_key_value_t
                                     [key_value_map_length]

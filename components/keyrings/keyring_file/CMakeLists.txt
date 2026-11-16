@@ -34,7 +34,10 @@ ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="component_keyring_file")
 
 INCLUDE_DIRECTORIES(
   ${CMAKE_CURRENT_SOURCE_DIR}
+  ${BOOST_PATCHES_DIR}
+  ${BOOST_INCLUDE_DIR}
 )
+
 
 SET(KEYRING_FILE_SOURCE
   # Encryption handling
@@ -69,11 +72,14 @@ SET(KEYRING_FILE_SOURCE
 
   # Component callbacks
   component_callbacks.cc
+
+  option_usage.cc
 )
 
 SET(KEYRING_FILE_LIBRARIES
   keyring_common
   OpenSSL::SSL OpenSSL::Crypto
+  library_mysys
 )
 
 MYSQL_ADD_COMPONENT(keyring_file
@@ -81,3 +87,11 @@ MYSQL_ADD_COMPONENT(keyring_file
   LINK_LIBRARIES ${KEYRING_FILE_LIBRARIES}
   MODULE_ONLY
 )
+
+TARGET_LINK_OPTIONS(component_keyring_file PRIVATE "${LINK_FLAG_NO_UNDEFINED}")
+
+IF(APPLE)
+  SET_TARGET_PROPERTIES(component_keyring_file PROPERTIES
+    LINK_FLAGS "-undefined dynamic_lookup")
+ENDIF()
+

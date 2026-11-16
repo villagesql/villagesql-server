@@ -765,7 +765,7 @@ Sort_rows	2
 Sort_scan	1
 FLUSH STATUS;
 SELECT FTS_DOC_ID docid, MATCH(title, text) AGAINST ('database') AS score 
-FROM wp 
+FROM wp FORCE INDEX (idx)
 WHERE MATCH(title, text) AGAINST ('database');
 docid	score
 1	0.5756555199623108
@@ -802,15 +802,15 @@ Sort_range	0
 Sort_rows	2
 Sort_scan	1
 EXPLAIN SELECT COUNT(*) 
-FROM wp 
+FROM wp FORCE INDEX (idx)
 WHERE MATCH(title,text) AGAINST ('database' IN NATURAL LANGUAGE MODE);
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	wp	NULL	fulltext	idx	idx	0	const	1	100.00	Using where
 Warnings:
-Note	1003	/* select#1 */ select count(0) AS `COUNT(*)` from `test`.`wp` where (match `test`.`wp`.`title`,`test`.`wp`.`text` against ('database'))
+Note	1003	/* select#1 */ select count(0) AS `COUNT(*)` from `test`.`wp` FORCE INDEX (`idx`) where (match `test`.`wp`.`title`,`test`.`wp`.`text` against ('database'))
 FLUSH STATUS;
 SELECT COUNT(*) 
-FROM wp 
+FROM wp FORCE INDEX (idx)
 WHERE MATCH(title,text) AGAINST ('database' IN NATURAL LANGUAGE MODE);
 COUNT(*)
 2
@@ -1136,7 +1136,7 @@ LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)
     -> Filter:
-        -> Full-text covering index search on t1 using ft_idx (title='+database')
+        -> Full-text covering index search on t1 using ft_idx (title = '+database')
 
 SELECT FTS_DOC_ID,  MATCH(title, text) AGAINST ('+database' IN BOOLEAN MODE) as `rank`
 FROM t1 WHERE MATCH(title, text) AGAINST ('+database' IN BOOLEAN MODE) and FTS_DOC_ID > 1
@@ -1482,9 +1482,9 @@ CREATE TABLE t1 (
 FTS_DOC_ID BIGINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY,
 title VARCHAR(200),
 text TEXT
-) CHARACTER SET = utf8, ENGINE=InnoDB;
+) CHARACTER SET = utf8mb3, ENGINE=InnoDB;
 Warnings:
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO t1 (title, text) VALUES
 ('Я могу есть стекло', 'оно мне не вредит'),
 ('Мога да ям стъкло', 'то не ми вреди'),
@@ -1575,6 +1575,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	SIMPLE	t1	NULL	fulltext	f1	f1	0	const	1	100.00	Using where; Ft_hints: rank >= 1e+308
 Warnings:
 Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` where (1.238585e+308 <= (match `test`.`t1`.`f1` against ('1' in boolean mode)))
+SET explain_json_format_version = 1;
 EXPLAIN FORMAT = JSON SELECT 1 FROM t1 WHERE 1.238585e+308 <= MATCH(f1) AGAINST ('1' IN BOOLEAN MODE);
 EXPLAIN
 {
@@ -1616,6 +1617,7 @@ EXPLAIN
 }
 Warnings:
 Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` where (1.238585e+308 <= (match `test`.`t1`.`f1` against ('1' in boolean mode)))
+SET explain_json_format_version = DEFAULT;
 DROP TABLE t1;
 #
 # Bug#21140088 MATCH AGAINST: ASSERTION FAILED: !TABLE || (!TABLE->READ_SET || BITMAP_IS_SET

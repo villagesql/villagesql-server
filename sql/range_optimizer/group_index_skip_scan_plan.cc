@@ -44,6 +44,7 @@
 #include "sql/item_sum.h"
 #include "sql/join_optimizer/access_path.h"
 #include "sql/join_optimizer/bit_utils.h"
+#include "sql/join_optimizer/cost_model.h"
 #include "sql/key.h"
 #include "sql/key_spec.h"
 #include "sql/opt_costmodel.h"
@@ -447,9 +448,9 @@ void collect_group_skip_scans(
       Item *expr = min_max_item->get_arg(0)->real_item();
       if (expr->type() == Item::FIELD_ITEM) /* Is it an attribute? */
       {
-        if (!min_max_arg_item)
-          min_max_arg_item = (Item_field *)expr;
-        else if (!min_max_arg_item->eq(expr, true))
+        if (min_max_arg_item == nullptr)
+          min_max_arg_item = down_cast<Item_field *>(expr);
+        else if (!min_max_arg_item->eq(expr))
           return;
       } else
         return;
@@ -961,6 +962,12 @@ Mem_root_array<AccessPath *> get_all_group_skip_scans(
       // Adjust num_output_rows for hypergraph to match aggregate path rowcounts
       cur_path->set_num_output_rows(rows > 1 ? rows - 1 : rows);
       cur_path->num_output_rows_before_filter = cur_path->num_output_rows();
+
+      // Calculate cost for hypergraph
+      const uint cur_index = param->real_keynr[gskip_scan->param_idx];
+      cur_path->set_cost(
+          EstimateGroupSkipScanCost(param->table, cur_index, rows, have_max));
+
       group_skip_scan_paths.push_back(cur_path);
     }
   }
@@ -1333,7 +1340,7 @@ static bool check_group_min_max_predicates(Item *cond,
     cur_arg = arguments[arg_idx]->real_item();
     DBUG_PRINT("info", ("cur_arg: %s", cur_arg->full_name()));
     if (cur_arg->type() == Item::FIELD_ITEM) {
-      if (min_max_arg_item->eq(cur_arg, true)) {
+      if (min_max_arg_item->eq(cur_arg)) {
         /*
           If pred references the MIN/MAX argument, check whether pred is a range
           condition that compares the MIN/MAX argument with a constant.
@@ -1410,7 +1417,7 @@ static inline void util_min_max_inspect_item(Item *item_field,
                                              bool *min_max_arg_present,
                                              bool *non_min_max_arg_present) {
   if (item_field->type() == Item::FIELD_ITEM) {
-    if (min_max_arg_item->eq(item_field, true))
+    if (min_max_arg_item->eq(item_field))
       *min_max_arg_present = true;
     else
       *non_min_max_arg_present = true;
@@ -1486,12 +1493,12 @@ static bool min_max_inspect_cond_for_fields(Item *cond,
         if (*min_max_arg_present && *non_min_max_arg_present) return true;
       }
 
-      if (pred->functype() == Item_func::MULT_EQUAL_FUNC) {
+      if (pred->functype() == Item_func::MULTI_EQ_FUNC) {
         /*
           Analyze participating fields in a multiequal condition.
         */
         for (Item_field &item_field :
-             down_cast<Item_equal *>(cond)->get_fields()) {
+             down_cast<Item_multi_eq *>(cond)->get_fields()) {
           util_min_max_inspect_item(&item_field, min_max_arg_item,
                                     min_max_arg_present,
                                     non_min_max_arg_present);
@@ -1704,7 +1711,7 @@ static inline uint get_field_keypart(KEY *index, const Field *field) {
      - When both min and max are present, LIS will make two reads per group
        instead of one. Similarly when min and max functions are not present,
        rows retrieved are different. Cost model should reflect what happens
-       in GroupIndexSkipScanIterator::Read()
+       in GroupIndexSkipScanIterator::DoRead()
 
   RETURN
     None

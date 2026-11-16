@@ -71,6 +71,7 @@
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/item.h"
+#include "sql/json_duality_view/dml.h"
 #include "sql/key.h"
 #include "sql/lock.h"  // mysql_unlock_tables
 #include "sql/locked_tables_list.h"
@@ -90,6 +91,7 @@
 #include "sql/sql_class.h"
 #include "sql/sql_const.h"
 #include "sql/sql_error.h"
+#include "sql/sql_foreign_key_constraint.h"
 #include "sql/sql_gipk.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
@@ -241,7 +243,7 @@ static bool check_insert_fields(THD *thd, Table_ref *table_list,
         const Item *item1 = *i;
         for (auto j = std::next(i); j != fields->cend(); ++j) {
           const Item *item2 = *j;
-          if (item1->eq(item2, true)) {
+          if (item1->eq(item2)) {
             my_error(ER_FIELD_SPECIFIED_TWICE, MYF(0), item1->item_name.ptr());
             return true;
           }
@@ -401,6 +403,7 @@ static bool mysql_prepare_blob_values(THD *thd,
     Field *lhs_field = field->field;
 
     if (lhs_field->type() == MYSQL_TYPE_BLOB ||
+        lhs_field->type() == MYSQL_TYPE_VECTOR ||
         lhs_field->type() == MYSQL_TYPE_GEOMETRY)
       blob_update_field_set.insert_unique(down_cast<Field_blob *>(lhs_field));
   }
@@ -434,8 +437,9 @@ bool Sql_cmd_insert_base::precheck(THD *thd) {
     Check that we have modify privileges for the first table and
     select privileges for the rest
   */
-  ulong privilege = INSERT_ACL | (duplicates == DUP_REPLACE ? DELETE_ACL : 0) |
-                    (update_value_list.empty() ? 0 : UPDATE_ACL);
+  Access_bitmask privilege = INSERT_ACL |
+                             (duplicates == DUP_REPLACE ? DELETE_ACL : 0) |
+                             (update_value_list.empty() ? 0 : UPDATE_ACL);
 
   if (check_one_table_access(thd, privilege, lex->query_tables)) return true;
 
@@ -503,6 +507,18 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
   Query_block *const query_block = lex->query_block;
 
   Table_ref *const table_list = lex->insert_table;
+
+  if (table_list->is_json_duality_view()) {
+    if (lex->is_explain()) {
+      auto plan = Modification_plan(thd, MT_INSERT,
+                                    jdv_root_base_table(table_list)->table,
+                                    nullptr, false, 0);
+      return explain_single_table_modification(thd, thd, &plan, query_block);
+    }
+
+    return jdv::jdv_insert(thd, table_list, insert_many_values);
+  }
+
   TABLE *const insert_table = lex->insert_table_leaf->table;
 
   if (duplicates == DUP_UPDATE || duplicates == DUP_REPLACE)
@@ -655,7 +671,22 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
         continue;
       }
 
-      if (write_record(thd, insert_table, &info, &update)) {
+      if (use_sql_fk_checks_for_table(thd, insert_table)) {
+        if (check_all_parent_fk_ref(thd, insert_table,
+                                    enum_fk_dml_type::FK_INSERT)) {
+          if (thd->is_error()) {
+            has_error = true;
+            break;
+          }
+          // continue when IGNORE clause is used.
+          continue;
+        }
+      }
+      int error = insert_table->file->ha_upsert(thd, update_field_list,
+                                                update_value_list);
+      if (error == ENOTSUP)
+        error = write_record(thd, insert_table, &info, &update);
+      if (error) {
         has_error = true;
         break;
       }
@@ -764,15 +795,16 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
   assert(has_error == thd->get_stmt_da()->is_error());
   if (has_error) return true;
 
+  ha_rows row_count;
+
   if (insert_many_values.size() == 1 &&
       (!(thd->variables.option_bits & OPTION_WARNINGS) ||
        !thd->num_truncated_fields)) {
-    my_ok(thd,
-          info.stats.copied + info.stats.deleted +
-              (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-                   ? info.stats.touched
-                   : info.stats.updated),
-          id);
+    row_count = info.stats.copied + info.stats.deleted +
+                (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+                     ? info.stats.touched
+                     : info.stats.updated);
+    my_ok(thd, row_count, id);
   } else {
     char buff[160];
     const ha_rows updated =
@@ -788,8 +820,10 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
       snprintf(buff, sizeof(buff), ER_THD(thd, ER_INSERT_INFO),
                (long)info.stats.records, (long)(info.stats.deleted + updated),
                (long)thd->get_stmt_da()->current_statement_cond_count());
-    my_ok(thd, info.stats.copied + info.stats.deleted + updated, id, buff);
+    row_count = info.stats.copied + info.stats.deleted + updated;
+    my_ok(thd, row_count, id, buff);
   }
+  thd->updated_row_count += row_count;
 
   /*
     If we have inserted into a VIEW, and the base table has
@@ -808,6 +842,8 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
     assert(opt_debug_sync_timeout > 0);
     assert(!debug_sync_set_action(thd, STRING_WITH_LEN(act)));
   };);
+  thd->lex->clear_values_map();
+  DEBUG_SYNC(thd, "after_mysql_insert");
 
   return false;
 }
@@ -1080,9 +1116,9 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
       Require proper privileges for all leaf tables of the view.
       @todo - Check for target table only.
     */
-    ulong privilege = INSERT_ACL |
-                      (duplicates == DUP_REPLACE ? DELETE_ACL : 0) |
-                      (update_value_list.empty() ? 0 : UPDATE_ACL);
+    Access_bitmask privilege = INSERT_ACL |
+                               (duplicates == DUP_REPLACE ? DELETE_ACL : 0) |
+                               (update_value_list.empty() ? 0 : UPDATE_ACL);
 
     if (select->check_view_privileges(thd, privilege, privilege)) return true;
     /*
@@ -1092,6 +1128,13 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
     if (!select->first_execution && table_list->is_merged() &&
         fix_join_cond_for_insert(thd, table_list))
       return true; /* purecov: inspected */
+
+    if (table_list->is_json_duality_view()) {
+      // Skipping other checks for JSON duality view top level INSERT operation.
+      if (jdv::jdv_prepare_insert(thd, table_list, this)) {
+        return true;
+      }
+    }
   }
 
   /*
@@ -1111,7 +1154,8 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
     return true;
   }
 
-  if (insert_into_view && column_count == 0) {
+  if (insert_into_view && column_count == 0 &&
+      !table_list->is_json_duality_view()) {
     if (table_list->is_multiple_tables()) {
       my_error(ER_VIEW_NO_INSERT_FIELD_LIST, MYF(0), table_list->db,
                table_list->table_name);
@@ -1145,17 +1189,21 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
           select->having_cond() == nullptr && !select->has_limit()));
 
   // Prepare the lists of columns and values in the statement.
+  TABLE *insert_table = nullptr;
+  table_map map = 0;
+  uint field_count = 1;
+  if (!table_list->is_json_duality_view()) {
+    if (check_insert_fields(thd, table_list, &insert_field_list)) return true;
 
-  if (check_insert_fields(thd, table_list, &insert_field_list)) return true;
+    lex->insert_table_leaf->set_inserted();
+    if (duplicates == DUP_REPLACE) lex->insert_table_leaf->set_deleted();
+    if (duplicates == DUP_UPDATE) lex->insert_table_leaf->set_updated();
 
-  lex->insert_table_leaf->set_inserted();
-  if (duplicates == DUP_REPLACE) lex->insert_table_leaf->set_deleted();
-  if (duplicates == DUP_UPDATE) lex->insert_table_leaf->set_updated();
+    insert_table = lex->insert_table_leaf->table;
 
-  TABLE *const insert_table = lex->insert_table_leaf->table;
-
-  uint field_count = insert_field_list.size();
-  const table_map map = lex->insert_table_leaf->map();
+    field_count = insert_field_list.size();
+    map = lex->insert_table_leaf->map();
+  }
 
   uint value_list_counter = 0;
   for (const List_item *values : insert_many_values) {
@@ -1196,6 +1244,9 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
     for (Item *item : *values) {
       if (!item->const_for_execution()) values_need_privilege_check = true;
     }
+    if (table_list->is_json_duality_view()) {
+      continue;
+    }
 
     if (check_valid_table_refs(table_list, *values, map))
       return true; /* purecov: inspected */
@@ -1204,6 +1255,10 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
          insert_table->gen_def_fields_ptr != nullptr) &&
         validate_gc_assignment(insert_field_list, *values, insert_table))
       return true;
+  }
+  if (table_list->is_json_duality_view()) {
+    unit->set_prepared();
+    return false;
   }
 
   /*
@@ -1981,6 +2036,16 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
             goto ok_or_after_trg_err;
           }
 
+          if (use_sql_fk_checks_for_table(thd, table)) {
+            if (check_all_child_fk_ref(thd, table,
+                                       enum_fk_dml_type::FK_UPDATE) ||
+                check_all_parent_fk_ref(thd, table,
+                                        enum_fk_dml_type::FK_UPDATE)) {
+              if (thd->is_error()) goto before_trg_err;
+              goto ok_or_after_trg_err;
+            }
+          }
+
           if ((error = table->file->ha_update_row(table->record[1],
                                                   table->record[0])) &&
               error != HA_ERR_RECORD_IS_THE_SAME) {
@@ -2089,6 +2154,16 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
               table->triggers->process_triggers(thd, TRG_EVENT_DELETE,
                                                 TRG_ACTION_BEFORE, true))
             goto before_trg_err;
+
+          if (use_sql_fk_checks_for_table(thd, table)) {
+            // FK_DELETE_REPLACE is passed so that record[1] is used to
+            // populate search key instead of record[0]
+            if (check_all_child_fk_ref(thd, table,
+                                       enum_fk_dml_type::FK_DELETE_REPLACE)) {
+              return thd->is_error();
+            }
+          }
+
           if ((error = table->file->ha_delete_row(table->record[1]))) goto err;
           info->stats.deleted++;
           if (!table->file->has_transactions())
@@ -2347,6 +2422,11 @@ bool Query_result_insert::send_data(THD *thd,
     return thd->is_error();
   }
 
+  if (use_sql_fk_checks_for_table(thd, table)) {
+    if (check_all_parent_fk_ref(thd, table, enum_fk_dml_type::FK_INSERT))
+      return thd->is_error();
+  }
+
   error = write_record(thd, table, &info, &update);
 
   DEBUG_SYNC(thd, "create_select_after_write_rows_event");
@@ -2485,6 +2565,7 @@ bool Query_result_insert::send_eof(THD *thd) {
                   : (info.stats.copied ? autoinc_value_of_last_inserted_row
                                        : 0));
   my_ok(thd, row_count, id, buff);
+  thd->updated_row_count += row_count;
 
   /*
     If we have inserted into a VIEW, and the base table has
@@ -3095,6 +3176,30 @@ bool Query_result_create::send_eof(THD *thd) {
             adjust_fk_parents(thd, create_table->db, create_table->table_name,
                               true, nullptr))
           error = true;
+      }
+
+      /*
+        Invalidate TABLE_SHARE and mark TABLE instance of table being created if
+        it has self-referencing FKs. FK metadata in the TABLE_SHARE needs to be
+        adjusted in this case. Opening TABLE and TABLE_SHARE instance on next
+        access will populate FK metadata properly in TABLE_SHARE.
+      */
+      if (alter_info->flags & Alter_info::ADD_FOREIGN_KEY) {
+        TABLE_SHARE *ct_share = create_table->table->s;
+        assert(ct_share != nullptr);
+        for (uint idx = 0; idx < ct_share->foreign_keys; idx++) {
+          auto fk = ct_share->foreign_key[idx];
+          if (!my_strcasecmp(table_alias_charset, fk.referenced_table_db.str,
+                             create_table->db) &&
+              !my_strcasecmp(table_alias_charset, fk.referenced_table_name.str,
+                             create_table->table_name)) {
+            fk_invalidator.add(create_table->db, create_table->table_name,
+                               create_info->db_type,
+                               Foreign_key_parents_invalidator::
+                                   INVALIDATE_AND_MARK_FOR_REOPEN);
+            break;
+          }
+        }
       }
     }
   }

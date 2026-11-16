@@ -528,7 +528,8 @@ check_if_purged:
   ut_a(success);
 
   old_has = row_vers_old_has_index_entry(false, node->pcur.get_rec(), &mtr_vers,
-                                         index, entry, 0, 0);
+                                         index, entry, 0, 0,
+                                         thr->prebuilt);
   if (old_has) {
     err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr,
                                        &mtr);
@@ -603,10 +604,11 @@ func_exit_no_pcur:
   return (err);
 }
 
-/** Delete unmarks a secondary index entry which must be found. It might not be
- delete-marked at the moment, but it does not harm to unmark it anyway. We also
- need to update the fields of the secondary index record if we updated its
- fields but alphabetically they stayed the same, e.g., 'abc' -> 'aBc'.
+/** Delete unmarks a secondary index entry if found, otherwise inserts.
+ It might not be delete-marked at the moment, but it does not harm to
+ unmark it anyway. We also need to update the fields of the secondary
+ index record if we updated its fields but alphabetically they stayed
+ the same, e.g., 'abc' -> 'aBc'.
  @retval DB_SUCCESS on success
  @retval DB_FAIL if BTR_MODIFY_TREE should be tried
  @retval DB_OUT_OF_FILE_SPACE when running out of tablespace
@@ -716,8 +718,9 @@ try_again:
             << " at: " << rec_index_print(btr_cur_get_rec(btr_cur), index);
       }
 
-      if (btr_cur->up_match >= dict_index_get_n_unique(index) ||
-          btr_cur->low_match >= dict_index_get_n_unique(index)) {
+      if ((btr_cur->up_match >= dict_index_get_n_unique(index) ||
+           btr_cur->low_match >= dict_index_get_n_unique(index)) &&
+          (index->n_nullable == 0 || !dtuple_contains_null(entry))) {
         if (index->is_committed()) {
           ib::warn(ER_IB_MSG_1040) << "Record in index " << index->name
                                    << " was not found on rollback, and"

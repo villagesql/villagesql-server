@@ -30,7 +30,6 @@ if (!$have_windows) {
   INSERT INTO test.r_vars (var_name, var_value)
    SELECT * FROM performance_schema.global_variables
    WHERE VARIABLE_NAME LIKE 'replica_parallel_workers'
-   OR VARIABLE_NAME LIKE 'replica_parallel_type'
    OR VARIABLE_NAME LIKE 'replica_preserve_commit_order'
    OR VARIABLE_NAME LIKE 'enforce_gtid_consistency'
    OR VARIABLE_NAME LIKE 'gtid_mode'
@@ -77,6 +76,8 @@ if (!$have_windows) {
      OR VARIABLE_NAME LIKE 'group_replication_recovery_ssl_ca'
      OR VARIABLE_NAME LIKE 'group_replication_recovery_ssl_cert'
      OR VARIABLE_NAME LIKE 'group_replication_recovery_ssl_key'
+     OR VARIABLE_NAME LIKE 'group_replication_communication_stack'
+     OR VARIABLE_NAME LIKE 'group_replication_paxos_single_leader'
      ORDER BY VARIABLE_NAME;
 
     # Ensure that next auto_increment values are consecutive.

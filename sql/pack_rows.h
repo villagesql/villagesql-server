@@ -32,9 +32,9 @@
   hash join, BKA, and streaming aggregation.
  */
 
-#include <assert.h>
-#include <stddef.h>
-#include <string.h>
+#include <cassert>
+#include <cstddef>
+#include <cstring>
 
 #include "field_types.h"
 #include "my_bitmap.h"
@@ -47,9 +47,7 @@
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/table.h"
-#include "template_utils.h"
 
-class JOIN;
 class String;
 
 // Names such as “Column” and “Table” are a tad too generic for the global
@@ -78,13 +76,6 @@ struct Table {
 
   // Whether to copy the NULL flags or not.
   bool copy_null_flags{false};
-
-  // Whether to store the actual contents of NULL-complemented rows.
-  // This is needed by AggregateIterator in order to be able to
-  // restore the exact contents of the record buffer for a table
-  // accessed with EQRefIterator, so that the cache in EQRefIterator
-  // is not disturbed.
-  bool store_contents_of_null_rows{false};
 };
 
 /// A structure that contains a list of input tables for a hash join operation,
@@ -95,8 +86,7 @@ class TableCollection {
   TableCollection() = default;
 
   TableCollection(const Prealloced_array<TABLE *, 4> &tables, bool store_rowids,
-                  table_map tables_to_get_rowid_for,
-                  table_map tables_to_store_contents_of_null_rows_for);
+                  table_map tables_to_get_rowid_for);
 
   const Prealloced_array<Table, 4> &tables() const { return m_tables; }
 
@@ -112,8 +102,26 @@ class TableCollection {
     return m_tables_to_get_rowid_for;
   }
 
+  /// For each of the tables that we should get row IDs for, request that the
+  /// row ID is filled in (the equivalent of calling handler::position()) if
+  /// needed.
+  ///
+  /// Since this function is typically called once per row read, the check for
+  /// the common case where no row IDs are required, is inlined to reduce the
+  /// overhead.
+  void RequestRowId() const {
+    if (m_tables_to_get_rowid_for != 0) {
+      RequestRowIdInner();
+    }
+  }
+
+  /// For each of the tables that we should get row IDs for, inform the handler
+  /// than row IDs will be needed.
+  void PrepareForRequestRowId() const;
+
  private:
-  void AddTable(TABLE *tab, bool store_contents_of_null_rows);
+  void AddTable(TABLE *tab);
+  void RequestRowIdInner() const;
 
   Prealloced_array<Table, 4> m_tables{PSI_NOT_INSTRUMENTED};
 
@@ -135,26 +143,6 @@ class TableCollection {
   table_map m_tables_to_get_rowid_for = 0;
 };
 
-/// Possible values of the NULL-row flag stored by StoreFromTableBuffers(). It
-/// tells whether or not a row is a NULL-complemented row in which all column
-/// values (including non-nullable columns) are NULL. Additionally, in case it
-/// is a NULL-complemented row, the flag contains information about whether the
-/// buffer contains the actual non-NULL values that were available in the record
-/// buffer at the time the row was stored, or if no column values are stored for
-/// the NULL-complemented row. Usually, no values are stored for
-/// NULL-complemented rows, but it may be necessary in order to avoid corrupting
-/// the internal cache of EQRefIterator. See Table::store_contents_of_null_rows.
-enum class NullRowFlag {
-  /// The row is not a NULL-complemented one.
-  kNotNull,
-  /// The row is NULL-complemented. No column values are stored in the buffer.
-  kNullWithoutData,
-  /// The row is NULL-complemented. The actual non-NULL values that were in the
-  /// record buffer at the time StoreFromTableBuffers() was called, will however
-  /// be available in the buffer.
-  kNullWithData
-};
-
 /// Count up how many bytes a single row from the given tables will occupy,
 /// in "packed" format. Note that this is an upper bound, so the length after
 /// calling Field::pack may very well be shorter than the size returned by this
@@ -167,11 +155,15 @@ enum class NullRowFlag {
 ///     - Space for a NULL flag per nullable table (tables on the inner side of
 ///     an outer join).
 /// 3) Size of the buffer returned by pack() on all columns marked in the
-///    read_set_internal.
-///
-/// Note that if any of the tables has a BLOB/TEXT column, this function looks
-/// at the data stored in the record buffers. This means that the function can
-/// not be called before reading any rows if tables.has_blob_column is true.
+///    \c read_set_internal.
+/// We do not necessarily have valid data in the table buffers, so we do not try
+/// to calculate size for blobs.
+size_t ComputeRowSizeUpperBoundSansBlobs(const TableCollection &tables);
+/// Similar to ComputeRowSizeUpperBoundSansBlobs, but will calculate blob size
+/// as well.  To do this, we need to look at the data stored in the record
+/// buffers.
+/// \note{This means that the function cannot be called without making sure
+/// there is valid data in the table buffers.}
 size_t ComputeRowSizeUpperBound(const TableCollection &tables);
 
 /// Take the data marked for reading in "tables" and store it in the provided
@@ -201,18 +193,6 @@ bool StoreFromTableBuffers(const TableCollection &tables, String *buffer);
 const uchar *LoadIntoTableBuffers(const TableCollection &tables,
                                   const uchar *ptr);
 
-/// For each of the given tables, request that the row ID is filled in
-/// (the equivalent of calling file->position()) if needed.
-///
-/// @param tables All tables involved in the operation.
-/// @param tables_to_get_rowid_for A bitmap of which tables to actually
-///     get row IDs for. (A table needs to be in both sets to be processed.)
-void RequestRowId(const Prealloced_array<pack_rows::Table, 4> &tables,
-                  table_map tables_to_get_rowid_for);
-
-void PrepareForRequestRowId(const Prealloced_array<pack_rows::Table, 4> &tables,
-                            table_map tables_to_get_rowid_for);
-
 inline bool ShouldCopyRowId(const TABLE *table) {
   // It is not safe to copy the row ID if we have a NULL-complemented row; the
   // value is undefined, or the buffer location can even be nullptr.
@@ -224,23 +204,10 @@ ALWAYS_INLINE uchar *StoreFromTableBuffersRaw(const TableCollection &tables,
   for (const Table &tbl : tables.tables()) {
     const TABLE *table = tbl.table;
 
-    NullRowFlag null_row_flag = NullRowFlag::kNotNull;
+    bool null_row_flag = false;
     if (table->is_nullable()) {
-      if (table->has_null_row()) {
-        null_row_flag = tbl.store_contents_of_null_rows && table->has_row()
-                            ? NullRowFlag::kNullWithData
-                            : NullRowFlag::kNullWithoutData;
-      }
-      *dptr++ = static_cast<uchar>(null_row_flag);
-      if (null_row_flag == NullRowFlag::kNullWithData) {
-        assert(table->is_started());
-        // If we want to store the actual values in the table buffer for the
-        // NULL-complemented row, instead of the NULLs, we need to restore the
-        // original null flags first. We reset the flags after we have stored
-        // the column values.
-        tbl.table->restore_null_flags();
-        tbl.table->reset_null_row();
-      }
+      null_row_flag = table->has_null_row();
+      *dptr++ = uchar{null_row_flag};
     }
 
     // Store the NULL flags.
@@ -257,12 +224,6 @@ ALWAYS_INLINE uchar *StoreFromTableBuffersRaw(const TableCollection &tables,
         // include the length of the data if needed.
         dptr = column.field->pack(dptr);
       }
-    }
-
-    if (null_row_flag == NullRowFlag::kNullWithData) {
-      // The null flags were changed in order to get the actual contents of the
-      // null row stored. Restore the original null flags.
-      tbl.table->set_null_row();
     }
 
     if (tables.store_rowids() && ShouldCopyRowId(table)) {

@@ -26,8 +26,7 @@
 #include "http/base/io_buffer.h"
 #include "http/base/request_handler.h"
 
-namespace http {
-namespace base {
+namespace http::base {
 
 // must be declared in .cc file as otherwise each plugin
 // gets its own class-instance of http::base::RequestHandler which leads
@@ -38,5 +37,4 @@ ConnectionInterface::~ConnectionInterface() = default;
 
 IOBuffer::~IOBuffer() = default;
 
-}  // namespace base
-}  // namespace http
+}  // namespace http::base

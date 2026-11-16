@@ -443,7 +443,6 @@ select f3 from t1 where f3 between cast("2006-1-1 12:1:1" as datetime) and cast(
 select f3 from t1 where timestamp(f3) between cast("2006-1-1 12:1:1" as datetime) and cast("2006-1-1 12:1:2" as datetime);
 select f1 from t1 where cast("2006-1-1" as date) between f1 and f3;
 select f1 from t1 where cast("2006-1-1" as date) between date(f1) and date(f3);
---skip_if_hypergraph  # Warnings depend on query plan.
 select f1 from t1 where cast("2006-1-1" as date) between f1 and cast('zzz' as date);
 select f1 from t1 where makedate(2006,1) between date(f1) and date(f3);
 select f1 from t1 where makedate(2006,2) between date(f1) and date(f3);
@@ -479,6 +478,7 @@ SELECT SUBTIME('-916:40:00', '416:40:00');
 
 # check if MAKETIME() handles out-of-range values correctly
 SELECT MAKETIME(916,0,0);
+SELECT MAKETIME(-916,0,0);
 SELECT MAKETIME(4294967296, 0, 0);
 SELECT MAKETIME(-4294967296, 0, 0);
 SELECT MAKETIME(0, 4294967296, 0);
@@ -722,26 +722,30 @@ SELECT TIME_FORMAT(SEC_TO_TIME(a),"%H:%i:%s") FROM (SELECT 3020399 AS a UNION SE
 set names latin1;
 create table t1 (a varchar(15) character set ascii not null);
 insert into t1 values ('070514-000000');
---source include/turn_off_only_full_group_by.inc
+
+set timestamp = UNIX_TIMESTAMP('2022-02-02 02:02:02');
 
 # Conversion of date_format() result to ASCII
 # is safe with the default locale en_US
---replace_column 1 #
-select concat(a,ifnull(min(date_format(now(), '%Y-%m-%d')),' ull')) from t1;
-# Error for swe7: it is not ASCII compatible
+select concat(a,ifnull(min(date_format(now(), '%Y-%m-%d')),' ull'))
+from t1
+group by a;
+# swe7 is not ASCII compatible, but source string is compliant
 set names swe7;
---error 1267
-select concat(a,ifnull(min(date_format(now(), '%Y-%m-%d')),' ull')) from t1;
+select concat(a,ifnull(min(date_format(now(), '%Y-%m-%d')),' ull'))
+from t1
+group by a;
 set names latin1;
 # Conversion of date_format() result to ASCII
 # is not safe with the non-default locale fr_FR
 # because month and day names can have accented characters
 set lc_time_names=fr_FR;
---error 1267
-select concat(a,ifnull(min(date_format(now(), '%Y-%m-%d')),' ull')) from t1;
+--error ER_CANNOT_CONVERT_STRING
+select concat(a,ifnull(min(date_format(now(), '%Y-%M-%d')),' ull'))
+from t1
+group by a;
 set lc_time_names=en_US;
-
---source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+set timestamp = DEFAULT;
 drop table t1;
 
 #
@@ -1047,24 +1051,18 @@ SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a TIME NOT NULL) ENGINE=InnoDB;
 INSERT INTO t1 VALUES ('04:39:24');
 INSERT INTO t1 VALUES ('00:20:09');
---skip_if_hypergraph  # Warnings depend on query plan.
 SELECT a FROM t1
 WHERE CONVERT_TZ(TIMESTAMPADD(YEAR , a, TIMESTAMP('0000-00-00')),
                  '+00:00','+00:00');
---skip_if_hypergraph  # Warnings depend on query plan.
 SELECT a FROM t1
 WHERE CONVERT_TZ(TIMESTAMPADD(YEAR, a, DATE('0000-00-00')),
                  '+00:00','+00:00');
 DROP TABLE t1;
 CREATE TABLE t1 (a TIME) ENGINE=InnoDB;
 INSERT INTO t1 VALUES ('00:00:00');
---skip_if_hypergraph  # Warnings depend on query plan.
 SELECT * FROM t1 WHERE TIMESTAMPDIFF(MONTH, a, TIMESTAMP('0000-00-01')) IS NULL;
---skip_if_hypergraph  # Warnings depend on query plan.
 SELECT * FROM t1 WHERE TIMESTAMPDIFF(MONTH, a, TIMESTAMP'0000-00-01 00:00:00') IS NULL;
---skip_if_hypergraph  # Warnings depend on query plan.
 SELECT * FROM t1 WHERE TIMESTAMPDIFF(MONTH, a, DATE('0000-00-01')) IS NULL;
---skip_if_hypergraph  # Warnings depend on query plan.
 SELECT * FROM t1 WHERE TIMESTAMPDIFF(MONTH, a, DATE'0000-00-01') IS NULL;
 DROP TABLE t1;
 SET sql_mode = default;
@@ -1341,3 +1339,167 @@ DROP TABLE t1;
 
 SELECT CAST(1 AS YEAR) UNION SELECT CAST(1 AS YEAR);
 SELECT YEAR('1999-09-11') UNION SELECT YEAR('1999-09-11');
+
+--echo
+--echo Bug#35884337 Mysqld crash from TIME_to_longlong_datetime_packed
+--echo              (my_time=...) my_time.cc:1868
+--echo
+
+SET SQL_MODE="";
+DO MIN(STR_TO_DATE('4746-12-18' ,'%D  '));
+SET SQL_MODE=default;
+
+--echo #
+--echo # Bug#37807230: assertion null_value || current_thd->is_error failed
+--echo #
+
+CREATE TABLE t1(ic INTEGER, d DATE);
+INSERT INTO t1 VALUES(NULL, DATE'2025-04-11'),
+                     (20250412, DATE'2025-04-11'),
+                     (41331246, DATE'1998-11-30'),
+                     (-711023684, DATE'2028-09-27');
+SELECT * FROM t1 WHERE d > TIMEDIFF(ic, NULL);
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#37818753: Assertion `null_value == (res == nullptr)' failed
+--echo #
+
+CREATE TABLE t1(vc varchar(1));
+INSERT INTO t1 VALUES('a');
+SELECT SUBTIME('0000-00-00 00:00:00', vc) AS c FROM t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#37864777: Assertion `null_value || current_thd->is_error()
+--echo #
+
+CREATE TABLE t1(t time(3));
+INSERT INTO t1 VALUES(TIME'05:27:52.019');
+
+SELECT DATEDIFF('2031-08-06',
+                TIMEDIFF(SUBTIME(t, '12:59:38'), '1994-01-14')) AS c
+FROM t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#37881114: Assertion `mt.time_type == MYSQL_TIMESTAMP_DATETIME'
+--echo #
+
+SELECT SUBTIME(DATE'2005-04-14', TIMESTAMPADD(YEAR, 165, DATE'2025-01-01')) c;
+
+--echo #
+--echo # Bug#37900924: Assertion `mt.time_type == MYSQL_TIMESTAMP_DATETIME'
+--echo #
+
+CREATE TABLE t1 (t time(3) NOT NULL);
+
+INSERT INTO t1 VALUES (TIME'00:20:01.000'), (TIME'14:46:31.033');
+
+SELECT *
+FROM t1
+WHERE t IN (FROM_UNIXTIME(2120220672, '%Y-%m-%d'),
+            TIMESTAMP('2003-10-18', TIMESTAMPADD(QUARTER, 1, '2003-03-07'))
+           );
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#37923312: Assertion `l_time1.time_type == MYSQL_TIMESTAMP_DATETIME'
+--echo #
+
+SELECT SUBTIME(FROM_UNIXTIME(3569025024, CONCAT_WS(':', '%V', '%V', '%m', '%T')
+                            ), '00:00:00') AS c;
+
+--echo #
+--echo # Bug#37976294: Assertion `hour <= TIME_MAX_HOUR &&
+--echo #                          minute <= TIME_MAX_MINUTE'
+--echo #
+
+SELECT TIMEDIFF('4617000000', DATE(NULL)) AS c;
+
+--echo #
+--echo # Bug#38179658: TIMEDIFF is not consistent with documentation
+--echo #
+
+CREATE TABLE t(t2 TIME, t4 DATETIME);
+INSERT INTO t VALUES(TIME'01:01:01', TIMESTAMP'2001-02-01 01:01:01');
+
+SELECT t2, t4, TIMEDIFF(t2, t4) AS v FROM t;
+SELECT TIMEDIFF('01:01:01', '2001-02-01 01:01:01');
+SELECT TIMEDIFF(TIME'01:01:01', TIMESTAMP'2001-02-01 01:01:01');
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#38177844: TO_DAYS() result is inconsistent
+--echo #
+
+SELECT FROM_DAYS(3652499), FROM_DAYS(3652500), FROM_DAYS(3652501);
+
+--echo #
+--echo # Bug#38177993: TO_DAYS() result with argument < 366 is inconsistent
+--echo #
+
+SELECT FROM_DAYS(1), FROM_DAYS(365);
+
+--echo #
+--echo # Bug#38181443: TIMEDIFF returns wrong result when first argument
+--echo #               is DATETIME and second argument is DATE
+--echo #
+
+SELECT TIMEDIFF(TIMESTAMP'0000-01-01 00:00:00.00000', DATE'2025-08-01');
+SELECT TIMEDIFF(TIMESTAMP'0000-01-01 00:00:00.00000', '2025-08-01');
+SELECT TIMEDIFF('0000-01-01 00:00:00.00000', DATE'2025-08-01');
+SELECT TIMEDIFF('0000-01-01 00:00:00.00000', '2025-08-01');
+
+--echo #
+--echo # Bug#38980002: Assertion 'dt.time_type == MYSQL_TIMESTAMP_DATETIME ||
+--echo #               dt.time_type == MYSQL_TIMESTAMP_DATETIME_TZ' failed
+--echo #
+
+SELECT CEILING(CONVERT_TZ('2025-01-01' ,'-01:00','-08:00')) AS ceil;
+
+--echo #
+--echo # Bug#38979962: Assertion 'hour != 0 && minute != 0 && second != 0 &&
+--echo #               microsecond != 0' failed'
+--echo #
+
+SELECT SEC_TO_TIME(-00.0000004584) AS tv;
+
+--echo #
+--echo # Bug#34499767: TIMESTAMPDIFF function does not work as expected on where
+--echo #
+
+CREATE TABLE t
+ (id int NOT NULL,
+  dt datetime,
+  PRIMARY KEY (id)
+);
+
+INSERT INTO t(id, dt) VALUES (1, '2022-08-03 10:37:33');
+
+SELECT TIMESTAMPDIFF(DAY, dt, '2022-08-16 04:30:58')    AS day_diff,
+       TIMESTAMPDIFF(MINUTE, dt, '2022-08-16 04:30:58') AS min_diff
+FROM t
+WHERE id = 1 AND
+      TIMESTAMPDIFF(DAY, dt, '2022-08-16 04:30:58') = 12 AND
+      TIMESTAMPDIFF(MINUTE, dt,'2022-08-16 04:30:58') = 18353;
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#39649755: IN (DATE/TIME constant list) wrongly TRUE for
+--echo #               non-temporal string
+--echo #
+
+SELECT 'abc' IN (DATE'2024-02-29', DATE'2026-06-25') AS d,
+       'abc' IN (TIME'01:00:00', TIME'02:00:00') AS t,
+       'abc' IN (TIMESTAMP'2024-02-29 01:00:00',
+                 TIMESTAMP'2026-06-25 02:00:00') AS dt;
+
+CREATE TABLE s (id INT, v VARCHAR(20));
+INSERT INTO s VALUES (1,'abc'), (2,'2024-02-29'), (3,'xyz'),(4,'2026-06-25');
+SELECT id, v FROM s WHERE v IN (DATE'2024-02-29', DATE'2026-06-25');
+DROP TABLE s;

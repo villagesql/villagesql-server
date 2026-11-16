@@ -23,8 +23,8 @@
 
 #include "my_config.h"
 
-#include <errno.h>
 #include <gtest/gtest.h>
+#include <cerrno>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -38,7 +38,7 @@
 TEST(FileUtilsTest, TellPipe) {
   int pipefd[2];
   EXPECT_EQ(0, pipe(pipefd));
-  my_off_t pos = mysql_file_tell(pipefd[1], MYF(0));
+  my_off_t const pos = mysql_file_tell(pipefd[1], MYF(0));
   EXPECT_EQ(MY_FILEPOS_ERROR, pos);
   EXPECT_EQ(ESPIPE, my_errno());
   EXPECT_EQ(0, close(pipefd[0]));

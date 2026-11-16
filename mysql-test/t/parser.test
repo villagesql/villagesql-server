@@ -2,6 +2,11 @@
 # This file contains tests covering the parser
 #
 
+# ER_STACK_OVERRUN_NEED_MORE does not currently work well with neither TSan
+# nor ASan (when ASAN_OPTIONS include 'detect_stack_use_after_return=true')
+--source include/not_asan.inc
+--source include/not_tsan.inc
+
 #=============================================================================
 # LEXICAL PARSER (lex)
 #=============================================================================
@@ -2787,6 +2792,38 @@ DROP TABLE source_tls_ciphersuites;
 DROP TABLE source_tls_version;
 DROP TABLE source_user;
 DROP TABLE source_zstd_compression_level;
+
+--echo #
+--echo # Bug#22574003: Non-reserved "BINLOG" keyword costs 22 shift/reduce
+--echo #               conflicts to MySQL grammar
+--echo #
+
+# "binlog: is allowed as table and column name
+CREATE TABLE binlog(binlog INTEGER);
+DROP TABLE binlog;
+
+# "binlog" is allowed as a role name:
+CREATE ROLE binlog;
+DROP ROLE binlog;
+
+# "binlog" is not allowed as procedure label
+
+DELIMITER //;
+--error ER_PARSE_ERROR
+CREATE PROCEDURE p()
+BEGIN
+  DECLARE x INTEGER DEFAULT 3;
+binlog:
+  LOOP
+    IF x = 0 THEN
+      LEAVE binlog;
+    END IF;
+    SET x = x - 1;
+  END LOOP binlog;
+END;
+//
+DELIMITER ;//
+
 
 --echo #
 --echo #

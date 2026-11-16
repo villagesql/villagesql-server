@@ -23,18 +23,20 @@ perl;
                pid-file slow-query-log-file
                language lc-messages-dir
                datadir replica-load-tmpdir slave-load-tmpdir tmpdir socket table-definition-cache table-open-cache
-               tls-version admin-tls-version secure-file-priv temptable-max-ram/;
+               tls-version admin-tls-version secure-file-priv temptable-max-ram
+               external-table-storage-engine external-table-secondary-storage-engine/;
 
   # Variables which we don't want to display in result file since
   # they depend on type of build
-  @build_specific=qw/auto-generate-certs lock-order tls-version admin-tls-version debug-enable-extended-set-ops/;
+  @build_specific=qw/auto-generate-certs lock-order tls-version admin-tls-version debug-enable-extended-set-ops
+               enable-diagnostic-log log-diagnostic version-suffix percona-telemetry-disable/;
 
   # Plugins which may or may not be there:
   @plugins=qw/innodb ngram mecab ndb ndbinfo archive blackhole federated partition ndbcluster debug ssl des-key-file
               thread-concurrency super-large-pages mutex-deadlock-detector null-audit
               sha256-password-private-key-path sha256-password-public-key-path
               sha256-password-auto-generate-rsa-keys caching-sha2-password-auto-generate-rsa-keys
-              keyring-migration-socket mysqlx/;
+              keyring-migration-socket mysqlx thread-pool/;
 
   # And substitute the content some environment variables with their
   # names:
@@ -67,6 +69,7 @@ perl;
     s/\b286720\b/262144/;
     s/\b442368\b/262144/;
     s/\b221184\b/262144/;
+    s/hypergraph_optimizer=on/hypergraph_optimizer=off/;
     # Replacing port number with string
     s/^port \d+/port ####/;
     # log-tc-size varies by platform

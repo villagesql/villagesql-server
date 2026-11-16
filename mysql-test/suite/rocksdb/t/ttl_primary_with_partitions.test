@@ -1,0 +1,18 @@
+--source include/have_debug.inc
+--source include/have_rocksdb.inc
+
+--let $coltype=BIGINT UNSIGNED
+--let $timegen=UNIX_TIMESTAMP()
+--source ttl_primary_with_partitions.inc
+
+--let $coltype=TIMESTAMP
+--let $timegen=NOW()
+--source ttl_primary_with_partitions.inc
+
+--let $coltype=TIMESTAMP DEFAULT NOW()
+--let $timegen=NOW()
+--source ttl_primary_with_partitions.inc
+
+--let $coltype=TIMESTAMP(6)
+--let $timegen=NOW()
+--source ttl_primary_with_partitions.inc

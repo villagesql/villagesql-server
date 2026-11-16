@@ -33,14 +33,12 @@ INSERT INTO t1 VALUES(1, NULL),(2, 2), (3, NULL), (4, 4), (5, NULL), (6, 6);
 
 --source include/rpl/sync_to_replica.inc
 --source include/rpl/stop_applier.inc
-SET @saved_replica_parallel_type = @@GLOBAL.replica_parallel_type;
 SET @saved_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
 SET @saved_replica_preserve_commit_order = @@GLOBAL.replica_preserve_commit_order;
 SET @saved_innodb_lock_wait_timeout = @@GLOBAL.innodb_lock_wait_timeout;
 SET @saved_replica_transaction_retries = @@GLOBAL.replica_transaction_retries;
 
 SET GLOBAL replica_transaction_retries = 2;
-SET GLOBAL replica_parallel_type = "LOGICAL_CLOCK";
 SET GLOBAL replica_parallel_workers = 3;
 SET GLOBAL replica_preserve_commit_order = ON;
 # Set it a long time to guarantee it doens't report an timeout error
@@ -60,7 +58,7 @@ INSERT INTO t1 VALUES(10, 10);
 --let $debug_point= d,set_commit_parent_100
 --source include/add_debug_point.inc
 INSERT INTO t1 VALUES(11, NULL);
-DELETE FROM t1 WHERE c2 <= 3;
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 3;
 
 --source include/rpl/connection_replica.inc
 # It blocks above INSERT statement
@@ -103,7 +101,7 @@ INSERT INTO t1 VALUES(21, NULL);
 
 BEGIN;
 INSERT INTO t1 VALUES(22, 22);
-DELETE FROM t1 WHERE c2 <= 3;
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 3;
 INSERT INTO t1 VALUES(23, 23);
 INSERT INTO t1 VALUES(24, 24);
 INSERT INTO t1 VALUES(25, 25);
@@ -167,7 +165,7 @@ INSERT INTO t1 VALUES(30, NULL);
 INSERT INTO t1 VALUES(31, NULL);
 INSERT INTO t1 VALUES(33, NULL);
 
-DELETE FROM t1 WHERE c2 <= 3;
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 3;
 
 --source include/rpl/connection_replica.inc
 # Use it to block the worker applying 'INSERT INTO t1 VALUES(31, NULL)';
@@ -263,7 +261,7 @@ INSERT INTO t1 VALUES(50, 50);
 INSERT INTO t1 VALUES(51, NULL);
 BEGIN;
 INSERT INTO t1 VALUES(52, 52);
-DELETE FROM t1 WHERE c2 <= 3;
+DELETE /*+ INDEX(t1 c2) */ FROM t1 WHERE c2 <= 3;
 INSERT INTO t1 VALUES(53, 53);
 INSERT INTO t1 VALUES(54, 54);
 INSERT INTO t1 VALUES(55, 55);
@@ -319,7 +317,6 @@ DROP TABLE t1, t2;
 
 --source include/rpl/stop_replica.inc
 SET GLOBAL replica_transaction_retries = @saved_replica_transaction_retries;
-SET GLOBAL replica_parallel_type = @saved_replica_parallel_type;
 --disable_warnings
 SET GLOBAL replica_parallel_workers = @saved_replica_parallel_workers;
 --enable_warnings

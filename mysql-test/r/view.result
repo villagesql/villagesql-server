@@ -2699,26 +2699,12 @@ id	td
 3	2005-01-02
 4	2005-01-03
 5	2005-01-04
-Warnings:
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.02' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.02' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.04' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.04' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.02' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.04' at row 1 is deprecated. Prefer the standard '-'.
 SELECT * FROM v1 WHERE td BETWEEN CAST('2005.01.02' AS DATE) AND CAST('2005.01.04' AS DATE);
 id	td
 2	2005-01-02
 3	2005-01-02
 4	2005-01-03
 5	2005-01-04
-Warnings:
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.02' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.02' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.04' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.04' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.02' at row 1 is deprecated. Prefer the standard '-'.
-Warning	4095	Delimiter '.' in position 4 in datetime value '2005.01.04' at row 1 is deprecated. Prefer the standard '-'.
 DROP VIEW v1;
 DROP TABLE t1;
 create table t1 (a int);
@@ -4465,7 +4451,7 @@ explain SELECT *
 FROM t1 JOIN vu_1 AS dt ON t1.a=dt.a;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	#	Using where
-1	PRIMARY	<derived2>	NULL	ref	<auto_key1>	<auto_key1>	5	test.t1.a	#	#	NULL
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	5	test.t1.a	#	#	NULL
 2	DERIVED	t2	NULL	ALL	NULL	NULL	NULL	NULL	#	#	NULL
 3	UNION	t2	NULL	ALL	NULL	NULL	NULL	NULL	#	#	NULL
 4	UNION RESULT	<union2,3>	NULL	ALL	NULL	NULL	NULL	NULL	#	#	Using temporary

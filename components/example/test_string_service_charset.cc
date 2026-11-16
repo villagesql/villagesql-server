@@ -25,7 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <mysql/components/component_implementation.h>
 #include <mysql/components/service_implementation.h>
 #include <mysql/components/services/mysql_string.h>
-#include <stdio.h>
+#include <cstdio>
 
 #include "m_string.h"  // strlen
 #include "my_inttypes.h"

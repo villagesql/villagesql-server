@@ -49,7 +49,7 @@ class Ndb_schema_objects {
   std::unordered_map<std::string, NDB_SCHEMA_OBJECT *> m_hash;
   Ndb_schema_objects() {}
 
-  NDB_SCHEMA_OBJECT *find(std::string key) const {
+  NDB_SCHEMA_OBJECT *find(const std::string &key) const {
     const auto it = m_hash.find(key);
     if (it == m_hash.end()) return nullptr;
     return it->second;
@@ -243,7 +243,7 @@ std::string NDB_SCHEMA_OBJECT::waiting_participants_to_string() const {
   const char *separator = "";
   std::string participants("[");
   for (const auto &it : state.m_participants) {
-    if (it.second.m_completed == true) continue;  // Don't show completed
+    if (it.second.m_completed) continue;  // Don't show completed
     participants.append(separator).append(std::to_string(it.first));
     separator = ",";
   }
@@ -295,7 +295,7 @@ bool NDB_SCHEMA_OBJECT::register_participants(
     const std::unordered_set<uint32> &nodes) {
   std::lock_guard<std::mutex> lock_state(state.m_lock);
 
-  if (state.m_participants.size()) {
+  if (!state.m_participants.empty()) {
     // There are already participants registered, this means that the client has
     // failed the schema operation (most likley due to timeout).
     // As part of failing it has inserted one participant where it's assigned
@@ -309,7 +309,7 @@ bool NDB_SCHEMA_OBJECT::register_participants(
   }
 
   // Assume the list of participants is empty
-  ndbcluster::ndbrequire(state.m_participants.size() == 0);
+  ndbcluster::ndbrequire(state.m_participants.empty());
   // Assume coordinator have not completed
   ndbcluster::ndbrequire(!state.m_coordinator_completed);
 
@@ -416,7 +416,7 @@ bool NDB_SCHEMA_OBJECT::check_timeout(bool is_client, int timeout_seconds,
                                       const char *message) const {
   std::unique_lock<std::mutex> lock_state(state.m_lock);
 
-  if (is_client && state.m_participants.size()) {
+  if (is_client && !state.m_participants.empty()) {
     // The client is checking for timeout but participants have been registered,
     // this means that coordinator has taken over timeout checking
     return false;
@@ -456,7 +456,7 @@ void NDB_SCHEMA_OBJECT::fail_schema_op(uint32 result,
                                        const char *message) const {
   std::unique_lock<std::mutex> lock_state(state.m_lock);
 
-  if (state.m_participants.size() == 0) {
+  if (state.m_participants.empty()) {
     // Participants hasn't been registered yet since the coordinator
     // hasn't heard about schema operation, add own node as participant
     state.m_participants[active_schema_clients.m_own_nodeid];

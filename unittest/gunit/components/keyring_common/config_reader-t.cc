@@ -34,8 +34,8 @@ class KeyringCommonConfigReader_test : public ::testing::Test {};
 using keyring_common::config::Config_reader;
 
 TEST_F(KeyringCommonConfigReader_test, Config_reader_test) {
-  std::string config_file_name("config_file");
-  std::string config_data =
+  std::string const config_file_name("config_file");
+  std::string const config_data =
       "{"
       "\"config_1\": \"This is a string config.\","
       "\"config_2\": false,"

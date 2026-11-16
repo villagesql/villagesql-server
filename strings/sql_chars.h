@@ -29,7 +29,7 @@
 #ifndef STRINGS_SQL_CHARS_H_
 #define STRINGS_SQL_CHARS_H_
 
-#include "my_compiler.h"
+#include "mysql/attribute.h"  // for MY_ATTRIBUTE
 
 class MY_CHARSET_LOADER;
 struct CHARSET_INFO;

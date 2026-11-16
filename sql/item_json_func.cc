@@ -25,12 +25,14 @@
 
 #include "sql/item_json_func.h"
 
+#include <ankerl/unordered_dense.h>
 #include <assert.h>
 #include <algorithm>  // std::fill
 #include <cstring>
 #include <limits>
 #include <memory>
 #include <new>
+#include <stack>
 #include <string>
 #include <utility>
 #include <vector>
@@ -48,7 +50,9 @@
 #include "scope_guard.h"
 #include "sql-common/json_diff.h"
 #include "sql-common/json_dom.h"
+#include "sql-common/json_hash.h"
 #include "sql-common/json_path.h"
+#include "sql-common/json_schema.h"
 #include "sql-common/json_syntax_check.h"
 #include "sql-common/my_decimal.h"
 #include "sql/current_thd.h"  // current_thd
@@ -58,7 +62,8 @@
 #include "sql/field_common_properties.h"
 #include "sql/item_cmpfunc.h"  // Item_func_like
 #include "sql/item_create.h"
-#include "sql/json_schema.h"
+#include "sql/item_sum.h"  // Item_sum_json_array
+#include "sql/parse_tree_nodes.h"
 #include "sql/parser_yystype.h"
 #include "sql/psi_memory_key.h"  // key_memory_JSON
 #include "sql/sql_class.h"       // THD
@@ -71,6 +76,7 @@
 #include "sql/table_function.h"
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
+#include "sql_string.h"  // stringcmp
 #include "string_with_len.h"
 #include "template_utils.h"  // down_cast
 
@@ -642,9 +648,7 @@ longlong Item_func_json_valid::val_int() {
 }
 
 static bool evaluate_constant_json_schema(
-    THD *thd, Item *json_schema,
-    unique_ptr_destroy_only<const Json_schema_validator>
-        *cached_schema_validator,
+    THD *thd, Item *json_schema, Json_schema_validator *cached_schema_validator,
     Item **ref) {
   assert(is_convertible_to_json(json_schema));
   const char *func_name = down_cast<const Item_func *>(*ref)->func_name();
@@ -656,11 +660,10 @@ static bool evaluate_constant_json_schema(
       *ref = new (thd->mem_root) Item_null((*ref)->item_name);
       if (*ref == nullptr) return true;
     } else {
-      *cached_schema_validator =
-          create_json_schema_validator(thd->mem_root, schema_string->ptr(),
-                                       schema_string->length(), func_name);
-
-      if (*cached_schema_validator == nullptr) {
+      const JsonSchemaDefaultErrorHandler error_handler(func_name);
+      if (cached_schema_validator->initialize(
+              thd->mem_root, schema_string->ptr(), schema_string->length(),
+              error_handler, JsonDepthErrorHandler)) {
         return true;
       }
     }
@@ -689,7 +692,7 @@ Item_func_json_schema_valid::~Item_func_json_schema_valid() = default;
 
 static bool do_json_schema_validation(
     const THD *thd, Item *json_schema, Item *json_document,
-    const char *func_name, const Json_schema_validator *cached_schema_validator,
+    const char *func_name, const Json_schema_validator &cached_schema_validator,
     bool *null_value, bool *validation_result,
     Json_schema_validation_report *validation_report) {
   assert(is_convertible_to_json(json_document));
@@ -702,11 +705,12 @@ static bool do_json_schema_validation(
     return false;
   }
 
-  if (cached_schema_validator != nullptr) {
+  if (cached_schema_validator.is_initialized()) {
     assert(json_schema->const_item());
-    if (cached_schema_validator->is_valid_json_schema(
-            document_string->ptr(), document_string->length(), func_name,
-            validation_result, validation_report)) {
+    const JsonSchemaDefaultErrorHandler error_handler(func_name);
+    if (cached_schema_validator.is_valid(
+            document_string->ptr(), document_string->length(), error_handler,
+            JsonDepthErrorHandler, validation_result, validation_report)) {
       return true;
     }
   } else {
@@ -718,7 +722,7 @@ static bool do_json_schema_validation(
     assert(!json_schema->const_item() ||
            (json_schema->real_item()->type() == Item::FIELD_ITEM &&
             down_cast<const Item_field *>(json_schema->real_item())
-                ->table_ref->table->const_table));
+                ->m_table_ref->table->const_table));
 
     assert(is_convertible_to_json(json_schema));
 
@@ -730,9 +734,11 @@ static bool do_json_schema_validation(
       return false;
     }
 
+    const JsonSchemaDefaultErrorHandler error_handler(func_name);
     if (is_valid_json_schema(document_string->ptr(), document_string->length(),
                              schema_string->ptr(), schema_string->length(),
-                             func_name, validation_result, validation_report)) {
+                             error_handler, JsonDepthErrorHandler,
+                             validation_result, validation_report)) {
       return true;
     }
   }
@@ -748,7 +754,7 @@ bool Item_func_json_schema_valid::val_bool() {
   if (m_in_check_constraint_exec_ctx) {
     Json_schema_validation_report validation_report;
     if (do_json_schema_validation(current_thd, args[0], args[1], func_name(),
-                                  m_cached_schema_validator.get(), &null_value,
+                                  m_cached_schema_validator, &null_value,
                                   &validation_result, &validation_report)) {
       return error_bool();
     }
@@ -759,7 +765,7 @@ bool Item_func_json_schema_valid::val_bool() {
     }
   } else {
     if (do_json_schema_validation(current_thd, args[0], args[1], func_name(),
-                                  m_cached_schema_validator.get(), &null_value,
+                                  m_cached_schema_validator, &null_value,
                                   &validation_result, nullptr)) {
       return error_bool();
     }
@@ -797,7 +803,7 @@ bool Item_func_json_schema_validation_report::val_json(Json_wrapper *wr) {
   bool validation_result = false;
   Json_schema_validation_report validation_report;
   if (do_json_schema_validation(current_thd, args[0], args[1], func_name(),
-                                m_cached_schema_validator.get(), &null_value,
+                                m_cached_schema_validator, &null_value,
                                 &validation_result, &validation_report)) {
     return error_json();
   }
@@ -1040,6 +1046,7 @@ bool get_json_wrapper(Item **args, uint arg_idx, String *str,
 
 bool Item_func_json_type::resolve_type(THD *thd) {
   if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
+  if (reject_vector_args()) return true;
   set_nullable(true);
   m_value.set_charset(&my_charset_utf8mb4_bin);
   set_data_type_string(kMaxJsonTypeNameLength + 1, &my_charset_utf8mb4_bin);
@@ -1090,30 +1097,44 @@ String *Item_json_func::val_str(String *) {
   return val_string_from_json(this, &m_string_buffer);
 }
 
-static bool get_date_from_json(Item_func *item, MYSQL_TIME *ltime,
-                               my_time_flags_t) {
+static bool get_date_from_json(Item_func *item, Date_val *date,
+                               my_time_flags_t flags) {
   Json_wrapper wr;
   if (item->val_json(&wr)) return true;
   if (item->null_value) return true;
+  flags |= DatetimeConversionFlags(current_thd);
   return wr.coerce_date(JsonCoercionWarnHandler{item->func_name()},
-                        JsonCoercionDeprecatedDefaultHandler{}, ltime,
-                        DatetimeConversionFlags(current_thd));
+                        JsonCoercionDeprecatedDefaultHandler{}, date, flags);
 }
 
-bool Item_json_func::get_date(MYSQL_TIME *ltime, my_time_flags_t flags) {
-  return get_date_from_json(this, ltime, flags);
+static bool get_datetime_from_json(Item_func *item, Datetime_val *dt,
+                                   my_time_flags_t flags) {
+  Json_wrapper wr;
+  if (item->val_json(&wr)) return true;
+  if (item->null_value) return true;
+  flags |= DatetimeConversionFlags(current_thd);
+  return wr.coerce_datetime(JsonCoercionWarnHandler{item->func_name()},
+                            JsonCoercionDeprecatedDefaultHandler{}, dt, flags);
 }
 
-static bool get_time_from_json(Item_func *item, MYSQL_TIME *ltime) {
+bool Item_json_func::val_date(Date_val *date, my_time_flags_t flags) {
+  return get_date_from_json(this, date, flags);
+}
+
+bool Item_json_func::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  return get_datetime_from_json(this, dt, flags);
+}
+
+static bool get_time_from_json(Item_func *item, Time_val *time) {
   Json_wrapper wr;
   if (item->val_json(&wr)) return true;
   if (item->null_value) return true;
   return wr.coerce_time(JsonCoercionWarnHandler{item->func_name()},
-                        JsonCoercionDeprecatedDefaultHandler{}, ltime);
+                        JsonCoercionDeprecatedDefaultHandler{}, time);
 }
 
-bool Item_json_func::get_time(MYSQL_TIME *ltime) {
-  return get_time_from_json(this, ltime);
+bool Item_json_func::val_time(Time_val *time) {
+  return get_time_from_json(this, time);
 }
 
 longlong val_int_from_json(Item_func *item) {
@@ -1138,7 +1159,7 @@ static my_decimal *val_decimal_from_json(Item_func *item,
                                          my_decimal *decimal_value) {
   Json_wrapper wr;
   if (item->val_json(&wr)) {
-    return item->error_decimal(decimal_value);
+    return nullptr;
   }
   if (item->null_value) return nullptr;
   return wr.coerce_decimal(JsonCoercionWarnHandler{item->func_name()},
@@ -1235,15 +1256,13 @@ bool sql_scalar_to_json(Item *arg, const char *calling_function, String *value,
 
       break;
     }
-    case MYSQL_TYPE_DATE:
     case MYSQL_TYPE_DATETIME:
-    case MYSQL_TYPE_TIMESTAMP:
-    case MYSQL_TYPE_TIME: {
-      const longlong dt = arg->val_temporal_by_field_type();
+    case MYSQL_TYPE_TIMESTAMP: {
+      const longlong dt = arg->val_date_temporal();
       if (current_thd->is_error()) return true;
       if (arg->null_value) return false;
 
-      MYSQL_TIME t;
+      Datetime_val t;
       TIME_from_longlong_datetime_packed(&t, dt);
       t.time_type = field_type_to_timestamp_type(field_type);
       if (create_scalar<Json_datetime>(scalar, &dom, t, field_type))
@@ -1251,12 +1270,29 @@ bool sql_scalar_to_json(Item *arg, const char *calling_function, String *value,
 
       break;
     }
+    case MYSQL_TYPE_DATE: {
+      Date_val date;
+      if (arg->val_date(&date, 0)) {
+        return current_thd->is_error();
+      }
+      if (create_scalar<Json_date>(scalar, &dom, date))
+        return true; /* purecov: inspected */
+      break;
+    }
+    case MYSQL_TYPE_TIME: {
+      Time_val time;
+      if (arg->val_time(&time)) {
+        return current_thd->is_error();
+      }
+      if (create_scalar<Json_time>(scalar, &dom, time)) {
+        return true; /* purecov: inspected */
+      }
+      break;
+    }
     case MYSQL_TYPE_NEWDECIMAL: {
       my_decimal m;
       my_decimal *r = arg->val_decimal(&m);
-      if (current_thd->is_error()) return true;
-      if (arg->null_value) return false;
-      assert(r != nullptr);
+      if (r == nullptr) return current_thd->is_error();
 
       if (create_scalar<Json_decimal>(scalar, &dom, *r))
         return true; /* purecov: inspected */
@@ -1282,7 +1318,7 @@ bool sql_scalar_to_json(Item *arg, const char *calling_function, String *value,
       if (arg->null_value) return false;
       const bool retval =
           geometry_to_json(wr, swkb, calling_function, INT_MAX32, false, false,
-                           false, &geometry_srid);
+                           true, &geometry_srid);
 
       /**
         Scalar processing is irrelevant. Geometry types are converted
@@ -1610,9 +1646,7 @@ bool Item_func_json_keys::val_json(Json_wrapper *wr) {
     Json_array_ptr res(new (std::nothrow) Json_array());
     if (res == nullptr) return error_json(); /* purecov: inspected */
     for (const auto &i : Json_object_wrapper(wrapper)) {
-      const MYSQL_LEX_CSTRING &key = i.first;
-      if (res->append_alias(new (std::nothrow)
-                                Json_string(key.str, key.length)))
+      if (res->append_alias(new (std::nothrow) Json_string(i.first)))
         return error_json(); /* purecov: inspected */
     }
     *wr = Json_wrapper(std::move(res));
@@ -1694,7 +1728,7 @@ bool Item_func_json_extract::val_json(Json_wrapper *wr) {
   return false;
 }
 
-bool Item_func_json_extract::eq(const Item *item, bool binary_cmp) const {
+bool Item_func_json_extract::eq(const Item *item) const {
   if (this == item) return true;
   if (item->type() != FUNC_ITEM) return false;
   const auto item_func = down_cast<const Item_func *>(item);
@@ -1702,24 +1736,35 @@ bool Item_func_json_extract::eq(const Item *item, bool binary_cmp) const {
       strcmp(func_name(), item_func->func_name()) != 0)
     return false;
 
-  auto cmp = [binary_cmp](const Item *arg1, const Item *arg2) {
-    /*
-      JSON_EXTRACT doesn't care about the collation of its arguments. String
-      literal arguments are considered equal if they have the same character
-      set and binary contents, even if their collations differ.
-    */
-    const bool ignore_collation =
-        binary_cmp ||
-        (arg1->type() == STRING_ITEM &&
-         my_charset_same(arg1->collation.collation, arg2->collation.collation));
-    return ItemsAreEqual(arg1, arg2, ignore_collation);
-  };
+  /*
+    JSON_EXTRACT doesn't care about the collation of its arguments. String
+    literal arguments are considered equal if they have the same character
+    set and binary contents, even if their collations differ.
+  */
   const auto item_json = down_cast<const Item_func_json_extract *>(item);
-  return std::equal(args, args + arg_count, item_json->args, cmp);
+
+  for (uint i = 0; i < arg_count; i++) {
+    const Item *a = args[i]->unwrap_for_eq();
+    const Item *b = item_json->args[i]->unwrap_for_eq();
+    if (a->type() == STRING_ITEM && b->type() == STRING_ITEM &&
+        a->const_item() && b->const_item()) {
+      if (!my_charset_same(a->collation.collation, b->collation.collation))
+        return false;
+      String str1, str2;
+      if (stringcmp(const_cast<Item *>(a)->val_str(&str1),
+                    const_cast<Item *>(b)->val_str(&str2))) {
+        return false;
+      }
+    } else {
+      if (!a->eq(b)) return false;
+    }
+  }
+  return true;
 }
 
 bool Item_func_modify_json_in_path::resolve_type(THD *thd) {
   if (Item_json_func::resolve_type(thd)) return true;
+  if (reject_vector_args()) return true;
   if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_JSON)) return true;
   if (param_type_is_default(thd, 1, -1, 2, MYSQL_TYPE_VARCHAR)) return true;
   if (param_type_is_default(thd, 2, -1, 2, MYSQL_TYPE_JSON)) return true;
@@ -2051,8 +2096,7 @@ bool Item_func_json_array_insert::val_json(Json_wrapper *wr) {
       size_t pos = leg->first_array_index(arr->size()).position();
       if (arr->insert_alias(pos, valuew.clone_dom()))
         return error_json(); /* purecov: inspected */
-
-    }  // end of loop through paths
+    }                        // end of loop through paths
     // docw still owns the augmented doc, so hand it over to result
     *wr = std::move(docw);
 
@@ -2064,58 +2108,6 @@ bool Item_func_json_array_insert::val_json(Json_wrapper *wr) {
   }
 
   null_value = false;
-  return false;
-}
-
-/**
-  Clone a source path to a target path, stripping out legs which are made
-  redundant by the auto-wrapping rule from the WL#7909 spec and further
-  extended in the WL#9831 spec:
-
-  "If an array cell path leg or an array range path leg is evaluated against a
-  non-array value, the result of the evaluation is the same as if the non-array
-  value had been wrapped in a single-element array."
-
-  @see Json_path_leg::is_autowrap
-
-  @param[in]      source_path The original path.
-  @param[in,out]  target_path The clone to be filled in.
-  @param[in]      doc The document to seek through.
-
-  @returns True if an error occurred. False otherwise.
-*/
-static bool clone_without_autowrapping(const Json_path *source_path,
-                                       Json_path_clone *target_path,
-                                       Json_wrapper *doc) {
-  Json_wrapper_vector hits(key_memory_JSON);
-
-  target_path->clear();
-  for (const Json_path_leg *path_leg : *source_path) {
-    if (path_leg->is_autowrap()) {
-      /*
-         We have a partial path of the form
-
-         pathExpression[0]
-
-         So see if pathExpression identifies a non-array value.
-      */
-      hits.clear();
-      if (doc->seek(*target_path, target_path->leg_count(), &hits, false, true))
-        return true; /* purecov: inspected */
-
-      if (!hits.empty() && hits[0].type() != enum_json_type::J_ARRAY) {
-        /*
-          pathExpression identifies a non-array value.
-          We satisfy the conditions of the rule above.
-          So we can throw away the [0] leg.
-        */
-        continue;
-      }
-    }
-    // The rule above is NOT satisfied. So add the leg.
-    if (target_path->append(path_leg)) return true; /* purecov: inspected */
-  }
-
   return false;
 }
 
@@ -2218,7 +2210,8 @@ bool Item_func_json_set_replace::val_json(Json_wrapper *wr) {
       if (current_path == nullptr) goto return_null;
 
       // Clone the path, stripping off redundant auto-wrapping.
-      if (clone_without_autowrapping(current_path, &m_path, &docw)) {
+      if (clone_without_autowrapping(current_path, &m_path, &docw,
+                                     key_memory_JSON)) {
         return error_json();
       }
 
@@ -2493,6 +2486,217 @@ bool Item_func_json_row_object::val_json(Json_wrapper *wr) {
   return false;
 }
 
+Item_func_json_duality_object::Item_func_json_duality_object(
+    THD *thd, const POS &pos, int table_tags,
+    PT_jdv_name_value_list *jdv_name_value_list)
+    : super(thd, pos, jdv_name_value_list->name_value_list()),
+      m_jdv_name_value_list(jdv_name_value_list) {
+  m_table_tags = static_cast<jdv::Duality_view_tags>(table_tags);
+}
+
+bool Item_func_json_duality_object::resolve_type(THD *thd) {
+  if (super::resolve_type(thd)) return true;
+
+  // Set m_inject_object_hash only in the first JDO instance of JSON duality
+  // view.
+  Query_expression *master_query_expression =
+      thd->lex->current_query_block()->master_query_expression();
+  Table_ref *tr = master_query_expression->derived_table;
+  if (tr != nullptr && tr->is_view() && tr->is_json_duality_view()) {
+    m_inject_object_hash = true;
+    set_json_arrayagg_keys(thd);
+  }
+  return false;
+}
+
+/*
+This function will add full path to the JSON_ARRAYAGG() keys to ignore order of
+elements as MySQL doesn't guarantee order in this case.
+The keys in the path will contain double quotes to avoid conflicts when there
+are other datatypes which can produce Json array i.e. JSON, Geometry etc. The
+below example shows one such case.
+
+CREATE TABLE `t1` (
+  `T1C1` int,
+  `T1C2` JSON DEFAULT NULL,
+  PRIMARY KEY (`T1C1`)
+);
+
+CREATE TABLE `t2` (
+  `T2C1` int,
+  `T2C2` int DEFAULT NULL,
+  PRIMARY KEY (`T1C1`)
+);
+
+CREATE JSON RELATIONAL DUALITY VIEW `dv_keytest`
+AS SELECT JSON_DUALITY_OBJECT(
+    '_id':`t1`.`T1C1`,
+    'T1.C2':`t1`.`T1C2`,
+    'T1' : (SELECT JSON_DUALITY_VIEW(
+          '_id':`t2`.`T2C1`,
+          'C2' : (SELECT JSON_ARRAYAGG(T2C2) FROM t2)
+          ) FROM t2;
+) from `t1x`;
+
+The m_json_arrayagg_keys will contains $."T1.C2". This will help ignore the
+order only for JSON_ARRAYGAGG() case and not for Json arrays in $."T1.C1".
+*/
+bool Item_func_json_duality_object::set_json_arrayagg_keys(THD *thd) {
+  std::stack<std::pair<Item_func_json_duality_object *, std::string>>
+      duality_object_stack;
+
+  duality_object_stack.emplace(std::make_pair(this, std::string("$")));
+
+  while (!duality_object_stack.empty()) {
+    auto *node = duality_object_stack.top().first;
+    auto path = duality_object_stack.top().second;
+    duality_object_stack.pop();
+
+    /* Traversing over arguments looking for JSONARRAY_AGG item */
+    uint32 arg_count = node->argument_count();
+    for (uint32 i = 0; i < arg_count; ++i) {
+      /*
+        Arguments are in pairs. There will be an even number of args.
+      */
+      assert(arg_count % 2 == 0);
+      const uint32 key_idx = i++;
+      const uint32 value_idx = i;
+
+      /* Since JSONARRAY_AGG in JSON_DUALITY_OBJECT shall be part of subquery
+         others are ignored */
+      if (node->arguments()[value_idx]->type() != Item::SUBQUERY_ITEM) {
+        continue;
+      }
+
+      /* key */
+      Item *key_item = node->arguments()[key_idx];
+      char buff[MAX_FIELD_WIDTH];
+      String utf8_res(buff, sizeof(buff), &my_charset_utf8mb4_bin);
+      const char *safep;   // contents of key_item, possibly converted
+      size_t safe_length;  // length of safep
+      String tmp_key_value;
+
+      if (get_json_object_member_name(thd, key_item, &tmp_key_value, &utf8_res,
+                                      &safep, &safe_length)) {
+        return true;
+      }
+
+      std::string key(safep, safe_length);
+      std::string full_path = path + ".\"" + key + "\"";
+
+      auto *subquery_item =
+          down_cast<Item_subselect *>(node->arguments()[value_idx]);
+      Query_block *sl =
+          subquery_item->query_expr()->query_term()->query_block();
+
+      for (Item *it : sl->visible_fields()) {
+        if (it->type() == Item::SUM_FUNC_ITEM &&
+            (down_cast<Item_sum_json_array *>(it)->sum_func() ==
+             Item_sum::JSON_ARRAYAGG_FUNC)) {
+          /* JSON_ARRAYAGG item is found. Add existing keys to path and
+           add current full path to array agg keys */
+          m_json_arrayagg_keys.insert(full_path);
+          auto *json_aragg = down_cast<Item_sum_json_array *>(it);
+          auto *arg1 = json_aragg->get_arg(0);
+
+          if (arg1->type() == Item::FUNC_ITEM &&
+              down_cast<Item_func *>(arg1)->functype() ==
+                  JSON_DUALITY_OBJECT_FUNC) {
+            duality_object_stack.emplace(
+                std::make_pair(down_cast<Item_func_json_duality_object *>(arg1),
+                               full_path + "[*]"));
+          }
+        } else if (it->type() == Item::FUNC_ITEM &&
+                   down_cast<Item_func *>(it)->functype() ==
+                       JSON_DUALITY_OBJECT_FUNC) {
+          duality_object_stack.emplace(std::make_pair(
+              down_cast<Item_func_json_duality_object *>(it), full_path));
+        }
+      }
+    }
+  }
+  return false;
+}
+
+bool Item_func_json_duality_object::val_json(Json_wrapper *wr) {
+  assert(fixed);
+
+  if (super::val_json(wr)) return true;
+
+  if (m_inject_object_hash) {
+    Json_wrapper_xxh_hasher hash_key;
+    std::string root("$");
+    if (calculate_etag_for_json(
+            *wr, hash_key, JsonSerializationDefaultErrorHandler(current_thd),
+            &m_json_arrayagg_keys, &root)) {
+      return error_json();
+    }
+    Json_object *object = down_cast<Json_object *>(wr->to_dom());
+    assert(object != nullptr);
+
+    Json_object *metadata = new (std::nothrow) Json_object();
+    if (metadata == nullptr) {
+      return true;
+    }
+    String etag_hash;
+    XXH128_hash_hex(hash_key.get_digest(), &etag_hash);
+    if (metadata->add_alias("etag", create_dom_ptr<Json_string>(
+                                        etag_hash.ptr(), etag_hash.length()))) {
+      return error_json();
+    }
+    if (object->add_alias("_metadata", metadata)) return error_json();
+  }
+
+  return false;
+}
+
+void Item_func_json_duality_object::print(const THD *thd, String *str,
+                                          enum_query_type query_type) const {
+  str->append(func_name());
+  str->append('(');
+
+  if (table_tags() != 0) {
+    str->append(" WITH (");
+
+    bool first = true;
+    auto add_if_set = [&](int flag, const char *name) {
+      if (table_tags() & flag) {
+        if (!first) str->append(",");
+        str->append(name);
+        first = false;
+      }
+    };
+
+    add_if_set(jdv::DVT_INSERT, "INSERT");
+    add_if_set(jdv::DVT_UPDATE, "UPDATE");
+    add_if_set(jdv::DVT_DELETE, "DELETE");
+    add_if_set(jdv::DVT_NOINSERT, "NO INSERT");
+    add_if_set(jdv::DVT_NOUPDATE, "NO UPDATE");
+    add_if_set(jdv::DVT_NODELETE, "NO DELETE");
+
+    str->append(") ");
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    if ((i != 0) && (i % 2) == 0)
+      str->append(',');
+    else if ((i % 2))
+      str->append(':');
+
+    args[i]->print(thd, str, query_type);
+  }
+
+  str->append(')');
+}
+
+Mem_root_array<LEX_STRING> *Item_func_json_duality_object::name_list() {
+  return m_jdv_name_value_list->name_list();
+}
+
+Mem_root_array<uint> *Item_func_json_duality_object::col_tags_list() {
+  return m_jdv_name_value_list->col_tags_list();
+}
+
 bool Item_func_json_search::fix_fields(THD *thd, Item **items) {
   if (Item_json_func::fix_fields(thd, items)) return true;
 
@@ -2580,14 +2784,16 @@ static bool find_matches(const Json_wrapper &wrapper, String *path,
       const char *data = wrapper.get_data();
       const uint len = static_cast<uint>(wrapper.get_data_length());
       source_string->set_str_with_copy(data, len, &my_charset_utf8mb4_bin);
-      if (like_node->val_int()) {
+      const bool result = like_node->val_int() != 0;
+      if (current_thd->is_error()) return true;
+      if (result) {
         // Got a match with the LIKE node. Save the path of the JSON string.
         std::pair<String_set::iterator, bool> res =
             duplicates->insert_unique(std::string(path->ptr(), path->length()));
 
         if (res.second) {
           Json_string *jstr = new (std::nothrow) Json_string(*res.first);
-          if (!jstr || matches->push_back(jstr))
+          if (jstr == nullptr || matches->push_back(jstr))
             return true; /* purecov: inspected */
         }
       }
@@ -2598,8 +2804,7 @@ static bool find_matches(const Json_wrapper &wrapper, String *path,
       const size_t path_length = path->length();
       for (const auto &jwot : Json_object_wrapper(wrapper)) {
         // recurse with the member added to the path
-        const MYSQL_LEX_CSTRING &key = jwot.first;
-        if (Json_path_leg(key.str, key.length).to_string(path) ||
+        if (Json_path_leg(jwot.first).to_string(path) ||
             find_matches(jwot.second, path, matches, duplicates, one_match,
                          like_node, source_string))
           return true;              /* purecov: inspected */
@@ -2882,7 +3087,7 @@ bool Item_func_json_remove::val_json(Json_wrapper *wr) {
   Json_path_clone path(key_memory_JSON);
   for (uint path_idx = 0; path_idx < path_count; ++path_idx) {
     if (clone_without_autowrapping(m_path_cache.get_path(path_idx + 1), &path,
-                                   &wrapper))
+                                   &wrapper, key_memory_JSON))
       return error_json(); /* purecov: inspected */
 
     // Cannot remove the root of the document.
@@ -3360,7 +3565,8 @@ static void set_data_type_from_cast_type(Item *item, Cast_target cast_type,
       item->set_data_type_datetime(decimals);
       return;
     case ITEM_CAST_DECIMAL:
-      item->set_data_type_decimal(length, decimals);
+      item->set_data_type_decimal(
+          std::min<unsigned>(length, DECIMAL_MAX_PRECISION), decimals);
       return;
     case ITEM_CAST_CHAR:
       // If no character set is specified, the JSON default character set is
@@ -3561,6 +3767,7 @@ void Item_func_array_cast::add_json_info(Json_object *obj) {
 }
 
 bool Item_func_array_cast::resolve_type(THD *) {
+  if (reject_vector_args()) return true;
   set_nullable(true);
   return false;
 }
@@ -3917,8 +4124,6 @@ bool save_json_to_field(THD *thd, Field *field, const Json_wrapper *w,
       break;
     }
     case STRING_RESULT: {
-      MYSQL_TIME ltime;
-      bool date_time_handled = false;
       /*
         Here we explicitly check for DATE/TIME to reduce overhead by
         avoiding encoding data into string in JSON code and decoding it
@@ -3927,27 +4132,47 @@ bool save_json_to_field(THD *thd, Field *field, const Json_wrapper *w,
         Ensure that date is saved to a date column, and time into time
         column. Don't mix.
       */
-      if (is_temporal_type_with_date(field->type())) {
-        switch (w->type()) {
-          case enum_json_type::J_DATE:
-          case enum_json_type::J_DATETIME:
-          case enum_json_type::J_TIMESTAMP:
+      bool date_time_handled = false;
+      switch (field->type()) {
+        case MYSQL_TYPE_TIME: {
+          if (w->type() == enum_json_type::J_TIME) {
+            Time_val time;
+            err = w->coerce_time(error_handler,
+                                 JsonCoercionDeprecatedDefaultHandler{}, &time);
+            if (err) break;
+            err = field->store_time(time, DATETIME_MAX_DECIMALS);
             date_time_handled = true;
-            err = w->coerce_date(error_handler,
-                                 JsonCoercionDeprecatedDefaultHandler{}, &ltime,
-                                 DatetimeConversionFlags(current_thd));
-            break;
-          default:
-            break;
+          }
+          break;
         }
-      } else if (field->type() == MYSQL_TYPE_TIME &&
-                 w->type() == enum_json_type::J_TIME) {
-        date_time_handled = true;
-        err = w->coerce_time(error_handler,
-                             JsonCoercionDeprecatedDefaultHandler{}, &ltime);
+        case MYSQL_TYPE_DATE: {
+          if (w->type() == enum_json_type::J_DATE) {
+            Date_val date;
+            err = w->coerce_date(error_handler,
+                                 JsonCoercionDeprecatedDefaultHandler{}, &date);
+            if (err) break;
+            err = field->store_date(date);
+            date_time_handled = true;
+          }
+          break;
+        }
+        case MYSQL_TYPE_DATETIME:
+        case MYSQL_TYPE_TIMESTAMP: {
+          if (w->type() == enum_json_type::J_DATETIME) {
+            Datetime_val dt;
+            err = w->coerce_datetime(error_handler,
+                                     JsonCoercionDeprecatedDefaultHandler{},
+                                     &dt, DatetimeConversionFlags(current_thd));
+            if (err) break;
+            err = field->store_time(&dt);
+            date_time_handled = true;
+          }
+          break;
+        }
+        default:
+          break;
       }
       if (date_time_handled) {
-        err = err || field->store_time(&ltime);
         break;
       }
       // Initialize with an explicit empty string pointer,
@@ -3962,7 +4187,6 @@ bool save_json_to_field(THD *thd, Field *field, const Json_wrapper *w,
       } else {
         err = w->to_string(&str, false, "JSON_TABLE", JsonDepthErrorHandler);
       }
-
       if (!err && (field->store(str.ptr(), str.length(), str.charset()) >=
                    TYPE_WARN_OUT_OF_RANGE))
         err = true;
@@ -3993,7 +4217,9 @@ bool save_json_to_field(THD *thd, Field *field, const Json_wrapper *w,
 
 struct Item_func_json_value::Default_value {
   int64_t integer_default;
-  const MYSQL_TIME *temporal_default;
+  Date_val date_default;
+  Time_val time_default;
+  Datetime_val datetime_default;
   LEX_CSTRING string_default;
   const my_decimal *decimal_default;
   std::unique_ptr<Json_dom> json_default;
@@ -4018,6 +4244,14 @@ Item_func_json_value::~Item_func_json_value() = default;
 
 enum Item_result Item_func_json_value::result_type() const {
   return json_cast_result_type(m_cast_target);
+}
+
+Json_on_response_type Item_func_json_value::on_empty_response_type() const {
+  return m_on_empty;
+}
+
+Json_on_response_type Item_func_json_value::on_error_response_type() const {
+  return m_on_error;
 }
 
 bool Item_func_json_value::resolve_type(THD *) {
@@ -4103,11 +4337,9 @@ Item_func_json_value::create_json_value_default(THD *thd, Item *item) {
       break;
     }
     case ITEM_CAST_DATE: {
-      MYSQL_TIME *ltime = new (mem_root) MYSQL_TIME;
-      if (ltime == nullptr) return nullptr;
-      if (item->get_date(ltime, 0)) return nullptr;
+      if (item->val_date(&default_value->date_default, TIME_ONLY_VALID_DATES))
+        return nullptr;
       assert(!thd->is_error());
-      default_value->temporal_default = ltime;
       break;
     }
     case ITEM_CAST_YEAR: {
@@ -4135,27 +4367,24 @@ Item_func_json_value::create_json_value_default(THD *thd, Item *item) {
       break;
     }
     case ITEM_CAST_TIME: {
-      MYSQL_TIME *ltime = new (mem_root) MYSQL_TIME;
-      if (ltime == nullptr) return nullptr;
-      if (item->get_time(ltime)) return nullptr;
+      if (item->val_time(&default_value->time_default)) return nullptr;
       assert(!thd->is_error());
-      if (actual_decimals(ltime) > decimals) {
+      if (default_value->time_default.actual_decimals() > decimals) {
         my_error(ER_DATA_OUT_OF_RANGE, MYF(0), "TIME DEFAULT", func_name());
         return nullptr;
       }
-      default_value->temporal_default = ltime;
       break;
     }
     case ITEM_CAST_DATETIME: {
-      MYSQL_TIME *ltime = new (mem_root) MYSQL_TIME;
-      if (ltime == nullptr) return nullptr;
-      if (item->get_date(ltime, TIME_DATETIME_ONLY)) return nullptr;
+      if (item->val_datetime(&default_value->datetime_default,
+                             TIME_ONLY_VALID_DATES | TIME_DATETIME_ONLY)) {
+        return nullptr;
+      }
       assert(!thd->is_error());
-      if (actual_decimals(ltime) > decimals) {
+      if (actual_decimals(&default_value->datetime_default) > decimals) {
         my_error(ER_DATA_OUT_OF_RANGE, MYF(0), "TIME DEFAULT", func_name());
         return nullptr;
       }
-      default_value->temporal_default = ltime;
       break;
     }
     case ITEM_CAST_CHAR: {
@@ -4192,7 +4421,7 @@ Item_func_json_value::create_json_value_default(THD *thd, Item *item) {
       my_decimal *buffer = new (mem_root) my_decimal;
       if (buffer == nullptr) return nullptr;
       const my_decimal *value = item->val_decimal(buffer);
-      if (thd->is_error()) return nullptr;
+      if (value == nullptr) return nullptr;
       if (!decimal_within_range(this, value) || value->frac > decimals) {
         my_error(ER_DATA_OUT_OF_RANGE, MYF(0), "DECIMAL DEFAULT", func_name());
         return nullptr;
@@ -4319,9 +4548,7 @@ static bool same_response_type(Json_on_response_type type1,
                              type2 == Json_on_response_type::NULL_VALUE));
 }
 
-bool Item_func_json_value::eq(const Item *item, bool binary_cmp) const {
-  if (!Item_func::eq(item, binary_cmp)) return false;
-
+bool Item_func_json_value::eq_specific(const Item *item) const {
   const auto other = down_cast<const Item_func_json_value *>(item);
 
   if (other->m_cast_target != m_cast_target) return false;
@@ -4683,8 +4910,9 @@ my_decimal *Item_func_json_value::val_decimal(my_decimal *value) {
     case ITEM_CAST_YEAR:
       return val_decimal_from_int(value);
     case ITEM_CAST_DATE:
-    case ITEM_CAST_DATETIME:
       return val_decimal_from_date(value);
+    case ITEM_CAST_DATETIME:
+      return val_decimal_from_datetime(value);
     case ITEM_CAST_TIME:
       return val_decimal_from_time(value);
     case ITEM_CAST_CHAR:
@@ -4725,28 +4953,28 @@ my_decimal *Item_func_json_value::val_decimal(my_decimal *value) {
   return nullptr;
 }
 
-bool Item_func_json_value::get_date(MYSQL_TIME *ltime, my_time_flags_t flags) {
+bool Item_func_json_value::val_date(Date_val *date, my_time_flags_t flags) {
   assert(fixed);
   switch (m_cast_target) {
     case ITEM_CAST_SIGNED_INT:
     case ITEM_CAST_UNSIGNED_INT:
-      return get_date_from_int(ltime, flags);
+      return get_date_from_int(date, flags);
     case ITEM_CAST_DATE:
     case ITEM_CAST_YEAR:
-      return extract_date_value(ltime);
+      return extract_date_value(date);
     case ITEM_CAST_DATETIME:
-      return extract_datetime_value(ltime);
+      return get_date_from_datetime(date, flags);
     case ITEM_CAST_TIME:
-      return get_date_from_time(ltime);
+      return get_date_from_time(date);
     case ITEM_CAST_CHAR:
-      return get_date_from_string(ltime, flags);
+      return get_date_from_string(date, flags);
     case ITEM_CAST_DECIMAL:
-      return get_date_from_decimal(ltime, flags);
+      return get_date_from_decimal(date, flags);
     case ITEM_CAST_JSON:
-      return get_date_from_json(this, ltime, flags);
+      return get_date_from_json(this, date, flags);
     case ITEM_CAST_FLOAT:
     case ITEM_CAST_DOUBLE:
-      return get_date_from_real(ltime, flags);
+      return get_date_from_real(date, flags);
     /* purecov: begin inspected */
     case ITEM_CAST_POINT:
       my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "POINT");
@@ -4776,28 +5004,80 @@ bool Item_func_json_value::get_date(MYSQL_TIME *ltime, my_time_flags_t flags) {
   return true;
 }
 
-bool Item_func_json_value::get_time(MYSQL_TIME *ltime) {
+bool Item_func_json_value::val_datetime(Datetime_val *dt,
+                                        my_time_flags_t flags) {
+  assert(fixed);
+  switch (m_cast_target) {
+    case ITEM_CAST_SIGNED_INT:
+    case ITEM_CAST_UNSIGNED_INT:
+      return get_datetime_from_int(dt, flags);
+    case ITEM_CAST_DATE:
+    case ITEM_CAST_YEAR:
+      return get_datetime_from_date(dt, flags);
+    case ITEM_CAST_DATETIME:
+      return extract_datetime_value(dt);
+    case ITEM_CAST_TIME:
+      return get_datetime_from_time(dt);
+    case ITEM_CAST_CHAR:
+      return get_datetime_from_string(dt, flags);
+    case ITEM_CAST_DECIMAL:
+      return get_datetime_from_decimal(dt, flags);
+    case ITEM_CAST_JSON:
+      return get_datetime_from_json(this, dt, flags);
+    case ITEM_CAST_FLOAT:
+    case ITEM_CAST_DOUBLE:
+      return get_datetime_from_real(dt, flags);
+    /* purecov: begin inspected */
+    case ITEM_CAST_POINT:
+      my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "POINT");
+      return true;
+    case ITEM_CAST_LINESTRING:
+      my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "LINESTRING");
+      return true;
+    case ITEM_CAST_POLYGON:
+      my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "POLYGON");
+      return true;
+    case ITEM_CAST_MULTIPOINT:
+      my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "MULTIPOINT");
+      return true;
+    case ITEM_CAST_MULTILINESTRING:
+      my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "MULTILINESTRING");
+      return true;
+    case ITEM_CAST_MULTIPOLYGON:
+      my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "MULTIPOLYGON");
+      return true;
+    case ITEM_CAST_GEOMETRYCOLLECTION:
+      my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON",
+               "GEOMETRYCOLLECTION");
+      return true;
+      /* purecov: end */
+  }
+  assert(false); /* purecov: deadcode */
+  return true;
+}
+
+bool Item_func_json_value::val_time(Time_val *time) {
   assert(fixed);
   switch (m_cast_target) {
     case ITEM_CAST_SIGNED_INT:
     case ITEM_CAST_YEAR:
     case ITEM_CAST_UNSIGNED_INT:
-      return get_time_from_int(ltime);
+      return get_time_from_int(time);
     case ITEM_CAST_DATE:
-      return get_time_from_date(ltime);
+      return get_time_from_date(time);
     case ITEM_CAST_TIME:
-      return extract_time_value(ltime);
+      return extract_time_value(time);
     case ITEM_CAST_DATETIME:
-      return get_time_from_datetime(ltime);
+      return get_time_from_datetime(time);
     case ITEM_CAST_CHAR:
-      return get_time_from_string(ltime);
+      return get_time_from_string(time);
     case ITEM_CAST_DECIMAL:
-      return get_time_from_decimal(ltime);
+      return get_time_from_decimal(time);
     case ITEM_CAST_JSON:
-      return get_time_from_json(this, ltime);
+      return get_time_from_json(this, time);
     case ITEM_CAST_FLOAT:
     case ITEM_CAST_DOUBLE:
-      return get_time_from_real(ltime);
+      return get_time_from_real(time);
     /* purecov: begin inspected */
     case ITEM_CAST_POINT:
       my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "POINT");
@@ -4894,87 +5174,75 @@ int64_t Item_func_json_value::extract_year_value() {
   return m_default_error->integer_default;
 }
 
-bool Item_func_json_value::extract_date_value(MYSQL_TIME *ltime) {
+bool Item_func_json_value::extract_date_value(Date_val *date) {
   assert(m_cast_target == ITEM_CAST_DATE || m_cast_target == ITEM_CAST_YEAR);
   Json_wrapper wr;
   const Default_value *return_default = nullptr;
   if (extract_json_value(&wr, &return_default) || null_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_DATE);
     return true;
   }
-
   if (return_default != nullptr) {
-    *ltime = *return_default->temporal_default;
+    *date = return_default->date_default;
     return false;
   }
   if (!wr.coerce_date([](const char *, int) {},
-                      JsonCoercionDeprecatedDefaultHandler{}, ltime,
+                      JsonCoercionDeprecatedDefaultHandler{}, date,
                       DatetimeConversionFlags(current_thd)))
     return false;
 
   if (handle_json_value_conversion_error(m_on_error, "DATE", this) ||
       null_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_DATE);
     return true;
   }
 
-  *ltime = *m_default_error->temporal_default;
+  *date = m_default_error->date_default;
   return false;
 }
 
-bool Item_func_json_value::extract_time_value(MYSQL_TIME *ltime) {
+bool Item_func_json_value::extract_time_value(Time_val *time) {
   assert(m_cast_target == ITEM_CAST_TIME);
   Json_wrapper wr;
   const Default_value *return_default = nullptr;
-  if (extract_json_value(&wr, &return_default) || null_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_TIME);
-    return true;
-  }
+  if (extract_json_value(&wr, &return_default) || null_value) return true;
 
   if (return_default != nullptr) {
-    *ltime = *return_default->temporal_default;
+    *time = return_default->time_default;
     return false;
   }
   if (!wr.coerce_time([](const char *, int) {},
-                      JsonCoercionDeprecatedDefaultHandler{}, ltime))
+                      JsonCoercionDeprecatedDefaultHandler{}, time)) {
     return false;
-
+  }
   if (handle_json_value_conversion_error(m_on_error, "TIME", this) ||
       null_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_TIME);
     return true;
   }
-
-  *ltime = *m_default_error->temporal_default;
+  *time = m_default_error->time_default;
   return false;
 }
 
-bool Item_func_json_value::extract_datetime_value(MYSQL_TIME *ltime) {
+bool Item_func_json_value::extract_datetime_value(Datetime_val *dt) {
   assert(m_cast_target == ITEM_CAST_DATETIME);
   Json_wrapper wr;
   const Default_value *return_default = nullptr;
   if (extract_json_value(&wr, &return_default) || null_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_DATETIME);
     return true;
   }
-
   if (return_default != nullptr) {
-    *ltime = *return_default->temporal_default;
+    *dt = return_default->datetime_default;
     return false;
   }
-
-  if (!wr.coerce_date(
-          [](const char *, int) {}, JsonCoercionDeprecatedDefaultHandler{},
-          ltime, TIME_DATETIME_ONLY | DatetimeConversionFlags(current_thd)))
+  if (!wr.coerce_datetime(
+          [](const char *, int) {}, JsonCoercionDeprecatedDefaultHandler{}, dt,
+          TIME_DATETIME_ONLY | DatetimeConversionFlags(current_thd)))
     return false;
 
   if (handle_json_value_conversion_error(m_on_error, "DATETIME", this) ||
       null_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_DATETIME);
     return true;
   }
 
-  *ltime = *m_default_error->temporal_default;
+  *dt = m_default_error->datetime_default;
   return false;
 }
 
@@ -4983,7 +5251,7 @@ my_decimal *Item_func_json_value::extract_decimal_value(my_decimal *value) {
   Json_wrapper wr;
   const Default_value *return_default = nullptr;
   if (extract_json_value(&wr, &return_default) || null_value) {
-    return error_decimal(value);
+    return nullptr;
   }
 
   if (return_default != nullptr) {
@@ -4997,7 +5265,7 @@ my_decimal *Item_func_json_value::extract_decimal_value(my_decimal *value) {
 
   if (handle_json_value_conversion_error(m_on_error, "DECIMAL", this) ||
       null_value) {
-    return error_decimal(value);
+    return nullptr;
   }
 
   *value = *m_default_error->decimal_default;

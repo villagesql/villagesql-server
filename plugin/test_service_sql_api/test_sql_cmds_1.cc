@@ -26,8 +26,8 @@
 #include <fcntl.h>
 #include <mysql/plugin.h>
 #include <mysql/service_srv_session_info.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cstdlib>
 
 #include <mysql/components/my_service.h>
 #include <mysql/components/services/log_builtins.h>
@@ -41,6 +41,7 @@
 #include "sql_string.h" /* STRING_PSI_MEMORY_KEY */
 #include "template_utils.h"
 #include "thr_cond.h"
+#include "thr_mutex.h"
 
 static constexpr int STRING_BUFFER = 1024 * 4;
 
@@ -64,6 +65,10 @@ static void WRITE_STR(const char *format) {
   my_write(outfile, (uchar *)buffer, strlen(buffer), MYF(0));
 }
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-format-attribute"
+#endif
 template <typename T>
 void WRITE_VAL(const char *format, T value) {
   char buffer[STRING_BUFFER];
@@ -77,6 +82,9 @@ void WRITE_VAL(const char *format, T1 value1, T2 value2) {
   snprintf(buffer, sizeof(buffer), format, value1, value2);
   my_write(outfile, (uchar *)buffer, strlen(buffer), MYF(0));
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 static const char *user_localhost = "localhost";
 static const char *user_local = "127.0.0.1";
@@ -280,7 +288,7 @@ static void sql_handle_ok(void *ctx, uint server_status,
                           ulonglong last_insert_id, const char *const message) {
   DBUG_TRACE;
 
-  Callback_data *cbd = (Callback_data *)ctx;
+  auto *cbd = (Callback_data *)ctx;
 
   cbd->server_status = server_status;
   cbd->warn_count = statement_warn_count;
@@ -293,7 +301,7 @@ static void sql_handle_error(void *ctx, uint sql_errno,
                              const char *const err_msg,
                              const char *const sqlstate) {
   DBUG_TRACE;
-  Callback_data *cbd = (Callback_data *)ctx;
+  auto *cbd = (Callback_data *)ctx;
   WRITE_VAL("ERROR %i %s\n", sql_errno, err_msg);
   cbd->error_called = true;
   cbd->err = sql_errno;
@@ -303,7 +311,7 @@ static void sql_handle_error(void *ctx, uint sql_errno,
 
 static void sql_shutdown(void *ctx, int shutdown_server) {
   DBUG_TRACE;
-  Callback_data *cbd = (Callback_data *)ctx;
+  auto *cbd = (Callback_data *)ctx;
 
   cbd->shutdown = shutdown_server;
   cbd->shutdown_called = true;

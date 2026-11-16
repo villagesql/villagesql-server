@@ -33,7 +33,6 @@
 #include "sql/derror.h"
 #include "storage/perfschema/pfs_error.h"
 
-extern server_error error_names_array[];
 static server_error *sqlstate_map = &error_names_array[1];
 
 static const char *builtin_get_sqlstate(int i) {

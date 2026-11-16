@@ -11,10 +11,6 @@ call mtr.add_suppression("Access denied for user .*");
 # 3. Verify SHA256_MEMORY with invalid length.
 
 
-CREATE USER xuser_native@'localhost'
-IDENTIFIED WITH 'mysql_native_password' BY 'native';
-CREATE USER xuser_sha256@'localhost'
-IDENTIFIED WITH 'sha256_password' BY 'sha256';
 CREATE USER xuser_cache2@'localhost'
 IDENTIFIED WITH 'caching_sha2_password' BY 'cache2';
 
@@ -96,6 +92,4 @@ Mysqlx.Ok {
   msg: "bye!"
 }
 ok
-DROP USER xuser_native@'localhost';
-DROP USER xuser_sha256@'localhost';
 DROP USER xuser_cache2@'localhost';

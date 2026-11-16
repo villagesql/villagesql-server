@@ -25,6 +25,7 @@
 
 #include <stdarg.h>
 #include <boost/graph/properties.hpp>
+#include <chrono>
 #include <memory>
 #include <new>
 
@@ -34,6 +35,7 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_macros.h"
+#include "my_user.h"  // parse_user
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/bits/psi_mutex_bits.h"
 #include "mysql/components/services/log_builtins.h"
@@ -49,6 +51,7 @@
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"    // ACL_internal_schema_access
 #include "sql/auth/auth_internal.h"  // auth_plugin_is_built_in
+#include "sql/auth/auth_plugin_shutdown.h"
 #include "sql/auth/auth_utility.h"
 #include "sql/auth/dynamic_privilege_table.h"
 #include "sql/auth/sql_authentication.h"  // g_cached_authentication_plugins
@@ -92,6 +95,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <regex>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -100,6 +104,7 @@ using std::make_unique;
 using std::min;
 using std::string;
 using std::unique_ptr;
+using namespace std::chrono_literals;
 
 PSI_mutex_key key_LOCK_acl_cache_flush;
 PSI_mutex_info all_acl_cache_mutexes[] = {
@@ -134,7 +139,6 @@ Prealloced_array<ACL_USER, ACL_PREALLOC_SIZE> *acl_users = nullptr;
 Prealloced_array<ACL_PROXY_USER, ACL_PREALLOC_SIZE> *acl_proxy_users = nullptr;
 Prealloced_array<ACL_DB, ACL_PREALLOC_SIZE> *acl_dbs = nullptr;
 Prealloced_array<ACL_HOST_AND_IP, ACL_PREALLOC_SIZE> *acl_wild_hosts = nullptr;
-Db_access_map acl_db_map;
 Default_roles *g_default_roles = nullptr;
 std::vector<Role_id> *g_mandatory_roles = nullptr;
 
@@ -143,7 +147,8 @@ unique_ptr<
     column_priv_hash;
 unique_ptr<
     malloc_unordered_multimap<string, unique_ptr_destroy_only<GRANT_NAME>>>
-    proc_priv_hash, func_priv_hash;
+    proc_priv_hash, func_priv_hash, library_priv_hash;
+
 malloc_unordered_map<std::string, unique_ptr_my_free<acl_entry>> db_cache{
     key_memory_acl_cache};
 collation_unordered_map<std::string, ACL_USER *> *acl_check_hosts = nullptr;
@@ -169,6 +174,36 @@ bool validate_user_plugins = true;
 #define IP_ADDR_STRLEN (3 + 1 + 3 + 1 + 3 + 1 + 3)
 #define ACL_KEY_LENGTH (IP_ADDR_STRLEN + 1 + NAME_LEN + 1 + USERNAME_LENGTH + 1)
 
+ACL_USER acl_utility_user;
+static LEX_STRING acl_utility_user_name, acl_utility_user_host_name;
+static bool acl_utility_user_initialized = false;
+static std::vector<std::string> acl_utility_user_schema_access;
+static std::vector<std::string> uu_dynamic_privileges;
+
+static void acl_free_utility_user();
+
+/**
+ * Returns a non-owning raw pointer of either func_priv_hash, proc_priv_hash or
+ * library_priv_hash.
+ */
+malloc_unordered_multimap<std::string, unique_ptr_destroy_only<GRANT_NAME>>
+    *get_routine_priv_hash(Acl_type type) {
+  if (type == Acl_type::FUNCTION) {
+    assert(func_priv_hash);
+    return func_priv_hash.get();
+  }
+  if (type == Acl_type::PROCEDURE) {
+    assert(proc_priv_hash);
+    return proc_priv_hash.get();
+  }
+  if (type == Acl_type::LIBRARY) {
+    assert(library_priv_hash);
+    return library_priv_hash.get();
+  }
+  assert(false);  // TABLE is not a routine
+  return nullptr;
+}
+
 /** Helper: Set user name */
 static void set_username(char **user, const char *user_arg, MEM_ROOT *mem) {
   assert(user != nullptr);
@@ -188,6 +223,20 @@ static void set_hostname(ACL_HOST_AND_IP *host, const char *host_arg,
 */
 void init_acl_memory() {
   init_sql_alloc(key_memory_acl_mem, &global_acl_memory, ACL_ALLOC_BLOCK_SIZE);
+}
+
+/**
+  Check if the given host name is equal to "localhost".
+
+  @return a flag telling if the given host name is equal to "localhost".
+  @retval TRUE the given host name is equal to "localhost".
+  @retval FALSE the given host name is not equal to "localhost".
+}
+*/
+bool is_localhost_string(const char *hostname) {
+  if (!hostname) return false;
+
+  return !strcmp(hostname, "localhost");
 }
 
 /**
@@ -555,7 +604,7 @@ bool ACL_PROXY_USER::check_validity(bool check_no_resolve) {
   if (check_no_resolve &&
       (hostname_requires_resolving(host.get_host()) ||
        hostname_requires_resolving(proxied_host.get_host())) &&
-      strcmp(host.get_host(), "localhost") != 0) {
+      !is_localhost_string(host.get_host())) {
     LogErr(WARNING_LEVEL, ER_AUTHCACHE_PROXIES_PRIV_SKIPPED_NEEDS_RESOLVE,
            proxied_user ? proxied_user : "",
            proxied_host.get_host() ? proxied_host.get_host() : "",
@@ -1042,10 +1091,8 @@ bool GRANT_TABLE::init(TABLE *col_privs) {
     error =
         col_privs->file->ha_index_read_map(col_privs->record[0], (uchar *)key,
                                            (key_part_map)15, HA_READ_KEY_EXACT);
-    assert(col_privs->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-           error != HA_ERR_LOCK_DEADLOCK);
-    assert(col_privs->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-           error != HA_ERR_LOCK_WAIT_TIMEOUT);
+    assert(error != HA_ERR_LOCK_DEADLOCK);
+    assert(error != HA_ERR_LOCK_WAIT_TIMEOUT);
     DBUG_EXECUTE_IF("wl7158_grant_table_2", error = HA_ERR_LOCK_DEADLOCK;);
     if (error) {
       bool ret = false;
@@ -1080,10 +1127,8 @@ bool GRANT_TABLE::init(TABLE *col_privs) {
                            unique_ptr_destroy_only<GRANT_COLUMN>(mem_check));
 
       error = col_privs->file->ha_index_next(col_privs->record[0]);
-      assert(col_privs->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-             error != HA_ERR_LOCK_DEADLOCK);
-      assert(col_privs->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-             error != HA_ERR_LOCK_WAIT_TIMEOUT);
+      assert(error != HA_ERR_LOCK_DEADLOCK);
+      assert(error != HA_ERR_LOCK_WAIT_TIMEOUT);
       DBUG_EXECUTE_IF("wl7158_grant_table_3", error = HA_ERR_LOCK_DEADLOCK;);
       if (error && error != HA_ERR_END_OF_FILE) {
         acl_print_ha_error(error);
@@ -1391,6 +1436,16 @@ Access_bitmask acl_get(THD *thd, const char *host, const char *ip,
     }
   }
 
+  /* Check to see if the inquiry is for the utility_user */
+  if (acl_is_utility_user(user, host, ip)) {
+    /* Check to see if database is within the schema access list */
+    const auto it = std::find(acl_utility_user_schema_access.cbegin(),
+                              acl_utility_user_schema_access.cend(), db);
+    if (it != acl_utility_user_schema_access.end())
+      db_access = host_access = GLOBAL_ACLS;
+    goto exit;
+  }
+
   /*
     Check if there are some access rights for database and user
   */
@@ -1429,6 +1484,279 @@ exit:
   }
   DBUG_PRINT("exit", ("access: 0x%" PRIx32, db_access & host_access));
   return db_access & host_access;
+}
+
+/*
+ Parse utility-user-dynamic-privileges parameter.
+*/
+static bool setup_utility_user_dynamic_privileges() {
+  if (!utility_user_dynamic_privileges) {
+    // no dynamic privileges provided
+    return false;
+  }
+
+  std::string privileges(utility_user_dynamic_privileges);
+
+  // check if the string is valid
+  std::regex validate_regex("(\\s*[A-Za-z0-9_]+\\s*,*)*\\s*[A-Za-z0-9_]+\\s*",
+                            std::regex::nosubs);
+  if (!std::regex_match(privileges, validate_regex)) {
+    sql_print_error(
+        "Wrong format of --utility-user-dynamic-privileges parameter value: %s",
+        utility_user_dynamic_privileges);
+    return true;
+  }
+
+  // split it into tokens and trim
+  std::regex split_regex("[^,\\s][^,]*[^,\\s]");
+  for (auto it = std::sregex_iterator(privileges.begin(), privileges.end(),
+                                      split_regex);
+       it != std::sregex_iterator(); ++it) {
+    // Unfortunately there is a bug related to std::regex_constants::icase
+    // https://stackoverflow.com/questions/37757863/c11-regexicase-inconsistent-behavior
+    auto s = it->str();
+    std::for_each(s.begin(), s.end(), [](char &c) { c = ::toupper(c); });
+    uu_dynamic_privileges.push_back(s);
+  }
+
+  return false;
+}
+
+int caching_sha2_password_generate(char *outbuf, unsigned int *buflen,
+                                   const char *inbuf, unsigned int inbuflen);
+
+/*
+  Set up the acl_utility_user and add it to the acl_user list.
+*/
+static bool acl_init_utility_user(bool check_no_resolve) {
+  bool ret = true;
+
+  unsigned int pwlen = 256;
+
+  if (!utility_user) goto end;
+
+  acl_free_utility_user();
+
+  /* Allocate all initial resources necessary */
+  acl_utility_user_name.str =
+      (char *)my_malloc(key_memory_acl_mem, USERNAME_LENGTH + 1, MY_ZEROFILL);
+  acl_utility_user_host_name.str =
+      (char *)my_malloc(key_memory_acl_mem, HOSTNAME_LENGTH + 1, MY_ZEROFILL);
+
+  acl_utility_user.credentials[0].m_auth_string.str =
+      static_cast<char *>(my_malloc(key_memory_acl_mem, pwlen, MY_ZEROFILL));
+
+  acl_utility_user_initialized = true;
+
+  /* parse out the option to its component user and host name parts */
+  parse_user(utility_user, strlen(utility_user), acl_utility_user_name.str,
+             &acl_utility_user_name.length, acl_utility_user_host_name.str,
+             &acl_utility_user_host_name.length);
+
+  /* Check to see if the username is anonymous */
+  if (!acl_utility_user_name.str || acl_utility_user_name.str[0] == '\0') {
+    sql_print_error(
+        "'utility user' specified as '%s' is anonymous"
+        " and not allowed.",
+        utility_user);
+    ret = false;
+    goto cleanup;
+  }
+
+  /* Check to see that a password was supplied */
+  if (!utility_user_password || utility_user_password[0] == '\0') {
+    sql_print_error(
+        "'utility user' specified as '%s' but has no "
+        "password. Please see --utility_user_password.",
+        utility_user);
+    ret = false;
+    goto cleanup;
+  }
+
+  /* set up some of the static utility user struct fields */
+  acl_utility_user.user = acl_utility_user_name.str;
+
+  acl_utility_user.host.update_hostname(acl_utility_user_host_name.str);
+
+  acl_utility_user.sort =
+      get_sort(2, acl_utility_user.host.get_host(), acl_utility_user.user);
+
+  /* Check to see if the utility user matches any existing user */
+  for (const ACL_USER &user : *acl_users) {
+    if (user.user && strcmp(acl_utility_user_name.str, user.user) == 0) {
+      if (user.sort == acl_utility_user.sort) {
+        sql_print_error(
+            "'utility user' specification '%s' exactly"
+            " matches existing user in mysql.user table.",
+            utility_user);
+        ret = false;
+        goto cleanup;
+      } else if (user.sort < acl_utility_user.sort) {
+        sql_print_warning(
+            "'utility user' specification '%s' closely"
+            " matches more specific existing user '%s@%s' in"
+            " mysql.user table which may render the utility_user"
+            " inaccessable from certain hosts.",
+            utility_user, user.user ? user.user : "", user.host.get_host());
+      }
+    }
+  }
+
+  if (check_no_resolve &&
+      hostname_requires_resolving(acl_utility_user.host.get_host())) {
+    sql_print_warning(
+        "'utility user' entry '%s@%s' "
+        "ignored in --skip-name-resolve mode.",
+        acl_utility_user.user ? acl_utility_user.user : "",
+        acl_utility_user.host.get_host() ? acl_utility_user.host.get_host()
+                                         : "");
+    ret = false;
+    goto cleanup;
+  }
+
+  /* Fill out the rest of the static utility user struct, and add it into the
+  acl_users list, then resort */
+
+  caching_sha2_password_generate(
+      const_cast<char *>(acl_utility_user.credentials[0].m_auth_string.str),
+      &pwlen, utility_user_password, strlen(utility_user_password));
+
+  acl_utility_user.credentials[0].m_auth_string.length = pwlen;
+
+  acl_utility_user.plugin.str = Cached_authentication_plugins::get_plugin_name(
+      PLUGIN_CACHING_SHA2_PASSWORD);
+  acl_utility_user.plugin.length = strlen(acl_utility_user.plugin.str);
+
+  if (set_user_salt(&acl_utility_user)) {
+    goto cleanup;
+  }
+
+  if (setup_utility_user_dynamic_privileges()) {
+    goto cleanup;
+  }
+
+  assert(utility_user_privileges <= UINT_MAX32);
+  acl_utility_user.access = utility_user_privileges & UINT_MAX32;
+  if (acl_utility_user.access) {
+    char privilege_desc[512];
+    get_privilege_desc(privilege_desc, array_elements(privilege_desc),
+                       acl_utility_user.access);
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with access rights "
+        "'%s'.",
+        acl_utility_user.user, acl_utility_user.host.get_host(),
+        privilege_desc);
+  } else {
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with basic "
+        "access rights.",
+        acl_utility_user.user, acl_utility_user.host.get_host());
+  }
+
+  if (!uu_dynamic_privileges.empty()) {
+    std::stringstream oss;
+    bool first = true;
+    for (const auto &item : uu_dynamic_privileges) {
+      oss << (first ? "" : ",") << item;
+      first = false;
+    }
+
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with dynamic privileges '%s'.",
+        acl_utility_user.user, acl_utility_user.host.get_host(),
+        oss.str().c_str());
+  }
+
+  acl_utility_user.ssl_type = SSL_TYPE_NONE;
+
+  acl_utility_user.can_authenticate = true;
+
+  acl_users->push_back(acl_utility_user);
+
+  rebuild_cached_acl_users_for_name();
+
+  /* initialize the schema access list if specified */
+  if (utility_user_schema_access) {
+    char *cur_pos = utility_user_schema_access;
+    char *cur_db = cur_pos;
+    std::stringstream formatted;
+    bool first_entry = true;
+    do {
+      if (*cur_pos == ',' || *cur_pos == '\0') {
+        if (cur_pos - cur_db > 0) {
+          const std::string db(cur_db, cur_pos - cur_db);
+          acl_utility_user_schema_access.push_back(db);
+          if (!first_entry) {
+            formatted << ", ";
+          }
+          formatted << db;
+          first_entry = false;
+        }
+        cur_db = cur_pos + 1;
+        if (*cur_pos == '\0') break;
+      }
+      cur_pos++;
+    } while (1);
+
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with full access to"
+        " schemas '%s'.",
+        acl_utility_user.user, acl_utility_user.host.get_host(),
+        formatted.str().c_str());
+  } else {
+    sql_print_information(
+        "Utility user '%s'@'%s' in use with"
+        " no schema access",
+        acl_utility_user.user, acl_utility_user.host.get_host());
+  }
+  goto end;
+
+cleanup:
+  acl_free_utility_user();
+
+end:
+  return ret;
+}
+
+/*
+  Free up any resources allocated during acl_init_utility_user.
+*/
+static void acl_free_utility_user() {
+  if (acl_utility_user_initialized) {
+    acl_utility_user_schema_access.clear();
+    my_free(acl_utility_user_name.str);
+    my_free(acl_utility_user_host_name.str);
+    my_free(
+        const_cast<char *>(acl_utility_user.credentials[0].m_auth_string.str));
+    memset(static_cast<void *>(&acl_utility_user), 0, sizeof(acl_utility_user));
+    acl_utility_user_initialized = false;
+  }
+}
+
+bool acl_utility_user_has_global_grant(const std::string &privilege) {
+  if (!utility_user_dynamic_privileges) {
+    return false;
+  }
+
+  // std::regex (..., std::regex_constants::icase) would fit here perfectly,
+  // but unfortunately there is a bug related to std::regex_constants::icase
+  // https://stackoverflow.com/questions/37757863/c11-regexicase-inconsistent-behavior
+  auto tmp_str = privilege;
+  std::for_each(tmp_str.begin(), tmp_str.end(),
+                [](char &c) { c = ::toupper(c); });
+
+  auto it = std::find(uu_dynamic_privileges.begin(),
+                      uu_dynamic_privileges.end(), tmp_str);
+  return it != uu_dynamic_privileges.end();
+}
+
+/*
+  Determines if the user specified by user, host, ip matches the utility user
+*/
+bool acl_is_utility_user(const char *user, const char *host, const char *ip) {
+  return (user && acl_utility_user.user &&
+          strcmp(user, acl_utility_user.user) == 0 &&
+          acl_utility_user.host.compare_hostname(host, ip));
 }
 
 /*
@@ -1566,7 +1894,7 @@ bool acl_getroot(THD *thd, Security_context *sctx, const char *user,
     get_default_roles(authid, default_roles);
     List_of_auth_id_refs::iterator it = default_roles.begin();
     for (; it != default_roles.end(); ++it) {
-      if (sctx->activate_role(it->first, it->second)) {
+      if (sctx->activate_role(it->first, it->second, false)) {
         sctx->clear_active_roles();
         break;
       }
@@ -1638,12 +1966,17 @@ bool set_user_salt(ACL_USER *acl_user) {
                                   MYSQL_AUTHENTICATION_PLUGIN);
   if (plugin) {
     st_mysql_auth *auth = (st_mysql_auth *)plugin_decl(plugin)->info;
+    Auth_plugin_operation_guard op_guard;
 
-    for (int i = 0; i < NUM_CREDENTIALS && !result; ++i) {
-      result = auth->set_salt(acl_user->credentials[i].m_auth_string.str,
-                              acl_user->credentials[i].m_auth_string.length,
-                              acl_user->credentials[i].m_salt,
-                              &acl_user->credentials[i].m_salt_len);
+    if (!op_guard) {
+      result = true;
+    } else {
+      for (int i = 0; i < NUM_CREDENTIALS && !result; ++i) {
+        result = auth->set_salt(acl_user->credentials[i].m_auth_string.str,
+                                acl_user->credentials[i].m_auth_string.length,
+                                acl_user->credentials[i].m_salt,
+                                &acl_user->credentials[i].m_salt_len);
+      }
     }
     plugin_unlock(nullptr, plugin);
   }
@@ -1872,6 +2205,8 @@ static bool acl_load(THD *thd, Table_ref *tables) {
 
   if (read_user_table(thd, tables[0].table)) goto end;
 
+  if (!acl_init_utility_user(check_no_resolve)) goto end;
+
   /*
     Prepare reading from the mysql.db table
   */
@@ -1894,7 +2229,7 @@ static bool acl_load(THD *thd, Table_ref *tables) {
     }
     db.user = get_field(&global_acl_memory, table->field[MYSQL_DB_FIELD_USER]);
     if (check_no_resolve && hostname_requires_resolving(db.host.get_host()) &&
-        strcmp(db.host.get_host(), "localhost") != 0) {
+        !is_localhost_string(db.host.get_host())) {
       LogErr(WARNING_LEVEL, ER_AUTHCACHE_DB_SKIPPED_NEEDS_RESOLVE, db.db,
              db.user ? db.user : "",
              db.host.get_host() ? db.host.get_host() : "");
@@ -1989,6 +2324,7 @@ void free_name_to_userlist() {
 }
 
 void acl_free(bool end /*= false*/) {
+  acl_free_utility_user();
   free_name_to_userlist();
   delete acl_users;
   acl_users = nullptr;
@@ -2356,6 +2692,8 @@ bool acl_reload(THD *thd, bool mdl_locked,
 
   if (!acl_cache_lock.lock()) goto end;
 
+  DEBUG_SYNC(thd, "acl_x_lock");
+
   old_acl_users = acl_users;
   old_acl_dbs = acl_dbs;
   old_acl_proxy_users = acl_proxy_users;
@@ -2444,12 +2782,6 @@ void acl_insert_proxy_user(ACL_PROXY_USER *new_value) {
   acl_proxy_users->insert(upper_bound, *new_value);
 }
 
-struct Free_grant_table {
-  void operator()(GRANT_TABLE *grant_table) const {
-    grant_table->~GRANT_TABLE();
-  }
-};
-
 /* Free grant array if possible */
 
 void grant_free(void) {
@@ -2457,6 +2789,7 @@ void grant_free(void) {
   column_priv_hash.reset();
   proc_priv_hash.reset();
   func_priv_hash.reset();
+  library_priv_hash.reset();
   memex.Clear();
 }
 
@@ -2529,6 +2862,10 @@ static bool grant_load_procs_priv(TABLE *p_table) {
       new malloc_unordered_multimap<string,
                                     unique_ptr_destroy_only<GRANT_NAME>>(
           key_memory_acl_memex));
+  library_priv_hash.reset(
+      new malloc_unordered_multimap<string,
+                                    unique_ptr_destroy_only<GRANT_NAME>>(
+          key_memory_acl_memex));
   error = p_table->file->ha_index_init(0, true);
   DBUG_EXECUTE_IF("wl7158_grant_load_proc_1", p_table->file->ha_index_end();
                   error = HA_ERR_LOCK_DEADLOCK;);
@@ -2539,10 +2876,8 @@ static bool grant_load_procs_priv(TABLE *p_table) {
   p_table->use_all_columns();
 
   error = p_table->file->ha_index_first(p_table->record[0]);
-  assert(p_table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-         error != HA_ERR_LOCK_DEADLOCK);
-  assert(p_table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-         error != HA_ERR_LOCK_WAIT_TIMEOUT);
+  assert(error != HA_ERR_LOCK_DEADLOCK);
+  assert(error != HA_ERR_LOCK_WAIT_TIMEOUT);
   DBUG_EXECUTE_IF("wl7158_grant_load_proc_2", error = HA_ERR_LOCK_DEADLOCK;);
 
   if (error) {
@@ -2569,11 +2904,13 @@ static bool grant_load_procs_priv(TABLE *p_table) {
                  mem_check->host.get_host() ? mem_check->host.get_host() : "");
         }
       }
-      const enum_sp_type sp_type = to_sp_type(p_table->field[4]->val_int());
-      if (sp_type == enum_sp_type::PROCEDURE) {
-        hash = proc_priv_hash.get();
-      } else if (sp_type == enum_sp_type::FUNCTION) {
+      auto sp_type = p_table->field[4]->val_int();
+      if (sp_type == 1) {  // FUNCTION
         hash = func_priv_hash.get();
+      } else if (sp_type == 2) {  // PROCEDURE
+        hash = proc_priv_hash.get();
+      } else if (sp_type == 3) {  // LIBRARY
+        hash = library_priv_hash.get();
       } else {
         LogErr(WARNING_LEVEL,
                ER_AUTHCACHE_PROCS_PRIV_ENTRY_IGNORED_BAD_ROUTINE_TYPE,
@@ -2591,10 +2928,8 @@ static bool grant_load_procs_priv(TABLE *p_table) {
       }
     next_record:
       error = p_table->file->ha_index_next(p_table->record[0]);
-      assert(p_table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-             error != HA_ERR_LOCK_DEADLOCK);
-      assert(p_table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-             error != HA_ERR_LOCK_WAIT_TIMEOUT);
+      assert(error != HA_ERR_LOCK_DEADLOCK);
+      assert(error != HA_ERR_LOCK_WAIT_TIMEOUT);
       DBUG_EXECUTE_IF("wl7158_grant_load_proc_3",
                       error = HA_ERR_LOCK_DEADLOCK;);
       if (error) {
@@ -2656,10 +2991,8 @@ static bool grant_load(THD *thd, Table_ref *tables) {
   c_table->use_all_columns();
 
   error = t_table->file->ha_index_first(t_table->record[0]);
-  assert(t_table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-         error != HA_ERR_LOCK_DEADLOCK);
-  assert(t_table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-         error != HA_ERR_LOCK_WAIT_TIMEOUT);
+  assert(error != HA_ERR_LOCK_DEADLOCK);
+  assert(error != HA_ERR_LOCK_WAIT_TIMEOUT);
   DBUG_EXECUTE_IF("wl7158_grant_load_2", error = HA_ERR_LOCK_DEADLOCK;);
   if (error) {
     if (error == HA_ERR_END_OF_FILE)
@@ -2683,7 +3016,7 @@ static bool grant_load(THD *thd, Table_ref *tables) {
 
       if (check_no_resolve) {
         if (hostname_requires_resolving(mem_check->host.get_host()) &&
-            strcmp(mem_check->host.get_host(), "localhost") != 0) {
+            !is_localhost_string(mem_check->host.get_host())) {
           LogErr(WARNING_LEVEL, ER_AUTHCACHE_TABLES_PRIV_SKIPPED_NEEDS_RESOLVE,
                  mem_check->tname, mem_check->user ? mem_check->user : "",
                  mem_check->host.get_host() ? mem_check->host.get_host() : "");
@@ -2698,10 +3031,8 @@ static bool grant_load(THD *thd, Table_ref *tables) {
             unique_ptr_destroy_only<GRANT_TABLE>(mem_check));
       }
       error = t_table->file->ha_index_next(t_table->record[0]);
-      assert(t_table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-             error != HA_ERR_LOCK_DEADLOCK);
-      assert(t_table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
-             error != HA_ERR_LOCK_WAIT_TIMEOUT);
+      assert(error != HA_ERR_LOCK_DEADLOCK);
+      assert(error != HA_ERR_LOCK_WAIT_TIMEOUT);
       DBUG_EXECUTE_IF("wl7158_grant_load_3", error = HA_ERR_LOCK_DEADLOCK;);
       if (error) {
         if (error != HA_ERR_END_OF_FILE)
@@ -2745,6 +3076,9 @@ static bool grant_reload_procs_priv(Table_ref *table) {
   unique_ptr<
       malloc_unordered_multimap<string, unique_ptr_destroy_only<GRANT_NAME>>>
       old_func_priv_hash(std::move(func_priv_hash));
+  unique_ptr<
+      malloc_unordered_multimap<string, unique_ptr_destroy_only<GRANT_NAME>>>
+      old_library_priv_hash(std::move(library_priv_hash));
   bool return_val = false;
 
   if ((return_val = grant_load_procs_priv(table->table))) {
@@ -2752,6 +3086,7 @@ static bool grant_reload_procs_priv(Table_ref *table) {
     DBUG_PRINT("error", ("Reverting to old privileges"));
     proc_priv_hash = std::move(old_proc_priv_hash);
     func_priv_hash = std::move(old_func_priv_hash);
+    library_priv_hash = std::move(old_library_priv_hash);
   }
 
   return return_val;
@@ -2862,7 +3197,7 @@ void acl_update_user(const char *user, const char *host, enum SSL_type ssl_type,
                      const char *x509_subject, USER_RESOURCES *mqh,
                      Access_bitmask privileges, const LEX_CSTRING &plugin,
                      const LEX_CSTRING &auth, const std::string &second_auth,
-                     const MYSQL_TIME &password_change_time,
+                     const Datetime_val &password_change_time,
                      const LEX_ALTER &password_life, Restrictions &restrictions,
                      acl_table::Pod_user_what_to_update &what_to_update,
                      uint failed_login_attempts, int password_lock_time,
@@ -3024,7 +3359,7 @@ void acl_users_add_one(const char *user, const char *host,
                        USER_RESOURCES *mqh, Access_bitmask privileges,
                        const LEX_CSTRING &plugin, const LEX_CSTRING &auth,
                        const LEX_CSTRING &second_auth,
-                       const MYSQL_TIME &password_change_time,
+                       const Datetime_val &password_change_time,
                        const LEX_ALTER &password_life, bool add_role_vertex,
                        Restrictions &restrictions, uint failed_login_attempts,
                        int password_lock_time, const I_multi_factor_auth *mfa,
@@ -3137,7 +3472,7 @@ void acl_insert_user(THD *thd [[maybe_unused]], const char *user,
                      const char *x509_subject, USER_RESOURCES *mqh,
                      Access_bitmask privileges, const LEX_CSTRING &plugin,
                      const LEX_CSTRING &auth,
-                     const MYSQL_TIME &password_change_time,
+                     const Datetime_val &password_change_time,
                      const LEX_ALTER &password_life, Restrictions &restrictions,
                      uint failed_login_attempts, int password_lock_time,
                      const I_multi_factor_auth *mfa) {
@@ -3391,10 +3726,11 @@ Acl_map::Acl_map(Security_context *sctx, uint64 ver)
     return;
   }
   List_of_granted_roles granted_roles;
-  get_privilege_access_maps(
-      acl_user, sctx->get_active_roles(), &m_global_acl, &m_db_acls,
-      &m_db_wild_acls, &m_table_acls, &m_sp_acls, &m_func_acls, &granted_roles,
-      &m_with_admin_acls, &m_dynamic_privileges, m_restrictions);
+  get_privilege_access_maps(acl_user, sctx->get_active_roles(), &m_global_acl,
+                            &m_db_acls, &m_db_wild_acls, &m_table_acls,
+                            &m_sp_acls, &m_func_acls, &m_lib_acls,
+                            &granted_roles, &m_with_admin_acls,
+                            &m_dynamic_privileges, m_restrictions, false);
 }
 
 Acl_map::~Acl_map() {
@@ -3411,6 +3747,7 @@ Acl_map &Acl_map::operator=(Acl_map &&map) {
   m_table_acls = std::move(map.m_table_acls);
   m_sp_acls = std::move(map.m_sp_acls);
   m_func_acls = std::move(map.m_func_acls);
+  m_lib_acls = std::move(map.m_lib_acls);
   m_with_admin_acls = std::move(map.m_with_admin_acls);
   m_version = map.m_version;
   m_restrictions = map.m_restrictions;
@@ -3433,6 +3770,8 @@ Grant_acl_set *Acl_map::grant_acls() { return &m_with_admin_acls; }
 SP_access_map *Acl_map::sp_acls() { return &m_sp_acls; }
 
 SP_access_map *Acl_map::func_acls() { return &m_func_acls; }
+
+SP_access_map *Acl_map::lib_acls() { return &m_lib_acls; }
 
 Dynamic_privileges *Acl_map::dynamic_privileges() {
   return &m_dynamic_privileges;
@@ -3565,6 +3904,15 @@ void Acl_cache::flush_cache() {
         lf_hash_random_match(&m_cache, pins, &cache_flusher, 0, nullptr));
     if (entry &&
         !lf_hash_delete(&m_cache, pins, entry->key, entry->key_length)) {
+      /*
+        Now that the entry is out of the cache, wait for the reference count to
+        go down to 0 if another thread is still using it.
+      */
+      while (entry->map->reference_count() != 0) {
+        DBUG_PRINT("info",
+                   ("Entry %p with reference count > 0. Waiting.", entry));
+        std::this_thread::sleep_for(100ms);
+      }
       // Hash element is removed from cache; safe to delete
       my_free(entry->key);
       delete entry->map;
@@ -4080,3 +4428,22 @@ bool is_partial_revoke_exists(THD *thd) {
 }
 
 bool is_acl_inited() { return acl_cache_initialized; }
+
+size_t acl_users_size() {
+  assert(assert_acl_cache_read_lock(current_thd));
+
+  size_t size = (acl_users != nullptr) ? acl_users->size() : 0;
+
+  return size;
+}
+
+void acl_users_accept(ACL_USER_visitor *visitor) {
+  assert(assert_acl_cache_read_lock(current_thd));
+
+  if (acl_users != nullptr) {
+    for (ACL_USER *acl_user = acl_users->begin(); acl_user != acl_users->end();
+         ++acl_user) {
+      visitor->visit(acl_user);
+    }
+  }
+}

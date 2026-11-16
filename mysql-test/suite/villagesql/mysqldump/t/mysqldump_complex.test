@@ -16,7 +16,7 @@ ORDER BY ORDINAL_POSITION;
 SELECT * FROM t1 ORDER BY id;
 
 --echo # Dump the table
---exec $MYSQL_DUMP --compact test t1 > $mysqldumpfile
+--exec $MYSQL_DUMP --compact --set-gtid-purged=OFF test t1 > $mysqldumpfile
 
 --echo # Rename original and restore from dump
 ALTER TABLE t1 RENAME TO t1_orig;

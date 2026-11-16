@@ -12,6 +12,39 @@
 SET optimizer_trace='enabled=on';
 
 --echo #
+--echo # WL#17265: hypergraph optimizer is settable when available
+--echo #
+
+SET SESSION optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@session.optimizer_switch) > 0;
+
+SET SESSION optimizer_switch='hypergraph_optimizer=off';
+SELECT LOCATE('hypergraph_optimizer=off', @@session.optimizer_switch) > 0;
+
+SET SESSION optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@session.optimizer_switch) > 0;
+
+SET GLOBAL optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0;
+
+SET GLOBAL optimizer_switch='hypergraph_optimizer=off';
+SELECT LOCATE('hypergraph_optimizer=off', @@global.optimizer_switch) > 0;
+
+SET GLOBAL optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0;
+
+SET PERSIST optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0;
+
+SET PERSIST optimizer_switch='hypergraph_optimizer=off';
+SELECT LOCATE('hypergraph_optimizer=off', @@global.optimizer_switch) > 0;
+
+SET PERSIST optimizer_switch='hypergraph_optimizer=on';
+SELECT LOCATE('hypergraph_optimizer=on', @@global.optimizer_switch) > 0;
+
+RESET PERSIST optimizer_switch;
+
+--echo #
 --echo # Bug #33296454: Use the hypergraph optimizer for SET statements
 --echo #
 
@@ -88,7 +121,7 @@ PREPARE ps_set FROM 'SET @x = (SELECT COUNT(*) FROM t)';
 PREPARE ps_select FROM 'SELECT COUNT(*) FROM t';
 
 # Set 'hypergraph_optimizer=on' while suppressing warnings
---source include/have_hypergraph.inc
+SET optimizer_switch = 'hypergraph_optimizer=on';
 
 EXECUTE ps_set;
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE
@@ -121,7 +154,7 @@ SELECT @x;
 --echo # Clean up for Bug #33296454
 
 DROP TABLE t;
---source include/have_hypergraph.inc
+SET optimizer_switch = 'hypergraph_optimizer=on';
 
 --echo # Bug #33296454 done
 
@@ -189,7 +222,7 @@ WHERE TRACE LIKE '%Constructed hypergraph%';
 --echo # Clean up for Bug #33296504
 
 DROP TABLE t1, t2, t3;
---source include/have_hypergraph.inc
+SET optimizer_switch = 'hypergraph_optimizer=on';
 
 --echo # Bug #33296504 done
 
@@ -234,3 +267,4 @@ DROP TABLE t1, t2;
 
 SET optimizer_trace='enabled=off';
 SET optimizer_switch=default;
+--source include/disable_hypergraph.inc

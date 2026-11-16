@@ -50,10 +50,10 @@
 #include <mysql.h>
 #include <mysql/client_plugin.h>
 #include <mysql/plugin_auth.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "my_compiler.h"
 
@@ -96,7 +96,7 @@ static int two_questions(MYSQL_PLUGIN_VIO *vio, MYSQL_SERVER_AUTH_INFO *info) {
   info->password_used = PASSWORD_USED_YES;
 
   /* fail if the password is wrong */
-  if (strcmp((const char *)pkt, info->auth_string)) return CR_ERROR;
+  if (strcmp((const char *)pkt, info->auth_string) != 0) return CR_ERROR;
 
   /* send the last, ordinary, question */
   if (vio->write_packet(

@@ -31,9 +31,9 @@
 #include "mysql/binlog/event/compression/none_dec.h"
 #include "mysql/binlog/event/compression/zstd_comp.h"
 #include "mysql/binlog/event/compression/zstd_dec.h"
-#include "mysql/binlog/event/string/concat.h"
+#include "mysql/utils/concat.h"
 
-using mysql::binlog::event::string::concat;
+using mysql::utils::throwing::concat;
 
 namespace mysql::binlog::event::compression::unittests {
 

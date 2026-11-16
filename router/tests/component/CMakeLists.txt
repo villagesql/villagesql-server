@@ -59,11 +59,14 @@ FOREACH(test_file
     test_config_overwrites.cc
     test_connection_pool.cc
     test_gr_notifications.cc
+    test_host_cache.cc
+    test_host_cache_config.cc
     test_http_server.cc
     test_logging.cc
     test_logging_eventlog.cc
     test_master_key_reader_writer.cc
     test_metadata_ttl.cc
+    test_mrs_config.cc
     test_cluster_metadata.cc
     test_node_attributes.cc
     test_gr_state.cc
@@ -94,21 +97,27 @@ FOREACH(test_file
     test_socket_close.cc
     test_stacktrace.cc
     test_destination_status.cc
+    test_routing_guidelines_invalid_document.cc
+    test_routing_guidelines_invalid_match.cc
+    test_routing_guidelines_routing.cc
+    test_routing_guidelines_adapter.cc
     )
 add_test_file(${CMAKE_CURRENT_SOURCE_DIR}/${test_file}
   MODULE "component"
   INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/src/mock_server/include/mysqlrouter/
+    ${PROJECT_SOURCE_DIR}/src/host_cache/include/
     ${PROJECT_SOURCE_DIR}/src/routing/include
+    ${PROJECT_SOURCE_DIR}/tests/
   SYSTEM_INCLUDE_DIRS ${GMOCK_INCLUDE_DIRS}
-                      ${PROTOBUF_INCLUDE_DIR} ${MYSQLX_GENERATE_DIR}
+                      ${PROTOBUF_INCLUDE_DIR}
   LIB_DEPENDS
   http_client
   http_common
   mock_server_rest_client
   mysql_protocol
-  mysqlxclient_lite
-  mysqlxmessages_lite
+  router_mysqlxclient
+  router_mysqlxmessages
   router_cluster
 
   DEPENDS
@@ -131,6 +140,9 @@ add_test_file(${CMAKE_CURRENT_SOURCE_DIR}/${test_file}
   )
   ROUTERTEST_GET_TARGET(ttt ${test_file} "component")
   DOWNGRADE_STRINGOP_WARNINGS(${ttt})
+  IF(MY_COMPILER_IS_GNU AND (WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO))
+    TARGET_LINK_OPTIONS(${ttt} PRIVATE -Wno-error=stringop-overflow)
+  ENDIF()
 ENDFOREACH()
 
 FOREACH(test_file
@@ -140,14 +152,14 @@ FOREACH(test_file
 add_router_test_file(${CMAKE_CURRENT_SOURCE_DIR}/${test_file}
   MODULE "component"
   SYSTEM_INCLUDE_DIRS ${GMOCK_INCLUDE_DIRS}
-                      ${PROTOBUF_INCLUDE_DIR} ${MYSQLX_GENERATE_DIR}
+                      ${PROTOBUF_INCLUDE_DIR}
   INCLUDE_DIRS
   ${CMAKE_SOURCE_DIR}/plugin/x/client/
   $<TARGET_PROPERTY:routing_connections,INCLUDE_DIRECTORIES>
 
   LIB_DEPENDS
-  mysqlxclient_lite
-  mysqlxmessages_lite
+  router_mysqlxclient
+  router_mysqlxmessages
 
   DEPENDS
   http_auth_backend
@@ -167,6 +179,16 @@ add_router_test_file(${CMAKE_CURRENT_SOURCE_DIR}/${test_file}
   routing
   )
 ENDFOREACH()
+
+# the mock-server test needs the mysql_native_password client plugin,
+# if it built (depends on WITH_AUTHENTICATION_CLIENT_PLUGINS)
+IF(TARGET mysql_native_password)
+  ADD_DEPENDENCIES(routertest_component_mock_server
+    mysql_native_password)
+ELSE()
+  ADD_DEFINITIONS(-DSKIP_MYSQL_NATIVE_PASSWORD_TESTS)
+ENDIF()
+
 
 # When system deployment bootstrap is executed, files are
 # created in locations specified by deployment layout.

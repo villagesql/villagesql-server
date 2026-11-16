@@ -42,6 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fts0fts.h"
 #endif /* !UNIV_HOTBACKUP */
 #include "gis0geo.h"
+#include "lob0lob.h"
 #include "mach0data.h"
 #include "mtr0log.h"
 #include "mtr0mtr.h"
@@ -267,7 +268,7 @@ bool is_store_version(const dict_index_t *index, size_t n_tuple_fields) {
 @return number of nullable fileds in the physical record. */
 static size_t get_nullable_fields_for_rec(const dict_index_t *index,
                                           const size_t n_fields,
-                                          uint8_t &rec_version) {
+                                          row_version_t &rec_version) {
   const bool is_valid_version = is_valid_row_version(rec_version);
   size_t nullable_fields = 0;
 
@@ -310,7 +311,7 @@ static size_t get_nullable_fields_for_rec(const dict_index_t *index,
 [[nodiscard]] static inline ulint rec_get_converted_size_comp_prefix_low(
     const dict_index_t *index, const dfield_t *fields, ulint n_fields,
     const dtuple_t *v_entry, ulint *extra, ulint *status, bool temp,
-    uint8_t rec_version) {
+    row_version_t rec_version) {
   ut_ad(n_fields <= dict_index_get_n_fields(index));
   ut_ad(!temp || extra);
 
@@ -410,7 +411,10 @@ static size_t get_nullable_fields_for_rec(const dict_index_t *index,
 
     ut_ad(len <= col->len || DATA_LARGE_MTYPE(col->mtype) ||
           (DATA_POINT_MTYPE(col->mtype) && len == DATA_MBR_LEN) ||
-          (col->len == 0 && col->mtype == DATA_VARCHAR));
+          ((col->mtype == DATA_VARCHAR || col->mtype == DATA_BINARY ||
+            col->mtype == DATA_VARMYSQL) &&
+           (col->len == 0 ||
+            len <= col->len + prtype_get_compression_extra(col->prtype))));
 
     fixed_len = field->fixed_len;
     if (temp && fixed_len && !col->get_fixed_size(temp)) {
@@ -746,7 +750,7 @@ size_t get_extra_bytes_for_temp_redundant(const dict_index_t *index,
 static inline Rec_instant_state rec_convert_dtuple_to_rec_comp(
     rec_t *rec, const dict_index_t *index, const dfield_t *fields,
     ulint n_fields, const dtuple_t *v_entry, ulint status, bool temp,
-    uint8_t rec_version) {
+    row_version_t rec_version) {
   ut_ad(temp || dict_table_is_comp(index->table));
 
   ulint num_v = v_entry ? dtuple_get_n_v_fields(v_entry) : 0;
@@ -919,12 +923,15 @@ static inline Rec_instant_state rec_convert_dtuple_to_rec_comp(
         /* DATA_POINT would have a fixed_len */
         ut_ad(dtype_get_mtype(type) != DATA_POINT);
 #ifndef UNIV_HOTBACKUP
-        ut_ad(len <= dtype_get_len(type) ||
+        ut_ad(len <= dtype_get_len(type) +
+                         prtype_get_compression_extra(dtype_get_prtype(type)) ||
               DATA_LARGE_MTYPE(dtype_get_mtype(type)) ||
               !strcmp(index->name, FTS_INDEX_TABLE_IND_NAME));
 #endif /* !UNIV_HOTBACKUP */
         if (len < 128 ||
-            !DATA_BIG_LEN_MTYPE(dtype_get_len(type), dtype_get_mtype(type))) {
+            !DATA_BIG_LEN_MTYPE(
+                dtype_get_len(type), dtype_get_mtype(type),
+                prtype_get_compression_extra(dtype_get_prtype(type)))) {
           *lens = (byte)len;
           lens--;
         } else {
@@ -1068,6 +1075,12 @@ static rec_t *rec_convert_dtuple_to_rec_new(byte *buf,
                               &extra_size);
   rec = buf + extra_size;
 
+#ifdef UNIV_DEBUG
+  /* Suppress Valgrind warnings in mach_read_from_1() called from
+   * rec_set_bit_field_1() */
+  mach_write_to_1(rec - REC_NEW_INFO_BITS, 0xFF);
+#endif /* UNIV_DEBUG */
+
   auto rec_state = rec_convert_dtuple_to_rec_comp(
       rec, index, dtuple->fields, dtuple->n_fields, nullptr, status, false,
       index->table->current_row_version);
@@ -1154,7 +1167,7 @@ rec_t *rec_convert_dtuple_to_rec(
  @return total size */
 ulint rec_get_serialize_size(const dict_index_t *index, const dfield_t *fields,
                              ulint n_fields, const dtuple_t *v_entry,
-                             ulint *extra, uint8_t rec_version) {
+                             ulint *extra, row_version_t rec_version) {
   return rec_get_converted_size_comp_prefix_low(
       index, fields, n_fields, v_entry, extra, nullptr, true, rec_version);
 }
@@ -1180,7 +1193,7 @@ void rec_deserialize_init_offsets(
 @see rec_deserialize_init_offsets() */
 void rec_serialize_dtuple(rec_t *rec, const dict_index_t *index,
                           const dfield_t *fields, ulint n_fields,
-                          const dtuple_t *v_entry, uint8_t rec_version) {
+                          const dtuple_t *v_entry, row_version_t rec_version) {
   rec_convert_dtuple_to_rec_comp(rec, index, fields, n_fields, v_entry,
                                  REC_STATUS_ORDINARY, true, rec_version);
 }
@@ -1313,7 +1326,7 @@ rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const dict_index_t *index,
 
   {
     uint16_t ndf = 0;
-    uint8_t row_version = UINT8_UNDEFINED;
+    row_version_t row_version = INVALID_ROW_VERSION;
     ut_d(enum REC_INSERT_STATE rec_ins_state =) rec_init_null_and_len_comp(
         rec, index, &nulls, &lens, &n_null, ndf, row_version);
     ut_ad(rec_ins_state != NONE);

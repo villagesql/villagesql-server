@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,7 +33,7 @@ bool printGCPSaveReq(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const GCPSaveReq *sr = (const GCPSaveReq *)theData;
+  const auto *sr = (const GCPSaveReq *)theData;
 
   fprintf(output, " dihBlockRef = (%d, %d) dihPtr = %d gci = %d\n",
           refToBlock(sr->dihBlockRef), refToNode(sr->dihBlockRef), sr->dihPtr,
@@ -50,7 +49,7 @@ bool printGCPSaveRef(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const GCPSaveRef *sr = (const GCPSaveRef *)theData;
+  const auto *sr = (const GCPSaveRef *)theData;
 
   fprintf(output, " nodeId = %d dihPtr = %d gci = %d reason: ", sr->nodeId,
           sr->dihPtr, sr->gci);
@@ -77,7 +76,7 @@ bool printGCPSaveConf(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const GCPSaveConf *sr = (const GCPSaveConf *)theData;
+  const auto *sr = (const GCPSaveConf *)theData;
 
   fprintf(output, " nodeId = %d dihPtr = %d gci = %d\n", sr->nodeId, sr->dihPtr,
           sr->gci);

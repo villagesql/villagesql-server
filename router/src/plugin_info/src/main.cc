@@ -44,7 +44,7 @@
  * @param errmsg error message to display
  * @param with_help true, if "hint for help" shall be displayed
  */
-static void display_error(std::ostream &cerr, const std::string program_name,
+static void display_error(std::ostream &cerr, const std::string &program_name,
                           const std::string &errmsg, bool with_help) {
   cerr << Vt100::foreground(Vt100::Color::Red) << "[ERROR] "
        << Vt100::render(Vt100::Render::ForegroundDefault) << errmsg << "\n";

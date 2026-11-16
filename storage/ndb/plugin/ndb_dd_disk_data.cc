@@ -147,16 +147,13 @@ void ndb_dd_disk_data_add_file(dd::Tablespace *object_def,
 
 void ndb_dd_disk_data_get_file_names(const dd::Tablespace *object_def,
                                      std::vector<std::string> &file_names) {
-  for (const auto file : object_def->files()) {
-    file_names.push_back((file->filename()).c_str());
+  for (const auto *const file : object_def->files()) {
+    file_names.emplace_back((file->filename()).c_str());
   }
 }
 
 bool ndb_dd_disk_data_get_table_refs(
     THD *thd, const dd::Tablespace &object_def,
     std::vector<dd::Tablespace_table_ref> &table_refs) {
-  if (dd::fetch_tablespace_table_refs(thd, object_def, &table_refs)) {
-    return false;
-  }
-  return true;
+  return !dd::fetch_tablespace_table_refs(thd, object_def, &table_refs);
 }

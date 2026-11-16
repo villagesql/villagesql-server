@@ -21,7 +21,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <stddef.h>
+#include <cstddef>
 #include <memory>
 #include <sstream>
 
@@ -29,6 +29,7 @@
 #include "my_inttypes.h"
 #include "my_psi_config.h"
 #include "mysql/psi/mysql_memory.h"
+#include "mysql/psi/mysql_rwlock.h"
 #include "mysql/psi/mysql_socket.h"
 #include "mysqld_error.h"
 #include "plugin/keyring/common/keyring.h"
@@ -38,8 +39,6 @@ namespace keyring {
 PSI_memory_key key_memory_KEYRING;
 PSI_rwlock_key key_LOCK_keyring;
 }  // namespace keyring
-
-extern mysql_rwlock_t LOCK_keyring;
 
 std::unique_ptr<IKeys_container> keys(nullptr);
 volatile bool is_keys_container_initialized = false;
@@ -59,7 +58,7 @@ void delete_keyring_file_data() {
   keyring_file_data = nullptr;
 }
 
-void keyring_init_psi_keys(void) {
+void keyring_init_psi_keys() {
   const char *category = "keyring";
   int count;
 
@@ -93,7 +92,7 @@ bool is_key_length_and_type_valid(const char *key_type, size_t key_len) {
     logger->log(ERROR_LEVEL, ER_KEYRING_INVALID_KEY_TYPE);
   }
 
-  if (is_type_valid == true && is_key_len_valid == false)
+  if (is_type_valid && !is_key_len_valid)
     logger->log(ERROR_LEVEL, ER_KEYRING_INVALID_KEY_LENGTH);
 
   return is_type_valid && is_key_len_valid;
@@ -117,7 +116,7 @@ bool create_keyring_dir_if_does_not_exist(const char *keyring_file_path) {
     keyring_dir[keyring_dir_length - 1] = '\0';
     --keyring_dir_length;
   }
-  const int flags =
+  constexpr int flags =
 #ifdef _WIN32
       0
 #else
@@ -160,9 +159,9 @@ void update_keyring_file_data(MYSQL_THD thd [[maybe_unused]],
 
 bool mysql_key_fetch(std::unique_ptr<IKey> key_to_fetch, char **key_type,
                      void **key, size_t *key_len) {
-  if (is_keys_container_initialized == false) return true;
+  if (!is_keys_container_initialized) return true;
 
-  if (key_to_fetch->is_key_id_valid() == false) {
+  if (!key_to_fetch->is_key_id_valid()) {
     logger->log(ERROR_LEVEL, ER_KEYRING_KEY_FETCH_FAILED_DUE_TO_EMPTY_KEY_ID);
     return true;
   }
@@ -181,13 +180,13 @@ bool mysql_key_fetch(std::unique_ptr<IKey> key_to_fetch, char **key_type,
   return false;
 }
 
-bool check_key_for_writing(IKey *key, std::string error_for) {
-  if (key->is_key_type_valid() == false) {
+bool check_key_for_writing(IKey *key, const std::string &error_for) {
+  if (!key->is_key_type_valid()) {
     logger->log(ERROR_LEVEL, ER_KEYRING_CHECK_KEY_FAILED_DUE_TO_INVALID_KEY,
                 error_for.c_str());
     return true;
   }
-  if (key->is_key_id_valid() == false) {
+  if (!key->is_key_id_valid()) {
     logger->log(ERROR_LEVEL, ER_KEYRING_CHECK_KEY_FAILED_DUE_TO_EMPTY_KEY_ID,
                 error_for.c_str());
     return true;
@@ -196,7 +195,7 @@ bool check_key_for_writing(IKey *key, std::string error_for) {
 }
 
 bool mysql_key_store(std::unique_ptr<IKey> key_to_store) {
-  if (is_keys_container_initialized == false) return true;
+  if (!is_keys_container_initialized) return true;
 
   if (check_key_for_writing(key_to_store.get(), "storing")) return true;
 
@@ -208,19 +207,18 @@ bool mysql_key_store(std::unique_ptr<IKey> key_to_store) {
   }
   mysql_rwlock_unlock(&LOCK_keyring);
 
-  key_to_store.release();
+  (void)key_to_store.release();
   return false;
 }
 
 bool mysql_key_remove(std::unique_ptr<IKey> key_to_remove) {
-  bool retval = false;
-  if (is_keys_container_initialized == false) return true;
-  if (key_to_remove->is_key_id_valid() == false) {
+  if (!is_keys_container_initialized) return true;
+  if (!key_to_remove->is_key_id_valid()) {
     logger->log(ERROR_LEVEL, ER_KEYRING_FAILED_TO_REMOVE_KEY_DUE_TO_EMPTY_ID);
     return true;
   }
   mysql_rwlock_wrlock(&LOCK_keyring);
-  retval = keys->remove_key(key_to_remove.get());
+  const bool retval = keys->remove_key(key_to_remove.get());
   mysql_rwlock_unlock(&LOCK_keyring);
   return retval;
 }
@@ -241,11 +239,11 @@ bool mysql_keyring_iterator_get_key(Keys_iterator *key_iterator, char *key_id,
                                     char *user_id) {
   keyring::Key_metadata *key_loaded = nullptr;
   const bool error = key_iterator->get_key(&key_loaded);
-  if (error == false && key_loaded != nullptr) {
+  if (!error && key_loaded != nullptr) {
     if (key_id) strcpy(key_id, key_loaded->id->c_str());
     if (user_id) strcpy(user_id, key_loaded->user->c_str());
     delete key_loaded;
-  } else if (error == false && key_loaded == nullptr) {
+  } else if (!error && key_loaded == nullptr) {
     /* no keys exists or all keys are read */
     return true;
   }

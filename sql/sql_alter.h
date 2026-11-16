@@ -39,6 +39,8 @@
 #include "mysql/components/services/bits/psi_bits.h"
 #include "sql/dd/types/column.h"
 #include "sql/gis/srid.h"
+#include "sql/key.h"  // KEY
+#include "sql/key_spec.h"
 #include "sql/mdl.h"                   // MDL_request
 #include "sql/mem_root_array.h"        // Mem_root_array
 #include "sql/sql_check_constraint.h"  // Sql_check_constraint_spec_list
@@ -90,63 +92,68 @@ class Alter_column {
   const char *name;
 
   /// The default value supplied.
-  Item *def;
+  Item *def{nullptr};
 
   /// The expression to be used to generate the default value.
-  Value_generator *m_default_val_expr;
+  Value_generator *m_default_val_expr{nullptr};
 
   /// The new column name.
-  const char *m_new_name;
+  const char *m_new_name{nullptr};
+
+  /// The new masking policy name.
+  LEX_CSTRING new_masking_policy_name() const {
+    return m_new_masking_policy_name;
+  }
 
   enum class Type {
     SET_DEFAULT,
+    SET_MASKING_POLICY,
     DROP_DEFAULT,
+    DROP_MASKING_POLICY,
     RENAME_COLUMN,
     SET_COLUMN_VISIBLE,
     SET_COLUMN_INVISIBLE
   };
 
- public:
   /// Type of change requested in ALTER TABLE.
-  inline Type change_type() const { return m_type; }
+  Type change_type() const { return m_type; }
 
   /// Constructor used when altering the field's default value with a literal
   /// constant or when dropping a field's default value.
   Alter_column(const char *par_name, Item *literal)
-      : name(par_name),
-        def(literal),
-        m_default_val_expr(nullptr),
-        m_new_name(nullptr) {
-    if (def)
+      : name{par_name}, def{literal} {
+    if (def != nullptr)
       m_type = Type::SET_DEFAULT;
     else
       m_type = Type::DROP_DEFAULT;
   }
 
+  /// Constructor for assigning or unassigning a column's MASKING POLICY.
+  Alter_column(const char *col_name, LEX_CSTRING policy_name)
+      : name{col_name},
+        m_type{policy_name.str != nullptr ? Type::SET_MASKING_POLICY
+                                          : Type::DROP_MASKING_POLICY},
+        m_new_masking_policy_name{policy_name} {}
+
   /// Constructor used when setting a field's DEFAULT value to an expression.
   Alter_column(const char *par_name, Value_generator *gen_def)
       : name(par_name),
-        def(nullptr),
         m_default_val_expr(gen_def),
-        m_new_name(nullptr),
         m_type(Type::SET_DEFAULT) {}
 
   /// Constructor used while renaming field name.
   Alter_column(const char *old_name, const char *new_name)
-      : name(old_name),
-        def(nullptr),
-        m_new_name(new_name),
-        m_type(Type::RENAME_COLUMN) {}
+      : name(old_name), m_new_name(new_name), m_type(Type::RENAME_COLUMN) {}
 
   /// Constructor used while altering column visibility.
-  Alter_column(const char *par_name, bool par_is_visible)
-      : name(par_name), def(nullptr), m_new_name(nullptr) {
+  Alter_column(const char *par_name, bool par_is_visible) : name(par_name) {
     m_type = (par_is_visible ? Type::SET_COLUMN_VISIBLE
                              : Type::SET_COLUMN_INVISIBLE);
   }
 
  private:
   Type m_type;
+  LEX_CSTRING m_new_masking_policy_name{NULL_CSTR};
 };
 
 /// An ALTER INDEX operation that changes the visibility of an index.
@@ -348,7 +355,13 @@ class Alter_info {
     ANY_ENGINE_ATTRIBUTE = 1ULL << 39,
 
     /// Set for column visibility attribute alter.
-    ALTER_COLUMN_VISIBILITY = 1ULL << 40
+    ALTER_COLUMN_VISIBILITY = 1ULL << 40,
+
+    /// Set for ALTER [COLUMN] ... SET MASKING POLICY | DROP MASKING POLICY.
+    ALTER_COLUMN_MASKING = 1ULL << 41,
+
+    /// Must be last, not a real type.
+    ALTER_TYPE_END = 1ULL << 42
   };
 
   enum enum_enable_or_disable { LEAVE_AS_IS, ENABLE, DISABLE };
@@ -428,6 +441,13 @@ class Alter_info {
 
   // List of columns, used by both CREATE and ALTER TABLE.
   List<Create_field> create_list;
+  // List of keys, which creation is delayed to benefit from fast index creation
+  Mem_root_array<const Key_spec *> delayed_key_list;
+  // Keys, which creation is delayed to benefit from fast index creation
+  KEY *delayed_key_info;
+  // Count of keys, which creation is delayed to benefit from fast index
+  // creation
+  uint delayed_key_count;
   std::vector<CreateFieldApplier> cf_appliers;
 
   // Type of ALTER TABLE operation.
@@ -448,6 +468,14 @@ class Alter_info {
   */
   enum_with_validation with_validation;
 
+  ///  Whether SECONDARY_LOAD should do guided load.
+  enum_with_validation guided_load;
+
+  /// SECONDARY_LOAD should only validate not load table.
+  bool validation_only;
+  /// Number of rows to be validated by SECONDARY_LOAD
+  uint64_t validate_num_rows;
+
   /// "new_db" (if any) or "db" (if any) or default database from
   /// ALTER TABLE [db.]table [ RENAME [TO|AS|=] [new_db.]new_table ]
   LEX_CSTRING new_db_name;
@@ -467,12 +495,16 @@ class Alter_info {
         alter_index_visibility_list(mem_root),
         alter_constraint_enforcement_list(mem_root),
         check_constraint_spec_list(mem_root),
+        delayed_key_list(mem_root),
         flags(0),
         keys_onoff(LEAVE_AS_IS),
         num_parts(0),
         requested_algorithm(ALTER_TABLE_ALGORITHM_DEFAULT),
         requested_lock(ALTER_TABLE_LOCK_DEFAULT),
         with_validation(ALTER_VALIDATION_DEFAULT),
+        guided_load(ALTER_VALIDATION_DEFAULT),
+        validation_only(false),
+        validate_num_rows(0),
         new_db_name(LEX_CSTRING{nullptr, 0}),
         new_table_name(LEX_CSTRING{nullptr, 0}) {}
 
@@ -499,12 +531,21 @@ class Alter_info {
                  Item *on_update_value, LEX_CSTRING *comment,
                  const char *change, List<String> *interval_list,
                  const CHARSET_INFO *cs, bool has_explicit_collation,
-                 uint uint_geom_type, Value_generator *gcol_info,
-                 Value_generator *default_val_expr, const char *opt_after,
-                 std::optional<gis::srid_t> srid,
+                 uint uint_geom_type, const LEX_CSTRING *zip_dict, Value_generator *gcol_info,
+                 Value_generator *default_val_expr, LEX_CSTRING masking_policy,
+                 const char *opt_after, std::optional<gis::srid_t> srid,
                  Sql_check_constraint_spec_list *check_cons_list,
                  dd::Column::enum_hidden_type hidden, bool is_array = false,
                  const villagesql::TypeContext *type_context = nullptr);
+
+  /**
+     Checks if there are any columns with COLUMN_FORMAT COMRPESSED
+     attribute among field definitions in create_list.
+
+     @retval false there are no compressed columns
+     @retval true there is at least one compressed column
+  */
+  bool has_compressed_columns() const;
 
  private:
   Alter_info &operator=(const Alter_info &rhs);  // not implemented

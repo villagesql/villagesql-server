@@ -23,7 +23,7 @@
 
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/xplatform/my_xp_util.h"
 
-#include <errno.h>
+#include <cerrno>
 
 #include "my_systime.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_logging_system.h"
@@ -42,7 +42,7 @@ int My_xp_socket_util_impl::disable_nagle_in_socket(int fd) {
   int ret = -1;
   if (fd != -1) {
     int optval;
-    socklen_t optval_size = static_cast<socklen_t>(sizeof(int));
+    auto optval_size = static_cast<socklen_t>(sizeof(int));
     ret =
         getsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&optval, &optval_size);
 

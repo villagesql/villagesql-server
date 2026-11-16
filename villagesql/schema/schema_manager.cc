@@ -97,6 +97,8 @@ class SchemaManagerStatus {
     return *upgrade_needed;
   }
 
+  static bool is_upgrade_needed_known() { return upgrade_needed != nullptr; }
+
   /**
    * Record the version of the VillageSQL Schema installed in memory.  This
    * must only be called between preinit() and init().
@@ -813,6 +815,10 @@ bool SchemaManager::upgrade_villagesql_schema(THD *thd) {
 
 bool SchemaManager::is_villagesql_upgrade_needed() {
   return SchemaManagerStatus::get_upgrade_needed();
+}
+
+bool SchemaManager::is_villagesql_upgrade_status_known() {
+  return SchemaManagerStatus::is_upgrade_needed_known();
 }
 
 Semver SchemaManager::get_version() {

@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "create_field.h"
 #include "field.h"
 #include "handler.h"
+#include "mysql/components/services/bulk_data_service.h"
 #include "mysql/components/services/clone_protocol_service.h"
 
 #include "row0pread-adapter.h"
@@ -73,6 +74,7 @@ struct INNOBASE_SHARE {
   /*!< hash table chain node */
   innodb_idx_translate_t idx_trans_tbl; /*!< index translation table between
                                         MySQL and InnoDB */
+  dict_table_t *ib_table;
 };
 
 /** Prebuilt structures in an InnoDB table handle used within MySQL */
@@ -166,6 +168,8 @@ class ha_innobase : public handler {
   int index_first(uchar *buf) override;
 
   int index_last(uchar *buf) override;
+
+  bool has_gap_locks() const noexcept override { return true; }
 
   int read_range_first(const key_range *start_key, const key_range *end_key,
                        bool eq_range_arg, bool sorted) override;
@@ -430,6 +434,7 @@ class ha_innobase : public handler {
                                   dd::Table *new_dd_tab) override;
   /** @} */
 
+
   using Reader = Parallel_reader_adapter;
 
   /** Initializes a parallel scan. It creates a scan_ctx that has to
@@ -475,6 +480,46 @@ class ha_innobase : public handler {
   @return true iff bulk load can be done on the table. */
   bool bulk_load_check(THD *thd) const override;
 
+  /** Check the table for any foreign key constraint violations.
+  @return 0 when there are no violations (success) */
+  int check_foreign_constraints(THD *thd, size_t n_threads) const override;
+
+  /** Used during bulk load on a non-empty table, called after the CSV file
+  input is exhausted and we need to copy any existing data from the original
+  table to the duplicated one.
+  @param[in]  load_ctx      SE load context
+  @param[in]  thread_idx    loader thread index
+  @param[in]  wait_cbk      stat callbacks.
+  @return 0 if successful, HA_ERR_GENERIC otherwise. */
+  int bulk_load_copy_existing_data(
+      void *load_ctx, size_t thread_idx,
+      Bulk_load::Stat_callbacks &wait_cbk) const override;
+
+  /** Sets the source table data (table name and key range boundaries) for all
+  loaders.
+  @param[in,out]  load_ctx                SE load context
+  @param[in]      source_table_data  vector containing the source table data
+  @return true if successful, false otherwise. */
+  bool bulk_load_set_source_table_data(
+      void *load_ctx,
+      const std::vector<Bulk_load::Source_table_data> &source_table_data)
+      const override;
+
+  /** Generates a temporary table name to be used for table duplication during
+  bulk load.
+  @return a temporary table name. */
+  std::string bulk_load_generate_temporary_table_name() const override;
+
+  /** Get the row ID range of the table that we're bulk loading into. Only used
+  when the table has a generated clustered index and is not empty.
+  @param[out] min Minimum ROW_ID in table
+  @param[out] max Maximum ROW_ID in table
+  @return true if successful, false otherwise. */
+  bool bulk_load_get_row_id_range(size_t &min, size_t &max) const override;
+
+  /** Check whether the table is empty */
+  bool is_table_empty() const override;
+
   /** Get the total memory available for bulk load in innodb buffer pool.
   @param[in] thd user session
   @return available memory for bulk load */
@@ -482,11 +527,12 @@ class ha_innobase : public handler {
 
   /** Begin parallel bulk data load to the table.
   @param[in] thd       user session
+  @param[in] keynr     key number to identify the index.
   @param[in] data_size total data size in bytes
   @param[in] memory buffer pool memory to be used
   @param[in] num_threads Number of concurrent threads used for load.
   @return bulk load context or nullptr if unsuccessful. */
-  void *bulk_load_begin(THD *thd, size_t data_size, size_t memory,
+  void *bulk_load_begin(THD *thd, size_t keynr, size_t data_size, size_t memory,
                         size_t num_threads) override;
 
   /** Execute bulk load operation. To be called by each of the concurrent
@@ -500,6 +546,41 @@ class ha_innobase : public handler {
   int bulk_load_execute(THD *thd, void *load_ctx, size_t thread_idx,
                         const Rows_mysql &rows,
                         Bulk_load::Stat_callbacks &wait_cbk) override;
+
+  /** Open a blob for write operation.
+  @param[in,out]  thd         user session
+  @param[in,out]  load_ctx    load execution context
+  @param[in]      thread_idx  index of the thread executing
+  @param[out]     blob_ctx    a blob context
+  @param[out]     blobref     a blob reference to be placed in the record.
+  @return 0 on success, error code on failure */
+  int open_blob(THD *thd [[maybe_unused]], void *load_ctx, size_t thread_idx,
+                Blob_context &blob_ctx, unsigned char *blobref) override;
+
+  /** Write to a blob
+  @param[in,out]  thd         user session
+  @param[in,out]  load_ctx    load execution context
+  @param[in]      thread_idx  index of the thread executing
+  @param[in]      blob_ctx    a blob context
+  @param[out]     blobref     buffer to hold a blob reference.
+  @param[in]      data        data to be written to blob.
+  @param[in]      data_len    length of data to be written in bytes.
+  @return 0 on success, error code on failure */
+  int write_blob(THD *thd [[maybe_unused]], void *load_ctx, size_t thread_idx,
+                 Blob_context blob_ctx, unsigned char *blobref,
+                 const unsigned char *data, size_t data_len) override;
+
+  /** Close the blob
+  @param[in,out]  thd         user session
+  @param[in,out]  load_ctx    load execution context
+  @param[in]      thread_idx  index of the thread executing
+  @param[in]      blob_ctx    a blob context
+  @param[out]     blobref     blob reference will be populated in the provided
+  buffer. The buffer should have enough space (@ref lob::ref_t::SIZE) to hold
+  a blob reference.
+  @return 0 on success, error code on failure */
+  int close_blob(THD *thd [[maybe_unused]], void *load_ctx, size_t thread_idx,
+                 Blob_context blob_ctx, byte *blobref) override;
 
   /** End bulk load operation. Must be called after all execution threads have
   completed. Must be called even if the bulk load execution failed.
@@ -626,6 +707,13 @@ class ha_innobase : public handler {
   /** Returns statistics information of the table to the MySQL interpreter, in
   various fields of the handle object.
   @param[in]    flag            what information is requested
+                                HA_STATUS_NO_LOCK is supported only for:
+                                ha_statistics::delete_length
+                                it is not supported for others like:
+                                ha_statistics::records
+                                But it will not lock for the duration of stats
+                                calculation. Only during copy to make sure
+                                stats are consistent.
   @param[in]    is_analyze      True if called from "::analyze()".
   @return HA_ERR_* error code or 0 */
   virtual int info_low(uint flag, bool is_analyze);
@@ -737,6 +825,21 @@ class ha_innobase : public handler {
 
   /** If mysql has locked with external_lock() */
   bool m_mysql_has_locked;
+
+  /** Get the table stats.
+  @param[in]  flag       flag indicating which statistics to return
+  @param[in]  ib_table   table
+  @param[out] n_rows     estimated number of rows
+  @param[out] stat_clustered_index_size      size of the clustered index
+  @param[out] stat_sum_of_other_index_sizes  total size of all indexes */
+  void info_low_table_stats(uint flag, const dict_table_t *ib_table,
+                            uint64_t &n_rows, ulint &stat_clustered_index_size,
+                            ulint &stat_sum_of_other_index_sizes) const;
+
+  /** Get number of records per key. Save them into array ib_table->key_info.
+  @param[in]      flag      flag indicating which statistics to return
+  @param[in,out]  ib_table  table */
+  void info_low_key(uint flag, const dict_table_t *ib_table);
 };
 
 struct trx_t;
@@ -961,6 +1064,9 @@ class create_table_info_t {
   /** Validate COMPRESSION option. */
   bool create_option_compression_is_valid();
 
+  /** Validate ENCRYPTION option. */
+  bool create_option_encryption_is_valid() const;
+
   /** Prepare to create a table. */
   int prepare_create_table(const char *name);
 
@@ -1017,6 +1123,12 @@ class create_table_info_t {
   @param[in]            name            Table name string.
   @return true if successful. */
   static bool normalize_table_name(char *norm_name, const char *name);
+
+  /** If encryption is requested, check for master key availability
+  and set the encryption flag in table flags
+  @param[in,out]	table	table object
+  @return on success DB_SUCCESS else DB_UNSPPORTED on failure */
+  dberr_t enable_encryption(dict_table_t *table);
 
  private:
   /** Parses the table name into normal name and either temp path or
@@ -1385,6 +1497,32 @@ void innobase_build_v_templ_callback(const TABLE *table, void *ib_table);
 /** Callback function definition, used by MySQL server layer to initialized
 the table virtual columns' template */
 typedef void (*my_gcolumn_templatecallback_t)(const TABLE *, void *);
+
+/** This function builds a translation table in INNOBASE_SHARE
+structure for fast index location with mysql array number from its
+table->key_info structure. This also provides the necessary
+translation between the key order in mysql key_info and InnoDB
+ib_table->indexes if they are not fully matched with each other.  Note
+we do not have any mutex protecting the translation table building
+based on the assumption that there is no concurrent index
+creation/drop and DMLs that requires index lookup. All table handle
+will be closed before the index creation/drop.
+@param[in]	table           table in MySQL data dictionary
+@param[in]	ib_table	table in InnoDB data dictionary
+@param[in,out]	share		share structure where index translation table
+                                will be constructed in.
+@return true if index translation table built successfully */
+[[nodiscard]]
+bool innobase_build_index_translation(const TABLE *table,
+                                      dict_table_t *ib_table,
+                                      INNOBASE_SHARE *share);
+
+uint innodb_force_index_records_in_range(THD *thd);
+uint innodb_records_in_range(THD *thd);
+
+/** Free InnoDB session specific data.
+@param[in,out]	thd	MySQL thread handler. */
+void thd_free_innodb_session(THD *thd) noexcept;
 
 /** Drop the statistics for a specified table, and mark it as discard
 after DDL

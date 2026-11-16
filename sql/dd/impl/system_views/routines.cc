@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/routines.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Routines &Routines::instance() {
-  static Routines *s_instance = new Routines();
+  static auto *s_instance = new Routines();
   return *s_instance;
 }
 
@@ -73,6 +72,8 @@ Routines::Routines() {
       "    (IF (cs_result.name='binary',NULL, cs_result.name))"
       "  WHEN 'MYSQL_TYPE_BLOB' THEN "
       "    (IF (cs_result.name='binary',NULL, cs_result.name))"
+      "  WHEN 'MYSQL_TYPE_VECTOR' THEN "
+      "    (IF (cs_result.name='binary',NULL, cs_result.name))"
       "  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN "
       "    (IF (cs_result.name='binary',NULL, cs_result.name))"
       "  WHEN 'MYSQL_TYPE_ENUM' THEN "
@@ -94,6 +95,8 @@ Routines::Routines() {
       "  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN "
       "    (IF (cs_result.name='binary',NULL, coll_result.name))"
       "  WHEN 'MYSQL_TYPE_BLOB' THEN "
+      "    (IF (cs_result.name='binary',NULL, coll_result.name))"
+      "  WHEN 'MYSQL_TYPE_VECTOR' THEN "
       "    (IF (cs_result.name='binary',NULL, coll_result.name))"
       "  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN "
       "    (IF (cs_result.name='binary',NULL, coll_result.name))"
@@ -162,7 +165,8 @@ Routines::Routines() {
   m_target_def.add_where(
       "CAN_ACCESS_ROUTINE(sch.name, rtn.name, rtn.type, "
       "rtn.definer, FALSE)");
+
+  m_target_def.add_where("AND rtn.type IN ('FUNCTION', 'PROCEDURE')");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

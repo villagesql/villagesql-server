@@ -27,7 +27,7 @@
 
 #include "Logger.hpp"
 
-#include <time.h>
+#include <ctime>
 
 #include <ConsoleLogHandler.hpp>
 #include <FileLogHandler.hpp>
@@ -244,7 +244,7 @@ void Logger::startAsync(unsigned buffer_kb) {
   Guard g(m_log_mutex);
 
   if (m_internalBufferedHandler == nullptr) {
-    BufferedLogHandler *blh =
+    auto *blh =
         new BufferedLogHandler(m_internalLogListHandler,
                                false, /* m_internalLogListHandler not owned */
                                m_pCategory, buffer_kb);
@@ -474,6 +474,23 @@ TAPTEST(logger) {
       return res;
     };
 
+    // Returns the message part (level + text) of the last non-empty line in
+    // the log file, without clearing it. Unlike getLastLogMsg() this does not
+    // assume the file holds a single line, so it stays correct when the
+    // asynchronous handler has flushed several buffered messages at once.
+    auto getLastLogLine = [&](const std::string &fileName) {
+      std::ifstream ifs(fileName);
+      std::string line;
+      std::string last;
+      while (std::getline(ifs, line)) {
+        if (!line.empty()) last = line;
+      }
+      ifs.close();
+      // Remove date + Category, same layout as getLastLogMsg().
+      const size_t prefix = timestamp_length + 1 + category_length + 1;
+      return (last.size() >= prefix) ? last.substr(prefix) : std::string();
+    };
+
     static const std::string file = "file.log";
 #ifdef _WIN32
     static constexpr int async_wait_time_ms = 250;
@@ -561,9 +578,18 @@ TAPTEST(logger) {
       NdbSleep_MilliSleep(1000);
       g_eventLogger->info("[ASYNC] message #%d", i);
       expected_msg = "INFO     -- [ASYNC] message #" + std::to_string(i);
-      // give time to BufferedLogHandler log thread to dump last log message
-      NdbSleep_MilliSleep(async_wait_time_ms);
-      OK(getLastLogMsg(file) == expected_msg);
+      // The BufferedLogHandler writes asynchronously, so on a loaded machine
+      // the final message may take more than a single wait interval to be
+      // flushed (and the log may transiently still hold earlier buffered
+      // messages). Retry reading the last logged line - without clearing the
+      // file, so the message we are waiting for cannot be truncated away -
+      // until it matches or we time out.
+      bool last_msg_logged = false;
+      for (int j = 0; j < 100 && !last_msg_logged; j++) {
+        NdbSleep_MilliSleep(async_wait_time_ms);
+        last_msg_logged = (getLastLogLine(file) == expected_msg);
+      }
+      OK(last_msg_logged);
 
       g_eventLogger->stopAsync();
     }
@@ -585,8 +611,8 @@ TAPTEST(logger) {
     const std::string fileB = "fileB.log";
     const std::string fileC = "fileC.log";
 
-    Ndb_log_consumer *log_consumer1 = new Ndb_log_consumer(fileB.c_str());
-    Ndb_log_consumer *log_consumer2 = new Ndb_log_consumer(fileC.c_str());
+    auto *log_consumer1 = new Ndb_log_consumer(fileB.c_str());
+    auto *log_consumer2 = new Ndb_log_consumer(fileC.c_str());
 
     g_eventLogger->close();
     clearFile(fileA);

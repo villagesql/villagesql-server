@@ -44,7 +44,10 @@
 #include "mysql/my_loglevel.h"
 #include "mysql/service_mysql_alloc.h"
 #include "prealloced_array.h"  // Prealloced_array
-#include "sql/log_event.h"     // Format_description_log_event
+#include "sql/changestreams/apply/metrics/applier_metrics.h"
+#include "sql/changestreams/apply/metrics/dummy_worker_metrics.h"
+#include "sql/changestreams/apply/metrics/mta_worker_metrics.h"
+#include "sql/log_event.h"  // Format_description_log_event
 #include "sql/rpl_gtid.h"
 #include "sql/rpl_mta_submode.h"  // enum_mts_parallel_type
 #include "sql/rpl_replica.h"      // MTS_WORKER_UNDEF
@@ -70,42 +73,9 @@ extern ulong w_rr;
   T-event event that Terminates a group (a transaction)
 */
 
-/* Assigned Partition Hash (APH) entry */
-struct db_worker_hash_entry {
-  uint db_len;
-  const char *db;
-  Slave_worker *worker;
-  /*
-    The number of transaction pending on this database.
-    This should only be modified under the lock slave_worker_hash_lock.
-   */
-  long usage;
-  /*
-    The list of temp tables belonging to @ db database is
-    attached to an assigned @c worker to become its thd->temporary_tables.
-    The list is updated with every ddl incl CREATE, DROP.
-    It is removed from the entry and merged to the coordinator's
-    thd->temporary_tables in case of events: slave stops, APH oversize.
-  */
-  TABLE *volatile temporary_tables;
-
-  /* todo: relax concurrency to mimic record-level locking.
-     That is to augmenting the entry with mutex/cond pair
-     pthread_mutex_t
-     pthread_cond_t
-     timestamp updated_at; */
-};
-
-bool init_hash_workers(Relay_log_info *rli);
-void destroy_hash_workers(Relay_log_info *);
-Slave_worker *map_db_to_worker(const char *dbname, Relay_log_info *rli,
-                               db_worker_hash_entry **ptr_entry,
-                               bool need_temp_tables, Slave_worker *w);
 Slave_worker *get_least_occupied_worker(Relay_log_info *rli,
                                         Slave_worker_array *workers,
                                         Log_event *ev);
-
-#define SLAVE_INIT_DBS_IN_GROUP 4  // initial allocation for CGEP dynarray
 
 struct Slave_job_group {
   Slave_job_group() = default;
@@ -517,9 +487,6 @@ class Slave_worker : public Relay_log_info {
   mysql_cond_t jobs_cond;   // condition variable for the jobs queue
   Relay_log_info *c_rli;    // pointer to Coordinator's rli
 
-  Prealloced_array<db_worker_hash_entry *, SLAVE_INIT_DBS_IN_GROUP>
-      curr_group_exec_parts;  // Current Group Executed Partitions
-
 #ifndef NDEBUG
   bool curr_group_seen_sequence_number;  // is set to true about starts_group()
 #endif
@@ -528,18 +495,14 @@ class Slave_worker : public Relay_log_info {
   /*
     Worker runtime statistics
   */
+  /// Number of transaction handled - incremented at slave_worker_ends_group
+  ulong transactions_handled;
+
   // the index in GAQ of the last processed group by this Worker
   volatile ulong last_group_done_index;
   ulonglong
       last_groups_assigned_index;  // index of previous group assigned to worker
-  ulong wq_empty_waits;            // how many times got idle
-  ulong events_done;               // how many events (statements) processed
-  ulong groups_done;               // how many groups (transactions) processed
   std::atomic<int> curr_jobs;      // number of active  assignments
-  // number of partitions allocated to the worker at point in time
-  long usage_partition;
-  // symmetric to rli->mts_end_group_sets_max_dbs
-  bool end_group_sets_max_dbs;
 
   volatile bool relay_log_change_notified;  // Coord sets and resets, W can read
   volatile bool checkpoint_notified;        // Coord sets and resets, W can read
@@ -558,6 +521,68 @@ class Slave_worker : public Relay_log_info {
   */
   bool fd_change_notified;
   ulong bitmap_shifted;  // shift the last bitmap at receiving new CP
+
+ private:
+  /// @brief worker statistics
+  cs::apply::instruments::Mta_worker_metrics m_worker_metrics;
+  /// @brief Placehold for stats when metric collection is disabled
+  cs::apply::instruments::Dummy_worker_metrics m_disabled_worker_metrics;
+
+  /// @brief Is worker metric collection enabled
+  bool m_is_worker_metric_collection_enabled{false};
+
+ public:
+  /// @brief Sets the metric collection as on or off
+  /// This should be done at the worker start
+  /// @param status if metrics are enabled or not
+  void set_worker_metric_collection_status(bool status) {
+    m_is_worker_metric_collection_enabled = status;
+  }
+
+  /// @brief gets a reference to the worker statistics.
+  /// @return a reference to the worker statistics.
+  cs::apply::instruments::Worker_metrics &get_worker_metrics();
+
+  /// @brief Copies data and sets the metric collection flag
+  /// @param other the instance to be copied
+  void copy_worker_metrics(Slave_worker *other) {
+    m_worker_metrics = other->m_worker_metrics;
+    m_is_worker_metric_collection_enabled =
+        other->m_is_worker_metric_collection_enabled;
+  }
+
+  /// The number of events applied in an ongoing transaction, used to collect
+  /// statistics when the transaction ends.
+  int64_t m_events_applied_in_transaction;
+
+  /// True if this transaction occurred after the _metrics breakpoint_ in the
+  /// relay log.
+  ///
+  /// @see Applier_metrics_interface::is_received_initialized.
+  bool m_is_after_metrics_breakpoint;
+
+  /// Update per-event worker metrics.
+  ///
+  /// This includes:
+  ///
+  /// - APPLYING_TRANSACTION_APPLIED_SIZE_BYTES
+  ///
+  /// - The the number of events in the transaction. This is an internal
+  /// counter, not directly user visible, but used to increment
+  /// EVENTS_COMMITTED_COUNT at commit time. This is set to 1 for the GTID
+  /// event, and incremented for all other events. It does not need to be reset
+  /// at rollback, since the value is only used at commits, and the next GTID
+  /// event will reset the value before the next commit.
+  void increment_worker_metrics_for_event(const Log_event &event) {
+    get_worker_metrics().inc_transaction_ongoing_progress_size(
+        event.common_header->data_written);
+    if (mysql::binlog::event::Log_event_type_helper::is_any_gtid_event(
+            event.get_type_code()))
+      m_events_applied_in_transaction = 1;
+    else
+      ++m_events_applied_in_transaction;
+  }
+
   // WQ current excess above the overrun level
   long wq_overrun_cnt;
   /*
@@ -909,6 +934,10 @@ class Slave_worker : public Relay_log_info {
                : get_rli_description_event()->get_product_version();
   }
 
+  // overridden new and delete operators for 64 byte alignment
+  static void *operator new(size_t request);
+  static void operator delete(void *ptr);
+
  protected:
   void do_report(loglevel level, int err_code, const char *msg,
                  va_list v_args) const override
@@ -939,7 +968,6 @@ class Slave_worker : public Relay_log_info {
                              const char *start_event_relay_log_name,
                              my_off_t end_relay_pos,
                              const char *end_event_relay_log_name);
-  void assign_partition_db(Log_event *ev);
 
  public:
   /**
@@ -962,7 +990,6 @@ bool handle_slave_worker_stop(Slave_worker *worker, Slave_job_item *job_item);
 bool set_max_updated_index_on_stop(Slave_worker *worker,
                                    Slave_job_item *job_item);
 
-TABLE *mts_move_temp_table_to_entry(TABLE *, THD *, db_worker_hash_entry *);
 TABLE *mts_move_temp_tables_to_thd(THD *, TABLE *);
 // Auxiliary function
 TABLE *mts_move_temp_tables_to_thd(THD *, TABLE *, enum_mts_parallel_type);

@@ -23,7 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <my_sys.h>
 #include <mysql/components/service_implementation.h>
-#include <stdarg.h>
+#include <cstdarg>
 #include "mysql_runtime_error_imp.h"
 
 DEFINE_METHOD(void, mysql_server_runtime_error_imp::emit,

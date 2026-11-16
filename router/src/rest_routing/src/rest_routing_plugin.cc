@@ -49,6 +49,8 @@
 #include "rest_routing_config.h"
 #include "rest_routing_connections.h"
 #include "rest_routing_destinations.h"
+#include "rest_routing_guidelines.h"
+#include "rest_routing_guidelines_schema.h"
 #include "rest_routing_health.h"
 #include "rest_routing_list.h"
 #include "rest_routing_routes_status.h"
@@ -65,9 +67,9 @@ std::string require_realm_routing;
 
 using StringOption = mysql_harness::StringOption;
 
-#define GET_OPTION_CHECKED(option, section, name, value)                      \
-  static_assert(                                                              \
-      mysql_harness::str_in_collection(rest_plugin_supported_options, name)); \
+#define GET_OPTION_CHECKED(option, section, name, value)                 \
+  static_assert(                                                         \
+      mysql_harness::str_in_collection(plugin_supported_options, name)); \
   option = get_option(section, name, value);
 
 class RestRoutingPluginConfig : public mysql_harness::BasePluginConfig {
@@ -154,85 +156,131 @@ static void init(mysql_harness::PluginFuncEnv *env) {
 using JsonPointer = RestApiComponent::JsonPointer;
 using JsonValue = RestApiComponent::JsonValue;
 
-#define STR(s) \
-  { s, strlen(s), rapidjson::kPointerInvalidIndex }
+static JsonPointer::Token make_json_pointer_token(std::string_view token) {
+  return {token.data(), token.size(), rapidjson::kPointerInvalidIndex};
+}
 
-static const std::array<JsonPointer::Token, 2> routing_status_path_tokens{
-    {STR("paths"), STR("/routing/status")}};
+static const std::array routing_status_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routing/status"),
+};
 
-static const std::array<JsonPointer::Token, 2> routing_status_def_tokens{
-    {STR("definitions"), STR("RoutingGlobalStatus")}};
+static const std::array routing_status_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RoutingGlobalStatus"),
+};
 
-static const std::array<JsonPointer::Token, 2> route_name_param_tokens{
-    {STR("parameters"), STR("routeNameParam")}};
+static const std::array routing_guidelines_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routing/guidelines")};
 
-static const std::array<JsonPointer::Token, 2> routes_list_def_tokens{
-    {STR("definitions"), STR("RouteList")}};
+static const std::array routing_guidelines_schema_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routing/guidelines/schema")};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_destination_list_def_tokens{
-        {STR("definitions"), STR("RouteDestinationList")}};
+static const std::array routing_guidelines_def{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RoutingGuidelinesDef")};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_destination_summary_def_tokens{
-        {STR("definitions"), STR("RouteDestinationSummary")}};
+static const std::array route_name_param_tokens{
+    make_json_pointer_token("parameters"),
+    make_json_pointer_token("routeNameParam"),
+};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_blockedhost_list_def_tokens{
-        {STR("definitions"), STR("RouteBlockedHostList")}};
+static const std::array routes_list_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteList"),
+};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_blockedhost_summary_def_tokens{
-        {STR("definitions"), STR("RouteBlockedHostSummary")}};
+static const std::array routes_destination_list_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteDestinationList"),
+};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_connection_list_def_tokens{
-        {STR("definitions"), STR("RouteConnectionsList")}};
+static const std::array routes_destination_summary_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteDestinationSummary"),
+};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_connection_summary_def_tokens{
-        {STR("definitions"), STR("RouteConnectionsSummary")}};
+static const std::array routes_blockedhost_list_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteBlockedHostList"),
+};
 
-static const std::array<JsonPointer::Token, 2> routes_summary_def_tokens{
-    {STR("definitions"), STR("RouteSummary")}};
+static const std::array routes_blockedhost_summary_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteBlockedHostSummary"),
+};
 
-static const std::array<JsonPointer::Token, 2> routes_config_def_tokens{
-    {STR("definitions"), STR("RouteConfig")}};
+static const std::array routes_connection_list_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteConnectionsList"),
+};
 
-static const std::array<JsonPointer::Token, 2> routes_status_def_tokens{
-    {STR("definitions"), STR("RouteStatus")}};
+static const std::array routes_connection_summary_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteConnectionsSummary"),
+};
 
-static const std::array<JsonPointer::Token, 2> routes_health_def_tokens{
-    {STR("definitions"), STR("RouteHealth")}};
+static const std::array routes_summary_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteSummary"),
+};
 
-static const std::array<JsonPointer::Token, 2> routes_status_path_tokens{
-    {STR("paths"), STR("/routes/{routeName}/status")}};
+static const std::array routes_config_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteConfig"),
+};
 
-static const std::array<JsonPointer::Token, 2> routes_config_path_tokens{
-    {STR("paths"), STR("/routes/{routeName}/config")}};
+static const std::array routes_status_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteStatus"),
+};
 
-static const std::array<JsonPointer::Token, 2> routes_health_path_tokens{
-    {STR("paths"), STR("/routes/{routeName}/health")}};
+static const std::array routes_health_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("RouteHealth"),
+};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_connection_list_path_tokens{
-        {STR("paths"), STR("/routes/{routeName}/connections")}};
+static const std::array routes_status_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routes/{routeName}/status"),
+};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_blockedhost_list_path_tokens{
-        {STR("paths"), STR("/routes/{routeName}/blockedHosts")}};
+static const std::array routes_config_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routes/{routeName}/config"),
+};
 
-static const std::array<JsonPointer::Token, 2>
-    routes_destination_list_path_tokens{
-        {STR("paths"), STR("/routes/{routeName}/destinations")}};
+static const std::array routes_health_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routes/{routeName}/health"),
+};
 
-static const std::array<JsonPointer::Token, 2> routes_list_path_tokens{
-    {STR("paths"), STR("/routes")}};
+static const std::array routes_connection_list_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routes/{routeName}/connections"),
+};
 
-static const std::array<JsonPointer::Token, 2> tags_append_tokens{
-    {STR("tags"), STR("-")}};
+static const std::array routes_blockedhost_list_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routes/{routeName}/blockedHosts"),
+};
 
-#undef STR
+static const std::array routes_destination_list_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routes/{routeName}/destinations"),
+};
+
+static const std::array routes_list_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/routes"),
+};
+
+static const std::array tags_append_tokens{
+    make_json_pointer_token("tags"),
+    make_json_pointer_token("-"),
+};
 
 std::string json_pointer_stringfy(const JsonPointer &ptr) {
   rapidjson::StringBuffer sb;
@@ -268,6 +316,20 @@ static void spec_adder(RestApiComponent::JsonDocument &spec_doc) {
 
   std::string routing_status_def_ptr_str =
       json_pointer_stringfy(routing_status_def_ptr);
+
+  // /definitions/RoutingGuidelinesDef
+  const RestApiComponent::JsonPointer routing_guidelines_def_ptr(
+      routing_guidelines_def.data(), routing_guidelines_def.size());
+
+  routing_guidelines_def_ptr.Set(
+      spec_doc,
+      JsonValue(rapidjson::kObjectType)
+          .AddMember("type", "object", allocator)
+          .AddMember("additionalProperties", "true", allocator),
+      allocator);
+
+  std::string routing_guidelines_def_ptr_str =
+      json_pointer_stringfy(routing_guidelines_def_ptr);
 
   // /parameters/routeNameParam
   const RestApiComponent::JsonPointer route_name_param_ptr(
@@ -739,6 +801,98 @@ static void spec_adder(RestApiComponent::JsonDocument &spec_doc) {
         allocator);
   }
 
+  // /guidelines schema
+  {
+    JsonPointer ptr(routing_guidelines_schema_tokens.data(),
+                    routing_guidelines_schema_tokens.size());
+
+    ptr.Set(
+        spec_doc,
+        JsonValue(rapidjson::kObjectType)
+            .AddMember(
+                "get",
+                JsonValue(rapidjson::kObjectType)
+                    .AddMember("tags",
+                               JsonValue(rapidjson::kArrayType)
+                                   .PushBack("routing", allocator),
+                               allocator)
+                    .AddMember("description",
+                               "Get routing guidelines document schema",
+                               allocator)
+                    .AddMember(
+                        "responses",
+                        JsonValue(rapidjson::kObjectType)
+                            .AddMember(
+                                "200",
+                                JsonValue(rapidjson::kObjectType)
+                                    .AddMember(
+                                        "description",
+                                        "routing guidelines document schema",
+                                        allocator)
+                                    .AddMember(
+                                        "schema",
+                                        JsonValue(rapidjson::kObjectType)
+                                            .AddMember(
+                                                "$ref",
+                                                JsonValue(
+                                                    routing_guidelines_def_ptr_str
+                                                        .data(),
+                                                    routing_guidelines_def_ptr_str
+                                                        .size(),
+                                                    allocator),
+                                                allocator),
+                                        allocator),
+                                allocator),
+                        allocator),
+                allocator),
+        allocator);
+  }
+
+  // /guidelines
+  {
+    JsonPointer ptr(routing_guidelines_tokens.data(),
+                    routing_guidelines_tokens.size());
+
+    ptr.Set(
+        spec_doc,
+        JsonValue(rapidjson::kObjectType)
+            .AddMember(
+                "get",
+                JsonValue(rapidjson::kObjectType)
+                    .AddMember("tags",
+                               JsonValue(rapidjson::kArrayType)
+                                   .PushBack("routing", allocator),
+                               allocator)
+                    .AddMember("description", "Get routing guidelines document",
+                               allocator)
+                    .AddMember(
+                        "responses",
+                        JsonValue(rapidjson::kObjectType)
+                            .AddMember(
+                                "200",
+                                JsonValue(rapidjson::kObjectType)
+                                    .AddMember("description",
+                                               "routing guidelines document",
+                                               allocator)
+                                    .AddMember(
+                                        "schema",
+                                        JsonValue(rapidjson::kObjectType)
+                                            .AddMember(
+                                                "$ref",
+                                                JsonValue(
+                                                    routing_guidelines_def_ptr_str
+                                                        .data(),
+                                                    routing_guidelines_def_ptr_str
+                                                        .size(),
+                                                    allocator),
+                                                allocator),
+                                        allocator),
+                                allocator),
+                        allocator),
+                allocator),
+        allocator);
+  }
+
   // /paths/routesConfig
   {
     JsonPointer ptr(routes_config_path_tokens.data(),
@@ -1176,24 +1330,38 @@ static void start(mysql_harness::PluginFuncEnv *env) {
 
   const bool spec_adder_executed = rest_api_srv.try_process_spec(spec_adder);
 
-  std::array<RestApiComponentPath, 8> paths{{
-      {rest_api_srv, RestRoutingStatus::path_regex,
-       std::make_unique<RestRoutingStatus>(require_realm_routing)},
-      {rest_api_srv, RestRoutingList::path_regex,
-       std::make_unique<RestRoutingList>(require_realm_routing)},
-      {rest_api_srv, RestRoutingBlockedHosts::path_regex,
-       std::make_unique<RestRoutingBlockedHosts>(require_realm_routing)},
-      {rest_api_srv, RestRoutingDestinations::path_regex,
-       std::make_unique<RestRoutingDestinations>(require_realm_routing)},
-      {rest_api_srv, RestRoutingConfig::path_regex,
-       std::make_unique<RestRoutingConfig>(require_realm_routing)},
-      {rest_api_srv, RestRoutingRoutesStatus::path_regex,
-       std::make_unique<RestRoutingRoutesStatus>(require_realm_routing)},
-      {rest_api_srv, RestRoutingHealth::path_regex,
-       std::make_unique<RestRoutingHealth>(require_realm_routing)},
-      {rest_api_srv, RestRoutingConnections::path_regex,
-       std::make_unique<RestRoutingConnections>(require_realm_routing)},
-  }};
+  std::array paths{
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingStatus::path_regex,
+          std::make_unique<RestRoutingStatus>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingGuidelines::path_regex,
+          std::make_unique<RestRoutingGuidelines>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingGuidelinesSchema::path_regex,
+          std::make_unique<RestRoutingGuidelinesSchema>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingList::path_regex,
+          std::make_unique<RestRoutingList>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingBlockedHosts::path_regex,
+          std::make_unique<RestRoutingBlockedHosts>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingDestinations::path_regex,
+          std::make_unique<RestRoutingDestinations>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingConfig::path_regex,
+          std::make_unique<RestRoutingConfig>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingRoutesStatus::path_regex,
+          std::make_unique<RestRoutingRoutesStatus>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingHealth::path_regex,
+          std::make_unique<RestRoutingHealth>(require_realm_routing)},
+      RestApiComponentPath{
+          rest_api_srv, RestRoutingConnections::path_regex,
+          std::make_unique<RestRoutingConnections>(require_realm_routing)},
+  };
 
   mysql_harness::on_service_ready(env);
 
@@ -1204,11 +1372,11 @@ static void start(mysql_harness::PluginFuncEnv *env) {
   if (!spec_adder_executed) rest_api_srv.remove_process_spec(spec_adder);
 }
 
-static std::array<const char *, 2> required = {{
+static constexpr std::array required{
     "logger",
     // "routing",
     "rest_api",
-}};
+};
 
 namespace {
 
@@ -1267,8 +1435,8 @@ mysql_harness::Plugin REST_ROUTING_EXPORT harness_plugin_rest_routing = {
     start,    // start
     nullptr,  // stop
     true,     // declares_readiness
-    rest_plugin_supported_options.size(),
-    rest_plugin_supported_options.data(),
+    plugin_supported_options.size(),
+    plugin_supported_options.data(),
     expose_configuration,
 };
 }

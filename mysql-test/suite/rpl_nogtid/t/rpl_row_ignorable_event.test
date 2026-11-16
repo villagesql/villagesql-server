@@ -94,7 +94,7 @@ RESET BINARY LOGS AND GTIDS;
 --source include/rpl/mysqlbinlog.inc
 
 --echo # Test the Rows_query log event can be applied
---exec $MYSQL_BINLOG -v -v --stop-position=$end_pos $binlog_uuid_filename | $MYSQL test 2>&1
+--exec $MYSQL_BINLOG -v -v --stop-position=$end_pos $binlog_uuid_filename | $MYSQL -c test 2>&1
 
 --remove_file $binlog_uuid_filename
 
@@ -128,5 +128,8 @@ source include/rpl/deprecated/show_binlog_events.inc;
 --echo # Test The Rows_query log event can be relayed.
 --echo # SHOW BINLOG EVENTS ON SLAVE
 source include/rpl/deprecated/show_binlog_events.inc;
+
+--connection master
+set DEBUG_SYNC= 'RESET';
 
 --source include/rpl/deinit.inc

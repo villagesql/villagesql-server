@@ -22,8 +22,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysql/binlog/event/compression/factory.h"
-#include <my_byteorder.h>
 #include <algorithm>
+#include "my_byteorder.h"
 #include "mysql/binlog/event/compression/none_comp.h"
 #include "mysql/binlog/event/compression/none_dec.h"
 #include "mysql/binlog/event/compression/zstd_comp.h"
@@ -34,27 +34,27 @@ namespace mysql::binlog::event::compression {
 std::unique_ptr<Compressor> Factory::build_compressor(
     type t, const Memory_resource_t &memory_resource) {
   switch (t) {
-    case ZSTD:
+    case ALGORITHM_ZSTD:
       return std::make_unique<Zstd_comp>(memory_resource);
     case NONE:
       return std::make_unique<None_comp>();
     default:
       break;
   }
-  return std::unique_ptr<Compressor>();
+  return {};
 }
 
 std::unique_ptr<Decompressor> Factory::build_decompressor(
     type t, const Memory_resource_t &memory_resource) {
   switch (t) {
-    case ZSTD:
+    case ALGORITHM_ZSTD:
       return std::make_unique<Zstd_dec>(memory_resource);
     case NONE:
       return std::make_unique<None_dec>();
     default:
       break;
   }
-  return std::unique_ptr<Decompressor>();
+  return {};
 }
 
 }  // namespace mysql::binlog::event::compression

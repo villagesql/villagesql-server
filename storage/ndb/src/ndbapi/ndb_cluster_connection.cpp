@@ -150,7 +150,7 @@ const char *Ndb_cluster_connection::get_connectstring(char *buf,
 }
 
 extern "C" void *run_ndb_cluster_connection_connect_thread(void *me) {
-  Ndb_cluster_connection_impl *connection = (Ndb_cluster_connection_impl *)me;
+  auto *connection = (Ndb_cluster_connection_impl *)me;
   connection->m_run_connect_thread = 1;
   connection->connect_thread();
   return me;
@@ -194,7 +194,6 @@ void Ndb_cluster_connection_impl::init_get_next_node(
   iter.init_pos = iter.cur_pos;
   iter.scan_state = 0;
   //  fprintf(stderr,"[init %d]",iter.init_pos);
-  return;
 }
 
 Uint32 Ndb_cluster_connection_impl::get_next_node(
@@ -356,7 +355,7 @@ int Ndb_cluster_connection::wait_until_ready(int timeout,
       secondsCounter++;
       milliCounter = 0;
     }  // if
-  } while (1);
+  } while (true);
 }
 
 unsigned Ndb_cluster_connection::get_connect_count() const {
@@ -410,7 +409,7 @@ class NdbApiInternalLogHandler : public LogHandler {
     if (g_api_internal_log_handler == nullptr) {
       /* None defined, create it and add to the g_eventLogger*/
       LogHandler *clh = new ConsoleLogHandler();
-      NdbApiInternalLogHandler *nilh = new NdbApiInternalLogHandler(clh);
+      auto *nilh = new NdbApiInternalLogHandler(clh);
       g_eventLogger->addHandler(nilh);
       g_api_internal_log_handler = nilh;
     }
@@ -594,9 +593,9 @@ Ndb_cluster_connection_impl::~Ndb_cluster_connection_impl() {
   if (m_transporter_facade != nullptr) {
     m_transporter_facade->stop_instance();
   }
-  if (m_globalDictCache) {
-    delete m_globalDictCache;
-  }
+
+  delete m_globalDictCache;
+
   if (m_connect_thread) {
     void *status;
     m_run_connect_thread = 0;
@@ -649,7 +648,7 @@ Ndb_cluster_connection_impl::~Ndb_cluster_connection_impl() {
   if (m_new_delete_ndb_cond) NdbCondition_Destroy(m_new_delete_ndb_cond);
   m_new_delete_ndb_cond = nullptr;
 
-  if (m_multi_wait_group) delete m_multi_wait_group;
+  delete m_multi_wait_group;
   m_multi_wait_group = nullptr;
 
   m_uri_scheme.clear();
@@ -1269,7 +1268,7 @@ int Ndb_cluster_connection_impl::configure(
 void Ndb_cluster_connection_impl::do_test() {
   Ndb_cluster_connection_node_iter iter;
   int n = no_db_nodes() + 5;
-  Uint32 *nodes = new Uint32[n + 1];
+  auto *nodes = new Uint32[n + 1];
 
   for (int g = 0; g < n; g++) {
     for (int h = 0; h < n; h++) {
@@ -1405,7 +1404,7 @@ int Ndb_cluster_connection_impl::connect(int no_retries,
     m_latest_error_msg.assign("");
     DBUG_PRINT("exit", ("connect ok, ret: 0"));
     DBUG_RETURN(0);
-  } while (0);
+  } while (false);
 
   const char *erString = m_config_retriever->getErrorString();
   if (erString == nullptr) {
@@ -1521,9 +1520,8 @@ NdbWaitGroup *Ndb_cluster_connection::create_ndb_wait_group(int size) {
   if (m_impl.m_multi_wait_group == nullptr) {
     m_impl.m_multi_wait_group = new NdbWaitGroup(this, size);
     return m_impl.m_multi_wait_group;
-  } else {
-    return nullptr;  // NdbWaitGroup already exists
   }
+  return nullptr;  // NdbWaitGroup already exists
 }
 
 bool Ndb_cluster_connection::release_ndb_wait_group(NdbWaitGroup *group) {
@@ -1531,9 +1529,8 @@ bool Ndb_cluster_connection::release_ndb_wait_group(NdbWaitGroup *group) {
     delete m_impl.m_multi_wait_group;
     m_impl.m_multi_wait_group = nullptr;
     return true;
-  } else {
-    return false;
   }
+  return false;
 }
 
 Uint32 Ndb_cluster_connection_impl::select_any(NdbImpl *impl_ndb) {
@@ -1553,11 +1550,11 @@ Uint32 Ndb_cluster_connection_impl::select_any(NdbImpl *impl_ndb) {
   }
   if (num_prospective_nodes == 0) {
     return 0;
-  } else if (num_prospective_nodes == 1) {
-    return prospective_node_ids[0];
-  } else {
-    return select_node(impl_ndb, prospective_node_ids, num_prospective_nodes);
   }
+  if (num_prospective_nodes == 1) {
+    return prospective_node_ids[0];
+  }
+  return select_node(impl_ndb, prospective_node_ids, num_prospective_nodes);
 }
 
 /**
@@ -1586,11 +1583,11 @@ Uint32 Ndb_cluster_connection_impl::select_location_based(NdbImpl *impl_ndb,
   }
   if (num_prospective_nodes == 0) {
     return nodes[0];
-  } else if (num_prospective_nodes == 1) {
-    return prospective_node_ids[0];
-  } else {
-    return select_node(impl_ndb, prospective_node_ids, num_prospective_nodes);
   }
+  if (num_prospective_nodes == 1) {
+    return prospective_node_ids[0];
+  }
+  return select_node(impl_ndb, prospective_node_ids, num_prospective_nodes);
 }
 
 Uint32 Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
@@ -1598,7 +1595,8 @@ Uint32 Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
                                                 Uint32 cnt) {
   if (cnt == 1) {
     return nodes[0];
-  } else if (cnt == 0) {
+  }
+  if (cnt == 0) {
     return 0;
   }
 
@@ -1607,7 +1605,7 @@ Uint32 Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
   const Uint32 nodes_arr_cnt = m_nodes_proximity.size();
 
   Uint32 best_node = nodes[0];
-  Uint32 best_idx = Uint32(~0);
+  auto best_idx = Uint32(~0);
   Uint32 best_usage = 0;
   Int32 best_score = MAX_PROXIMITY_GROUP;  // Lower is better
 

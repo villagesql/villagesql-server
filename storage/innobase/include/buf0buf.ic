@@ -256,7 +256,14 @@ static inline bool buf_page_is_private(const buf_page_t *bpage,
   ut_a(!bpage->in_free_list);
   ut_a(!bpage->in_LRU_list);
   if (!hold_block_mutex) {
-    ut_a(!mutex_own(buf_page_get_mutex(bpage)));
+    /* A never-used block can reach this validation before lazy construction
+    of its embedded mutex. Reused blocks retain their latches, so keep checking
+    ownership once latches_initialized has been published.
+    Note: If mutex was not initialized, then it is also not an owned mutex. */
+    ut_a((buf_page_get_state(bpage) == BUF_BLOCK_NOT_USED &&
+          !reinterpret_cast<const buf_block_t *>(bpage)
+               ->latches_initialized.load(std::memory_order_relaxed)) ||
+         !mutex_own(buf_page_get_mutex(bpage)));
   }
   ut_a(!mutex_own(&buf_pool->free_list_mutex));
   if (!hold_zip_free_mutex) {
@@ -505,7 +512,12 @@ static inline bool buf_page_can_relocate(
 {
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(buf_page_in_file(bpage));
-  ut_ad(bpage->in_LRU_list);
+  /* A page whose read IO is still in progress may be hash-visible but not
+  yet linked into the LRU list: buf_page_init_for_read() links it into the
+  LRU list only after making it hash-visible. Such a page is io-fixed for
+  read (and not relocatable), which is the only legitimate way to reach
+  this function for a page which is not in the LRU list. */
+  ut_ad(bpage->in_LRU_list || buf_page_get_io_fix(bpage) == BUF_IO_READ);
 
   return (buf_page_get_io_fix(bpage) == BUF_IO_NONE &&
           bpage->buf_fix_count == 0);
@@ -614,7 +626,7 @@ static inline buf_block_t *buf_page_get_block(buf_page_t *bpage) {
 static inline buf_frame_t *buf_block_get_frame(
     const buf_block_t *block) /*!< in: pointer to the control block */
 {
-  ut_ad(block);
+  SRV_CORRUPT_TABLE_CHECK(block, return (0););
 
   switch (buf_block_get_state(block)) {
     case BUF_BLOCK_POOL_WATCH:
@@ -681,6 +693,13 @@ static inline buf_page_t *buf_page_alloc_descriptor(void) {
   UNIV_MEM_ALLOC(bpage, sizeof *bpage);
   /* This is required for valgrind to work correctly. */
   bpage->m_space = nullptr;
+#ifdef UNIV_DEBUG_VALGRIND
+  /* There is a counterpart assertion of the following assignment in
+   buf_page_init_low(). The assertion is to check if we call buf_page_init_low()
+   on buf_page_t that is not buf-fixed. buf_page_alloc_descriptor() does not
+   init buf_fix_count explicitly, so Valgrind would complain there. */
+  bpage->buf_fix_count.store(0);
+#endif
 
   return (bpage);
 }
@@ -723,20 +742,19 @@ static inline lsn_t buf_page_get_newest_modification(const buf_page_t *bpage) {
 
 /** Increment the modify clock.
 The caller must
-(1) block bufferfix count has to be zero,
+(1) own the buffer block mutex and block bufferfix count has to be zero,
 (2) own X or SX latch on the block->lock, or
 (3) operate on a thread-private temporary table
 @param[in,out]  block   buffer block */
 static inline void buf_block_modify_clock_inc(buf_block_t *block) {
 #ifdef UNIV_DEBUG
-  buf_pool_t *buf_pool = buf_pool_from_bpage(&block->page);
+  const auto bpage = &block->page;
 #endif /* UNIV_DEBUG */
   block->ahi.validate();
 
   /* No block latch is acquired for internal temporary tables. */
   ut_ad(fsp_is_system_temporary(block->page.id.space()) ||
-        (block->page.buf_fix_count == 0 &&
-         mutex_own(&buf_pool->LRU_list_mutex)) ||
+        (bpage->buf_fix_count == 0 && block->mutex.is_owned()) ||
         rw_lock_own_flagged(&block->lock, RW_LOCK_FLAG_X | RW_LOCK_FLAG_SX) ||
         block->is_memory());
 
@@ -771,6 +789,10 @@ static inline ulint buf_block_fix(buf_block_t *block) {
 static inline void buf_block_buf_fix_inc_func(IF_DEBUG(ut::Location location, )
                                                   buf_block_t *block) {
 #ifdef UNIV_DEBUG
+  /* Any block being buffer-fixed must have left the free list, and thus have
+  had its latches created (see buf_LRU_get_free_only()). */
+  ut_ad(block->latches_initialized);
+
   /* No debug latch is acquired if block belongs to system temporary.
   Debug latch is not of much help if access to block is single
   threaded. */

@@ -2,12 +2,14 @@
 # Nested Loops semi-join subquery evaluation tests
 #
 --source include/elide_costs.inc
+--source include/hypergraph_is_active.inc
 
 # This portion of the file vas developed when subquery materialization
 # was rule-based; to preserve the intended test scenarios, we switch
 # off cost-based choice for them.
 set @old_opt_switch=@@optimizer_switch;
 set optimizer_switch='subquery_materialization_cost_based=off';
+SET explain_json_format_version = 1;
 
 -- disable_query_log
 -- disable_result_log
@@ -100,6 +102,7 @@ insert into t10 select a,a from t0;
 create table t12 like t10;
 insert into t12 select * from t10;
 
+ANALYZE TABLE t0, t1, t2, t10, t11, t12;
 
 --echo Flattened because of dependency, t10=func(t1)
 explain select * from t1 where a in (select pk from t10);
@@ -181,6 +184,7 @@ drop table t10, t11, t12;
 CREATE TABLE t1 (i INTEGER);
 CREATE TABLE t2 (i INTEGER);
 CREATE TABLE t3 (i INTEGER);
+ANALYZE TABLE t1, t2, t3;
 let $i=3;
 while ($i)
 {
@@ -276,14 +280,17 @@ while ($i)
 
 	 dec $k;
 	 eval INSERT INTO t3 VALUES ($k);
+         ANALYZE TABLE t3;
        }
        DELETE FROM t3;
        dec $j;
        eval INSERT INTO t2 VALUES ($j);	
+       ANALYZE TABLE t2, t3;
    }
    DELETE FROM t2;
    dec $i;
    eval INSERT INTO t1 VALUES ($i);
+   ANALYZE TABLE t1, t2;
 }
 DROP TABLE t1, t2, t3;
 
@@ -432,6 +439,7 @@ drop table t1, t11, t12, t21, t22;
 # 
 create table t1(a int);
 insert into t1 values (0),(1);
+ANALYZE TABLE t1;
 
 explain 
 select (select max(y.a) from t1 y where a in (select a from t1 z) and a < x.a) as subq from t1 x;
@@ -484,6 +492,7 @@ select * from t3 where a in (select kp1 from t1 where kp1<20) and a<20;
 create table t4 (pk int primary key);
 insert into t4 select a from t3;
 ANALYZE TABLE t4;
+--replace_regex $elide_costs
 explain select * from t3 where a in
           (select t1.kp1 from t1,t4 where kp1<20 and t4.pk=t1.c);
 
@@ -569,8 +578,21 @@ explain select * from t1 where a in (select a from t3);
 drop table t1, t2, t3;
 create table t1 (a decimal);
 insert into t1 values (1),(2);
+ANALYZE TABLE t1;
 explain select * from t1 where a in (select a from t1);
 drop table t1;
+
+#
+# BIT type checks
+#
+SET internal_tmp_mem_storage_engine='memory';
+--source include/subquery_sj_type_bit.inc
+SET internal_tmp_mem_storage_engine='TempTable';
+--source include/subquery_sj_type_bit.inc
+SET internal_tmp_mem_storage_engine=default;
+SET SESSION big_tables=true;
+--source include/subquery_sj_type_bit.inc
+SET SESSION big_tables=default;
 
 #
 # SJ-Materialization-scan for non-first table
@@ -600,6 +622,7 @@ where x.a in (select straight_join a.a from t1 a, t1 b);
 #
 create table t0 (a int, b int);
 insert into t0 values(1,1);
+ANALYZE TABLE t0;
 explain select * from t0, t3 where t3.a in (select a from t2) and (t3.a < 10 or t3.a >30);
 create table t4 as select a as x, a as y from t1;
 explain select * from t0, t3 where (t3.a, t3.b) in (select x,y from t4) and (t3.a < 10 or t3.a >30);
@@ -613,6 +636,7 @@ insert into t0 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
 create table t1 (a int, b int, filler char(100), key(a,b));
 insert into t1 select A.a, B.a, 'filler' from t0 A, t0 B;
 create table t2 as select * from t1;
+ANALYZE TABLE t0, t1, t2;
 
 explain select * from t2 where a in (select b from t1 where a=3);
 explain select * from t2 where (b,a) in (select a,b from t1 where a=3);
@@ -626,6 +650,7 @@ create table t1 (a int, b int);
 insert into t1 select a,a from t0;
 create table t2 (a int, b int); 
 insert into t2 select A.a + 10*B.a, A.a + 10*B.a from t0 A, t0 B;
+ANALYZE TABLE t1, t2;
 
 explain select * from t1 where (a,b) in (select a,b from t2);
 
@@ -660,6 +685,7 @@ INSERT INTO t3 VALUES (22,'come','h'),
  (24,'lpjdzvkp','ababa'),
  (25,'d','GGDD');
 
+--sorted_result
 SELECT * FROM t1 WHERE (field1, field2) IN (
   SELECT table1.col_varchar_255_utf8_key AS field1,
          table1.col_varchar_255_utf8_key AS field2
@@ -700,6 +726,7 @@ insert into t0 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
 create table t1 as select a as a, a as b, a as c from t0 where a < 3;
 create table t2 as select a as a, a as b from t0 where a < 3;
 insert into t2 select * from t2;
+ANALYZE TABLE t0, t1, t2;
 
 explain select * from t1 where (a,b,c) in (select x.a, y.a, z.a from t2 x, t2 y, t2 z where x.b=33);
 
@@ -1399,6 +1426,7 @@ FROM ot1 JOIN ot2 ON ot1.a=ot2.a AND ot1.a IN (SELECT a FROM it3)
 let $query=
 SELECT *
 FROM ot1 LEFT JOIN ot2 ON ot1.a=ot2.a AND ot1.a IN (SELECT a FROM it3);
+--replace_regex $elide_costs
 eval explain $query;
 --sorted_result
 eval $query;
@@ -1847,6 +1875,7 @@ CREATE TABLE t0 (
 INSERT INTO t0 
 VALUES (1,'g','g'), (2,'v','v'), (3,'t','t'), (4,'u','u'), (5,'n','n');
 ANALYZE TABLE t0;
+--replace_column 10 #
 EXPLAIN SELECT vkey FROM t0 WHERE pk IN
   (SELECT t1.pk FROM t0 t1 JOIN t0 t2 ON t2.vkey = t1.vnokey);
 
@@ -2284,6 +2313,8 @@ INSERT INTO t1 VALUES(1),(2);
 INSERT INTO t2 VALUES(1),(2);
 INSERT INTO t3 VALUES(1),(2);
 
+ANALYZE TABLE t1, t2, t3;
+
 PREPARE stmt FROM
 "
 SELECT t1field
@@ -2438,6 +2469,7 @@ CREATE VIEW v1 AS
   WHERE a.t1field IN (SELECT t1field FROM t1);
 
 INSERT INTO t1 VALUES(1),(2);
+ANALYZE TABLE t1;
 
 SELECT t1field
 FROM t1
@@ -2903,6 +2935,9 @@ INSERT INTO t1 VALUES(10),(20);
 create table t2 select * from t1;
 create table t3 select * from t1;
 
+ANALYZE TABLE t1, t2, t3;
+
+--sorted_result
 SELECT *
 FROM t1
 WHERE 1 IN(SELECT 1
@@ -2924,6 +2959,7 @@ INSERT INTO t1 VALUES(30),(40),(50),(60),(70),(80),(90);
 insert into t2 select * from t1;
 insert into t3 select * from t1;
 create table t4 select * from t1;
+ANALYZE tABLE t1, t2, t3, t4;
 
 --sorted_result
 SELECT *
@@ -3029,6 +3065,8 @@ INSERT INTO t1 VALUES (1,'o','ffff','ffff','ffoo'),(2,'f','ffff','ffff','ffff');
 CREATE TABLE t2 LIKE t1;
 INSERT INTO t2 VALUES (1,'i','iiii','iiii','iiii'),(2,'f','ffff','ffff','ffff');
 
+ANALYZE TABLE t1, t2;
+
 EXPLAIN SELECT pk FROM t1 WHERE (a) IN (SELECT a FROM t2 WHERE pk > 0);
 SELECT pk FROM t1 WHERE (a) IN (SELECT a FROM t2 WHERE pk > 0);
 SELECT pk FROM t1 WHERE (b,c,d) IN (SELECT b,c,d FROM t2 WHERE pk > 0);
@@ -3046,6 +3084,8 @@ INSERT INTO t1 (f1, f2) VALUES (10, 1.668);
 CREATE TABLE t2 LIKE t1;
 INSERT INTO t2 VALUES (1, 1.789);
 INSERT INTO t2 VALUES (13, 1.454);
+
+ANALYZE TABLE t1, t2;
 
 EXPLAIN SELECT COUNT(*) FROM t1 WHERE (f1,f2) IN (SELECT f1,f2 FROM t2);
 SELECT COUNT(*) FROM t1 WHERE (f1,f2) IN (SELECT f1,f2 FROM t2);
@@ -3715,6 +3755,8 @@ INSERT INTO t1 VALUES (1,'o','ffff','ffff','ffoo','ffff','ffff','ffff','ffff','f
 CREATE TABLE t2 LIKE t1;
 INSERT INTO t2 VALUES (1,'i','iiii','iiii','iiii','iiii','ffff','ffff','ffff','ffff','ffff',ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))')), (2,'f','ffff','ffff','ffff','ffff','ffff','ffff','ffff','ffff','ffff',ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'));
 
+ANALYZE TABLE t1, t2;
+
 # Test that materialization is skipped for semijoins where materialized
 # table would contain GEOMETRY or different kinds of BLOB/TEXT columns
 let $query=
@@ -3931,6 +3973,7 @@ CREATE TABLE t3 (i INTEGER);
 INSERT INTO t1 VALUES (1), (2);
 INSERT INTO t2 VALUES (6);
 INSERT INTO t3 VALUES (1), (2);
+ANALYZE TABLE t1, t2, t3;
 explain SELECT * FROM t1 WHERE (t1.i) IN 
 (SELECT t3.i FROM t3 LEFT JOIN t2 ON t2.i=t3.i);
 SELECT * FROM t1 WHERE (t1.i) IN 
@@ -4188,6 +4231,7 @@ SELECT * FROM t2
 WHERE f2 IN (SELECT t1.f1
              FROM t1 LEFT OUTER JOIN (t2 AS b1 JOIN t2 AS b2 ON TRUE) ON TRUE);
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 DROP TABLE t1, t2;
@@ -4334,7 +4378,14 @@ WHERE col_varchar_10_latin1_key IN (
     WHERE alias1.pk AND alias1.pk < 3 OR alias1.pk AND alias3.pk);
 ANALYZE TABLE t1, t2, t3;
 eval EXPLAIN $query;
+if ($hypergraph_is_active) {
+  # Different warnings with hypergraph than with old optimizer.
+  --disable_warnings
+}
 eval $query;
+if ($hypergraph_is_active) {
+  --enable_warnings
+}
 
 DROP TABLE t1, t2, t3;
 
@@ -4613,6 +4664,7 @@ WHERE g1 NOT IN
       AND grandparent1.col_varchar_key IS NOT NULL
     );
 
+--replace_column 10 ROWS
 eval EXPLAIN $query;
 eval $query;
 
@@ -5127,6 +5179,7 @@ eval $query;
 ALTER TABLE t1 ENGINE=Innodb;
 ALTER TABLE t2 ENGINE=Innodb;
 
+--sorted_result
 eval $query;
 
 DROP TABLE t1, t2;
@@ -5375,11 +5428,15 @@ eval $query;
 ALTER TABLE t1 ENGINE=INNODB;
 ALTER TABLE t2 ENGINE=INNODB;
 
+ANALYZE TABLE t1, t2;
+
 eval explain $query;
 eval $query;
 
 ALTER TABLE t1 ENGINE=Memory;
 ALTER TABLE t2 ENGINE=Memory;
+
+ANALYZE TABLE t1, t2;
 
 eval explain $query;
 eval $query;
@@ -6311,6 +6368,8 @@ CREATE TABLE t3 (
   i INT
 );
 
+ANALYZE TABLE t1, t2, t3;
+
 SET @optimizer_switch_saved= @@optimizer_switch;
 SET @@optimizer_switch="derived_merge=off";
 
@@ -6453,6 +6512,8 @@ CREATE TABLE t1 (
 );
 
 INSERT INTO t1 VALUES (0), (1);
+
+ANALYZE TABLE t1;
 
 CREATE VIEW view_t1 AS SELECT * FROM t1;
 
@@ -7139,6 +7200,7 @@ WHERE field1 IN (
   FROM v1 AS tv1 LEFT JOIN v1 AS tv2 ON tv1.var_10_latin1=tv2.var_10_utf8);
 --replace_column 10 6
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 DROP VIEW v1;
@@ -7248,6 +7310,7 @@ DROP TABLE t1,t2;
 
 CREATE TABLE t1(a INTEGER) engine=innodb;
 CREATE TABLE t2(b INTEGER) engine=innodb;
+ANALYZE TABLE t1, t2;
 
 let $query=
 SELECT 1
@@ -7267,6 +7330,7 @@ DROP TABLE t1, t2;
 # Debugging is needed to inspect correct transformation, unfortunately.
 
 CREATE TABLE t1(a INTEGER) engine=innodb;
+ANALYZE TABLE t1;
 
 let $query=
 SELECT (SELECT a FROM t1 AS t2
@@ -7289,6 +7353,7 @@ SET DEFAULT_STORAGE_ENGINE=INNODB;
 
 CREATE TABLE t1 (a INT, b INT, PRIMARY KEY(a));
 CREATE TABLE t2 (c INT PRIMARY KEY);
+ANALYZE TABLE t1, t2;
 let $query=
 SELECT 1 FROM t1
 WHERE 1 IN

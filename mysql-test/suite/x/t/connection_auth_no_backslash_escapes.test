@@ -3,7 +3,7 @@
 --source include/xplugin_preamble.inc
 
 CREATE USER 'quote''user'@'localhost'
-  IDENTIFIED WITH 'mysql_native_password' BY 'auth_string';
+  IDENTIFIED WITH 'caching_sha2_password' BY 'auth_string';
 GRANT ALL ON *.* TO 'quote''user'@'localhost';
 
 SET @old_global_sql_mode = @@GLOBAL.sql_mode;

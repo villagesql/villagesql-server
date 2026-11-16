@@ -4,7 +4,8 @@
 #
 # The variable
 #     $engine_type       -- storage engine to be tested
-# has to be set before sourcing this script.
+#     $eval_before_analyze -- statement to execute before any analyze table
+# have to be set before sourcing this script.
 #
 # Note: The comments/expectations refer to InnoDB.
 #       They might be not valid for other storage engines.
@@ -14,6 +15,8 @@
 #               old name was t/index_merge_innodb.test
 #               main code went into include/index_merge2.inc
 #
+
+--source include/elide_costs.inc
 
 --echo #---------------- Index merge test 2 -------------------------------------------
 --echo # (Start of test file: index_merge2.inc)
@@ -45,6 +48,10 @@ while ($1)
 
 -- disable_query_log
 -- disable_result_log
+if ($eval_before_analyze)
+{
+  eval $eval_before_analyze;
+}
 analyze table t1;
 -- enable_result_log
 -- enable_query_log
@@ -72,6 +79,10 @@ alter table t1 add primary key (str1, zeroval, str2, str3);
 
 -- disable_query_log
 -- disable_result_log
+if ($eval_before_analyze)
+{
+  eval $eval_before_analyze;
+}
 analyze table t1;
 -- enable_result_log
 -- enable_query_log
@@ -107,6 +118,10 @@ while ($1)
 
 -- disable_query_log
 -- disable_result_log
+if ($eval_before_analyze)
+{
+  eval $eval_before_analyze;
+}
 analyze table t1;
 -- enable_result_log
 -- enable_query_log
@@ -145,25 +160,39 @@ insert into t1 (key1a, key1b, key2a, key2b, key3a, key3b)
   select key1a, key1b, key2a, key2b, key3a, key3b from t1;
 insert into t1 (key1a, key1b, key2a, key2b, key3a, key3b)
   select key1a, key1b, key2a, key2b, key3a, key3b from t1;
+if ($eval_before_analyze)
+{
+  eval $eval_before_analyze;
+}
 analyze table t1;
 select count(*) from t1;
 
 -- disable_query_log
 -- disable_result_log
+if ($eval_before_analyze)
+{
+  eval $eval_before_analyze;
+}
 analyze table t2;
 -- enable_result_log
 -- enable_query_log
 
+if (!$skip_ror_EXPLAIN_for_MyRocks)
+{
 --replace_regex $elide_costs
 explain select count(*) from t1 where
   key1a = 2 and key1b is null and  key2a = 2 and key2b is null;
+}
 
 select count(*) from t1 where
   key1a = 2 and key1b is null and key2a = 2 and key2b is null;
 
+if (!$skip_ror_EXPLAIN_for_MyRocks)
+{
 --replace_regex $elide_costs
 explain select count(*) from t1 where
   key1a = 2 and key1b is null and key3a = 2 and key3b is null;
+}
 
 select count(*) from t1 where
   key1a = 2 and key1b is null and key3a = 2 and key3b is null;
@@ -352,7 +381,7 @@ drop table t1;
 --echo # BUG#21277: Index Merge/sort_union: wrong query results
 create table t1
 (
-  key1 int not null, 
+  key1 int not null,
   key2 int not null default 0,
   key3 int not null default 0
 );
@@ -374,13 +403,20 @@ update t1 set key2=key1,key3=key1;
 
 -- disable_query_log
 -- disable_result_log
+if ($eval_before_analyze)
+{
+  eval $eval_before_analyze;
+}
 analyze table t1;
 -- enable_result_log
 -- enable_query_log
 
+if (!$skip_ror_EXPLAIN_for_MyRocks)
+{
 # to test the bug, the following must use "sort_union":
---replace_regex $elide_costs
+--replace_regex $elide_costs_and_rows
 explain select * from t1 where (key3 > 30 and key3<35) or (key2 >32 and key2 < 40);
+}
 select * from t1 where (key3 > 30 and key3<35) or (key2 >32 and key2 < 40);
 drop table t1;
 
@@ -406,10 +442,15 @@ INSERT INTO t1 VALUES
 
 -- disable_query_log
 -- disable_result_log
+if ($eval_before_analyze)
+{
+  eval $eval_before_analyze;
+}
 analyze table t1;
 -- enable_result_log
 -- enable_query_log
 
+--replace_regex $elide_costs
 EXPLAIN
 SELECT a
 FROM t1
@@ -461,22 +502,27 @@ INSERT INTO t1 VALUES (1,1,'a'), (2,2,'b');
 
 -- disable_query_log
 -- disable_result_log
+if ($eval_before_analyze)
+{
+  eval $eval_before_analyze;
+}
 analyze table t1;
 -- enable_result_log
 -- enable_query_log
 
+--replace_regex $elide_costs
 EXPLAIN
 SELECT col_int_key
 FROM t1
-WHERE col_varchar_key >= 'l' OR 
-      (((pk BETWEEN 141 AND 141) OR col_varchar_key <> 'l') 
+WHERE col_varchar_key >= 'l' OR
+      (((pk BETWEEN 141 AND 141) OR col_varchar_key <> 'l')
          AND ((pk BETWEEN 141 AND 141) OR (col_int_key > 141)));
 
 --sorted_result
 SELECT col_int_key
 FROM t1
-WHERE col_varchar_key >= 'l' OR 
-      (((pk BETWEEN 141 AND 141) OR col_varchar_key <> 'l') 
+WHERE col_varchar_key >= 'l' OR
+      (((pk BETWEEN 141 AND 141) OR col_varchar_key <> 'l')
          AND ((pk BETWEEN 141 AND 141) OR (col_int_key > 141)));
 
 DROP TABLE t1;

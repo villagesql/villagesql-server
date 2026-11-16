@@ -56,7 +56,7 @@ void parse_command_line_password_option(const struct my_option *opt,
     --password3. Thus extract factor from option.
   */
   unsigned int factor = 0;
-  if (strcmp(opt->name, "password"))
+  if (strcmp(opt->name, "password") != 0)
     factor = opt->name[strlen("password")] - '0' - 1;
   if (argument) {
     char *start = argument;

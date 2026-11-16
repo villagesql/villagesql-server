@@ -8,10 +8,10 @@ vsql_lifecycle_test.tick_count() > 0
 # restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
 # Monitor thread visible in processlist after restart (enabled was persisted)
 SELECT id, user, info FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+WHERE info = 'vsql_lifecycle_test/monitor'
 ORDER BY id;
 id	user	info
-<id>	vef_worker	vsql_lifecycle_test/monitor
+<id>	system user	vsql_lifecycle_test/monitor
 # Tick count >= 0 confirms thread restarted
 SELECT vsql_lifecycle_test.tick_count() >= 0;
 vsql_lifecycle_test.tick_count() >= 0
@@ -20,6 +20,6 @@ SET PERSIST vsql_lifecycle_test.monitor_enabled = OFF;
 UNINSTALL EXTENSION vsql_lifecycle_test;
 # Thread is gone from processlist after uninstall
 SELECT COUNT(*) FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+WHERE info = 'vsql_lifecycle_test/monitor';
 COUNT(*)
 0

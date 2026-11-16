@@ -29,7 +29,6 @@
 #include <algorithm>
 #include <atomic>
 #include <bitset>
-#include <cctype>
 #include <list>
 #include <map>
 #include <optional>
@@ -158,8 +157,8 @@ class Connection : public base::ConnectionInterface, public cno::CnoInterface {
 
     for (const auto &entry : headers) {
       if (CNO_HTTP2 == cno_.mode) {
-        auto &header_name =
-            http2_headers_names.emplace_back(make_lower(entry.first));
+        auto &header_name = http2_headers_names.emplace_back(
+            ::mysql_harness::make_lower(entry.first));
         output->name.size = header_name.length();
         output->name.data = header_name.c_str();
       } else {
@@ -217,11 +216,6 @@ class Connection : public base::ConnectionInterface, public cno::CnoInterface {
   void start() override { do_net_recv(); }
 
  protected:
-  std::string make_lower(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(), ::tolower);
-    return s;
-  }
-
   void do_net_send() {
     socket_.async_send(ref_buffers(output_buffers_),
                        [this](std::error_code error, auto size) {

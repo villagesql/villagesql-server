@@ -23,11 +23,14 @@
 
 ADD_WSHADOW_WARNING()
 
+# Use default value for -ftls-model which is global-dynamic with -fPIC
+REMOVE_CMAKE_COMPILER_FLAGS(CMAKE_C_FLAGS "-ftls-model=initial-exec")
+REMOVE_CMAKE_COMPILER_FLAGS(CMAKE_CXX_FLAGS "-ftls-model=initial-exec")
+
 SET(KEYRING_COMMON_SOURCES
   # Component implementation helpers
   component_helpers/src/keyring_log_builtins_definition.cc
   # Config file reader
-  config/config_reader.cc
   # Data representation
   data/data.cc
   data/meta.cc
@@ -51,6 +54,10 @@ IF(COMPONENT_COMPILE_VISIBILITY)
   SET(COMPILE_OPTIONS_ARG COMPILE_OPTIONS "${COMPONENT_COMPILE_VISIBILITY}")
 ENDIF()
 
+INCLUDE_DIRECTORIES(SYSTEM
+        ${BOOST_PATCHES_DIR}
+        ${BOOST_INCLUDE_DIR})
+
 ADD_CONVENIENCE_LIBRARY(
   keyring_common
   ${KEYRING_COMMON_SOURCES}
@@ -62,3 +69,14 @@ ADD_CONVENIENCE_LIBRARY(
     $<TARGET_PROPERTY:extra::rapidjson,INTERFACE_COMPILE_DEFINITIONS>
   LINK_LIBRARIES library_mysys extra::rapidjson
 )
+
+IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
+  ADD_COMPILE_FLAGS(
+    component_helpers/src/keyring_log_builtins_definition.cc
+    json_data/json_reader.cc
+    COMPILE_FLAGS
+    "-Wno-array-bounds"
+    "-Wno-restrict"
+    "-Wno-stringop-overflow"
+    )
+ENDIF()

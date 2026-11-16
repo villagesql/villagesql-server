@@ -49,7 +49,7 @@ JsonDocument DynamicConfig::get_json(const ValueType value_type) const {
   json_doc.SetObject();
   auto &allocator = json_doc.GetAllocator();
 
-  auto &config = get_config(value_type);
+  const auto &config = get_config(value_type);
 
   for (const auto &section : config) {
     const std::string &section_name = section.first.first;
@@ -133,7 +133,7 @@ void DynamicConfig::set_option(const ValueType value_type,
                                const OptionValue &value) {
   auto &config = get_config(value_type);
 
-  if (config.count(section_id) == 0) {
+  if (!config.contains(section_id)) {
     SectionOptions section_options;
     section_options[std::string(option_name)] = value;
     config[section_id].options = std::move(section_options);

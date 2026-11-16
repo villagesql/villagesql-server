@@ -34,11 +34,10 @@
 #include "sql/dd/impl/types/event_impl.h"      // dd::Event_impl
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Events &Events::instance() {
-  static Events *s_instance = new Events();
+  static auto *s_instance = new Events();
   return *s_instance;
 }
 
@@ -166,5 +165,4 @@ Object_key *Events::create_key_by_definer(const String_type &definer) {
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

@@ -65,18 +65,18 @@ int ProtobufMain(int argc, char* argv[]) {
 #endif
 
   // Proto2 Java
-  java::JavaGenerator java_generator;
-  cli.RegisterGenerator("--java_out", "--java_opt", &java_generator,
-                        "Generate Java source file.");
+  //  java::JavaGenerator java_generator;
+  //  cli.RegisterGenerator("--java_out", "--java_opt", &java_generator,
+  //                        "Generate Java source file.");
 
 #ifdef GOOGLE_PROTOBUF_RUNTIME_INCLUDE_BASE
   java_generator.set_opensource_runtime(true);
 #endif
 
   // Proto2 Kotlin
-  java::KotlinGenerator kt_generator;
-  cli.RegisterGenerator("--kotlin_out", "--kotlin_opt", &kt_generator,
-                        "Generate Kotlin file.");
+  //  java::KotlinGenerator kt_generator;
+  //  cli.RegisterGenerator("--kotlin_out", "--kotlin_opt", &kt_generator,
+  //                        "Generate Kotlin file.");
 
 
   // Proto2 Python
@@ -94,35 +94,43 @@ int ProtobufMain(int argc, char* argv[]) {
                         "Generate python pyi stub.");
 
   // PHP
-  php::Generator php_generator;
-  cli.RegisterGenerator("--php_out", "--php_opt", &php_generator,
-                        "Generate PHP source file.");
+  // php::Generator php_generator;
+  // cli.RegisterGenerator("--php_out", "--php_opt", &php_generator,
+  //                        "Generate PHP source file.");
 
   // Ruby
-  ruby::Generator rb_generator;
-  cli.RegisterGenerator("--ruby_out", "--ruby_opt", &rb_generator,
-                        "Generate Ruby source file.");
+  //  ruby::Generator rb_generator;
+  //  cli.RegisterGenerator("--ruby_out", "--ruby_opt", &rb_generator,
+  //                        "Generate Ruby source file.");
 
   // CSharp
-  csharp::Generator csharp_generator;
-  cli.RegisterGenerator("--csharp_out", "--csharp_opt", &csharp_generator,
-                        "Generate C# source file.");
+  //  csharp::Generator csharp_generator;
+  //  cli.RegisterGenerator("--csharp_out", "--csharp_opt", &csharp_generator,
+  //                        "Generate C# source file.");
 
   // Objective-C
-  objectivec::ObjectiveCGenerator objc_generator;
-  cli.RegisterGenerator("--objc_out", "--objc_opt", &objc_generator,
-                        "Generate Objective-C header and source.");
+  //  objectivec::ObjectiveCGenerator objc_generator;
+  //  cli.RegisterGenerator("--objc_out", "--objc_opt", &objc_generator,
+  //                        "Generate Objective-C header and source.");
 
   // Rust
-  rust::RustGenerator rust_generator;
-  cli.RegisterGenerator("--rust_out", &rust_generator,
-                        "Generate Rust sources.");
+  // rust::RustGenerator rust_generator;
+  // cli.RegisterGenerator("--rust_out", &rust_generator,
+  //                        "Generate Rust sources.");
   return cli.Run(argc, argv);
 }
 
 }  // namespace compiler
 }  // namespace protobuf
 }  // namespace google
+
+#ifdef HAVE_ASAN_WIN32_VS
+// Some of our .proto files generate ASAN failures, disable them.
+// https://github.com/google/sanitizers/wiki/addresssanitizerflags
+const char *__asan_default_options() {
+  return "new_delete_type_mismatch=false";
+}
+#endif
 
 int main(int argc, char* argv[]) {
   return google::protobuf::compiler::ProtobufMain(argc, argv);

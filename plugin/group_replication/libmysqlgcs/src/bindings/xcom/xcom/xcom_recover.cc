@@ -21,13 +21,13 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <assert.h>
-#include <stdlib.h>
+#include <cassert>
+#include <cstdlib>
 #ifdef _MSC_VER
 #include <stdint.h>
 #endif
 #ifndef _WIN32
-#include <inttypes.h>
+#include <cinttypes>
 #endif
 
 #include "xcom/app_data.h"

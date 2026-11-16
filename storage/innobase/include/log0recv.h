@@ -45,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ut0byte.h"
 #include "ut0new.h"
+#include "ut0todo_counter.h"
 
 #include <list>
 #include <unordered_map>
@@ -52,6 +53,23 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 class MetadataRecover;
 class PersistentTableMetadata;
+
+/** Calculates the new value for lsn when more data is added to the log. */
+lsn_t recv_calc_lsn_on_data_add(
+    lsn_t lsn,     /*!< in: old lsn */
+    uint64_t len); /*!< in: this many bytes of data is
+                      added, log block headers not included */
+
+/** Tries to parse a single log record.
+@param[out]	type		log record type
+@param[in]	ptr		pointer to a buffer
+@param[in]	end_ptr		end of the buffer
+@param[out]	space_id	tablespace identifier
+@param[out]	page_no		page number
+@param[out]	body		start of log record body
+@return length of the record, or 0 if the record was not complete */
+ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
+                         space_id_t *space_id, page_no_t *page_no, byte **body);
 
 #ifdef UNIV_HOTBACKUP
 
@@ -234,16 +252,9 @@ lsn_t recv_calc_lsn_on_data_add(lsn_t lsn, os_offset_t len);
 
 /** Empties the hash table of stored log records, applying them to appropriate
 pages.
-@param[in,out]  log             redo log
-@param[in]      allow_ibuf      if true, ibuf operations are allowed during
-                                the application; if false, no ibuf operations
-                                are allowed, and after the application all
-                                file pages are flushed to disk and invalidated
-                                in buffer pool: this alternative means that
-                                no new log records can be generated during
-                                the application; the caller must in this case
-                                own the log mutex */
-void recv_apply_hashed_log_recs(log_t &log, bool allow_ibuf);
+@param[in,out]  log             redo log */
+
+void recv_apply_hashed_log_recs(log_t &log);
 
 #if defined(UNIV_DEBUG) || defined(UNIV_HOTBACKUP)
 /** Return string name of the redo log record type.
@@ -521,8 +532,8 @@ struct recv_sys_t {
 
 #ifndef UNIV_HOTBACKUP
 
-  /*!< mutex protecting the fields apply_log_recs, n_addrs, and the
-  state field in each recv_addr struct */
+  /** mutex protecting the fields apply_log_recs, decrements of
+  n_pages_to_recover, and the state field in each recv_addr struct */
   ib_mutex_t mutex;
 
   /** mutex coordinating flushing between recv_writer_thread and
@@ -547,9 +558,6 @@ struct recv_sys_t {
   this flag tells the i/o-handler if it should do log record
   application */
   bool apply_log_recs;
-
-  /** This is true when a log rec application batch is running */
-  bool apply_batch_on;
 
   /** Buffer for parsing log records */
   byte *buf;
@@ -616,8 +624,11 @@ struct recv_sys_t {
   /** Hash table of pages, indexed by SpaceID. */
   Spaces *spaces;
 
-  /** Number of not processed hashed file addresses in the hash table */
-  ulint n_addrs;
+  /** Number of unique unprocessed page ids in the spaces nested hash table.
+  Increments are done only from the main recovery thread before apply starts.
+  Decrements are done from multiple threads during batch apply phase, and are
+  protected by the recv_sys_t::mutex. */
+  ut::Todo_counter n_pages_to_recover;
 
   /** Doublewrite buffer pages, destroyed after recovery completes */
   dblwr::recv::DBLWR *dblwr;
@@ -647,17 +658,6 @@ otherwise.  Note that this is false while a background thread is
 rolling back incomplete transactions. */
 extern volatile bool recv_recovery_on;
 
-/** If the following is true, the buffer pool file pages must be invalidated
-after recovery and no ibuf operations are allowed; this becomes true if
-the log record hash table becomes too full, and log records must be merged
-to file pages already before the recovery is finished: in this case no
-ibuf operations are allowed, as they could modify the pages read in the
-buffer pool before the pages have been recovered to the up-to-date state.
-
-true means that recovery is running and no operations on the log files
-are allowed yet: the variable name is misleading. */
-extern bool recv_no_ibuf_operations;
-
 /** true when recv_init_crash_recovery() has been called. */
 extern bool recv_needed_recovery;
 
@@ -675,10 +675,6 @@ roll-forward */
 #define RECV_SCAN_SIZE (4 * UNIV_PAGE_SIZE)
 
 extern size_t recv_n_frames_for_pages_per_pool_instance;
-
-/** A list of tablespaces for which (un)encryption process was not
-completed before crash. */
-extern std::list<space_id_t> recv_encr_ts_list;
 
 #include "log0recv.ic"
 

@@ -31,7 +31,6 @@ Group_action_message::Group_action_message()
       group_action_type(ACTION_MESSAGE_END),
       group_action_phase(ACTION_PHASE_END),
       return_value(0),
-      primary_election_uuid(""),
       gcs_protocol(Gcs_protocol_version::UNKNOWN),
       m_action_initiator(ACTION_INITIATOR_UNKNOWN) {}
 
@@ -40,7 +39,6 @@ Group_action_message::Group_action_message(enum_action_message_type type)
       group_action_type(type),
       group_action_phase(ACTION_PHASE_END),
       return_value(0),
-      primary_election_uuid(""),
       gcs_protocol(Gcs_protocol_version::UNKNOWN),
       m_action_initiator(ACTION_INITIATOR_UNKNOWN) {}
 
@@ -60,7 +58,6 @@ Group_action_message::Group_action_message(Gcs_protocol_version gcs_protocol)
       group_action_type(ACTION_SET_COMMUNICATION_PROTOCOL_MESSAGE),
       group_action_phase(ACTION_PHASE_END),
       return_value(0),
-      primary_election_uuid(""),
       gcs_protocol(gcs_protocol),
       m_action_initiator(ACTION_INITIATOR_UNKNOWN) {}
 
@@ -109,9 +106,7 @@ void Group_action_message::decode_payload(const unsigned char *buffer,
   }
   return_value = (int32)return_value_aux;
 
-  while (slider <= end &&
-         static_cast<size_t>(end - slider) >=
-             Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE) {
+  while (slider + Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE <= end) {
     // Read payload item header to find payload item length.
     decode_payload_item_type_and_length(&slider, &payload_item_type,
                                         &payload_item_length);
@@ -174,15 +169,15 @@ void Group_action_message::encode_payload(
     std::vector<unsigned char> *buffer) const {
   DBUG_TRACE;
 
-  uint16 group_action_message_type_aux = (uint16)group_action_type;
+  auto group_action_message_type_aux = (uint16)group_action_type;
   encode_payload_item_int2(buffer, PIT_ACTION_TYPE,
                            group_action_message_type_aux);
 
-  uint16 group_action_message_phase_aux = (uint16)group_action_phase;
+  auto group_action_message_phase_aux = (uint16)group_action_phase;
   encode_payload_item_int2(buffer, PIT_ACTION_PHASE,
                            group_action_message_phase_aux);
 
-  uint32 return_value_aux = (uint32)return_value;
+  auto return_value_aux = (uint32)return_value;
   encode_payload_item_int4(buffer, PIT_ACTION_RETURN_VALUE, return_value_aux);
   /*
     Optional payload items.
@@ -192,7 +187,7 @@ void Group_action_message::encode_payload(
                                primary_election_uuid.c_str(),
                                primary_election_uuid.length());
     if (m_transaction_monitor_timeout >= 0) {
-      uint32 transaction_monitor_timeout_aux =
+      auto transaction_monitor_timeout_aux =
           (uint32)m_transaction_monitor_timeout;
       encode_payload_item_int4(buffer, PIT_ACTION_TRANSACTION_MONITOR_TIMEOUT,
                                transaction_monitor_timeout_aux);

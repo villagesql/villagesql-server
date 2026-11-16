@@ -23,9 +23,9 @@
 
 #include <mysql/client_plugin.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 /**
   first byte of the question string is the question "type".

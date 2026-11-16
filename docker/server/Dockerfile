@@ -39,6 +39,12 @@ COPY . /source
 # Build and install
 # VSQL_PRE_RELEASE_VERSION defaults to "dev"; set to "" for release builds
 ARG VSQL_PRE_RELEASE_VERSION=dev
+#
+# The three settings DWITH_ROCKSDB, DWITH_COREDUMPER, DWITH_AUTH_OPENID_CONNECT,
+# DWITHOUT_COMPONENT_KEYRING_KMIP must stay in sync with the CMAKE_FLAGS in
+# villagesql/bld_tools/build_ci.sh.
+#
+# TODO(villagesql-rebase): reenable in CI and here together.
 RUN mkdir /build && cd /build && \
     cmake /source \
         -DCMAKE_INSTALL_PREFIX=/usr \
@@ -47,6 +53,10 @@ RUN mkdir /build && cd /build && \
         -DINSTALL_MYSQLTESTDIR="" \
         -DWITH_ROUTER=OFF \
         -DWITH_NUMA=OFF \
+        -DWITH_ROCKSDB=0 \
+        -DWITH_COREDUMPER=OFF \
+        -DWITH_AUTH_OPENID_CONNECT=OFF \
+        -DWITHOUT_COMPONENT_KEYRING_KMIP=ON \
         -DMYSQL_DATADIR=/var/lib/mysql \
         -DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
         -DMYSQLX_UNIX_ADDR=/var/run/mysqld/mysqlx.sock \

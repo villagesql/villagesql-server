@@ -35,7 +35,7 @@
 /* The unresponsive child process sleeps for this long and then exits */
 static constexpr int SleeperProcessTimeMsec = 5000;
 
-int run_parent(void);
+int run_parent();
 
 const char *argv0 = nullptr;
 

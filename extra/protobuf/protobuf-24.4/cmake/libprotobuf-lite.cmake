@@ -25,6 +25,11 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Android")
 endif()
 target_include_directories(libprotobuf-lite PUBLIC ${protobuf_SOURCE_DIR}/src)
 target_link_libraries(libprotobuf-lite PUBLIC ${protobuf_ABSL_USED_TARGETS})
+if(TARGET absl::throw_delegate AND APPLE)
+    target_link_options(libprotobuf-lite PRIVATE
+        "-Wl,-force_load,$<TARGET_FILE:absl::throw_delegate>"
+    )
+endif()
 protobuf_configure_target(libprotobuf-lite)
 if(protobuf_BUILD_SHARED_LIBS)
   target_compile_definitions(libprotobuf-lite
@@ -81,20 +86,5 @@ IF(protobuf_BUILD_SHARED_LIBS)
     ADD_INSTALL_RPATH(libprotobuf-lite "\$ORIGIN")
   ENDIF()
   INSTALL_PRIVATE_LIBRARY(libprotobuf-lite)
-
-  IF(WITH_ROUTER)
-    IF(APPLE OR WIN32)
-      INSTALL(TARGETS libprotobuf-lite
-        DESTINATION "${ROUTER_INSTALL_PLUGINDIR}" COMPONENT Router
-        )
-    ELSEIF(UNIX)
-      INSTALL(TARGETS libprotobuf-lite
-        LIBRARY
-        DESTINATION "${ROUTER_INSTALL_LIBDIR}"
-        COMPONENT Router
-        NAMELINK_SKIP
-        )
-    ENDIF()
-  ENDIF()
 
 ENDIF()

@@ -377,7 +377,7 @@
   @page page_protocol_basic_character_set Character Set
 
   MySQL has a very flexible character set support as documented in
-  [Character Set Support](http://dev.mysql.com/doc/refman/5.7/en/charset.html).
+  [Character Set Support](https://dev.mysql.com/doc/refman/en/charset.html).
   The list of character sets and their IDs can be queried as follows:
 
 <pre>
@@ -697,26 +697,28 @@ bool net_send_error(NET *net, uint sql_errno, const char *err) {
       <td>status_flags</td>
       <td>@ref SERVER_STATUS_flags_enum</td></tr>
   <tr><td colspan="3">}</td></tr>
-  <tr><td colspan="3">if capabilities @& ::CLIENT_SESSION_TRACK</td></tr>
+  <tr><td colspan="3">if capabilities @& ::CLIENT_SESSION_TRACK {</td></tr>
+  <tr><td colspan="3">if (status_flags @& ::SERVER_SESSION_STATE_CHANGED) OR (status is not empty) {</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
       <td>info</td>
       <td>human readable status information</td></tr>
+  <tr><td colspan="3">} -- if (status_flags @& ::SERVER_SESSION_STATE_CHANGED) OR (s... </td></tr>
   <tr><td colspan="3">  if status_flags @& ::SERVER_SESSION_STATE_CHANGED {</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
       <td>session state info</td>
       <td>@anchor a_protocol_basic_ok_packet_sessinfo
           @ref sect_protocol_basic_ok_packet_sessinfo</td></tr>
-  <tr><td colspan="3">  }</td></tr>
-  <tr><td colspan="3">} else {</td></tr>
+  <tr><td colspan="3">  } if status_flags @& ::SERVER_SESSION_STATE_CHANGED</td></tr>
+  <tr><td colspan="3">} else { -- if capabilities @& ::CLIENT_SESSION_TRACK </td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_eof "string&lt;EOF&gt;"</td>
       <td>info</td>
       <td>human readable status information</td></tr>
-  <tr><td colspan="3">}</td></tr>
+  <tr><td colspan="3">} -- if capabilities @& ::CLIENT_SESSION_TRACK </td></tr>
   </table>
 
   These rules distinguish whether the packet represents OK or EOF:
-  - OK: header = 0 and length of packet > 7
-  - EOF: header = 0xfe and length of packet < 9
+  - OK: header = 0 and length of packet >= 7
+  - EOF: header = 0xfe and length of packet < 8
 
   To ensure backward compatibility between old (prior to 5.7.5) and
   new (5.7.5 and up) versions of MySQL, new clients advertise
@@ -988,7 +990,7 @@ static uchar eof_buff[1] = {(uchar)254}; /* Marker for end of fields */
   the @ref page_protocol_basic_ok_packet packets (such as session
   state tracking), and to avoid repeating the changes in
   the @ref page_protocol_basic_eof_packet packet, the
-  @ref page_protocol_basic_ok_packet is deprecated as of MySQL 5.7.5.
+  @ref page_protocol_basic_eof_packet is deprecated as of MySQL 5.7.5.
 
   @warning
   The @ref page_protocol_basic_eof_packet packet may appear in places where
@@ -1504,7 +1506,7 @@ int Protocol_classic::read_packet() {
   <tr><td colspan="3">if new_params_bind_flag, for each parameter {</td></tr>
   <tr><td>@ref a_protocol_type_int2 "int&lt;2&gt;"</td>
       <td>param_type_and_flag</td>
-      <td>Parameter type (2 bytes). The MSB is reserved for unsigned flag</td></tr>
+      <td>Parameter type (2 bytes). The MSB is reserved for unsigned flag. See @ref enum_field_types </td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
     <td>parameter name</td>
     <td>String</td></tr>
@@ -1521,7 +1523,7 @@ int Protocol_classic::read_packet() {
 
   @par Example
   ~~~~~~~~~
-  21 00 00 00 03 01 01 00    01 fe 00 01 61 01 31 73   !....... ....a.1s
+  2B 00 00 00 03 01 01 00    01 fe 00 01 61 01 31 73   +....... ....a.1s
   65 6c 65 63 74 20 40 40    76 65 72 73 69 6f 6e 5f   elect @@version_c
   63 6f 6d 6d 65 6e 74 20    6c 69 6d 69 74 20 31      omment limit 1
 
@@ -1950,7 +1952,7 @@ int Protocol_classic::read_packet() {
   <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
       <td>reserved_1</td>
       <td>[00] filler</td></tr>
-  <tr><td colspan="3">if (packet_lenght > 12) {</td></tr>
+  <tr><td colspan="3">if (packet_lenght >= 12) {</td></tr>
   <tr><td>@ref a_protocol_type_int2 "int&lt;2&gt;"</td>
       <td>warning_count</td>
       <td>Number of warnings</td></tr>
@@ -1996,13 +1998,13 @@ int Protocol_classic::read_packet() {
   @par Example
   for a prepared query like  SELECT CONCAT(?, ?) AS col1 and no ::CLIENT_OPTIONAL_RESULTSET_METADATA
   ~~~~~~~~~~~
-  0c 00 00 01 00 01 00 00    00 01 00 02 00 00 00 00|   ................
+  0c 00 00 01 00 01 00 00    00 01 00 02 00 00 00 00    ................
   17 00 00 02 03 64 65 66    00 00 00 01 3f 00 0c 3f    .....def....?..?
-  00 00 00 00 00 fd 80 00    00 00 00|17 00 00 03 03    ................
+  00 00 00 00 00 fd 80 00    00 00 00 17 00 00 03 03    ................
   64 65 66 00 00 00 01 3f    00 0c 3f 00 00 00 00 00    def....?..?.....
-  fd 80 00 00 00 00|05 00    00 04 fe 00 00 02 00|1a    ................
+  fd 80 00 00 00 00 05 00    00 04 fe 00 00 02 00 1a    ................
   00 00 05 03 64 65 66 00    00 00 04 63 6f 6c 31 00    ....def....col1.
-  0c 3f 00 00 00 00 00 fd    80 00 1f 00 00|05 00 00    .?..............
+  0c 3f 00 00 00 00 00 fd    80 00 1f 00 00 05 00 00    .?..............
   06 fe 00 00 02 00                                     ...
   ~~~~~~~~~~~
 
@@ -2113,7 +2115,7 @@ int Protocol_classic::read_packet() {
   <tr><td colspan="3">if new_params_bind_flag, for each parameter {</td></tr>
   <tr><td>@ref a_protocol_type_int2 "int&lt;2&gt;"</td>
     <td>parameter_type</td>
-    <td>Type of the parameter value. See ::enum_field_type</td></tr>
+    <td>Type of the parameter value. See ::enum_field_types. The MSB is reserved for unsigned flag.</td></tr>
   <tr><td colspan="3">if ::CLIENT_QUERY_ATTRIBUTES is on {</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
       <td>parameter_name</td>
@@ -2555,7 +2557,7 @@ MY_COMPILER_CLANG_WORKAROUND_REF_DOCBUG()
   <tr><th>Type</th><th>Name</th><th>Description</th></tr>
   <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
       <td>status</td>
-      <td>[0x19] COM_STMT_CLOSE</td></tr>
+      <td>[0x1C] COM_STMT_FETCH</td></tr>
   <tr><td>@ref a_protocol_type_int4 "int&lt;4&gt;"</td>
       <td>statement_id</td>
       <td>ID of the prepared statement to close</td></tr>
@@ -3082,7 +3084,7 @@ bool Protocol_classic::end_result_metadata() {
       <td>maximum length of the field</td></tr>
   <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
       <td>type</td>
-      <td>type of the column as defined in ::enum_field_types</td></tr>
+      <td>type of the column as defined in @ref enum_field_types</td></tr>
   <tr><td>@ref a_protocol_type_int1 "int&lt;2&gt;"</td>
       <td>flags</td>
       <td>Flags as defined in @ref group_cs_column_definition_flags</td></tr>
@@ -3094,6 +3096,14 @@ bool Protocol_classic::end_result_metadata() {
         <li>0x1f for dynamic strings, double, float</li>
         <li>0x00 to 0x51 for decimals</li>
         </ul></td></tr>
+  <tr><td>@ref sect_protocol_basic_dt_string_fix "string[2]"</td>
+      <td>reserved</td>
+      <td>reserved for future use.</td></tr>
+  <tr><td colspan="3">if command was COM_FIELD_LIST {</td></tr>
+  <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
+      <td>default value</td>
+      <td>NULL if 0xFB</td></tr>
+  <tr><td colspan="3">}</td></tr>
   </table>
 
   @note `decimals` and `column_length` can be used for text output formatting
@@ -3115,7 +3125,7 @@ bool Protocol_classic::end_result_metadata() {
       <td>[01]</td></tr>
   <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
       <td>type</td>
-      <td>type of the column as defined in ::enum_field_types</td></tr>
+      <td>type of the column as defined in @ref enum_field_types</td></tr>
   <tr><td colspan="3">if capabilities @& ::CLIENT_LONG_FLAG {</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_int_le "int&lt;lenenc&gt;"</td>
       <td>length of flags + decimals fields</td>
@@ -3138,12 +3148,9 @@ bool Protocol_classic::end_result_metadata() {
       <td>number of decimal digits</td></tr>
   <tr><td colspan="3">}</td></tr>
   <tr><td colspan="3">if command was COM_FIELD_LIST {</td></tr>
-  <tr><td>@ref sect_protocol_basic_dt_int_le "int&lt;lenenc&gt;"</td>
-      <td>length of default values</td>
-      <td>[02]</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
-      <td>default_values</td>
-      <td></td></tr>
+      <td>default_value</td>
+      <td>NULL if 0xFB</td></tr>
   <tr><td colspan="3">}</td></tr>
   </table>
 
@@ -3314,7 +3321,7 @@ int Protocol_classic::shutdown(bool) {
     m_thd->net.vio->thread_id = m_thd->real_id;
   }
 #endif /* USE_PPOLL_IN_VIO */
-  return m_thd->net.vio ? vio_shutdown(m_thd->net.vio) : 0;
+  return m_thd->net.vio ? vio_shutdown(m_thd->net.vio, SHUT_RDWR) : 0;
 }
 
 bool Protocol_classic::store_string(const char *from, size_t length,
@@ -3326,6 +3333,7 @@ bool Protocol_classic::store_string(const char *from, size_t length,
          field_types[field_pos] == MYSQL_TYPE_NEWDECIMAL ||
          field_types[field_pos] == MYSQL_TYPE_NEWDATE ||
          field_types[field_pos] == MYSQL_TYPE_JSON ||
+         field_types[field_pos] == MYSQL_TYPE_VECTOR ||
          (field_types[field_pos] >= MYSQL_TYPE_ENUM &&
           field_types[field_pos] <= MYSQL_TYPE_GEOMETRY));
   field_pos++;
@@ -3529,22 +3537,24 @@ bool Protocol_text::store_datetime(const MYSQL_TIME &tm, uint decimals) {
       packet);
 }
 
-bool Protocol_text::store_date(const MYSQL_TIME &tm) {
+bool Protocol_text::store_date(const Date_val date) {
   // field_types check is needed because of the embedded protocol
   assert(send_metadata || field_types == nullptr ||
          field_types[field_pos] == MYSQL_TYPE_DATE);
   field_pos++;
+  MYSQL_TIME tm = MYSQL_TIME(date);
   return store_temporal([&tm](char *to) { return my_date_to_str(tm, to); },
                         packet);
 }
 
-bool Protocol_text::store_time(const MYSQL_TIME &tm, uint decimals) {
+bool Protocol_text::store_time(const Time_val time, uint precision) {
   // field_types check is needed because of the embedded protocol
   assert(send_metadata || field_types == nullptr ||
          field_types[field_pos] == MYSQL_TYPE_TIME);
   field_pos++;
+  MYSQL_TIME tm = MYSQL_TIME(time);
   return store_temporal(
-      [&tm, decimals](char *to) { return my_time_to_str(tm, to, decimals); },
+      [&tm, precision](char *to) { return my_time_to_str(tm, to, precision); },
       packet);
 }
 
@@ -3816,13 +3826,13 @@ bool Protocol_binary::store_datetime(const MYSQL_TIME &tm, uint precision) {
   return false;
 }
 
-bool Protocol_binary::store_date(const MYSQL_TIME &tm) {
-  if (send_metadata) return Protocol_text::store_date(tm);
+bool Protocol_binary::store_date(const Date_val date) {
+  if (send_metadata) return Protocol_text::store_date(date);
   // field_types check is needed because of the embedded protocol
   assert(field_types == nullptr || field_types[field_pos] == MYSQL_TYPE_DATE);
   field_pos++;
 
-  if (tm.year == 0 && tm.month == 0 && tm.day == 0) {
+  if (date.is_zero_date()) {
     // Nothing to send, except a single byte to indicate length = 0.
     return packet->append(char{0});
   }
@@ -3830,26 +3840,26 @@ bool Protocol_binary::store_date(const MYSQL_TIME &tm) {
   char *pos = packet->prep_append(5, PACKET_BUFFER_EXTRA_ALLOC);
   if (pos == nullptr) return true;
   pos[0] = char{4};  // length
-  int2store(pos + 1, tm.year);
-  pos[3] = char(tm.month);
-  pos[4] = char(tm.day);
+  int2store(pos + 1, date.year());
+  pos[3] = char(date.month());
+  pos[4] = char(date.day());
   return false;
 }
 
-bool Protocol_binary::store_time(const MYSQL_TIME &tm, uint precision) {
-  if (send_metadata) return Protocol_text::store_time(tm, precision);
+bool Protocol_binary::store_time(const Time_val time, uint precision) {
+  if (send_metadata) return Protocol_text::store_time(time, precision);
   // field_types check is needed because of the embedded protocol
   assert(field_types == nullptr || field_types[field_pos] == MYSQL_TYPE_TIME);
   field_pos++;
 
   size_t length;
-  if (tm.second_part)
+  if (time.microsecond() != 0) {
     length = 12;
-  else if (tm.hour || tm.minute || tm.second || tm.day)
+  } else if (time.hour() != 0 || time.minute() != 0 || time.second() != 0) {
     length = 8;
-  else
+  } else {
     length = 0;
-
+  }
   char *pos = packet->prep_append(length + 1, PACKET_BUFFER_EXTRA_ALLOC);
   if (pos == nullptr) return false;
   *pos++ = char(length);
@@ -3858,19 +3868,19 @@ bool Protocol_binary::store_time(const MYSQL_TIME &tm, uint precision) {
   if (pos == end) return false;  // zero date
 
   // Move hours to days if we have 24 hours or more.
-  const unsigned days = tm.day + tm.hour / 24;
-  const unsigned hours = tm.hour % 24;
+  const unsigned days = time.hour() / 24;
+  const unsigned hours = time.hour() % 24;
 
-  *pos++ = tm.neg ? 1 : 0;
+  *pos++ = time.is_negative() ? 1 : 0;
   int4store(pos, days);
   pos += 4;
   *pos++ = char(hours);
-  *pos++ = char(tm.minute);
-  *pos++ = char(tm.second);
+  *pos++ = char(time.minute());
+  *pos++ = char(time.second());
 
   if (pos == end) return false;  // no second part
 
-  int4store(pos, tm.second_part);
+  int4store(pos, time.microsecond());
   assert(pos + 4 == end);
   return false;
 }

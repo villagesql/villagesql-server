@@ -3,6 +3,9 @@
 --source include/force_myisam_default.inc
 --source include/have_myisam.inc
 
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
+
 set @org_mode=@@sql_mode;
 set @@sql_mode='ansi,traditional';
 select @@sql_mode;
@@ -808,11 +811,11 @@ UPDATE t1 SET col1 =col1 * 5000 WHERE col1 > 0;
 UPDATE t1 SET col2 =col2 / 0 WHERE col2 > 0;
 --error 1365
 UPDATE t1 SET col2= MOD(col2,0) WHERE col2 > 0;
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO t1 (col1) VALUES ('');
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO t1 (col1) VALUES ('a59b');
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO t1 (col1) VALUES ('1a');
 INSERT IGNORE INTO t1 (col1) VALUES ('2a');
 INSERT IGNORE INTO t1 (col1) VALUES (1/0);
@@ -842,11 +845,11 @@ UPDATE t1 SET col1 =col1 * 5000 WHERE col1 > 0;
 UPDATE t1 SET col2 =col2 / 0 WHERE col2 > 0;
 --error 1365
 UPDATE t1 SET col2= MOD(col2,0) WHERE col2 > 0;
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO t1 (col1) VALUES ('');
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO t1 (col1) VALUES ('a59b');
---error 1265
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO t1 (col1) VALUES ('1a');
 INSERT IGNORE INTO t1 (col1) VALUES ('2a');
 INSERT IGNORE INTO t1 (col1) values (1/0);
@@ -1685,3 +1688,6 @@ select str_to_date('0000-00-01', '%Y-%m-%d');
 select str_to_date('2023-02-31', '%Y-%m-%d');
 
 SET sql_mode=@org_mode;
+
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

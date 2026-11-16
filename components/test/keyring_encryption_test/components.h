@@ -25,7 +25,6 @@
 
 #ifndef COMPONENTS_INCLUDED
 #define COMPONENTS_INCLUDED
-
 #include <mysql/components/minimal_chassis.h> /* Minimal chassis */
 #include <mysql/components/my_service.h>
 #include <mysql/components/service.h>
@@ -35,6 +34,7 @@
 #include <mysql/components/services/keyring_reader_with_status.h>
 #include <mysql/components/services/keyring_writer.h>
 #include <mysql/components/services/registry.h>
+#include <string>
 
 namespace components {
 using registry_type_t = SERVICE_TYPE_NO_CONST(registry);
@@ -51,7 +51,7 @@ void deinit_components_subsystem();
 
 class Keyring_component_load final {
  public:
-  Keyring_component_load(const std::string component_name);
+  Keyring_component_load(const std::string &component_name);
 
   ~Keyring_component_load();
 
@@ -65,7 +65,7 @@ class Keyring_component_load final {
 
 class Keyring_services {
  public:
-  Keyring_services(const std::string implementation_name);
+  Keyring_services(const std::string &implementation_name);
 
   virtual ~Keyring_services();
 
@@ -80,7 +80,7 @@ class Keyring_services {
 
 class AES_encryption_keyring_services final : public Keyring_services {
  public:
-  AES_encryption_keyring_services(const std::string implementation_name);
+  AES_encryption_keyring_services(const std::string &implementation_name);
 
   ~AES_encryption_keyring_services();
 

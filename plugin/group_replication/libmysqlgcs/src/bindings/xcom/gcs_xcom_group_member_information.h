@@ -54,7 +54,7 @@ class Gcs_xcom_node_address {
     Gcs_xcom_node_address constructor.
   */
 
-  explicit Gcs_xcom_node_address(std::string member_address);
+  explicit Gcs_xcom_node_address(const std::string &member_address);
 
   virtual ~Gcs_xcom_node_address();
 

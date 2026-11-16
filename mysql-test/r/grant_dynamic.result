@@ -40,6 +40,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -52,6 +53,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -107,6 +109,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -119,6 +122,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -141,6 +145,8 @@ root	localhost	XA_RECOVER_ADMIN	Y
 u1	localhost	SYSTEM_VARIABLES_ADMIN	Y
 
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR u1@localhost;
 Grants for u1@localhost
 GRANT USAGE ON *.* TO `u1`@`localhost`
@@ -173,6 +179,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -185,6 +192,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -252,6 +260,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -264,6 +273,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -291,6 +301,8 @@ GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
 'u1'@'localhost'	def	SYSTEM_VARIABLES_ADMIN	YES
 'u1'@'localhost'	def	USAGE	NO
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR u1@localhost;
 Grants for u1@localhost
 GRANT USAGE ON *.* TO `u1`@`localhost`
@@ -323,6 +335,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -335,6 +348,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -389,6 +403,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -401,6 +416,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -437,6 +453,8 @@ GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
 'u1'@'localhost'	def	USAGE	NO
 INSERT INTO mysql.global_grants VALUES ('u1','localhost','RUBBISH','N');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR u1@localhost;
 Grants for u1@localhost
 GRANT USAGE ON *.* TO `u1`@`localhost`
@@ -445,6 +463,8 @@ INSERT INTO mysql.global_grants VALUES ('u1','localhost','RUBBISH','Y');
 ERROR 23000: Duplicate entry 'u1-localhost-RUBBISH' for key 'global_grants.PRIMARY'
 INSERT INTO mysql.global_grants VALUES ('u1','localhoster','RUBBISH','N');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR u1@localhost;
 Grants for u1@localhost
 GRANT USAGE ON *.* TO `u1`@`localhost`
@@ -478,6 +498,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -490,6 +511,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -558,6 +580,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -570,6 +593,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -646,6 +670,7 @@ root	localhost	BINLOG_ADMIN	Y
 root	localhost	BINLOG_ENCRYPTION_ADMIN	Y
 root	localhost	CLONE_ADMIN	Y
 root	localhost	CONNECTION_ADMIN	Y
+root	localhost	CREATE_SPATIAL_REFERENCE_SYSTEM	Y
 root	localhost	ENCRYPTION_KEY_ADMIN	Y
 root	localhost	EXTENSION_ADMIN	Y
 root	localhost	FIREWALL_EXEMPT	Y
@@ -658,6 +683,7 @@ root	localhost	GROUP_REPLICATION_ADMIN	Y
 root	localhost	GROUP_REPLICATION_STREAM	Y
 root	localhost	INNODB_REDO_LOG_ARCHIVE	Y
 root	localhost	INNODB_REDO_LOG_ENABLE	Y
+root	localhost	MANAGE_DATA_MASKING_POLICY	Y
 root	localhost	OPTIMIZE_LOCAL_TABLE	Y
 root	localhost	PASSWORDLESS_USER_ADMIN	Y
 root	localhost	PERSIST_RO_VARIABLES_ADMIN	Y
@@ -698,17 +724,23 @@ DROP TABLE t1;
 # Insert valid privilege ID with an unknown user ID
 INSERT INTO mysql.global_grants VALUES('u1', '%', 'ROUTINE_GRANT', 'Y');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR `u1`@`%`;
 ERROR 42000: There is no such grant defined for user 'u1' on host '%'
 # Insert invalid privilege ID with an unknown user ID
 INSERT INTO mysql.global_grants VALUES('u1_non', '%', 'HELLOWORLD', 'Y');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR `u1`@`%`;
 ERROR 42000: There is no such grant defined for user 'u1' on host '%'
 # Insert invalid privilege ID with an known user ID
 CREATE USER u1@localhost;
 INSERT INTO mysql.global_grants VALUES('u1', 'localhost', 'HelloWorld', 'Y');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR `u1`@`localhost`;
 Grants for u1@localhost
 GRANT USAGE ON *.* TO `u1`@`localhost`
@@ -718,6 +750,8 @@ SHOW GRANTS FOR `u1`@`localhost`;
 ERROR 42000: There is no such grant defined for user 'u1' on host 'localhost'
 DELETE FROM mysql.global_grants;
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 #
 # Bug25555019 DYNAMIC PRIVILEGES CAN BE GRANTED AT TABLE LEVEL
 #
@@ -738,6 +772,8 @@ INSERT INTO mysql.global_grants VALUES('u1', 'localhost', 'ROLE_ADMIN', 'Y');
 INSERT INTO mysql.global_grants
 VALUES('u1', 'localhost', 'SYSTEM_VARIABLES_ADMIN', 'N');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO u2@localhost;
 SHOW GRANTS FOR CURRENT_USER();
 Grants for u1@localhost
@@ -786,6 +822,8 @@ INSERT INTO mysql.global_grants VALUES('u1', '%', 'non_documented_privilege',
 INSERT INTO mysql.global_grants VALUES('u1', 'localhost',
 'non_documented_privilege', 'Y');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 # This will show "non_documented_privilege" as granted privilege to u1:
 SHOW GRANTS FOR u1;
 Grants for u1@%
@@ -807,6 +845,8 @@ SHOW GRANTS FOR u1;
 Grants for u1@%
 GRANT USAGE ON *.* TO `u1`@`%`
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 # "non_documented_privilege" should not be seen again
 SHOW GRANTS FOR u1;
 Grants for u1@%
@@ -954,12 +994,14 @@ GRANT ALL ON *.* to u1;
 SHOW GRANTS FOR u1;
 Grants for u1@%
 GRANT <ALL_STATIC_PRIVILEGES> ON *.* TO `u1`@`%`
-GRANT ALLOW_NONEXISTENT_DEFINER,APPLICATION_PASSWORD_ADMIN,AUDIT_ABORT_EXEMPT,AUDIT_ADMIN,AUTHENTICATION_POLICY_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,ENCRYPTION_KEY_ADMIN,EXTENSION_ADMIN,FIREWALL_EXEMPT,FLUSH_OPTIMIZER_COSTS,FLUSH_PRIVILEGES,FLUSH_STATUS,FLUSH_TABLES,FLUSH_USER_RESOURCES,GROUP_REPLICATION_ADMIN,GROUP_REPLICATION_STREAM,HELLOWORLD,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,NON_DOCUMENTED_PRIVILEGE,OPTIMIZE_LOCAL_TABLE,PASSWORDLESS_USER_ADMIN,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,ROUTINE_GRANT,RUBBISH,SENSITIVE_VARIABLES_OBSERVER,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_ANY_DEFINER,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,TELEMETRY_LOG_ADMIN,TRANSACTION_GTID_TAG,XA_RECOVER_ADMIN ON *.* TO `u1`@`%`
+GRANT ALLOW_NONEXISTENT_DEFINER,APPLICATION_PASSWORD_ADMIN,AUDIT_ABORT_EXEMPT,AUDIT_ADMIN,AUTHENTICATION_POLICY_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,CREATE_SPATIAL_REFERENCE_SYSTEM,ENCRYPTION_KEY_ADMIN,EXTENSION_ADMIN,FIREWALL_EXEMPT,FLUSH_OPTIMIZER_COSTS,FLUSH_PRIVILEGES,FLUSH_STATUS,FLUSH_TABLES,FLUSH_USER_RESOURCES,GROUP_REPLICATION_ADMIN,GROUP_REPLICATION_STREAM,HELLOWORLD,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,MANAGE_DATA_MASKING_POLICY,NON_DOCUMENTED_PRIVILEGE,OPTIMIZE_LOCAL_TABLE,PASSWORDLESS_USER_ADMIN,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,ROUTINE_GRANT,RUBBISH,SENSITIVE_VARIABLES_OBSERVER,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_ANY_DEFINER,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,TELEMETRY_LOG_ADMIN,TRANSACTION_GTID_TAG,XA_RECOVER_ADMIN ON *.* TO `u1`@`%`
 GRANT `r2`@`%` TO `u1`@`%`
 # Boundary value test for privilege_id
 INSERT INTO mysql.global_grants VALUES('u1', '%',
 'length_32_abcdefghijklmnopqrstux', 'Y');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 INSERT INTO mysql.global_grants VALUES('u1', '%',
 'length_33_abcdefghijklmnopqrstuvw', 'Y');
 ERROR 22001: Data too long for column 'PRIV' at row 1
@@ -977,6 +1019,7 @@ BINLOG_ADMIN	Server Admin
 BINLOG_ENCRYPTION_ADMIN	Server Admin	
 CLONE_ADMIN	Server Admin	
 CONNECTION_ADMIN	Server Admin	
+CREATE_SPATIAL_REFERENCE_SYSTEM	Server Admin	
 Create	Databases,Tables,Indexes	To create new databases and tables
 Create role	Server Admin	To create new roles
 Create routine	Databases	To use CREATE FUNCTION/PROCEDURE
@@ -1008,6 +1051,7 @@ Index	Tables	To create or drop indexes
 Insert	Tables	To insert data into tables
 LENGTH_32_ABCDEFGHIJKLMNOPQRSTUX	Server Admin	
 Lock tables	Databases	To use LOCK TABLES (together with SELECT privilege)
+MANAGE_DATA_MASKING_POLICY	Server Admin	
 NON_DOCUMENTED_PRIVILEGE	Server Admin	
 OPTIMIZE_LOCAL_TABLE	Server Admin	
 PASSWORDLESS_USER_ADMIN	Server Admin	
@@ -1046,6 +1090,8 @@ Usage	Server Admin	No privileges - allow connect only
 XA_RECOVER_ADMIN	Server Admin	
 TRUNCATE TABLE mysql.global_grants;
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 # restore root privileges
 GRANT ALL ON *.* to root@localhost WITH GRANT OPTION;
 # REPLICATION_SLAVE_ADMIN test
@@ -1159,7 +1205,7 @@ GRANT ALL ON *.* TO u1@localhost;
 SHOW GRANTS;
 Grants for u1@localhost
 GRANT <ALL_STATIC_PRIVILEGES> ON *.* TO `u1`@`localhost`
-GRANT ALLOW_NONEXISTENT_DEFINER,APPLICATION_PASSWORD_ADMIN,AUDIT_ADMIN,AUTHENTICATION_POLICY_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,ENCRYPTION_KEY_ADMIN,EXTENSION_ADMIN,FLUSH_OPTIMIZER_COSTS,FLUSH_PRIVILEGES,FLUSH_STATUS,FLUSH_TABLES,FLUSH_USER_RESOURCES,GROUP_REPLICATION_ADMIN,GROUP_REPLICATION_STREAM,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,OPTIMIZE_LOCAL_TABLE,PASSWORDLESS_USER_ADMIN,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,SENSITIVE_VARIABLES_OBSERVER,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_ANY_DEFINER,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,TELEMETRY_LOG_ADMIN,TRANSACTION_GTID_TAG,XA_RECOVER_ADMIN ON *.* TO `u1`@`localhost`
+GRANT ALLOW_NONEXISTENT_DEFINER,APPLICATION_PASSWORD_ADMIN,AUDIT_ADMIN,AUTHENTICATION_POLICY_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,CREATE_SPATIAL_REFERENCE_SYSTEM,ENCRYPTION_KEY_ADMIN,EXTENSION_ADMIN,FLUSH_OPTIMIZER_COSTS,FLUSH_PRIVILEGES,FLUSH_STATUS,FLUSH_TABLES,FLUSH_USER_RESOURCES,GROUP_REPLICATION_ADMIN,GROUP_REPLICATION_STREAM,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,MANAGE_DATA_MASKING_POLICY,OPTIMIZE_LOCAL_TABLE,PASSWORDLESS_USER_ADMIN,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,SENSITIVE_VARIABLES_OBSERVER,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_ANY_DEFINER,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,TELEMETRY_LOG_ADMIN,TRANSACTION_GTID_TAG,XA_RECOVER_ADMIN ON *.* TO `u1`@`localhost`
 REVOKE ALL ON *.* FROM CURRENT_USER();
 SHOW GRANTS;
 Grants for u1@localhost
@@ -1292,6 +1338,8 @@ u1	%	SYSTEM_VARIABLES_ADMIN	Y
 u1	%	XA_RECOVER_ADMIN	Y
 REVOKE RESOURCE_GROUP_ADMIN ON *.* FROM u1;
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR u1;
 Grants for u1@%
 GRANT SELECT, INSERT, DELETE ON *.* TO `u1`@`%` WITH GRANT OPTION
@@ -1306,6 +1354,8 @@ u1	%	SYSTEM_VARIABLES_ADMIN	Y
 u1	%	XA_RECOVER_ADMIN	Y
 REVOKE PERSIST_RO_VARIABLES_ADMIN, GRANT OPTION ON *.* FROM u1;
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 SHOW GRANTS FOR u1;
 Grants for u1@%
 GRANT SELECT, INSERT, DELETE ON *.* TO `u1`@`%` WITH GRANT OPTION
@@ -1343,22 +1393,36 @@ RESET REPLICA ALL;
 #
 INSERT INTO mysql.global_grants (user, host, priv) values ('', '%', ' ');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 DELETE FROM mysql.global_grants WHERE user = '' AND host = '%' AND priv = ' ';
 INSERT INTO mysql.global_grants (user, host, priv) values ('', '', '');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 DELETE FROM mysql.global_grants WHERE user = '' AND host = '' AND priv = '';
 INSERT INTO mysql.global_grants (user, host, priv) values (' ', '', '');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 DELETE FROM mysql.global_grants WHERE user = '' AND host = ' ' AND priv = '';
 INSERT INTO mysql.global_grants (user, host, priv) values (' ', ' ', '');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 DELETE FROM mysql.global_grants WHERE user = ' ' AND host = ' ' AND priv = '';
 INSERT INTO mysql.global_grants (user, host, priv) values ('', '', ' ');
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 DELETE FROM mysql.global_grants WHERE user = '' AND host = '' AND priv = ' ';
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 # restore the global_grants table
 DELETE FROM mysql.global_grants;
 INSERT INTO mysql.global_grants SELECT * FROM mysql.backup_global_grants;
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 DROP TABLE mysql.backup_global_grants;

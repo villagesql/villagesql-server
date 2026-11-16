@@ -23,8 +23,8 @@
 
 #include "sql/rpl_info_dummy.h"
 
-#include <assert.h>
-#include <stddef.h>
+#include <cassert>
+#include <cstddef>
 
 #include "my_compiler.h"
 
@@ -65,7 +65,7 @@ int Rpl_info_dummy::do_flush_info(const bool force [[maybe_unused]]) {
   return 0;
 }
 
-void Rpl_info_dummy::do_end_info() { return; }
+void Rpl_info_dummy::do_end_info() {}
 
 int Rpl_info_dummy::do_remove_info() {
   assert(!abort);

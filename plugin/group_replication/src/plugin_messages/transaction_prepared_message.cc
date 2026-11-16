@@ -92,9 +92,7 @@ void Transaction_prepared_message::decode_payload(const unsigned char *buffer,
   mysql::gtid::Uuid sid;
   gr::Gtid_tag tag;
 
-  while (slider <= end &&
-         static_cast<size_t>(end - slider) >=
-             Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE) {
+  while (slider + Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE <= end) {
     // Read payload item header to find payload item length.
     decode_payload_item_type_and_length(&slider, &payload_item_type,
                                         &payload_item_length);

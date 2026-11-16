@@ -27,15 +27,25 @@
 #include "backup_page_tracker.h"
 
 #include <algorithm>
+#include <cerrno>
+#include <string>
+
 #if defined _MSC_VER
 #include <direct.h>
 #endif
+#include <errno.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include "backup_comp_constants.h"
-#include "mysql/plugin.h"
+#include "mysql/components/services/bits/my_err_bits.h"
 #include "mysqld_error.h"
+
+#ifdef _WIN32
+#define OS_PATH_SEPARATOR '\\'
+#else
+#define OS_PATH_SEPARATOR '/'
+#endif /* _WIN32 */
 
 // defined in mysqlbackup component definition
 extern char *mysqlbackup_backup_id;
@@ -113,7 +123,7 @@ void Backup_page_tracker::initialize_udf_list() {
 */
 mysql_service_status_t Backup_page_tracker::register_udfs() {
   if (!m_udf_list.empty()) {
-    std::string msg{"UDF list for mysqlbackup_component is not empty."};
+    std::string const msg{"UDF list for mysqlbackup_component is not empty."};
     LogErr(ERROR_LEVEL, ER_MYSQLBACKUP_MSG, msg.c_str());
     return (1);
   }
@@ -121,9 +131,9 @@ mysql_service_status_t Backup_page_tracker::register_udfs() {
   // Initialize the UDF list
   initialize_udf_list();
 
-  for (auto udf : m_udf_list) {
+  for (auto *udf : m_udf_list) {
     if (udf->m_is_registered) {
-      std::string msg{udf->m_name + " is already registered."};
+      std::string const msg{udf->m_name + " is already registered."};
       LogErr(ERROR_LEVEL, ER_MYSQLBACKUP_MSG, msg.c_str());
       // un-register the already registered UDFs
       unregister_udfs();
@@ -133,7 +143,7 @@ mysql_service_status_t Backup_page_tracker::register_udfs() {
     if (mysql_service_udf_registration->udf_register(
             udf->m_name.c_str(), udf->m_return_type, udf->m_function,
             udf->m_init_function, udf->m_deinit_function)) {
-      std::string msg{udf->m_name + " register failed."};
+      std::string const msg{udf->m_name + " register failed."};
       LogErr(ERROR_LEVEL, ER_MYSQLBACKUP_MSG, msg.c_str());
       // un-register the already registered UDFs
       unregister_udfs();
@@ -157,13 +167,13 @@ mysql_service_status_t Backup_page_tracker::register_udfs() {
 mysql_service_status_t Backup_page_tracker::unregister_udfs() {
   mysql_service_status_t fail_status{0};
 
-  for (auto udf : m_udf_list) {
+  for (auto *udf : m_udf_list) {
     int was_present;
     if (mysql_service_udf_registration->udf_unregister(udf->m_name.c_str(),
                                                        &was_present) &&
         was_present) {
       if (udf->m_is_registered) {
-        std::string msg{udf->m_name + " unregister failed."};
+        std::string const msg{udf->m_name + " unregister failed."};
         LogErr(ERROR_LEVEL, ER_MYSQLBACKUP_MSG, msg.c_str());
         fail_status = 1;
       }
@@ -321,7 +331,7 @@ long long Backup_page_tracker::page_track_get_changed_page_count(
   uint64_t start_lsn = *((long long *)args->args[0]);
   uint64_t stop_lsn = *((long long *)args->args[1]);
 
-  int status = mysql_service_mysql_page_track->get_num_page_ids(
+  int const status = mysql_service_mysql_page_track->get_num_page_ids(
       thd, PAGE_TRACK_SE_INNODB, &start_lsn, &stop_lsn, &changed_page_count);
   if (status) return (-1 * status);
 
@@ -387,11 +397,11 @@ long long Backup_page_tracker::page_track_get_changed_pages(UDF_INIT *,
   void *p = &mysqlbackup_backupdir;
   size_t var_len = 1023;
 
-  mysql_service_component_sys_variable_register->get_variable(
-      "mysql_server", "datadir", (void **)&p, &var_len);
+  mysql_service_mysql_system_variable_reader->get(
+      nullptr, "GLOBAL", "mysql_server", "datadir", (void **)&p, &var_len);
   if (var_len == 0) return 2;
 
-  std::string changed_pages_file_dir =
+  std::string const changed_pages_file_dir =
       mysqlbackup_backupdir +
       std::string(Backup_comp_constants::backup_scratch_dir);
 
@@ -405,7 +415,7 @@ long long Backup_page_tracker::page_track_get_changed_pages(UDF_INIT *,
 
   free(m_changed_pages_file);
   m_changed_pages_file =
-      strdup((changed_pages_file_dir + FN_LIBCHAR + backupid +
+      strdup((changed_pages_file_dir + OS_PATH_SEPARATOR + backupid +
               Backup_comp_constants::change_file_extension)
                  .c_str());
 
@@ -421,7 +431,7 @@ long long Backup_page_tracker::page_track_get_changed_pages(UDF_INIT *,
   uint64_t stop_lsn = *((long long *)args->args[1]);
 
   Backup_page_tracker::m_receive_changed_page_data = true;
-  int status = mysql_service_mysql_page_track->get_page_ids(
+  int const status = mysql_service_mysql_page_track->get_page_ids(
       thd, PAGE_TRACK_SE_INNODB, &start_lsn, &stop_lsn,
       Backup_page_tracker::m_changed_pages_buf, CHANGED_PAGES_BUFFER_SIZE,
       page_track_callback, nullptr);
@@ -483,7 +493,7 @@ long long Backup_page_tracker::page_track_purge_up_to(UDF_INIT *,
   }
 
   uint64_t lsn = *((long long *)args->args[0]);
-  int retval =
+  int const retval =
       mysql_service_mysql_page_track->purge(thd, PAGE_TRACK_SE_INNODB, &lsn);
   if (retval != 0) {
     return -1;
@@ -511,9 +521,9 @@ int page_track_callback(MYSQL_THD opaque_thd [[maybe_unused]],
   // Append to the disk file in binary mode
   FILE *fd = fopen(Backup_page_tracker::m_changed_pages_file, "ab");
   if (!fd) {
-    std::string msg{std::string("[page-track] Cannot open '") +
-                    Backup_page_tracker::m_changed_pages_file +
-                    "': " + strerror(errno) + "\n"};
+    std::string const msg{std::string("[page-track] Cannot open '") +
+                          Backup_page_tracker::m_changed_pages_file +
+                          "': " + strerror(errno) + "\n"};
     LogEvent()
         .type(LOG_TYPE_ERROR)
         .prio(ERROR_LEVEL)
@@ -521,15 +531,15 @@ int page_track_callback(MYSQL_THD opaque_thd [[maybe_unused]],
     return (1);
   }
 
-  size_t data_size = page_count * Backup_comp_constants::page_number_size;
-  size_t write_count = fwrite(buffer, sizeof(char), data_size, fd);
+  size_t const data_size = page_count * Backup_comp_constants::page_number_size;
+  size_t const write_count = fwrite(buffer, sizeof(char), data_size, fd);
   fclose(fd);
 
   // write failed
   if (write_count != data_size) {
-    std::string msg{std::string("[page-track] Cannot write '") +
-                    Backup_page_tracker::m_changed_pages_file +
-                    "': " + strerror(errno) + "\n"};
+    std::string const msg{std::string("[page-track] Cannot write '") +
+                          Backup_page_tracker::m_changed_pages_file +
+                          "': " + strerror(errno) + "\n"};
     LogEvent()
         .type(LOG_TYPE_ERROR)
         .prio(ERROR_LEVEL)
@@ -540,6 +550,5 @@ int page_track_callback(MYSQL_THD opaque_thd [[maybe_unused]],
   // on-going backup interrupted, stop receiving the changed page data
   if (!Backup_page_tracker::m_receive_changed_page_data)
     return (2);  // interrupt an ongoing transfer
-  else
-    return (0);
+  return (0);
 }

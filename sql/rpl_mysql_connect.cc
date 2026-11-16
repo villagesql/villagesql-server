@@ -110,6 +110,11 @@ bool Mysql_connection::reconnect() {
   return m_connected;
 }
 
+bool Mysql_connection::version_compatible() const {
+  if (!m_init || !m_connected || !m_conn) return false;
+  return is_version_compatible(m_conn->server_version, server_version);
+}
+
 MYSQL_RES_TUPLE
 Mysql_connection::execute_query(std::string query) const {
   uint error = 0;

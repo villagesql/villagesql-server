@@ -23,11 +23,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "validate_password_imp.h"
 
-#include <assert.h>
-#include <string.h>
 #include <algorithm>  // std::swap
 #include <atomic>     // std::atomic
-#include <fstream>    // std::ifsteam
+#include <cassert>
+#include <cstring>
+#include <fstream>  // std::ifsteam
 #include <iomanip>
 #include <set>  // std::set
 #include <sstream>
@@ -36,7 +36,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql/components/library_mysys/my_memory.h"
 #include "mysql/components/services/mysql_rwlock.h"
 #include "mysql/components/services/psi_memory.h"
+#include "mysql/components/services/registry.h"
 #include "mysqld_error.h"
+#include "option_usage.h"
 #include "scope_guard.h"
 
 #define PSI_NOT_INSTRUMENTED 0
@@ -107,6 +109,10 @@ static SHOW_VAR validate_password_status_variables[] = {
     {"validate_password.dictionary_file_words_count",
      (char *)&validate_password_dictionary_file_words_count, SHOW_LONGLONG,
      SHOW_SCOPE_GLOBAL},
+    {"option_tracker_usage:Password validation component",
+     reinterpret_cast<char *>(
+         &opt_option_tracker_usage_validate_password_component),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {nullptr, nullptr, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 /**
@@ -545,6 +551,7 @@ DEFINE_BOOL_METHOD(validate_password_imp::get_strength,
     return true;
   }
 
+  ++opt_option_tracker_usage_validate_password_component;
   if (!is_valid_password_by_user_name(thd, password)) return true;
 
   if (mysql_service_mysql_string_iterator->iterator_create(password, &iter)) {
@@ -563,14 +570,14 @@ DEFINE_BOOL_METHOD(validate_password_imp::get_strength,
   if (n_chars < validate_password_length) {
     *strength = PASSWORD_SCORE;
     return false;
-  } else {
-    policy = PASSWORD_POLICY_LOW;
-    if (validate_password_policy_strength(thd, password,
-                                          PASSWORD_POLICY_MEDIUM)) {
-      policy = PASSWORD_POLICY_MEDIUM;
-      if (validate_dictionary_check(password)) policy = PASSWORD_POLICY_STRONG;
-    }
   }
+  policy = PASSWORD_POLICY_LOW;
+  if (validate_password_policy_strength(thd, password,
+                                        PASSWORD_POLICY_MEDIUM)) {
+    policy = PASSWORD_POLICY_MEDIUM;
+    if (validate_dictionary_check(password)) policy = PASSWORD_POLICY_STRONG;
+  }
+
   *strength = ((policy + 1) * PASSWORD_SCORE + PASSWORD_SCORE);
   return false;
 }
@@ -593,7 +600,7 @@ DEFINE_BOOL_METHOD(validate_password_imp::validate,
         .message("validate_password component is not yet initialized");
     return true;
   }
-
+  ++opt_option_tracker_usage_validate_password_component;
   return (validate_password_policy_strength(thd, password,
                                             validate_password_policy) == 0);
 }
@@ -614,6 +621,7 @@ DEFINE_BOOL_METHOD(validate_password_imp::validate,
 DEFINE_BOOL_METHOD(validate_password_changed_characters_imp::validate,
                    (my_h_string current_password, my_h_string new_password,
                     uint *minimum_required, uint *changed)) {
+  ++opt_option_tracker_usage_validate_password_component;
   try {
     uint current_length = 0, new_length = 0;
     if (changed) *changed = 0;
@@ -656,7 +664,7 @@ DEFINE_BOOL_METHOD(validate_password_changed_characters_imp::validate,
     }
 
     /* Determine number of characters required to be changed */
-    uint number_of_characters_to_be_changed =
+    uint const number_of_characters_to_be_changed =
         (std::max(static_cast<uint>(validate_password_length), current_length) *
          (static_cast<uint>(validate_password_changed_characters_percentage)) /
          100);
@@ -1038,6 +1046,15 @@ static mysql_service_status_t validate_password_init() {
     mysql_rwlock_destroy(&LOCK_dict_file);
     return true;
   }
+  if (validate_password_component_option_usage_init()) {
+    unregister_status_variables();
+    unregister_system_variables();
+    log_service_deinit();
+    delete dictionary_words;
+    dictionary_words = nullptr;
+    mysql_rwlock_destroy(&LOCK_dict_file);
+    return true;
+  }
   read_dictionary_file();
   /* Check if validate_password_length needs readjustment */
   readjust_validate_password_length();
@@ -1053,14 +1070,13 @@ static mysql_service_status_t validate_password_init() {
   @retval true failure
 */
 static mysql_service_status_t validate_password_deinit() {
+  if (validate_password_component_option_usage_deinit()) return true;
   free_dictionary_file();
   mysql_rwlock_destroy(&LOCK_dict_file);
   delete dictionary_words;
   dictionary_words = nullptr;
-  if (unregister_system_variables() || unregister_status_variables() ||
-      log_service_deinit())
-    return true;
-  return false;
+  return unregister_system_variables() || unregister_status_variables() ||
+         log_service_deinit();
 }
 /* This component provides an implementation for validate_password component
    only. */
@@ -1097,6 +1113,7 @@ REQUIRES_SERVICE_PLACEHOLDER(mysql_thd_security_context);
 REQUIRES_SERVICE_PLACEHOLDER(mysql_security_context_options);
 REQUIRES_PSI_MEMORY_SERVICE_PLACEHOLDER;
 REQUIRES_MYSQL_RWLOCK_SERVICE_PLACEHOLDER;
+REQUIRES_SERVICE_PLACEHOLDER(registry_registration);
 
 /* A list of dependencies.
    The dynamic_loader fetches the references for the below services at the
@@ -1114,8 +1131,8 @@ REQUIRES_SERVICE(log_builtins), REQUIRES_SERVICE(log_builtins_string),
     REQUIRES_SERVICE(status_variable_registration),
     REQUIRES_SERVICE(mysql_thd_security_context),
     REQUIRES_SERVICE(mysql_security_context_options),
-    REQUIRES_PSI_MEMORY_SERVICE, REQUIRES_MYSQL_RWLOCK_SERVICE,
-    END_COMPONENT_REQUIRES();
+    REQUIRES_SERVICE(registry_registration), REQUIRES_PSI_MEMORY_SERVICE,
+    REQUIRES_MYSQL_RWLOCK_SERVICE, END_COMPONENT_REQUIRES();
 
 /* component description */
 BEGIN_COMPONENT_METADATA(validate_password)

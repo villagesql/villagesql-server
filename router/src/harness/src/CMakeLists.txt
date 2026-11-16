@@ -22,7 +22,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 INCLUDE(GenerateExportHeader)
-INCLUDE(Plugin)
+INCLUDE(plugin)
 
 
 # Generate dynamic_state_schema.cc and configuration_update_schema.cc
@@ -58,8 +58,189 @@ ENDFUNCTION(ADD_SCHEMA_COMMAND)
 
 ADD_SCHEMA_COMMAND(dynamic_state_schema StateFileJsonSchema)
 
-ADD_SCHEMA_COMMAND(configuration_update_schema
-                   ConfigurationUpdateJsonSchema)
+ADD_SCHEMA_COMMAND(
+  configuration_update_schema
+  ConfigurationUpdateJsonSchema
+)
+
+SET(ROUTER_MYSQLCLIENT_EXPORTS)
+LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+  ${CLIENT_API_FUNCTIONS}
+  ${CLIENT_API_NONBLOCKING_FUNCTIONS}
+)
+
+# mysqlclient symbols
+IF(WIN32)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    my_get_err_msg
+  )
+ENDIF()
+
+# vio (for mysqlxclient)
+IF(MSVC)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    vio_new
+    vio_fd
+    vio_timeout
+    vio_socket_connect
+    new_VioSSLConnectorFd
+    process_tls_version
+    sslconnect
+    free_vio_ssl_acceptor_fd
+    sslGetErrString
+  )
+ENDIF()
+
+IF(WIN32_CLANG)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    ?psi_socket_service@@3PEAUPSI_socket_service_v1@@EA
+  )
+ELSE()
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    psi_socket_service
+  )
+ENDIF()
+
+
+# dbug.c is part of mysys, export it for mysqlxclient
+# if mysys doesn't have dbug.c (-DNDEBUG) then
+# router_mysqlclient_shim will provide it.
+IF(MSVC)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    _db_doprnt_
+    _db_dump_
+    _db_enabled_
+    _db_enter_
+    _db_keyword_
+    _db_pargs_
+    _db_return_
+    _db_set_
+  )
+ENDIF()
+
+# for harness
+IF(MSVC)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    my_print_stacktrace
+    my_write_core
+    my_thread_self_setname
+
+    build_version
+  )
+ELSE()
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    build_version
+  )
+ENDIF()
+
+IF(WIN32)
+  # only used my my_write_core on windows
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    my_set_exception_pointers
+  )
+ENDIF()
+
+IF(MSVC)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    ?s_dummy_target@MEM_ROOT@@0DA
+    ?AllocSlow@MEM_ROOT@@AEAAPEAX_K@Z
+    ?Clear@MEM_ROOT@@QEAAXXZ
+    my_safe_printf_stderr
+  )
+ELSE()
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    _Z21my_safe_printf_stderrPKcz
+  )
+ENDIF()
+
+# for SecureMemoryPool
+IF(MSVC)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    my_aligned_malloc
+    my_aligned_free
+  )
+ELSE()
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    _Z17my_aligned_mallocmm
+    _Z15my_aligned_freePv
+  )
+ENDIF()
+
+# charset stuff for SqlLexer.cc
+IF(WIN32)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    my_fcvt
+    my_gcvt
+
+    get_collation_number
+    get_charset_by_csname
+    get_charset_by_name
+    get_charset
+    strmake_root
+    my_init
+    my_end
+    my_free
+    ?my_progname@@3PEBDEB  # char const * const my_progname
+
+    set_fips_mode
+  )
+ENDIF()
+
+# WL#16504 stuff
+IF(WIN32)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    my_EVP_sha1
+    my_EVP_sha256
+  )
+ENDIF()
+
+ADD_CONVENIENCE_LIBRARY(
+  router_mysqlclient_shim
+
+  router_mysqlclient_exports.cc
+)
+
+# remove the libraries that need to be merged
+# into the 'router_mysqlclient' from the shared libmysql(client)
+GET_TARGET_PROPERTY(ROUTER_MYSQLCLIENT_LINK_LIBS
+  libmysql LINK_LIBRARIES)
+LIST(REMOVE_ITEM ROUTER_MYSQLCLIENT_LINK_LIBS
+  mysys
+  clientlib
+  mytime
+  strings
+  vio
+)
+
+IF(WIN32)
+  SET(ROUTER_MYSQLCLIENT_INSTALL_DIR ${ROUTER_INSTALL_BINDIR})
+ELSE()
+  SET(ROUTER_MYSQLCLIENT_INSTALL_DIR ${ROUTER_INSTALL_LIBDIR})
+ENDIF()
+
+MERGE_LIBRARIES_SHARED(router_mysqlclient
+  # mytime
+  clientlib
+  # strings
+  vio
+  mysys
+  router_mysqlclient_shim
+
+  COMPONENT Router
+
+  EXPORTS "${ROUTER_MYSQLCLIENT_EXPORTS}"
+
+  NAMELINK_SKIP
+  SOVERSION 1
+
+  OUTPUT_NAME "mysqlrouter_mysqlclient"
+
+  LINK_LIBRARIES
+  ${ROUTER_MYSQLCLIENT_LINK_LIBS}
+  ${LIBRT}
+
+  DESTINATION ${ROUTER_MYSQLCLIENT_INSTALL_DIR}
+)
 
 SET(harness_source
   access_rights.cc
@@ -69,6 +250,7 @@ SET(harness_source
   config_option.cc
   config_parser.cc
   plugin_config.cc
+  plugin_state.cc
   designator.cc
   dynamic_state.cc
   event_state_tracker.cc
@@ -78,6 +260,7 @@ SET(harness_source
   string_utils.cc
   arg_handler.cc
   builtin_plugins.cc
+  config_section_printer.cc
   dim.cc
   hostname_validator.cc
   mysql_router_thread.cc
@@ -92,9 +275,9 @@ SET(harness_source
   log_reopen.cc
   random_generator.cc
   signal_handler.cc
+  scoped_callback.cc
   sd_notify.cc
   socket_operations.cc
-  tcp_address.cc
   tls_cipher.cc
   tty.cc
   vt100.cc
@@ -107,8 +290,23 @@ SET(harness_source
   log_reopen_component.cc
   dynamic_config.cc
   section_config_exposer.cc
+  destination.cc
+  destination_acceptor.cc
+  destination_endpoint.cc
+  destination_socket.cc
+  secure_string.cc
+  regex_matcher.cc
   auto_cleaner.cc
+  resolver/resolver.cc
+  resolver/registry.cc
+  resolver/error_code.cc
   )
+
+IF(NOT SOLARIS)
+  LIST(APPEND harness_source
+    secure_memory_pool.cc
+  )
+ENDIF()
 
 IF(WIN32)
   LIST(APPEND harness_source
@@ -168,8 +366,10 @@ ROUTER_ADD_SHARED_LIBRARY(harness-library
   OUTPUT_NAME "mysqlharness"
 
   LINK_LIBRARIES
-  # mysys is need for my_print_stacktrace
-  ${common_libraries} mysys extra::rapidjson
+  ${common_libraries}
+  router_mysqlclient
+  extra::rapidjson
+  ext::icu
   )
 
 TARGET_INCLUDE_DIRECTORIES(harness-library PUBLIC

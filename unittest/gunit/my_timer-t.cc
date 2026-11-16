@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <gtest/gtest.h>
-#include <string.h>
+#include <cstring>
 
 #include "my_sys.h"
 #include "my_systime.h"
@@ -99,7 +99,7 @@ static void timer_set_and_wait(test_timer_t *test, unsigned int fired_count) {
   EXPECT_EQ(state, 0);
 }
 
-static void test_timer(void) {
+static void test_timer() {
   int rc;
   test_timer_t test;
 

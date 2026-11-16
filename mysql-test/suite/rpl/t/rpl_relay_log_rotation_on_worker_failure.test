@@ -27,7 +27,6 @@
 --source include/have_debug.inc
 --source include/have_debug_sync.inc
 --source include/have_binlog_format_row.inc
---source include/have_replica_parallel_workers.inc
 
 --echo
 --echo ##############################################################
@@ -89,6 +88,8 @@ SET DEBUG_SYNC= 'now SIGNAL signal.rpl_unblock_purge';
 
 --let $debug_point= wait_before_purge_applied_logs
 --source include/remove_debug_point.inc
+
+SET DEBUG_SYNC= 'RESET';
 
 --echo
 --echo ##############################################################

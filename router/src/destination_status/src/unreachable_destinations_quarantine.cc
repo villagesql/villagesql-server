@@ -25,7 +25,10 @@
 
 #include "unreachable_destinations_quarantine.h"
 
+#include "my_compiler.h"
+#include "mysql/harness/destination_endpoint.h"
 #include "mysql/harness/logging/logging.h"
+#include "mysql/harness/resolver/resolver.h"
 #include "mysql/harness/stdx/expected.h"
 
 IMPORT_LOG_FUNCTIONS()
@@ -54,7 +57,7 @@ void UnreachableDestinationsQuarantine::init(
 }
 
 bool UnreachableDestinationsQuarantine::report_connection_result(
-    const mysql_harness::TCPAddress &dest, bool success) {
+    const mysql_harness::Destination &dest, bool success) {
   bool add_to_quarantine{false};
   {
     std::lock_guard<std::mutex> lock{destination_errors_mutex_};
@@ -74,7 +77,7 @@ bool UnreachableDestinationsQuarantine::report_connection_result(
 }
 
 void UnreachableDestinationsQuarantine::add_destination_candidate_to_quarantine(
-    const mysql_harness::TCPAddress &dest) {
+    const mysql_harness::Destination &dest) {
   auto referencing_instances = get_referencing_routing_instances(dest);
 
   {
@@ -83,7 +86,7 @@ void UnreachableDestinationsQuarantine::add_destination_candidate_to_quarantine(
     auto pos = std::find_if(std::begin(quarantined_destination_candidates_),
                             std::end(quarantined_destination_candidates_),
                             [&dest](const auto &quarantined_dest) {
-                              return quarantined_dest->address_ == dest;
+                              return quarantined_dest->dest_ == dest;
                             });
     if (pos != std::end(quarantined_destination_candidates_)) {
       // it is already quarantined, just update the references
@@ -117,7 +120,7 @@ void UnreachableDestinationsQuarantine::add_destination_candidate_to_quarantine(
 
 void UnreachableDestinationsQuarantine::
     remove_destination_candidate_from_quarantine(
-        const mysql_harness::TCPAddress &dest) {
+        const mysql_harness::Destination &dest) {
   log_debug(
       "Destination candidate '%s' is available, remove it from quarantine",
       dest.str().c_str());
@@ -130,7 +133,7 @@ void UnreachableDestinationsQuarantine::
   auto pos = std::find_if(std::begin(quarantined_destination_candidates_),
                           std::end(quarantined_destination_candidates_),
                           [&dest](const auto &quarantined_dest) {
-                            return quarantined_dest->address_ == dest;
+                            return quarantined_dest->dest_ == dest;
                           });
   if (pos == std::end(quarantined_destination_candidates_)) {
     return;
@@ -145,12 +148,12 @@ void UnreachableDestinationsQuarantine::
 }
 
 bool UnreachableDestinationsQuarantine::is_quarantined(
-    const mysql_harness::TCPAddress &dest) {
+    const mysql_harness::Destination &dest) {
   std::lock_guard<std::mutex> l{quarantine_mutex_};
   return std::find_if(std::begin(quarantined_destination_candidates_),
                       std::end(quarantined_destination_candidates_),
                       [&dest](const auto &quarantined_dest) {
-                        return quarantined_dest->address_ == dest;
+                        return quarantined_dest->dest_ == dest;
                       }) != std::end(quarantined_destination_candidates_);
 }
 
@@ -189,7 +192,7 @@ void UnreachableDestinationsQuarantine::stop_quarantine() {
 }
 
 void UnreachableDestinationsQuarantine::quarantine_handler(
-    const std::error_code &ec, const mysql_harness::TCPAddress &dest) {
+    const std::error_code &ec, const mysql_harness::Destination &dest) {
   // Either there is an quarantine update or we are shutting down.
   if (ec && ec == std::errc::operation_canceled) {
     // leave early at shutdown.
@@ -202,7 +205,7 @@ void UnreachableDestinationsQuarantine::quarantine_handler(
     auto pos = std::find_if(std::begin(quarantined_destination_candidates_),
                             std::end(quarantined_destination_candidates_),
                             [&dest](const auto &quarantined_dest) {
-                              return quarantined_dest->address_ == dest;
+                              return quarantined_dest->dest_ == dest;
                             });
     if (pos == std::end(quarantined_destination_candidates_)) return;
 
@@ -279,7 +282,7 @@ void UnreachableDestinationsQuarantine::
 
 std::vector<std::string>
 UnreachableDestinationsQuarantine::get_referencing_routing_instances(
-    const mysql_harness::TCPAddress &destination) {
+    const mysql_harness::Destination &destination) {
   std::vector<std::string> referencing_instances;
   std::lock_guard<std::mutex> l{routing_instances_mutex_};
   for (const auto &instance_name : routing_instances_) {
@@ -298,12 +301,12 @@ void UnreachableDestinationsQuarantine::update_destinations_state(
     const AllowedNodes &destination_list) {
   std::lock_guard<std::mutex> l{quarantine_mutex_};
   for (const auto &destination : destination_list) {
-    const auto quarantined_pos =
-        std::find_if(std::begin(quarantined_destination_candidates_),
-                     std::end(quarantined_destination_candidates_),
-                     [&](auto &quarantined_dest) {
-                       return quarantined_dest->address_ == destination.address;
-                     });
+    const auto quarantined_pos = std::find_if(
+        std::begin(quarantined_destination_candidates_),
+        std::end(quarantined_destination_candidates_),
+        [&](auto &quarantined_dest) {
+          return quarantined_dest->dest_ == destination.destination;
+        });
     if (quarantined_pos != std::end(quarantined_destination_candidates_)) {
       (*quarantined_pos)->timer_.cancel();
     }
@@ -327,7 +330,7 @@ void UnreachableDestinationsQuarantine::drop_stray_destinations(
       if (std::find_if(std::begin(routing_new_destinations),
                        std::end(routing_new_destinations),
                        [&quarantined_dest](const auto &dest) {
-                         return dest.address == (*quarantined_dest)->address_;
+                         return dest.destination == (*quarantined_dest)->dest_;
                        }) == std::end(routing_new_destinations)) {
         // Quarantined destination is no longer a destination to the given
         // routing plugin
@@ -341,7 +344,7 @@ void UnreachableDestinationsQuarantine::drop_stray_destinations(
       log_debug(
           "Remove '%s' from quarantine, no plugin is using this destination "
           "candidate",
-          (*quarantined_dest)->address_.str().c_str());
+          (*quarantined_dest)->dest_.str().c_str());
       quarantined_dest =
           quarantined_destination_candidates_.erase(quarantined_dest);
     } else {
@@ -384,15 +387,37 @@ stdx::expected<void, std::error_code> UnreachableDestinationsQuarantine::
 
 stdx::expected<void, std::error_code> UnreachableDestinationsQuarantine::
     Unreachable_destination_candidate::resolve() {
-  net::ip::tcp::resolver resolver(*io_ctx_);
-  const auto resolve_res =
-      resolver.resolve(address_.address(), std::to_string(address_.port()));
+  using namespace mysql_harness::resolver;
 
-  if (!resolve_res) {
-    return stdx::unexpected(resolve_res.error());
+  if (dest_.is_tcp()) {
+    const auto &tcp_dest = dest_.as_tcp();
+
+    const auto resolve_res =
+        resolve_host(tcp_dest.hostname(), CachePolicy::FillOnSuccess);
+
+    if (!resolve_res) {
+      return stdx::unexpected(resolve_res.error());
+    }
+
+    endpoints_.clear();
+
+    for (const auto &addr : (*resolve_res).addresses) {
+      mysql_harness::DestinationEndpoint::TcpType endpoint{addr,
+                                                           tcp_dest.port()};
+      // GCC 15 emits a false-positive -Wmaybe-uninitialized warning here when
+      // constructing the std::variant alternative inside DestinationEndpoint.
+      MY_COMPILER_DIAGNOSTIC_PUSH();
+      MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wmaybe-uninitialized");
+      endpoints_.emplace_back(std::move(endpoint));
+      MY_COMPILER_DIAGNOSTIC_POP();
+    }
+
+  } else {
+    endpoints_.clear();
+
+    endpoints_.emplace_back(
+        mysql_harness::DestinationEndpoint::LocalType(dest_.as_local().path()));
   }
-
-  endpoints_ = resolve_res.value();
 
   return init_endpoint();
 }
@@ -409,8 +434,7 @@ stdx::expected<void, std::error_code> UnreachableDestinationsQuarantine::
   // close socket if it is already open
   server_sock_.close();
   connect_timed_out_ = false;
-  auto endpoint = *endpoints_it_;
-  server_endpoint_ = endpoint.endpoint();
+  server_endpoint_ = *endpoints_it_;
 
   return {};
 }
@@ -425,13 +449,15 @@ stdx::expected<void, std::error_code> UnreachableDestinationsQuarantine::
 #endif
   };
 
-  auto open_res = server_sock_.open(server_endpoint_.protocol(), socket_flags);
+  auto open_res = server_sock_.open(server_endpoint_, socket_flags);
   if (!open_res) return stdx::unexpected(open_res.error());
 
   const auto non_block_res = server_sock_.native_non_blocking(true);
   if (!non_block_res) return stdx::unexpected(non_block_res.error());
 
-  server_sock_.set_option(net::ip::tcp::no_delay{true});
+  if (server_sock_.is_tcp()) {
+    server_sock_.set_option(net::ip::tcp::no_delay{true});
+  }
 
   const auto connect_res = server_sock_.connect(server_endpoint_);
   if (!connect_res) {

@@ -30,9 +30,9 @@
   @file mysys/my_aes.cc
 */
 
+#include <string.h>
 #include <sys/types.h>
 
-#include "m_string.h"
 #include "my_aes.h"
 #include "my_inttypes.h"
 #include "mysys/my_aes_impl.h"
@@ -56,12 +56,10 @@
 void my_aes_create_key(const unsigned char *key, uint key_length, uint8 *rkey,
                        enum my_aes_opmode opmode) {
   const uint key_size = my_aes_opmode_key_sizes[opmode] / 8;
-  uint8 *rkey_end;                         /* Real key boundary */
+  const uint8 *rkey_end = rkey + key_size; /* Real key boundary */
   uint8 *ptr;                              /* Start of the real key*/
   const uint8 *sptr;                       /* Start of the working key */
   const uint8 *key_end = key + key_length; /* Working key boundary*/
-
-  rkey_end = rkey + key_size;
 
   memset(rkey, 0, key_size); /* Set initial key  */
 

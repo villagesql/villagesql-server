@@ -44,6 +44,7 @@
 #include "mysql_time.h"
 #include "sql-common/my_decimal.h"
 #include "sql/enum_query_type.h"
+#include "sql/hash.h"
 #include "sql/item.h"
 #include "sql/item_func.h"       // Item_int_func
 #include "sql/item_row.h"        // Item_row
@@ -72,6 +73,10 @@ struct MY_BITMAP;
 struct Parse_context;
 
 Item *make_condition(Parse_context *pc, Item *item);
+
+bool wrap_in_cast(Item **item, enum_field_types type, bool fix_new_item = true);
+bool wrap_in_decimal_cast(Item **a, int len, int dec, bool fix_new_item = true);
+bool wrap_in_int_cast(Item **a, bool is_unsigned, bool fix_new_item = true);
 
 typedef int (Arg_comparator::*arg_cmp_func)();
 
@@ -143,7 +148,7 @@ class Arg_comparator {
   Item **left{nullptr};
   Item **right{nullptr};
   arg_cmp_func func{nullptr};
-  Item_result_field *owner{nullptr};
+  Item_func *owner{nullptr};
   Arg_comparator *comparators{nullptr};  // used only for compare_row()
   uint16 comparator_count{0};
   double precision{0.0};
@@ -172,17 +177,22 @@ class Arg_comparator {
   String value1, value2;
 
   Arg_comparator() = default;
+  Arg_comparator(const Arg_comparator &) = delete;
+  Arg_comparator &operator=(const Arg_comparator &) = delete;
+
+  Arg_comparator(Arg_comparator &&) = default;
+  Arg_comparator &operator=(Arg_comparator &&) = default;
 
   Arg_comparator(Item **left, Item **right) : left(left), right(right) {}
 
-  bool set_compare_func(Item_result_field *owner, Item_result type);
-  bool set_cmp_func(Item_result_field *owner_arg, Item **left, Item **right,
+  bool set_compare_func(Item_func *owner, Item_result type);
+  bool set_cmp_func(Item_func *owner_arg, Item **left, Item **right,
                     Item_result type);
 
-  bool set_cmp_func(Item_result_field *owner_arg, Item **left, Item **right,
+  bool set_cmp_func(Item_func *owner_arg, Item **left, Item **right,
                     bool set_null_arg);
 
-  bool set_cmp_func(Item_result_field *owner_arg, Item **left, Item **right,
+  bool set_cmp_func(Item_func *owner_arg, Item **left, Item **right,
                     bool set_null_arg, Item_result type);
   /**
      Comparison function are expected to operate on arguments having the
@@ -222,7 +232,8 @@ class Arg_comparator {
   int compare_int_signed_unsigned();
   int compare_int_unsigned_signed();
   int compare_int_unsigned();
-  int compare_time_packed();
+  int compare_time();
+  int compare_date();
   int compare_row();  // compare args[0] & args[1]
   int compare_real_fixed();
   int compare_datetime();  // compare args[0] & args[1] as DATETIMEs
@@ -231,8 +242,7 @@ class Arg_comparator {
 
   static bool can_compare_as_dates(const Item *a, const Item *b);
 
-  void set_datetime_cmp_func(Item_result_field *owner_arg, Item **a1,
-                             Item **b1);
+  void set_datetime_cmp_func(Item_func *owner_arg, Item **a1, Item **b1);
   static arg_cmp_func comparator_matrix[5];
   void cleanup();
   /*
@@ -342,12 +352,21 @@ class Item_bool_func : public Item_int_func {
   bool created_by_in2exists() const override { return m_created_by_in2exists; }
   void set_created_by_in2exists() { m_created_by_in2exists = true; }
 
+  virtual Item_bool_func *negate_item() {
+    assert(false);
+    return nullptr;
+  }
+
   static const char *bool_transform_names[10];
   /**
     Array that transforms a boolean test according to another.
     First dimension is existing value, second dimension is test to apply
   */
   static const Bool_test bool_transform[10][8];
+  /**
+    Array used to simplify a boolean test when value cannot be NULL.
+  */
+  static const Bool_test bool_simplify[10];
 
  private:
   /**
@@ -394,6 +413,7 @@ class Item_func_true : public Item_func_bool_const {
   void print(const THD *, String *str, enum_query_type) const override {
     str->append("true");
   }
+  uint64 hash() override { return HashCString("func_true"); }
   enum Functype functype() const override { return TRUE_FUNC; }
 };
 
@@ -409,6 +429,7 @@ class Item_func_false : public Item_func_bool_const {
   void print(const THD *, String *str, enum_query_type) const override {
     str->append("false");
   }
+  uint64 hash() override { return HashCString("func_false"); }
   enum Functype functype() const override { return FALSE_FUNC; }
 };
 
@@ -521,6 +542,7 @@ class Item_in_optimizer final : public Item_bool_func {
                       mem_root_deque<Item *> *fields) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   bool is_null() override;
   longlong val_int() override;
   void cleanup() override;
@@ -533,18 +555,22 @@ class Item_in_optimizer final : public Item_bool_func {
 class Comp_creator {
  public:
   virtual ~Comp_creator() = default;
-  virtual Item_bool_func *create(Item *a, Item *b) const = 0;
+  virtual Item_bool_func *create(const POS &pos, Item *a, Item *b) const = 0;
 
   /// This interface is only used by Item_allany_subselect.
   virtual const char *symbol(bool invert) const = 0;
+
+  /// @returns true for operators =, <> and <=>, otherwise false.
   virtual bool eqne_op() const = 0;
+
+  /// @returns true for operators < and <=, otherwise false.
   virtual bool l_op() const = 0;
 };
 
 /// Abstract base class for the comparison operators =, <> and <=>.
 class Linear_comp_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   bool eqne_op() const override { return true; }
   bool l_op() const override { return false; }
 
@@ -554,10 +580,12 @@ class Linear_comp_creator : public Comp_creator {
     constructors.
     @see create()
   */
-  virtual Item_bool_func *create_scalar_predicate(Item *a, Item *b) const = 0;
+  virtual Item_bool_func *create_scalar_predicate(const POS &pos, Item *a,
+                                                  Item *b) const = 0;
 
   /// Combines a list of conditions <code>exp op exp</code>.
-  virtual Item_bool_func *combine(List<Item> list) const = 0;
+  [[nodiscard]] virtual Item_bool_func *combine(const POS &pos,
+                                                List<Item> list) const = 0;
 };
 
 class Eq_creator : public Linear_comp_creator {
@@ -565,8 +593,10 @@ class Eq_creator : public Linear_comp_creator {
   const char *symbol(bool invert) const override { return invert ? "<>" : "="; }
 
  protected:
-  Item_bool_func *create_scalar_predicate(Item *a, Item *b) const override;
-  Item_bool_func *combine(List<Item> list) const override;
+  Item_bool_func *create_scalar_predicate(const POS &pos, Item *a,
+                                          Item *b) const override;
+  [[nodiscard]] Item_bool_func *combine(const POS &pos,
+                                        List<Item> list) const override;
 };
 
 class Equal_creator : public Linear_comp_creator {
@@ -578,8 +608,10 @@ class Equal_creator : public Linear_comp_creator {
   }
 
  protected:
-  Item_bool_func *create_scalar_predicate(Item *a, Item *b) const override;
-  Item_bool_func *combine(List<Item> list) const override;
+  Item_bool_func *create_scalar_predicate(const POS &pos, Item *a,
+                                          Item *b) const override;
+  [[nodiscard]] Item_bool_func *combine(const POS &pos,
+                                        List<Item> list) const override;
 };
 
 class Ne_creator : public Linear_comp_creator {
@@ -587,13 +619,15 @@ class Ne_creator : public Linear_comp_creator {
   const char *symbol(bool invert) const override { return invert ? "=" : "<>"; }
 
  protected:
-  Item_bool_func *create_scalar_predicate(Item *a, Item *b) const override;
-  Item_bool_func *combine(List<Item> list) const override;
+  Item_bool_func *create_scalar_predicate(const POS &pos, Item *a,
+                                          Item *b) const override;
+  [[nodiscard]] Item_bool_func *combine(const POS &pos,
+                                        List<Item> list) const override;
 };
 
 class Gt_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   const char *symbol(bool invert) const override { return invert ? "<=" : ">"; }
   bool eqne_op() const override { return false; }
   bool l_op() const override { return false; }
@@ -601,7 +635,7 @@ class Gt_creator : public Comp_creator {
 
 class Lt_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   const char *symbol(bool invert) const override { return invert ? ">=" : "<"; }
   bool eqne_op() const override { return false; }
   bool l_op() const override { return true; }
@@ -609,7 +643,7 @@ class Lt_creator : public Comp_creator {
 
 class Ge_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   const char *symbol(bool invert) const override { return invert ? "<" : ">="; }
   bool eqne_op() const override { return false; }
   bool l_op() const override { return false; }
@@ -617,7 +651,7 @@ class Ge_creator : public Comp_creator {
 
 class Le_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   const char *symbol(bool invert) const override { return invert ? ">" : "<="; }
   bool eqne_op() const override { return false; }
   bool l_op() const override { return true; }
@@ -645,10 +679,16 @@ class Item_bool_func2 : public Item_bool_func {
       : Item_bool_func(a, b, c), cmp(args, args + 1) {}
 
   Item_bool_func2(const POS &pos, Item *a, Item *b)
-      : Item_bool_func(pos, a, b), cmp(args, args + 1) {}
-
+      : Item_bool_func(pos, a, b), cmp(args, args + 1) {
+    add_accum_properties(a);
+    add_accum_properties(b);
+  }
   Item_bool_func2(const POS &pos, Item *a, Item *b, Item *c)
-      : Item_bool_func(pos, a, b, c), cmp(args, args + 1) {}
+      : Item_bool_func(pos, a, b, c), cmp(args, args + 1) {
+    add_accum_properties(a);
+    add_accum_properties(b);
+    add_accum_properties(c);
+  }
 
  public:
   bool resolve_type(THD *) override;
@@ -712,11 +752,21 @@ class Item_func_comparison : public Item_bool_func2 {
   }
 
   Item *truth_transformer(THD *, Bool_test) override;
-  virtual Item *negated_item();
+  /**
+    @returns a negated (inverted) version of the comparison predicate,
+             as if the predicate was prefixed with NOT.
+  */
+  Item_bool_func *negate_item() override = 0;
+
   bool subst_argument_checker(uchar **) override { return true; }
   bool is_null() override;
 
   bool cast_incompatible_args(uchar *) override;
+  float get_filtering_effect(THD *thd, table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table) override;
+  bool gc_subst_analyzer(uchar **) override { return true; }
 
   // Handle custom type injection for comparisons
   bool fix_fields(THD *thd, Item **ref) override;
@@ -741,7 +791,7 @@ class Item_func_xor final : public Item_bool_func2 {
   longlong val_int() override;
   void apply_is_true() override {}
   Item *truth_transformer(THD *, Bool_test) override;
-
+  uint64_t hash() override { return Item_func::hash(true); }
   float get_filtering_effect(THD *thd, table_map filter_for_table,
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
@@ -759,7 +809,7 @@ class Item_func_not : public Item_bool_func {
   Item *truth_transformer(THD *, Bool_test) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
-
+  uint64 hash() override;
   float get_filtering_effect(THD *thd, table_map filter_for_table,
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
@@ -923,6 +973,7 @@ class Item_func_trig_cond final : public Item_bool_func {
   enum_trig_type get_trig_type() { return trig_type; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   plan_idx idx() const { return m_idx; }
 
   bool contains_only_equi_join_condition() const override;
@@ -980,7 +1031,12 @@ class Item_func_not_all : public Item_func_not {
     return 0;
   }
   bool empty_underlying_subquery();
-  Item *truth_transformer(THD *, Bool_test) override;
+
+  Item *truth_transformer(THD *, Bool_test) override {
+    // Only used after transformations, so will never need truth value change.
+    assert(false);
+    return nullptr;
+  }
 };
 
 class Item_func_nop_all final : public Item_func_not_all {
@@ -989,7 +1045,6 @@ class Item_func_nop_all final : public Item_func_not_all {
   longlong val_int() override;
   const char *func_name() const override { return "<nop>"; }
   table_map not_null_tables() const override { return not_null_tables_cache; }
-  Item *truth_transformer(THD *, Bool_test) override;
 };
 
 /**
@@ -1058,7 +1113,7 @@ class Item_eq_base : public Item_func_comparison {
   ///
   /// It is always nullptr in Item_func_equal objects, as such objects are never
   /// created from multiple equalities.
-  Item_equal *source_multiple_equality = nullptr;
+  Item_multi_eq *source_multiple_equality = nullptr;
 };
 
 /**
@@ -1073,11 +1128,11 @@ class Item_func_eq final : public Item_eq_base {
   enum Functype rev_functype() const override { return EQ_FUNC; }
   cond_result eq_cmp_result() const override { return COND_TRUE; }
   const char *func_name() const override { return "="; }
-  Item *negated_item() override;
+  uint64_t hash() override { return Item_func::hash(true); }
+  Item_func_comparison *negate_item() override;
   bool equality_substitution_analyzer(uchar **) override { return true; }
   Item *equality_substitution_transformer(uchar *arg) override;
   bool clean_up_after_removal(uchar *arg) override;
-  bool gc_subst_analyzer(uchar **) override { return true; }
 
   float get_filtering_effect(THD *thd, table_map filter_for_table,
                              table_map read_tables,
@@ -1141,6 +1196,7 @@ class Item_func_equal final : public Item_eq_base {
     return cmp.set_cmp_func(this, args, args + 1, true);
   }
   longlong val_int() override;
+  uint64_t hash() override { return Item_func::hash(true); }
   bool resolve_type(THD *thd) override;
   enum Functype functype() const override { return EQUAL_FUNC; }
   enum Functype rev_functype() const override { return EQUAL_FUNC; }
@@ -1149,65 +1205,65 @@ class Item_func_equal final : public Item_eq_base {
   Item *truth_transformer(THD *, Bool_test) override { return nullptr; }
   bool is_null() override { return false; }
 
-  float get_filtering_effect(THD *thd, table_map filter_for_table,
-                             table_map read_tables,
-                             const MY_BITMAP *fields_to_ignore,
-                             double rows_in_table) override;
-};
-
-/// '<,>,=<,=>' operators.
-class Item_func_inequality : public Item_func_comparison {
- public:
-  Item_func_inequality(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  // Negation is not implemented for <=>
+  Item_func_comparison *negate_item() override {
+    assert(false);
+    return this;
+  }
 
   float get_filtering_effect(THD *thd, table_map filter_for_table,
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
-
-  bool gc_subst_analyzer(uchar **) override { return true; }
+  bool gc_subst_analyzer(uchar **) override { return false; }
 };
 
 /**
   Implements the comparison operator greater than or equals (>=)
 */
-class Item_func_ge final : public Item_func_inequality {
+class Item_func_ge final : public Item_func_comparison {
  public:
-  Item_func_ge(Item *a, Item *b) : Item_func_inequality(a, b) {}
+  Item_func_ge(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_ge(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return GE_FUNC; }
   enum Functype rev_functype() const override { return LE_FUNC; }
   cond_result eq_cmp_result() const override { return COND_TRUE; }
   const char *func_name() const override { return ">="; }
-  Item *negated_item() override;
+  Item_func_comparison *negate_item() override;
 };
 
 /**
   Implements the comparison operator greater than (>)
 */
-class Item_func_gt final : public Item_func_inequality {
+class Item_func_gt final : public Item_func_comparison {
  public:
-  Item_func_gt(Item *a, Item *b) : Item_func_inequality(a, b) {}
+  Item_func_gt(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_gt(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return GT_FUNC; }
   enum Functype rev_functype() const override { return LT_FUNC; }
   cond_result eq_cmp_result() const override { return COND_FALSE; }
   const char *func_name() const override { return ">"; }
-  Item *negated_item() override;
+  Item_func_comparison *negate_item() override;
 };
 
 /**
   Implements the comparison operator less than or equals (<=)
 */
-class Item_func_le final : public Item_func_inequality {
+class Item_func_le final : public Item_func_comparison {
  public:
-  Item_func_le(Item *a, Item *b) : Item_func_inequality(a, b) {}
+  Item_func_le(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_le(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return LE_FUNC; }
   enum Functype rev_functype() const override { return GE_FUNC; }
   cond_result eq_cmp_result() const override { return COND_TRUE; }
   const char *func_name() const override { return "<="; }
-  Item *negated_item() override;
+  Item_func_comparison *negate_item() override;
 };
 
 /**
@@ -1245,15 +1301,17 @@ class Item_func_reject_if : public Item_bool_func {
 /**
   Implements the comparison operator less than (<)
 */
-class Item_func_lt final : public Item_func_inequality {
+class Item_func_lt final : public Item_func_comparison {
  public:
-  Item_func_lt(Item *a, Item *b) : Item_func_inequality(a, b) {}
+  Item_func_lt(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_lt(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return LT_FUNC; }
   enum Functype rev_functype() const override { return GT_FUNC; }
   cond_result eq_cmp_result() const override { return COND_FALSE; }
   const char *func_name() const override { return "<"; }
-  Item *negated_item() override;
+  Item_func_comparison *negate_item() override;
 };
 
 /**
@@ -1265,18 +1323,22 @@ class Item_func_ne final : public Item_func_comparison {
   static constexpr double kMinSelectivityForUnknownValue = 0.2;
 
   Item_func_ne(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_ne(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
+  uint64_t hash() override { return Item_func::hash(true); }
   enum Functype functype() const override { return NE_FUNC; }
   enum Functype rev_functype() const override { return NE_FUNC; }
   cond_result eq_cmp_result() const override { return COND_FALSE; }
   optimize_type select_optimize(const THD *) override { return OPTIMIZE_KEY; }
   const char *func_name() const override { return "<>"; }
-  Item *negated_item() override;
+  Item_func_comparison *negate_item() override;
 
   float get_filtering_effect(THD *thd, table_map filter_for_table,
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+  bool gc_subst_analyzer(uchar **) override { return false; }
 };
 
 /*
@@ -1320,7 +1382,7 @@ class Item_func_opt_neg : public Item_int_func {
     return ignore_unknown() || original->is_nullable() || !subst->is_nullable();
   }
 
-  bool eq(const Item *item, bool binary_cmp) const override;
+  bool eq_specific(const Item *item) const override;
   bool subst_argument_checker(uchar **) override { return true; }
 
  protected:
@@ -1336,17 +1398,15 @@ class Item_func_between final : public Item_func_opt_neg {
   Item_result cmp_type;
   String value0, value1, value2;
   /* true <=> arguments will be compared as dates. */
-  bool compare_as_dates_with_strings;
-  bool compare_as_temporal_dates;
-  bool compare_as_temporal_times;
+  bool compare_as_datetimes_with_strings{false};
+  bool compare_as_dates{false};
+  bool compare_as_times{false};
+  bool compare_as_datetimes{false};
 
   /* Comparators used for DATE/DATETIME comparison. */
   Arg_comparator ge_cmp, le_cmp;
   Item_func_between(const POS &pos, Item *a, Item *b, Item *c, bool is_negation)
-      : Item_func_opt_neg(pos, a, b, c, is_negation),
-        compare_as_dates_with_strings(false),
-        compare_as_temporal_dates(false),
-        compare_as_temporal_times(false) {}
+      : Item_func_opt_neg(pos, a, b, c, is_negation) {}
   longlong val_int() override;
   optimize_type select_optimize(const THD *) override { return OPTIMIZE_KEY; }
   enum Functype functype() const override { return BETWEEN; }
@@ -1357,6 +1417,7 @@ class Item_func_between final : public Item_func_opt_neg {
   bool resolve_type(THD *) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   bool is_bool_func() const override { return true; }
   const CHARSET_INFO *compare_collation() const override {
     return cmp_collation.collation;
@@ -1409,6 +1470,8 @@ struct interval_range {
   double dbl;
   my_decimal dec;
 };
+
+#ifdef MYSQL_SERVER
 
 class Item_func_interval final : public Item_int_func {
   typedef Item_int_func super;
@@ -1472,8 +1535,9 @@ class Item_func_coalesce : public Item_func_numhybrid {
     @param[in,out] wr   the result value holder
   */
   bool val_json(Json_wrapper *wr) override;
-  bool date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool time_op(MYSQL_TIME *ltime) override;
+  bool date_op(Date_val *date, my_time_flags_t flags) override;
+  bool time_op(Time_val *time) override;
+  bool datetime_op(Datetime_val *dt, my_time_flags_t flags) override;
   my_decimal *decimal_op(my_decimal *) override;
   bool resolve_type(THD *thd) override;
   bool resolve_type_inner(THD *thd) override;
@@ -1484,17 +1548,15 @@ class Item_func_coalesce : public Item_func_numhybrid {
 };
 
 class Item_func_ifnull final : public Item_func_coalesce {
- protected:
-  bool field_type_defined;
-
  public:
   Item_func_ifnull(const POS &pos, Item *a, Item *b)
       : Item_func_coalesce(pos, a, b) {}
   double real_op() override;
   longlong int_op() override;
   String *str_op(String *str) override;
-  bool date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool time_op(MYSQL_TIME *ltime) override;
+  bool date_op(Date_val *date, my_time_flags_t flags) override;
+  bool datetime_op(Datetime_val *dt, my_time_flags_t flags) override;
+  bool time_op(Time_val *time) override;
   my_decimal *decimal_op(my_decimal *) override;
   bool val_json(Json_wrapper *result) override;
   const char *func_name() const override { return "ifnull"; }
@@ -1538,8 +1600,9 @@ class Item_func_if final : public Item_func {
   String *val_str(String *str) override;
   my_decimal *val_decimal(my_decimal *) override;
   bool val_json(Json_wrapper *wr) override;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_date(Date_val *date, my_time_flags_t flags) override;
+  bool val_time(Time_val *time) override;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) override;
   enum Item_result result_type() const override { return cached_result_type; }
   bool fix_fields(THD *, Item **) override;
   enum_field_types default_data_type() const override {
@@ -1561,6 +1624,30 @@ class Item_func_if final : public Item_func {
   }
 };
 
+/**
+  IF function with result fixed as boolean value.
+  Result values must be constant boolean values.
+  For internal use only.
+*/
+class Item_bool_if final : public Item_bool_func {
+ public:
+  Item_bool_if(Item *a, Item *b, Item *c) : Item_bool_func(a, b, c) {
+    null_on_null = false;
+  }
+  longlong val_int() override {
+    Item *val = args[0]->val_int() ? args[1] : args[2];
+    longlong result = val->val_int();
+    null_value = result ? false : val->null_value;
+    return result;
+  }
+  bool resolve_type(THD *) override {
+    assert(args[1]->const_item() && args[2]->const_item());
+    return false;
+  }
+  const char *func_name() const override { return "if"; }
+  enum Functype functype() const override { return BOOL_IF_FUNC; }
+};
+
 class Item_func_nullif final : public Item_bool_func2 {
   enum Item_result cached_result_type;
 
@@ -1573,6 +1660,9 @@ class Item_func_nullif final : public Item_bool_func2 {
   longlong val_int() override;
   String *val_str(String *str) override;
   my_decimal *val_decimal(my_decimal *) override;
+  bool val_date(Date_val *date, my_time_flags_t flags) override;
+  bool val_time(Time_val *time) override;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) override;
   bool val_json(Json_wrapper *wr) override;
   Item_result result_type() const override { return cached_result_type; }
   enum_field_types default_data_type() const override {
@@ -1591,6 +1681,7 @@ class Item_func_nullif final : public Item_bool_func2 {
              enum_query_type query_type) const override {
     Item_func::print(thd, str, query_type);
   }
+  uint64 hash() override { return Item_func::hash(); }
 
   bool is_null() override;
   /**
@@ -1604,7 +1695,7 @@ class Item_func_nullif final : public Item_bool_func2 {
 
 /* A vector of values of some type  */
 
-class in_vector {
+class In_vector {
  private:
   const uint m_size;  ///< Size of the vector
  public:
@@ -1614,9 +1705,9 @@ class in_vector {
     See Item_func_in::resolve_type() for why we need both
     count and used_count.
    */
-  explicit in_vector(uint elements) : m_size(elements) {}
+  explicit In_vector(uint elements) : m_size(elements) {}
 
-  virtual ~in_vector() = default;
+  virtual ~In_vector() = default;
 
   /**
     Calls item->val_int() or item->val_str() etc.
@@ -1636,7 +1727,7 @@ class in_vector {
 
     @param mem_root  Where to allocate the Item.
   */
-  virtual Item_basic_constant *create_item(MEM_ROOT *mem_root) const = 0;
+  virtual Item *create_item(MEM_ROOT *mem_root) const = 0;
 
   /**
     Store the value at position #pos into provided item object
@@ -1645,7 +1736,7 @@ class in_vector {
     @param item  Constant item to store value into. The item must be of the same
                  type that create_item() returns.
   */
-  virtual void value_to_item(uint pos, Item_basic_constant *item) const = 0;
+  virtual void value_to_item(uint pos, Item *item) const = 0;
 
   /** Compare values number pos1 and pos2 for equality */
   virtual bool compare_elems(uint pos1, uint pos2) const = 0;
@@ -1667,13 +1758,21 @@ class in_vector {
   virtual void cleanup() {}
 
  private:
-  virtual void set(uint pos, Item *item) = 0;
+  /**
+    Evaluate item and set value into element "pos" of the vector.
+
+    @param pos  element number in vector
+    @param item item to evaluate
+
+    @returns false if successful evaluation and not null value, true otherwise
+  */
+  virtual bool set(uint pos, Item *item) = 0;
 
   /// Sort the IN-list array, so we can do efficient lookup with binary_search.
   virtual void sort_array() = 0;
 };
 
-class in_string final : public in_vector {
+class In_vector_string final : public In_vector {
   char buff[STRING_BUFFER_USUAL_SIZE];
   String tmp;
   Mem_root_array<String> base_objects;
@@ -1682,23 +1781,23 @@ class in_string final : public in_vector {
   const CHARSET_INFO *collation;
 
  public:
-  in_string(MEM_ROOT *mem_root, uint elements, const CHARSET_INFO *cs);
-  Item_basic_constant *create_item(MEM_ROOT *mem_root) const override {
+  In_vector_string(MEM_ROOT *mem_root, uint elements, const CHARSET_INFO *cs);
+  Item *create_item(MEM_ROOT *mem_root) const override {
     return new (mem_root) Item_string(collation);
   }
-  void value_to_item(uint pos, Item_basic_constant *item) const override {
-    item->set_str_value(base_pointers[pos]);
+  void value_to_item(uint pos, Item *item) const override {
+    down_cast<Item_basic_constant *>(item)->set_str_value(base_pointers[pos]);
   }
   bool find_item(Item *item) override;
   bool compare_elems(uint pos1, uint pos2) const override;
   void cleanup() override;
 
  private:
-  void set(uint pos, Item *item) override;
+  bool set(uint pos, Item *item) override;
   void sort_array() override;
 };
 
-class in_longlong : public in_vector {
+class In_vector_int : public In_vector {
  public:
   struct packed_longlong {
     longlong val;
@@ -1709,16 +1808,16 @@ class in_longlong : public in_vector {
   Mem_root_array<packed_longlong> base;
 
  public:
-  in_longlong(MEM_ROOT *mem_root, uint elements)
-      : in_vector(elements), base(mem_root, elements) {}
-  Item_basic_constant *create_item(MEM_ROOT *mem_root) const override {
+  In_vector_int(MEM_ROOT *mem_root, uint elements)
+      : In_vector(elements), base(mem_root, elements) {}
+  Item *create_item(MEM_ROOT *mem_root) const override {
     /*
       We've created a signed INT, this may not be correct in the
       general case (see BUG#19342).
     */
     return new (mem_root) Item_int(0LL);
   }
-  void value_to_item(uint pos, Item_basic_constant *item) const override {
+  void value_to_item(uint pos, Item *item) const override {
     down_cast<Item_int *>(item)->value = base[pos].val;
     item->unsigned_flag = base[pos].unsigned_flag;
   }
@@ -1726,92 +1825,108 @@ class in_longlong : public in_vector {
   bool compare_elems(uint pos1, uint pos2) const override;
 
  private:
-  void set(uint pos, Item *item) override { val_item(item, &base[pos]); }
+  bool set(uint pos, Item *item) override { return val_item(item, &base[pos]); }
   void sort_array() override;
-  virtual void val_item(Item *item, packed_longlong *result);
+  virtual bool val_item(Item *item, packed_longlong *result);
 };
 
-class in_datetime_as_longlong final : public in_longlong {
+class In_vector_time final : public In_vector {
  public:
-  in_datetime_as_longlong(MEM_ROOT *mem_root, uint elements)
-      : in_longlong(mem_root, elements) {}
-  Item_basic_constant *create_item(MEM_ROOT *mem_root) const override {
-    return new (mem_root) Item_temporal(MYSQL_TYPE_DATETIME, 0LL);
+  In_vector_time(MEM_ROOT *mem_root, uint elements)
+      : In_vector(elements), base(mem_root, elements) {}
+  Item *create_item(MEM_ROOT *mem_root) const override {
+    return new (mem_root) Item_cache_time();
   }
+  void value_to_item(uint pos, Item *item) const override {
+    down_cast<Item_cache_time *>(item)->store_value(base[pos]);
+  }
+  bool find_item(Item *item) override;
+  bool compare_elems(uint pos1, uint pos2) const override;
 
  private:
-  void val_item(Item *item, packed_longlong *result) override;
+  Mem_root_array<Time_val> base;
+
+  bool set(uint pos, Item *item) override;
+  void sort_array() override;
 };
 
-class in_time_as_longlong final : public in_longlong {
+class In_vector_date final : public In_vector {
  public:
-  in_time_as_longlong(MEM_ROOT *mem_root, uint elements)
-      : in_longlong(mem_root, elements) {}
-  Item_basic_constant *create_item(MEM_ROOT *mem_root) const override {
-    return new (mem_root) Item_temporal(MYSQL_TYPE_TIME, 0LL);
+  In_vector_date(MEM_ROOT *mem_root, uint elements)
+      : In_vector(elements), m_base(mem_root, elements) {}
+  Item *create_item(MEM_ROOT *mem_root) const override {
+    return new (mem_root) Item_cache_date();
   }
+  void value_to_item(uint pos, Item *item) const override {
+    down_cast<Item_cache_date *>(item)->store_value(m_base[pos]);
+  }
+  bool find_item(Item *item) override;
+  bool compare_elems(uint pos1, uint pos2) const override;
 
  private:
-  void val_item(Item *item, packed_longlong *result) override;
+  Mem_root_array<Date_val> m_base;
+
+  bool set(uint pos, Item *item) override;
+  void sort_array() override;
 };
 
 /*
-  Class to represent a vector of constant DATE/DATETIME values.
+  Class to represent a vector of constant DATETIME/TIMESTAMP values.
   Values are obtained with help of the get_datetime_value() function.
 */
-class in_datetime final : public in_longlong {
+class In_vector_datetime final : public In_vector_int {
   /// An item used to issue warnings.
   Item *warn_item;
 
  public:
-  in_datetime(MEM_ROOT *mem_root, Item *warn_item_arg, uint elements)
-      : in_longlong(mem_root, elements), warn_item(warn_item_arg) {}
-  Item_basic_constant *create_item(MEM_ROOT *mem_root) const override {
+  In_vector_datetime(MEM_ROOT *mem_root, Item *warn_item_arg, uint elements)
+      : In_vector_int(mem_root, elements), warn_item(warn_item_arg) {}
+  Item *create_item(MEM_ROOT *mem_root) const override {
     return new (mem_root) Item_temporal(MYSQL_TYPE_DATETIME, 0LL);
   }
 
  private:
-  void set(uint pos, Item *item) override;
-  void val_item(Item *item, packed_longlong *result) override;
+  bool set(uint pos, Item *item) override;
+  bool val_item(Item *item, packed_longlong *result) override;
 };
 
-class in_double final : public in_vector {
+class In_vector_double final : public In_vector {
   Mem_root_array<double> base;
 
  public:
-  in_double(MEM_ROOT *mem_root, uint elements)
-      : in_vector(elements), base(mem_root, elements) {}
-  Item_basic_constant *create_item(MEM_ROOT *mem_root) const override {
+  In_vector_double(MEM_ROOT *mem_root, uint elements)
+      : In_vector(elements), base(mem_root, elements) {}
+  Item *create_item(MEM_ROOT *mem_root) const override {
     return new (mem_root) Item_float(0.0, 0);
   }
-  void value_to_item(uint pos, Item_basic_constant *item) const override {
+  void value_to_item(uint pos, Item *item) const override {
     down_cast<Item_float *>(item)->value = base[pos];
   }
   bool find_item(Item *item) override;
   bool compare_elems(uint pos1, uint pos2) const override;
 
  private:
-  void set(uint pos, Item *item) override;
+  bool set(uint pos, Item *item) override;
   void sort_array() override;
 };
 
-class in_decimal final : public in_vector {
+class In_vector_decimal final : public In_vector {
   Mem_root_array<my_decimal> base;
 
  public:
-  in_decimal(MEM_ROOT *mem_root, uint elements)
-      : in_vector(elements), base(mem_root, elements) {}
-  Item_basic_constant *create_item(MEM_ROOT *mem_root) const override {
+  In_vector_decimal(MEM_ROOT *mem_root, uint elements)
+      : In_vector(elements), base(mem_root, elements) {}
+  Item *create_item(MEM_ROOT *mem_root) const override {
     return new (mem_root) Item_decimal(0, false);
   }
-  void value_to_item(uint pos, Item_basic_constant *item) const override {
+  void value_to_item(uint pos, Item *item) const override {
     down_cast<Item_decimal *>(item)->set_decimal_value(&base[pos]);
   }
   bool find_item(Item *item) override;
   bool compare_elems(uint pos1, uint pos2) const override;
 
  private:
-  void set(uint pos, Item *item) override;
+  bool set(uint pos, Item *item) override;
   void sort_array() override;
 };
 
@@ -2030,6 +2145,9 @@ class Item_func_case final : public Item_func {
   DTCollation cmp_collation;
   cmp_item *cmp_items[5]; /* For all result types */
   cmp_item *case_item;
+  /// Pointer to the column reference being masked by this CASE statement, if it
+  /// originates from a CREATE MASKING POLICY statement. Otherwise, nullptr.
+  const Item_field *m_masking_expression_for{nullptr};
 
  protected:
   void add_json_info(Json_object *obj) override {
@@ -2068,8 +2186,9 @@ class Item_func_case final : public Item_func {
   String *val_str(String *) override;
   my_decimal *val_decimal(my_decimal *) override;
   bool val_json(Json_wrapper *wr) override;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_date(Date_val *date, my_time_flags_t flags) override;
+  bool val_time(Time_val *time) override;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) override;
   bool fix_fields(THD *thd, Item **ref) override;
   enum_field_types default_data_type() const override {
     return MYSQL_TYPE_VARCHAR;
@@ -2081,11 +2200,15 @@ class Item_func_case final : public Item_func {
   const char *func_name() const override { return "case"; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   Item *find_item(String *str);
   const CHARSET_INFO *compare_collation() const override {
     return cmp_collation.collation;
   }
   enum Functype functype() const override { return CASE_FUNC; }
+  void set_masking_expression_for(const Item_field *masked_item) final {
+    m_masking_expression_for = masked_item;
+  }
 };
 
 /**
@@ -2093,7 +2216,7 @@ class Item_func_case final : public Item_func {
 
   The current implementation distinguishes 2 cases:
   1) all items in in_value_list are constants and have the same
-    result type. This case is handled by in_vector class.
+    result type. This case is handled by In_vector class.
   2) otherwise Item_func_in employs several cmp_item objects to perform
     comparisons of in_expr and an item from in_value_list. One cmp_item
     object for each result type. Different result types are collected in the
@@ -2102,7 +2225,7 @@ class Item_func_case final : public Item_func {
 class Item_func_in final : public Item_func_opt_neg {
  public:
   /// An array of const values, created when the bisection lookup method is used
-  in_vector *m_const_array{nullptr};
+  In_vector *m_const_array{nullptr};
   /**
     If there is some NULL among @<in value list@>, during a val_int() call; for
     example
@@ -2159,6 +2282,7 @@ class Item_func_in final : public Item_func_opt_neg {
   optimize_type select_optimize(const THD *) override { return OPTIMIZE_KEY; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   enum Functype functype() const override { return IN_FUNC; }
   const char *func_name() const override { return " IN "; }
   bool is_bool_func() const override { return true; }
@@ -2225,14 +2349,12 @@ class Item_func_in final : public Item_func_opt_neg {
 
 class cmp_item_row : public cmp_item {
   cmp_item **comparators{nullptr};
-  uint n;
-
-  // Only used for Mem_root_array::resize()
-  cmp_item_row() : n(0) {}
-
-  friend class Mem_root_array_YY<cmp_item_row>;
+  uint n{0};
 
  public:
+  // Only used for Mem_root_array::resize()
+  cmp_item_row() = default;
+
   cmp_item_row(THD *thd, Item *item) : n(item->cols()) {
     allocate_template_comparators(thd, item);
   }
@@ -2270,7 +2392,7 @@ class cmp_item_row : public cmp_item {
   bool allocate_template_comparators(THD *thd, Item *item);
 };
 
-class in_row final : public in_vector {
+class in_row final : public In_vector {
   unique_ptr_destroy_only<cmp_item_row> tmp;
   Mem_root_array<cmp_item_row> base_objects;
   // Sort pointers, rather than objects.
@@ -2292,16 +2414,14 @@ class in_row final : public in_vector {
   bool find_item(Item *item) override;
   bool compare_elems(uint pos1, uint pos2) const override;
 
-  Item_basic_constant *create_item(MEM_ROOT *) const override {
+  Item *create_item(MEM_ROOT *) const override {
     assert(false);
     return nullptr;
   }
-  void value_to_item(uint, Item_basic_constant *) const override {
-    assert(false);
-  }
+  void value_to_item(uint, Item *) const override { assert(false); }
 
  private:
-  void set(uint pos, Item *item) override;
+  bool set(uint pos, Item *item) override;
   void sort_array() override;
 };
 
@@ -2333,6 +2453,7 @@ class Item_func_isnull : public Item_bool_func {
   Item *truth_transformer(THD *, Bool_test test) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   const CHARSET_INFO *compare_collation() const override {
     return args[0]->collation.collation;
   }
@@ -2389,6 +2510,7 @@ class Item_func_isnotnull final : public Item_bool_func {
   Item *truth_transformer(THD *, Bool_test test) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   const CHARSET_INFO *compare_collation() const override {
     return args[0]->collation.collation;
   }
@@ -2437,6 +2559,7 @@ class Item_func_like final : public Item_bool_func2 {
   // clause.
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   /**
     @retval true non default escape char specified
                  using "expr LIKE pat ESCAPE 'escape_char'" syntax
@@ -2475,6 +2598,8 @@ class Item_func_like final : public Item_bool_func2 {
   bool check_covering_prefix_keys(THD *thd);
 };
 
+#endif /* MYSQL_SERVER */
+
 class Item_cond : public Item_bool_func {
   typedef Item_bool_func super;
 
@@ -2498,6 +2623,8 @@ class Item_cond : public Item_bool_func {
   Item_cond(THD *thd, Item_cond *item);
   Item_cond(List<Item> &nlist)
       : Item_bool_func(), list(nlist), abort_on_null(false) {}
+  Item_cond(const POS &pos, List<Item> &nlist)
+      : Item_bool_func(pos), list(nlist), abort_on_null(false) {}
   bool add(Item *item) {
     assert(item);
     return list.push_back(item);
@@ -2519,11 +2646,13 @@ class Item_cond : public Item_bool_func {
 
   Type type() const override { return COND_ITEM; }
   List<Item> *argument_list() { return &list; }
-  bool eq(const Item *item, bool binary_cmp) const override;
+  const List<Item> *argument_list() const { return &list; }
+  bool eq(const Item *item) const override;
   table_map used_tables() const override { return used_tables_cache; }
   void update_used_tables() override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   bool split_sum_func(THD *thd, Ref_item_array ref_item_array,
                       mem_root_deque<Item *> *fields) override;
   void apply_is_true() override { abort_on_null = true; }
@@ -2541,53 +2670,55 @@ class Item_cond : public Item_bool_func {
   bool equality_substitution_analyzer(uchar **) override { return true; }
 };
 
-/*
-  The class Item_equal is used to represent conjunctions of equality
-  predicates of the form field1 = field2, and field=const in where
-  conditions and on expressions.
+#ifdef MYSQL_SERVER
+
+/**
+  The class Item_multi_eq is used to represent conjunctions of equality
+  predicates of the form field1 = field2, and field = const in where
+  conditions and on join conditions.
 
   All equality predicates of the form field1=field2 contained in a
   conjunction are substituted for a sequence of items of this class.
-  An item of this class Item_equal(f1,f2,...fk) represents a
+  An item of this class Item_multi_eq(f1,f2,...fk) represents a
   multiple equality f1=f2=...=fk.
 
   If a conjunction contains predicates f1=f2 and f2=f3, a new item of
-  this class is created Item_equal(f1,f2,f3) representing the multiple
+  this class is created Item_multi_eq(f1,f2,f3) representing the multiple
   equality f1=f2=f3 that substitutes the above equality predicates in
   the conjunction.
   A conjunction of the predicates f2=f1 and f3=f1 and f3=f2 will be
   substituted for the item representing the same multiple equality
   f1=f2=f3.
-  An item Item_equal(f1,f2) can appear instead of a conjunction of
+  An item Item_multi_eq(f1,f2) can appear instead of a conjunction of
   f2=f1 and f1=f2, or instead of just the predicate f1=f2.
 
-  An item of the class Item_equal inherits equalities from outer
+  An item of the class Item_multi_eq inherits equalities from outer
   conjunctive levels.
 
   Suppose we have a where condition of the following form:
   WHERE f1=f2 AND f3=f4 AND f3=f5 AND ... AND (...OR (f1=f3 AND ...)).
   In this case:
-    f1=f2 will be substituted for Item_equal(f1,f2);
-    f3=f4 and f3=f5  will be substituted for Item_equal(f3,f4,f5);
-    f1=f3 will be substituted for Item_equal(f1,f2,f3,f4,f5);
+    f1=f2 will be substituted for Item_multi_eq(f1,f2);
+    f3=f4 and f3=f5  will be substituted for Item_multi_eq(f3,f4,f5);
+    f1=f3 will be substituted for Item_multi_eq(f1,f2,f3,f4,f5);
 
-  An object of the class Item_equal can contain an optional constant
+  An object of the class Item_multi_eq can contain an optional constant
   item c. Then it represents a multiple equality of the form
   c=f1=...=fk.
 
-  Objects of the class Item_equal are used for the following:
+  Objects of the class Item_multi_eq are used for the following:
 
-  1. An object Item_equal(t1.f1,...,tk.fk) allows us to consider any
+  1. An object Item_multi_eq(t1.f1,...,tk.fk) allows us to consider any
   pair of tables ti and tj as joined by an equi-condition.
   Thus it provide us with additional access paths from table to table.
 
-  2. An object Item_equal(t1.f1,...,tk.fk) is applied to deduce new
+  2. An object Item_multi_eq(t1.f1,...,tk.fk) is applied to deduce new
   SARGable predicates:
     f1=...=fk AND P(fi) => f1=...=fk AND P(fi) AND P(fj).
   It also can give us additional index scans and can allow us to
   improve selectivity estimates.
 
-  3. An object Item_equal(t1.f1,...,tk.fk) is used to optimize the
+  3. An object Item_multi_eq(t1.f1,...,tk.fk) is used to optimize the
   selected execution plan for the query: if table ti is accessed
   before the table tj then in any predicate P in the where condition
   the occurrence of tj.fj is substituted for ti.fi. This can allow
@@ -2604,18 +2735,12 @@ class Item_cond : public Item_bool_func {
   plan for those, obtained by substitution of some fields for equal fields,
   that can be used.
 
-  Prepared Statements/Stored Procedures note: instances of class
-  Item_equal are created only at the time a PS/SP is executed and
-  are deleted in the end of execution. All changes made to these
-  objects need not be registered in the list of changes of the parse
-  tree and do not harm PS/SP re-execution.
-
-  Item equal objects are employed only at the optimize phase. Usually they are
-  not supposed to be evaluated.  Yet in some cases we call the method val_int()
-  for them. We have to take care of restricting the predicate such an
+  Multiple equality objects are employed only at the optimize phase. Usually
+  they are not supposed to be evaluated. Yet in some cases we call the method
+  val_int() for them. We have to take care of restricting the predicate such an
   object represents f1=f2= ...=fn to the projection of known fields fi1=...=fik.
 */
-class Item_equal final : public Item_bool_func {
+class Item_multi_eq final : public Item_bool_func {
   /// List of equal field items.
   List<Item_field> fields;
   /// Optional constant item equal to all the field items.
@@ -2625,25 +2750,37 @@ class Item_equal final : public Item_bool_func {
   /// Helper for comparing constants.
   Arg_comparator cmp;
   /// Flag set to true if the equality is known to be always false.
-  bool cond_false{false};
+  bool m_always_false{false};
   /// Should constants be compared as datetimes?
   bool compare_as_dates{false};
+  /// Checks if the current constant value m_const_arg (that each field
+  /// in fields needs to be equal to during execution) is the same as
+  /// the provided constant item. If that's not the case, it sets
+  /// m_always_false to true as a field cannot be equal to different
+  /// constant values at the same time.
+  /// @returns false on success, true on error.
+  bool compare_const(THD *thd, Item *const_item);
 
  public:
-  ~Item_equal() override;
+  ~Item_multi_eq() override;
 
-  Item_equal(Item_field *f1, Item_field *f2);
-  Item_equal(Item *c, Item_field *f);
-  explicit Item_equal(Item_equal *item_equal);
+  Item_multi_eq(Item_field *lhs_field, Item_field *rhs_field);
+  Item_multi_eq(Item *const_item, Item_field *field);
+  explicit Item_multi_eq(Item_multi_eq *item_multi_eq);
 
+  Item_multi_eq(const Item_multi_eq &) = delete;
+  Item_multi_eq operator=(const Item_multi_eq &) = delete;
+  Item_multi_eq(const Item_multi_eq &&) = delete;
+  Item_multi_eq operator=(const Item_multi_eq &&) = delete;
+
+  /// Returns the constant Item that this multi equality is equal to(if any).
   Item *const_arg() const { return m_const_arg; }
-  void set_const_arg(Item *c) { m_const_arg = c; }
-  bool compare_const(THD *thd, Item *c);
-  bool add(THD *thd, Item *c, Item_field *f);
-  bool add(THD *thd, Item *c);
-  void add(Item_field *f);
+  void set_const_arg(Item *const_item) { m_const_arg = const_item; }
+  bool add(THD *thd, Item *const_item, Item_field *field);
+  bool add(THD *thd, Item *const_item);
+  void add(Item_field *field);
   uint members();
-  bool contains(const Field *field) const;
+  bool contains(const Item_field *field) const;
   /**
     Get the first field of multiple equality, use for semantic checking.
 
@@ -2651,14 +2788,14 @@ class Item_equal final : public Item_bool_func {
   */
   Item_field *get_first() { return fields.head(); }
   Item_field *get_subst_item(const Item_field *field);
-  bool merge(THD *thd, Item_equal *item);
+  bool merge(THD *thd, Item_multi_eq *item);
   bool update_const(THD *thd);
-  enum Functype functype() const override { return MULT_EQUAL_FUNC; }
+  enum Functype functype() const override { return MULTI_EQ_FUNC; }
   longlong val_int() override;
   const char *func_name() const override { return "multiple equal"; }
   optimize_type select_optimize(const THD *) override { return OPTIMIZE_EQUAL; }
   bool cast_incompatible_args(uchar *) override {
-    // Multiple equality nodes (Item_equal) should have been
+    // Multiple equality nodes (Item_multi_eq) should have been
     // converted back to simple equalities (Item_func_eq) by
     // substitute_for_best_equal_field before cast nodes are injected.
     assert(false);
@@ -2671,7 +2808,7 @@ class Item_equal final : public Item_bool_func {
   /**
     Order field items in multiple equality according to a sorting criteria.
 
-    The function perform ordering of the field items in the Item_equal
+    The function perform ordering of the field items in the Item_multi_eq
     object according to the criteria determined by the cmp callback parameter.
     If cmp(item_field1,item_field2,arg)<0 than item_field1 must be
     placed after item_field2.
@@ -2691,7 +2828,7 @@ class Item_equal final : public Item_bool_func {
   // A class to iterate over fields without exposing fields directly.
   class FieldProxy {
    public:
-    explicit FieldProxy(Item_equal *item) : m_fields(&item->fields) {}
+    explicit FieldProxy(Item_multi_eq *item) : m_fields(&item->fields) {}
     List_STL_Iterator<Item_field> begin() { return m_fields->begin(); }
     List_STL_Iterator<Item_field> end() { return m_fields->end(); }
     List_STL_Iterator<const Item_field> begin() const {
@@ -2710,7 +2847,7 @@ class Item_equal final : public Item_bool_func {
   };
   class ConstFieldProxy {
    public:
-    explicit ConstFieldProxy(const Item_equal *item)
+    explicit ConstFieldProxy(const Item_multi_eq *item)
         : m_fields(&item->fields) {}
     List_STL_Iterator<const Item_field> begin() const {
       return m_fields->cbegin();
@@ -2736,7 +2873,8 @@ class Item_equal final : public Item_bool_func {
   bool walk(Item_processor processor, enum_walk walk, uchar *arg) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
-  bool eq(const Item *item, bool binary_cmp) const override;
+  uint64 hash() override;
+  bool eq_specific(const Item *item) const override;
   const CHARSET_INFO *compare_collation() const override {
     return fields.head()->collation.collation;
   }
@@ -2749,27 +2887,25 @@ class Item_equal final : public Item_bool_func {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
-  Item *m_const_folding[2];  ///< temporary area used for constant folding
+  ///< temporary area used for constant folding
+  Item *m_const_folding[2]{nullptr, nullptr};
 
  private:
   void check_covering_prefix_keys();
 };
 
-class COND_EQUAL {
- public:
-  uint max_members;               /* max number of members the current level
-                                     list and all lower level lists */
-  COND_EQUAL *upper_levels;       /* multiple equalities of upper and levels */
-  List<Item_equal> current_level; /* list of multiple equalities of
-                                     the current and level           */
-  COND_EQUAL() { upper_levels = nullptr; }
+struct COND_EQUAL {
+  /// Reference to the multiple equalities of outer level.
+  COND_EQUAL *upper_levels{nullptr};
+  /// List of multiple equalities in the current conjunction.
+  List<Item_multi_eq> current_level;
 };
 
 class Item_cond_and final : public Item_cond {
  public:
-  COND_EQUAL cond_equal; /* contains list of Item_equal objects for
-                            the current and level and reference
-                            to multiple equalities of upper and levels */
+  /// Contains list of Item_multi_eq objects for the current conjunction
+  /// and references to multiple equalities of outer levels.
+  COND_EQUAL cond_equal;
   Item_cond_and() : Item_cond() {}
 
   Item_cond_and(Item *i1, Item *i2) : Item_cond(i1, i2) {}
@@ -2777,8 +2913,11 @@ class Item_cond_and final : public Item_cond {
 
   Item_cond_and(THD *thd, Item_cond_and *item) : Item_cond(thd, item) {}
   Item_cond_and(List<Item> &list_arg) : Item_cond(list_arg) {}
+  Item_cond_and(const POS &pos, List<Item> &list_arg)
+      : Item_cond(pos, list_arg) {}
   enum Functype functype() const override { return COND_AND_FUNC; }
   longlong val_int() override;
+  uint64_t hash() override { return Item_func::hash(true); }
   const char *func_name() const override { return "and"; }
   Item *copy_andor_structure(THD *thd) override {
     Item_cond_and *item;
@@ -2806,6 +2945,8 @@ class Item_cond_or final : public Item_cond {
 
   Item_cond_or(THD *thd, Item_cond_or *item) : Item_cond(thd, item) {}
   Item_cond_or(List<Item> &list_arg) : Item_cond(list_arg) {}
+  Item_cond_or(const POS &pos, List<Item> &list_arg)
+      : Item_cond(pos, list_arg) {}
   enum Functype functype() const override { return COND_OR_FUNC; }
   longlong val_int() override;
   const char *func_name() const override { return "or"; }
@@ -2837,6 +2978,12 @@ inline Item *and_conds(Item *a, Item *b) {
 
 longlong get_datetime_value(THD *thd, Item ***item_arg, Item ** /* cache_arg */,
                             const Item *warn_item, bool *is_null);
+
+longlong get_time_value(THD *thd, Item ***item_arg, Item ** /* cache_arg */,
+                        const Item *warn_item, bool *is_null);
+
+longlong get_date_value(THD *thd, Item ***item_arg, Item ** /* cache_arg */,
+                        const Item *warn_item, bool *is_null);
 
 // TODO: the next two functions should be moved to sql_time.{h,cc}
 bool get_mysql_time_from_str_no_warn(THD *thd, String *str, MYSQL_TIME *l_time,
@@ -2894,5 +3041,7 @@ bool WalkConjunction(Item *condition, Func func) {
     return func(condition);
   }
 }
+
+#endif /* MYSQL_SERVER */
 
 #endif /* ITEM_CMPFUNC_INCLUDED */

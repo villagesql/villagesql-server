@@ -401,7 +401,7 @@ class NdbSchemaOp {
                       int aDistributionKey = 0, int aDistributionGroup = 0,
                       int aDistributionGroupNoOfBits = 16,
                       bool aAutoIncrement = false,
-                      const char *aDefaultValue = 0);
+                      const char *aDefaultValue = nullptr);
 
   /**
    * @deprecated do not use!

@@ -35,7 +35,33 @@ leak:/usr/bin/sort
 leak:/usr/bin/tail
 leak:/lib64/libperl.so.*
 leak:/bin/bash
+leak:/usr/bin/sed
+leak:/usr/bin/awk
+leak:/usr/bin/python2.7
 leak:/usr/bin/zip
+leak:mysqltest_safe_process
+leak:/usr/bin/python3.8
+leak:/usr/bin/python3.9
+leak:/usr/bin/python3.10
+leak:/usr/bin/python3.11
+leak:/usr/bin/python3.12
+leak:/usr/bin/python3.13
+leak:/usr/bin/python3.14
+leak:/usr/bin/dd
+leak:/usr/bin/grep
+leak:/usr/bin/ps
+leak:/usr/bin/*g++-*
+leak:/usr/*/cc1plus
+leak:/lib/*libbfd-*-system.so
+leak:/usr/bin/*ld.bfd
+leak:/usr/lib/*collect2
+
+# Ubuntu 25.10 and newer ship the Rust (uutils) reimplementation of
+# coreutils, installed under /usr/lib/cargo/bin/coreutils/ rather than
+# /usr/bin/. Every one of these binaries leaks a small allocation at
+# startup, which LSAN reports whenever a test shells out to them.
+leak:/usr/lib/cargo/bin/coreutils/*
+
 # OpenLDAP bug 9081
 # Fixed in 2.4.49, we build with 2.4.48
 leak:ldap_initialize
@@ -50,6 +76,7 @@ leak:gss_acquire_cred_from
 
 # Memory leak due to JDK's assumption on object lifetime
 leak:java.lang.ProcessImpl*init
+leak:sun.nio.fs.NativeBuffer::NativeBuffer
 
 # ndb_sign_keys leaks in some error-exit situations
 leak:ndb_sign_keys
@@ -58,7 +85,7 @@ leak:ndb_sign_keys
 # google::protobuf::internal::InitSCCImpl()
 leak:libprotobuf-lite.so
 
-# Bug#36170703 ndb api tools leak with TLS required on data nodes 
+# Bug#36170703 ndb api tools leak with TLS required on data nodes
 # Suppress leak detection for them until leak is found.
 leak:ndb_blob_tool
 leak:ndb_config
@@ -92,3 +119,13 @@ leak:/usr/bin/grep
 # free process-lifetime allocations at exit. LSan reports the resolved
 # multi-call binary, so the /usr/bin/* paths above do not match it.
 leak:/usr/lib/cargo/bin/coreutils/
+
+# Internal leak in Graal's libjitexecutor.so
+# https://jira.oci.oraclecorp.com/browse/GR-67473
+# Originally reported in "Bug#37977799 Memory leak issue with
+#   router.app_specific_metadata_v_latest test on asan build"
+leak:Source*buildSource
+
+# The following line is needed to suppress memory leaks coming from standard /usr/bin/grep
+# utility on Ubuntu 22.04 Jammy
+leak:re_compile_internal

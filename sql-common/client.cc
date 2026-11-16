@@ -91,7 +91,6 @@
 #include "mysql/psi/mysql_memory.h"
 #include "mysql/service_mysql_alloc.h"
 #include "mysql/strings/int2str.h"
-#include "mysql_native_authentication_client.h"
 #include "mysql_version.h"
 #include "mysqld_error.h"
 #include "strmake.h"
@@ -139,7 +138,9 @@
 #include "mysql_com_server.h"
 #include "sql/client_settings.h"
 #include "sql/server_component/mysql_command_services_imp.h"
+#include "sql/srv_session.h"
 /* mysql_command_service_extn */
+#include "sql/mysqld.h"  // srv_registry
 #else
 #include "libmysql/client_settings.h"
 #endif
@@ -1384,6 +1385,24 @@ bool cli_advanced_command(MYSQL *mysql, enum enum_server_command command,
   */
   if ((command != COM_QUIT) && mysql->reconnect && !vio_is_connected(net->vio))
     net->error = NET_ERROR_SOCKET_UNUSABLE;
+
+  /*
+    If the connection becomes dead after the above check,
+    and the packet we are sending is bigger than 16k (net_buffer_length default)
+    the client will try to send partial data. In such a case net_write_command()
+    will detect connection loss  when trying to send the packet over the network
+    and report the error via my_error() from net_write_raw_loop(). But we don't
+    want this error to be propagated back to the client session.
+    net_write_command() should fail silently and the below reconnection logic
+    should kick in.
+  */
+  DBUG_EXECUTE_IF(
+      "PS-8747_wait_for_disconnect_after_check",
+      DBUG_SET("-d,PS-8747_wait_for_disconnect_after_check");
+      net->error = 0;  // Even if above check detected we are already
+                       // disconnected pretend we know nothing about this.
+      sleep(10);       // MTR test will set interactive_timeout/wait_timeout = 4
+  );
 
   if (net_write_command(net, (uchar)command, header, header_length, arg,
                         arg_length)) {
@@ -3375,6 +3394,141 @@ void mysql_extension_bind_free(MYSQL_EXTENSION *ext) {
   memset(&ext->bind_info, 0, sizeof(ext->bind_info));
 }
 
+#ifdef MYSQL_SERVER
+/**
+  Release services.
+
+  @param[in] consumer_refs A valid mysql_command_consumer_refs object.
+  @param[in] mcs_ext       A valid mysql_command_service_extn object.
+  @param[in] srv_registry  Registry service pointer.
+*/
+static void release_services(mysql_command_consumer_refs *consumer_refs,
+                             mysql_command_service_extn *mcs_ext,
+                             mysql_service_registry_t *srv_registry) {
+  if (consumer_refs) {
+    if (consumer_refs->factory_srv) {
+      /* This service call is used to free the memory, the allocation
+         was happened through factory_srv->start() service api. */
+      consumer_refs->factory_srv->end(
+          reinterpret_cast<SRV_CTX_H>(mcs_ext->consumer_srv_data));
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(mysql_text_consumer_factory_v1) *>(
+              consumer_refs->factory_srv)));
+    }
+    if (consumer_refs->metadata_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(mysql_text_consumer_metadata_v1) *>(
+              consumer_refs->metadata_srv)));
+    if (consumer_refs->row_factory_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(
+              mysql_text_consumer_row_factory_v1) *>(
+              consumer_refs->row_factory_srv)));
+    if (consumer_refs->error_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(mysql_text_consumer_error_v1) *>(
+              consumer_refs->error_srv)));
+    if (consumer_refs->get_null_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(mysql_text_consumer_get_null_v1) *>(
+              consumer_refs->get_null_srv)));
+    if (consumer_refs->get_integer_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(
+              mysql_text_consumer_get_integer_v1) *>(
+              consumer_refs->get_integer_srv)));
+    if (consumer_refs->get_longlong_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(
+              mysql_text_consumer_get_longlong_v1) *>(
+              consumer_refs->get_longlong_srv)));
+    if (consumer_refs->get_decimal_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(
+              mysql_text_consumer_get_decimal_v1) *>(
+              consumer_refs->get_decimal_srv)));
+    if (consumer_refs->get_double_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(
+              mysql_text_consumer_get_double_v1) *>(
+              consumer_refs->get_double_srv)));
+    if (consumer_refs->get_date_time_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(
+              mysql_text_consumer_get_date_time_v1) *>(
+              consumer_refs->get_date_time_srv)));
+    if (consumer_refs->get_string_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(
+              mysql_text_consumer_get_string_v1) *>(
+              consumer_refs->get_string_srv)));
+    if (consumer_refs->client_capabilities_srv)
+      srv_registry->release(reinterpret_cast<my_h_service>(
+          const_cast<SERVICE_TYPE_NO_CONST(
+              mysql_text_consumer_client_capabilities_v1) *>(
+              consumer_refs->client_capabilities_srv)));
+  }
+}
+
+/**
+  Free the command service extension.
+
+  This function releases consumer services and closes/detaches the backend
+  session as appropriate, then frees 'ext->mcs_extn'.
+  Safe to call even if some fields are null/partially initialized. No-op if
+  'ext' or 'ext->mcs_extn' is null.
+
+  @param[in,out] ext  The MYSQL_EXTENSION owning the command service state.
+                      On return, any consumer services are released, cleans up
+                      the backend session (detached sessions are detached/
+                      closed, THD-associated sessions are left to their owner),
+                      and 'ext->mcs_extn' is freed and set to nullptr. The 'ext'
+                      object itself is not freed.
+*/
+static void mysql_command_service_extn_free(MYSQL_EXTENSION *ext) {
+  if (!ext || !ext->mcs_extn) return;
+
+  auto *mcs_ext = reinterpret_cast<mysql_command_service_extn *>(ext->mcs_extn);
+
+  // Release consumer services acquired earlier
+  if (mcs_ext->command_consumer_services) {
+    auto *consumer_refs = reinterpret_cast<mysql_command_consumer_refs *>(
+        mcs_ext->command_consumer_services);
+    bool no_lock_registry = mcs_ext->no_lock_registry;
+
+    if (consumer_refs) {
+      no_lock_registry
+          ? release_services(consumer_refs, mcs_ext, srv_registry_no_lock)
+          : release_services(consumer_refs, mcs_ext, srv_registry);
+      delete consumer_refs;
+      consumer_refs = nullptr;
+
+      // avoid dangling ptr
+      mcs_ext->command_consumer_services = nullptr;
+    }
+  }
+
+  // Close session
+  if (mcs_ext->session_svc) {
+    if (!mcs_ext->is_thd_associated) {
+      // Detached session: detach then close
+      srv_session_detach(mcs_ext->session_svc);
+      srv_session_close(mcs_ext->session_svc);
+    } else {
+      // Locally created/owned session: delete it
+      delete mcs_ext->session_svc;
+    }
+    // THD-associated session: do not detach/close here (owner will close it)
+    mcs_ext->session_svc = nullptr;
+  }
+
+  // Reset var, free ext storage, and set ptr to nullptr
+  mcs_ext->is_thd_associated = false;
+  my_free(mcs_ext);
+  ext->mcs_extn = nullptr;
+}
+#endif
+
 void mysql_extension_free(MYSQL_EXTENSION *ext) {
   if (!ext) return;
   if (ext->trace_data) my_free(ext->trace_data);
@@ -3401,7 +3555,7 @@ void mysql_extension_free(MYSQL_EXTENSION *ext) {
     ext->mysql_async_context = nullptr;
   }
 #ifdef MYSQL_SERVER
-  if (ext->mcs_extn) my_free(ext->mcs_extn);
+  mysql_command_service_extn_free(ext);
 #endif
   // free state change related resources.
   free_state_change_info(ext);
@@ -3497,6 +3651,166 @@ const char *STDCALL mysql_get_ssl_cipher(MYSQL *mysql [[maybe_unused]]) {
     return SSL_get_cipher_name((SSL *)mysql->net.vio->ssl_arg);
   return nullptr;
 }
+
+#include <openssl/x509v3.h>
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+/*
+  Compares the DNS entry from the Subject Alternative Names (SAN) list with
+  the provided host name
+
+  SYNOPSIS
+  ssl_cmp_san_dns_name()
+  dns_name           pointer to a SAN list DNS entry
+  host_name          name of the server
+  errptr             if we fail, we'll return (a pointer to a string
+  describing) the reason here
+
+  RETURN VALUES
+  false Success
+  true Failed to validate server
+
+*/
+
+static bool ssl_cmp_san_dns_name(ASN1_STRING *dns_name, const char *host_name,
+                                 const char **errptr) {
+  DBUG_ENTER("ssl_cmp_san_dns_name");
+  *errptr = nullptr;
+  if (dns_name == nullptr) {
+    *errptr = "Failed to get DNS name from SAN list item";
+    DBUG_RETURN(true);
+  }
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+  const char *cn = reinterpret_cast<const char *>(
+      const_cast<const unsigned char *>(ASN1_STRING_data(dns_name)));
+#else
+  const char *cn = static_cast<const char *>(ASN1_STRING_get0_data(dns_name));
+#endif
+  if (cn == nullptr) {
+    *errptr = "Failed to get data from SAN DNS name";
+    DBUG_RETURN(true);
+  }
+  // There should not be any NULL embedded in the DNS name
+  if (static_cast<size_t>(ASN1_STRING_length(dns_name)) != strlen(cn)) {
+    *errptr = "NULL embedded in the certificate SAN DNS name";
+    DBUG_RETURN(true);
+  }
+  DBUG_PRINT("info", ("SAN DNS name in cert: %s", cn));
+  if (!strcmp(cn, host_name)) DBUG_RETURN(false);
+
+  DBUG_RETURN(true);
+}
+
+/*
+  Compares the IP address entry from the Subject Alternative Names (SAN) list
+  with the provided host IP address
+
+  SYNOPSIS
+  ssl_cmp_san_ip_address()
+  ip_address         pointer to a SAN list IP address entry
+  host_ip            IP address of the server
+  host_ip_len        server IP address length (must be either 4 or 16)
+  errptr             if we fail, we'll return (a pointer to a string
+  describing) the reason here
+
+  RETURN VALUES
+  false Success
+  true Failed to validate server
+
+*/
+
+static bool ssl_cmp_san_ip_address(ASN1_OCTET_STRING *ip_address,
+                                   const unsigned char *host_ip,
+                                   size_t host_ip_len, const char **errptr) {
+  DBUG_ENTER("ssl_cmp_san_ip_address");
+  *errptr = nullptr;
+  if (ip_address == nullptr) {
+    *errptr = "Failed to get IP address from SAN list item";
+    DBUG_RETURN(true);
+  }
+  const size_t ip_address_len = ASN1_STRING_length(ip_address);
+  /* IP address length must be either 4 (IPV4) or 16 (IPV6) */
+  if (ip_address_len != 4 && ip_address_len != 16) {
+    *errptr = "Invalid IP address embedded in the certificate SAN IP address";
+    DBUG_RETURN(true);
+  }
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+  const unsigned char *ip = ASN1_STRING_data(ip_address);
+#else
+  const unsigned char *ip = ASN1_STRING_get0_data(ip_address);
+#endif
+  if (ip == nullptr) {
+    *errptr = "Failed to get data from SAN IP address";
+    DBUG_RETURN(true);
+  }
+  DBUG_RETURN(!(ip_address_len == host_ip_len &&
+                memcmp(host_ip, ip, host_ip_len) == 0));
+}
+
+/*
+  Check the certificate's Subject Alternative Names (SAN) against the
+  hostname / IP address we connected to
+
+  SYNOPSIS
+  ssl_verify_server_cert_san()
+  server_cert        pointer to a X509 certificate
+  hostname_or_ip     name of the server / pointer to a V4/V6 IP address
+  buffer
+  hostname_or_ip_len 0 for host name, 4/16 for ip address
+  errptr             if we fail, we'll return (a pointer to a string
+  describing) the reason here
+
+  RETURN VALUES
+  false Success
+  true Failed to validate server
+
+*/
+
+static bool ssl_verify_server_cert_san(X509 *server_cert,
+                                       const char *hostname_or_ip,
+                                       size_t hostname_or_ip_len,
+                                       const char **errptr) {
+  bool ret_validation = true;
+
+  DBUG_ENTER("ssl_verify_server_cert_san");
+  *errptr = nullptr;
+  GENERAL_NAMES *const sans = static_cast<GENERAL_NAMES *>(
+      X509_get_ext_d2i(server_cert, NID_subject_alt_name, nullptr, nullptr));
+  if (sans == nullptr) DBUG_RETURN(ret_validation);
+
+  const int number_of_sans = sk_GENERAL_NAME_num(sans);
+  for (int i = 0; ret_validation != 0 && i < number_of_sans; ++i) {
+    GENERAL_NAME *san = sk_GENERAL_NAME_value(sans, i);
+    if (san == nullptr) {
+      *errptr = "Failed to get item from SAN list";
+      goto error;
+    }
+    if (hostname_or_ip_len == 0) {
+      /* server host name was provided, check only GEN_DNS entries */
+      if (san->type == GEN_DNS) {
+        ret_validation =
+            ssl_cmp_san_dns_name(san->d.dNSName, hostname_or_ip, errptr);
+        if (*errptr != nullptr) goto error;
+      }
+    } else {
+      /* server IP address was provided, check only GEN_IPADD entries */
+      if (san->type == GEN_IPADD) {
+        ret_validation = ssl_cmp_san_ip_address(
+            san->d.iPAddress,
+            reinterpret_cast<const unsigned char *>(hostname_or_ip),
+            hostname_or_ip_len, errptr);
+        if (*errptr != NULL) goto error;
+      }
+    }
+  } /* iterating over SAN enries */
+
+error:
+  GENERAL_NAMES_free(sans);
+
+  DBUG_RETURN(ret_validation);
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
 
 /**
   Get the current SSL session serialization
@@ -3644,20 +3958,21 @@ bool STDCALL mysql_get_ssl_session_reused(MYSQL *mysql) {
    1 Failed to validate server
 
  */
-
 static int ssl_verify_server_cert(Vio *vio, const char *server_hostname,
                                   const char **errptr) {
   SSL *ssl;
   X509 *server_cert = nullptr;
-  int ret_validation = 1;
-
-#if !(OPENSSL_VERSION_NUMBER >= 0x10002000L)
-  int cn_loc = -1;
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
   char *cn = nullptr;
+  int cn_loc = -1;
   ASN1_STRING *cn_asn1 = nullptr;
   X509_NAME_ENTRY *cn_entry = nullptr;
   X509_NAME *subject = nullptr;
+  const unsigned char *ipout = nullptr;
+  size_t iplen = 0;
 #endif
+  ASN1_OCTET_STRING *server_ip_address = nullptr;
+  int ret_validation = 1;
 
   DBUG_TRACE;
   DBUG_PRINT("enter", ("server_hostname: %s", server_hostname));
@@ -3697,50 +4012,69 @@ static int ssl_verify_server_cert(Vio *vio, const char *server_hostname,
   */
   ret_validation = 0;
 #else  /* OPENSSL_VERSION_NUMBER < 0x10002000L */
-  /*
-     OpenSSL prior to 1.0.2 do not support X509_check_host() function.
-     Use deprecated X509_get_subject_name() instead.
-  */
-  subject = X509_get_subject_name((X509 *)server_cert);
-  // Find the CN location in the subject
-  cn_loc = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
-  if (cn_loc < 0) {
-    *errptr = "Failed to get CN location in the certificate subject";
-    goto error;
+  /* Checking if the provided server_hostname is a V4/V6 IP address */
+  server_ip_address = a2i_IPADDRESS(server_hostname);
+  if (server_ip_address != nullptr) {
+    iplen = ASN1_STRING_length(server_ip_address);
+    ipout = (const unsigned char *)ASN1_STRING_data(server_ip_address);
   }
 
-  // Get the CN entry for given location
-  cn_entry = X509_NAME_get_entry(subject, cn_loc);
-  if (cn_entry == nullptr) {
-    *errptr = "Failed to get CN entry using CN location";
-    goto error;
-  }
+  ret_validation = ssl_verify_server_cert_san(
+      server_cert, iplen != 0 ? (const char *)ipout : server_hostname, iplen,
+      errptr);
+  if (*errptr != nullptr) goto error;
+  if (ret_validation != 0) {
+    /*
+      OpenSSL prior to 1.0.2 do not support X509_check_host() function.
+      Use deprecated X509_get_subject_name() instead.
+    */
+    subject = X509_get_subject_name(server_cert);
+    // Find the CN location in the subject
+    cn_loc = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
+    if (cn_loc < 0) {
+      *errptr = "Failed to get CN location in the certificate subject";
+      goto error;
+    }
 
-  // Get CN from common name entry
-  cn_asn1 = X509_NAME_ENTRY_get_data(cn_entry);
-  if (cn_asn1 == nullptr) {
-    *errptr = "Failed to get CN from CN entry";
-    goto error;
-  }
+    // Get the CN entry for given location
+    cn_entry = X509_NAME_get_entry(subject, cn_loc);
+    if (cn_entry == nullptr) {
+      *errptr = "Failed to get CN entry using CN location";
+      goto error;
+    }
 
-  cn = (char *)ASN1_STRING_data(cn_asn1);
+    // Get CN from common name entry
+    cn_asn1 = X509_NAME_ENTRY_get_data(cn_entry);
+    if (cn_asn1 == nullptr) {
+      *errptr = "Failed to get CN from CN entry";
+      goto error;
+    }
 
-  // There should not be any NULL embedded in the CN
-  if ((size_t)ASN1_STRING_length(cn_asn1) != strlen(cn)) {
-    *errptr = "NULL embedded in the certificate CN";
-    goto error;
-  }
+    cn = reinterpret_cast<char *>(ASN1_STRING_data(cn_asn1));
+    if (cn == nullptr) {
+      *errptr = "Failed to get data from CN";
+      goto error;
+    }
 
-  DBUG_PRINT("info", ("Server hostname in cert: %s", cn));
-  if (!strcmp(cn, server_hostname)) {
-    /* Success */
-    ret_validation = 0;
+    // There should not be any NULL embedded in the CN
+    if (static_cast<size_t>(ASN1_STRING_length(cn_asn1)) != strlen(cn)) {
+      *errptr = "NULL embedded in the certificate CN";
+      goto error;
+    }
+
+    DBUG_PRINT("info", ("Server hostname in cert: %s", cn));
+    if (!strcmp(cn, server_hostname)) {
+      /* Success */
+      ret_validation = 0;
+    }
   }
 #endif /* OPENSSL_VERSION_NUMBER >= 0x10002000L */
 
-  *errptr = "SSL certificate validation success";
+  *errptr = ret_validation != 0 ? "SSL certificate validation failure" : "";
 
 error:
+  if (server_ip_address != nullptr) ASN1_OCTET_STRING_free(server_ip_address);
+
   if (server_cert != nullptr) X509_free(server_cert);
   return ret_validation;
 }
@@ -4066,14 +4400,10 @@ extern "C" auth_plugin_t win_auth_client_plugin;
 
 #if defined(CLIENT_PROTOCOL_TRACING) && defined(TEST_TRACE_PLUGIN) && \
     !defined(NDEBUG)
-extern auth_plugin_t test_trace_plugin;
+extern "C" auth_plugin_t test_trace_plugin;
 #endif
 
 struct st_mysql_client_plugin *mysql_client_builtins[] = {
-#if !defined(WITHOUT_MYSQL_NATIVE_PASSWORD) || \
-    WITHOUT_MYSQL_NATIVE_PASSWORD == 0
-    (struct st_mysql_client_plugin *)&native_password_client_plugin,
-#endif
     (struct st_mysql_client_plugin *)&clear_password_client_plugin,
     (struct st_mysql_client_plugin *)&sha256_password_client_plugin,
     (struct st_mysql_client_plugin *)&caching_sha2_password_client_plugin,
@@ -5517,6 +5847,7 @@ void mpvio_info(Vio *vio, MYSQL_PLUGIN_VIO_INFO *info) {
       info->socket = (int)vio_fd(vio);
       return;
     case VIO_TYPE_SSL: {
+      info->is_tls_established = true;
       struct sockaddr addr;
       socklen_t addrlen = sizeof(addr);
       if (getsockname(vio_fd(vio), &addr, &addrlen)) return;
@@ -5752,13 +6083,34 @@ static mysql_state_machine_status authsm_begin_plugin_auth(
       ctx->auth_plugin = client_plugin;
     } else {
       /*
-        If everything else fail we use the built in plugin: caching sha if the
-        server is new enough or native if not.
-      */
-      ctx->auth_plugin = (mysql->server_capabilities & CLIENT_PLUGIN_AUTH)
-                             ? &caching_sha2_password_client_plugin
-                             : &native_password_client_plugin;
-      ctx->auth_plugin_name = ctx->auth_plugin->name;
+       * before we go here, the following happens:
+       * a. in csm_parse_handshake(),
+       *    if server has CLIENT_PLUGIN_AUTH,
+       *    ctx->scramble_plugin is taken from Server Greetings
+       *    otherwise it is set to "mysql_native_password"
+       * b. ctx->scramble_plugin is passed as data_plugin arg
+       *    into run_plugin_auth()
+       * c. run_plugin_auth() assigns data_plugin arg to ctx->data_plugin
+       *
+       * and we have to find/load the plugin indicated
+       */
+      if (mysql->server_capabilities & CLIENT_PLUGIN_AUTH) {
+        // what is a scenario we could get here ?
+        // maybe new plugin (not existing now) which is a default
+        // on server and it is unknown to client
+        ctx->auth_plugin = &caching_sha2_password_client_plugin;
+        ctx->auth_plugin_name = ctx->auth_plugin->name;
+      } else if (ctx->data_plugin &&
+                 (client_plugin = (auth_plugin_t *)mysql_client_find_plugin(
+                      mysql, ctx->data_plugin,
+                      MYSQL_CLIENT_AUTHENTICATION_PLUGIN))) {
+        ctx->auth_plugin_name = ctx->data_plugin;
+        ctx->auth_plugin = client_plugin;
+      } else {
+        // some abnormal case, we should not get here
+        assert(ctx->auth_plugin_name);
+        assert(ctx->auth_plugin);
+      }
     }
   }
 
@@ -6997,6 +7349,9 @@ static mysql_state_machine_status csm_parse_handshake(
         ctx->scramble_plugin = const_cast<char *>("");
       }
     } else {
+      /**
+        old server with no CLIENT_PLUGIN_AUTH support, so assume native auth
+      */
       ctx->scramble_data_len = (int)(pkt_end - ctx->scramble_data);
       ctx->scramble_plugin = MYSQL_NATIVE_PASSWORD_PLUGIN_NAME;
     }
@@ -7218,6 +7573,11 @@ bool mysql_reconnect(MYSQL *mysql) {
   }
   mysql_init(&tmp_mysql);
   mysql_close_free_options(&tmp_mysql);
+  /* Guarantee the extension struct exists before the shallow copy so that
+     mysql_real_connect's ENSURE_EXTENSIONS_PRESENT is a no-op and does not
+     allocate a new extension that would be leaked if mysql_set_character_set
+     fails (the error path does memset before mysql_close). */
+  ENSURE_EXTENSIONS_PRESENT(&mysql->options);
   tmp_mysql.options = mysql->options;
   tmp_mysql.options.my_cnf_file = tmp_mysql.options.my_cnf_group = nullptr;
 #ifdef MYSQL_SERVER
@@ -9531,9 +9891,7 @@ const char *STDCALL mysql_sqlstate(MYSQL *mysql) {
   </li>
   <li>
   Client side requires nothing from the server. But the server generates
-  and sends a 20-byte
-  @ref page_protocol_connection_phase_authentication_methods_native_password_authentication
-  compatible scramble.
+  and sends a 20-byte mysql_native_password compatible scramble.
   </li>
   <li>
   Client side sends the password in clear text to the server
@@ -9551,8 +9909,7 @@ const char *STDCALL mysql_sqlstate(MYSQL *mysql) {
   sending @ref page_protocol_connection_phase_packets_protocol_handshake
   and that one has a placeholder for authentication plugin dependent data the
   server does fill that space with a scramble should it come to pass that
-  it will back down to
-  @ref page_protocol_connection_phase_authentication_methods_native_password_authentication.
+  it will back down to mysql_native_password.
   This is also why it's OK no to specifically read this in
   @ref clear_password_auth_client since it's already read as a part of
   the initial exchange.
@@ -9583,6 +9940,8 @@ const char *fieldtype2str(enum enum_field_types type) {
       return "BIT";
     case MYSQL_TYPE_BLOB:
       return "BLOB";
+    case MYSQL_TYPE_VECTOR:
+      return "VECTOR";
     case MYSQL_TYPE_BOOL:
       return "BOOLEAN";
     case MYSQL_TYPE_DATE:

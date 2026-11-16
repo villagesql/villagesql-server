@@ -187,12 +187,10 @@ class TupleS {
 
  public:
   TupleS() {
-    m_currentTable = 0;
-    allAttrData = 0;
+    m_currentTable = nullptr;
+    allAttrData = nullptr;
   }
-  ~TupleS() {
-    if (allAttrData) delete[] allAttrData;
-  }
+  ~TupleS() { delete[] allAttrData; }
   TupleS(const TupleS &tuple);  // disable copy constructor
   TupleS &operator=(const TupleS &tuple);
   int getNoOfAttributes() const;
@@ -272,7 +270,7 @@ class TableS {
 
   int getNoOfAttributes() const { return allAttributesDesc.size(); }
 
-  bool have_auto_inc() const { return m_auto_val_attrib != 0; }
+  bool have_auto_inc() const { return m_auto_val_attrib != nullptr; }
 
   bool have_auto_inc(Uint32 id) const {
     return (m_auto_val_attrib ? m_auto_val_attrib->attrId == id : false);
@@ -306,7 +304,9 @@ class TableS {
    * Returns true if a table contains blobs, or is
    * a Blob parts table
    */
-  bool isBlobRelated() const { return (m_has_blobs || m_main_table != NULL); }
+  bool isBlobRelated() const {
+    return (m_has_blobs || m_main_table != nullptr);
+  }
 
   inline bool isBroken() const {
     return m_broken || (m_main_table && m_main_table->isBroken());
@@ -336,7 +336,7 @@ class TableS {
     return false;
   }
 
-  const Vector<TableS *> getBlobTables() { return m_blobTables; }
+  Vector<TableS *> getBlobTables() { return m_blobTables; }
 
   bool m_staging;
   BaseString m_stagingName;
@@ -453,7 +453,7 @@ class BackupFile {
   const char *getFilename() const { return m_fileName; }
   Uint32 getNodeId() const { return m_nodeId; }
   const BackupFormat::FileHeader &getFileHeader() const { return m_fileHeader; }
-  bool Twiddle(const AttributeDesc *const attr_desc, AttributeData *attr_data);
+  bool Twiddle(const AttributeDesc *attr_desc, AttributeData *attr_data);
 
   Uint64 get_file_size() const { return m_file_size; }
   /**
@@ -472,7 +472,7 @@ class BackupFile {
   static const Uint32 DEFAULT_BUFFER_SIZE = 128 * 1024;
 
  private:
-  void twiddle_atribute(const AttributeDesc *const attr_desc,
+  void twiddle_atribute(const AttributeDesc *attr_desc,
                         AttributeData *attr_data);
 };
 
@@ -547,7 +547,7 @@ class RestoreDataIterator : public BackupFile {
   bool readFragmentHeader(int &res, Uint32 *fragmentId);
   bool validateFragmentFooter();
 
-  const TupleS *getNextTuple(int &res, const bool skipFragment);
+  const TupleS *getNextTuple(int &res, bool skipFragment);
   TableS *getCurrentTable();
 
  private:
@@ -654,7 +654,7 @@ class RestoreLogger {
 
  private:
   void vlog_ll(FilteredNdbOut &out, const char *ll, const char *fmt, va_list ap)
-      ATTRIBUTE_FORMAT(printf, 3, 0);
+      ATTRIBUTE_FORMAT(printf, 4, 0);
 
   NdbMutex *m_mutex;
   char timestamp[64];

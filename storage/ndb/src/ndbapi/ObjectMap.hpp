@@ -158,9 +158,8 @@ inline void *NdbObjectIdMap::getObject(Uint32 id) const {
   if (id < m_size) {
     if (m_map[id].isFree()) {
       return nullptr;
-    } else {
-      return m_map[id].getObj();
     }
+    return m_map[id].getObj();
   }
   return nullptr;
 }

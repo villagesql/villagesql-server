@@ -48,7 +48,7 @@ static const std::error_category &tls_cert_category() noexcept {
     }
   };
 
-  static category_impl instance;
+  static category_impl const instance;
   return instance;
 }
 
@@ -74,7 +74,7 @@ static const std::error_category &tls_ssl_category() noexcept {
     }
   };
 
-  static category_impl instance;
+  static category_impl const instance;
   return instance;
 }
 
@@ -93,7 +93,7 @@ const std::error_category &tls_err_category() noexcept {
     }
   };
 
-  static category_impl instance;
+  static category_impl const instance;
   return instance;
 }
 

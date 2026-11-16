@@ -21,16 +21,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/// @defgroup GroupLibsMysql MySQL Libraries
-
-/// @defgroup GroupLibsMysqlBinlog MySQL Libraries : Binlog Libraries
-/// @ingroup GroupLibsMysql
-
-/// @defgroup GroupLibsMysqlBinlogEvent MySQL Libraries : Binlog Event
-/// @ingroup GroupLibsMysqlBinlog
-
 /**
-  @file binlog_event.h
+  @file
 
   @brief Contains the classes representing events occurring in the replication
   stream. Each event is represented as a byte sequence with logical divisions
@@ -149,7 +141,8 @@
    1U + 8 /* type, xid of DDL */ + 1U +                                       \
    2 /* type, default_collation_for_utf8mb4_number */ + 1U +                  \
    1 /* sql_require_primary_key */ + 1U +                                     \
-   1 /* type, default_table_encryption */)
+   1 /* type, default_table_encryption */ + 1U +                              \
+   1 /* type, enable_cascade_triggers */)
 
 /**
    Uninitialized timestamp value (for either last committed or sequence number).
@@ -376,6 +369,10 @@ enum Log_event_type {
     Add new events here - right above this comment!
     Existing events (except ENUM_END_EVENT) should never change their numbers
   */
+
+  /* New MySQL events are to be added right above this comment */
+  MYSQL_END_EVENT,
+
   ENUM_END_EVENT /* end marker */
 };
 
@@ -401,14 +398,14 @@ struct Log_event_type_helper {
   }
 };
 
-/**
-  Struct to pass basic information about a event: type, query, is it ignorable
-*/
+/// Holds basic information about an event: common-header fields, query, etc.
 struct Log_event_basic_info {
   Log_event_type event_type{UNKNOWN_EVENT};
   const char *query{nullptr};
   size_t query_length{0};
   bool ignorable_event{false};
+  int32_t log_pos{0};
+  int32_t server_id{0};
 };
 
 /**
@@ -754,7 +751,14 @@ class Log_event_header {
     @return True if the event object is valid, false otherwise.
   */
 
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#endif
   bool get_is_valid() { return m_is_valid; }
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
 
   /**
     Set if the event object shall be considered valid or not.
@@ -861,9 +865,11 @@ class Binary_log_event {
   /*
      The number of types we handle in Format_description_event (UNKNOWN_EVENT
      is not to be handled, it does not exist in binlogs, it does not have a
-     format).
+     format - unless it's START_5_7_ENCRYPTION_EVENT - then
+     Format_description_event is not aware of it. That's OK as this event never
+     leaves the server - it's not sent to slave).
   */
-  static const int LOG_EVENT_TYPES = (ENUM_END_EVENT - 1);
+  static constexpr int LOG_EVENT_TYPES = (MYSQL_END_EVENT - 1);
 
   /**
     The lengths for the fixed data part of each event.

@@ -27,6 +27,10 @@ IF(MY_COMPILER_IS_CLANG)
   STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-deprecated")
 ENDIF()
 
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
+  ADD_COMPILE_FLAGS(test_next_available.cc test_classic_quit_sender.cc COMPILE_FLAGS "-Wno-restrict")
+ENDIF()
+
 # routing-library as object-lib for testing
 STATICLIB_FROM_TARGET(routing_export_all routing)
 TARGET_COMPILE_DEFINITIONS(routing_export_all
@@ -37,10 +41,8 @@ SET(test_files
   test_block_clients.cc
   # test_connection.cc
   test_connection_container.cc
-  test_first_available.cc
   test_metadata_cache_group.cc
-  test_next_available.cc
-  test_round_robin.cc
+  test_static_routing.cc
   test_routing.cc
   test_setup_named_socket_service.cc
   test_setup_tcp_service.cc
@@ -88,7 +90,7 @@ TARGET_COMPILE_DEFINITIONS(${T}
 # error: __builtin_memcpy reading 106 bytes from a region of size 16
 # for socket_name = make_string(MAX_SOCKET_NAME_LEN - 1); in test_plugin.cc
 IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 11)
-  MY_TARGET_LINK_OPTIONS(${T} "-Wno-stringop-overread")
+  TARGET_LINK_OPTIONS(${T} PRIVATE -Wno-stringop-overread)
 ENDIF()
 
 ADD_ROUTER_TEST_FILE(
@@ -97,10 +99,10 @@ ADD_ROUTER_TEST_FILE(
   LIB_DEPENDS
     mysql_protocol
     test-helpers
-    mysqlxclient_lite
-    mysqlxmessages_lite
+    router_mysqlxclient
+    router_mysqlxmessages
     connection_pool
-    ext::libprotobuf-lite
+    ext::libprotobuf
     routing_connections
   INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/../src
@@ -122,9 +124,10 @@ IF(LIBFUZZER_COMPILE_FLAGS)
     fuzz_show_warnings.cc
     ../src/show_warnings_parser.cc
     ../src/sql_lexer.cc
+    ../src/sql_lexer_thd.cc
     ${CMAKE_SOURCE_DIR}/sql/sql_lex_hash.cc
     COMPONENT Router
-    DEPENDENCIES GenServerSource
+    DEPENDENCIES GenServerSource GenError
     LINK_LIBRARIES harness_stdx;mysys
     SKIP_INSTALL
     )
@@ -134,9 +137,10 @@ IF(LIBFUZZER_COMPILE_FLAGS)
   MYSQL_ADD_EXECUTABLE(routertest_fuzz_routing_sql_lexer
     fuzz_sql_lexer.cc
     ../src/sql_lexer.cc
+    ../src/sql_lexer_thd.cc
     ${CMAKE_SOURCE_DIR}/sql/sql_lex_hash.cc
     COMPONENT Router
-    DEPENDENCIES GenServerSource
+    DEPENDENCIES GenServerSource GenError
     LINK_LIBRARIES harness_stdx;mysys
     SKIP_INSTALL
     )

@@ -1,6 +1,8 @@
 --source include/villagesql/too_old_upgrade.inc
 --source include/not_valgrind.inc
 --source include/have_debug_sync.inc
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
 
 CALL mtr.add_suppression("Storage engine '.*' does not support system tables. \\[mysql.*\\]");
 CALL mtr.add_suppression("Column count of mysql.* is wrong. "
@@ -200,7 +202,7 @@ DROP USER u1a@h, u2a@h, u3a@h;
 --echo # A.4. Checking lock-wait-timeout with SET PASSWORD.
 --echo ########################################################################
 
-CREATE USER u1@h IDENTIFIED WITH 'mysql_native_password';
+CREATE USER u1@h IDENTIFIED WITH 'caching_sha2_password';
 
 # Check that the user has been created.
 SELECT user, host FROM mysql.user WHERE host = 'h';
@@ -241,8 +243,7 @@ ROLLBACK;
 --connection default
 
 # Check the SET PASSWORD was successful.
-SELECT user, host, authentication_string = '*3D56A309CD04FA2EEF181462E59011F075C89548' FROM mysql.user WHERE host = 'h';
-
+SELECT user, host, LENGTH(authentication_string)>0 FROM mysql.user WHERE host = 'h';
 # Drop the created users (cleanup).
 DROP USER u1@h;
 
@@ -2182,9 +2183,12 @@ call mtr.add_suppression("mysql.user has no `Event_priv` column at position 28")
 --echo
 --echo # Starting mysqld in the regular mode...
 --echo
---let $restart_parameters =
+--let $restart_parameters = restart:--loose-percona-telemetry-disable=1
 
 --source include/start_mysqld.inc
+
+# Start will restore the gtid_mode to ON so setting it to OFF again
+--source include/rpl/set_gtid_mode_off.inc
 
 --echo
 --echo # Check that any ACL statement is failed when privilege tables
@@ -2219,9 +2223,12 @@ ORDER BY table_name;
 # Filter out ndb_binlog_index to mask differences due to running with or
 # without ndb. Always report check-for-upgrade status as OK, as it depends
 # on the order in which tests are run.
---let $restart_parameters = restart:--upgrade=FORCE
+--let $restart_parameters = restart:--upgrade=FORCE --loose-percona-telemetry-disable=1
 --let $wait_counter= 10000
 --source include/restart_mysqld.inc
+
+# Restart will restore the gtid_mode to ON so setting it to OFF again
+--source include/rpl/set_gtid_mode_off.inc
 
 --echo
 --echo # The ACL tables must have been upgraded.
@@ -2322,3 +2329,5 @@ WHERE state = 'Waiting for table metadata lock' AND
 
 DROP USER u1;
 DROP TABLE t1;
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

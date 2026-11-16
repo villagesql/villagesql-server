@@ -34,7 +34,7 @@ bool printSCAN_FRAGREQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const ScanFragReq *const sig = (const ScanFragReq *)theData;
+  const auto *const sig = (const ScanFragReq *)theData;
   fprintf(output, " senderData: 0x%x\n", sig->senderData);
   fprintf(output, " resultRef: 0x%x\n", sig->resultRef);
   fprintf(output, " savePointId: %u\n", sig->savePointId);
@@ -83,8 +83,7 @@ bool printSCAN_FRAGREQ(FILE *output, const Uint32 *theData, Uint32 len,
 
 bool printSCAN_FRAGCONF(FILE *output, const Uint32 *theData, Uint32 len,
                         Uint16 /*receiverBlockNo*/) {
-  const ScanFragConf *const sig =
-      reinterpret_cast<const ScanFragConf *>(theData);
+  const auto *const sig = reinterpret_cast<const ScanFragConf *>(theData);
   fprintf(output, " senderData: 0x%x\n", sig->senderData);
   fprintf(output, " completedOps: %u\n", sig->completedOps);
   fprintf(output, " fragmentCompleted: 0x%x\n", sig->fragmentCompleted);

@@ -30,7 +30,7 @@
 #include <system_error>
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
-  std::string auth_hdr(Data, Data + Size);
+  std::string const auth_hdr(Data, Data + Size);
 
   std::error_code ec;
 

@@ -29,7 +29,7 @@
 #include <mysql/components/services/udf_registration.h>
 #include <mysql/plugin.h>
 #include <mysql_version.h>
-#include <stddef.h>
+#include <cstddef>
 
 REQUIRES_SERVICE_PLACEHOLDER(host_application_signal) = nullptr;
 REQUIRES_SERVICE_PLACEHOLDER(udf_registration) = nullptr;

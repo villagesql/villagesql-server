@@ -15,7 +15,7 @@ set names utf8mb3;
 #
 # Check trailing spaces
 #
-set collation_connection=utf8_unicode_ci;
+set collation_connection=utf8mb3_unicode_ci;
 
 select 'a' = 'a', 'a' = 'a ', 'a ' = 'a';
 
@@ -364,7 +364,7 @@ FROM t1 ORDER BY a, offs, BINARY a;
 DROP TABLE t1;
 
 SET @test_character_set= 'utf8mb3';
-SET @test_collation= 'utf8_swedish_ci';
+SET @test_collation= 'utf8mb3_swedish_ci';
 -- source include/ctype_common.inc
 
 #
@@ -375,7 +375,7 @@ insert into t1 values ('A'),('B'),('C'),('a'),('b'),('c');
 select a, a regexp '[a]' from t1 order by binary a;
 drop table t1;
 
-SET collation_connection='utf8_unicode_ci';
+SET collation_connection='utf8mb3_unicode_ci';
 -- source include/ctype_filesort.inc
 -- source include/ctype_like_escape.inc
 -- source include/ctype_german.inc
@@ -457,18 +457,36 @@ set names utf8mb3;
 -- echo End for 5.0 tests
 --echo End of 5.1 tests
 
+
 --echo #
 --echo # Start of 5.5 tests
 --echo #
 #
 # Test my_like_range and contractions
 #
-SET collation_connection=utf8_czech_ci;
+SET collation_connection=utf8mb3_czech_ci;
 --source include/ctype_czech.inc
 --source include/ctype_like_ignorable.inc
 SET collation_connection=ucs2_czech_ci;
 --source include/ctype_czech.inc
 --source include/ctype_like_ignorable.inc
+
+--echo #
+--echo # MDEV-7649 wrong result when comparing utf8 column with an invalid literal
+--echo #
+
+# CREATE TABLE ... SELECT on MEMORY and MyISAM tables doesn't work in GTID mode.
+--source include/rpl/set_gtid_mode_off.inc
+
+SET NAMES utf8mb3 COLLATE utf8mb3_unicode_ci;
+--let ENGINE=MyISAM
+--source include/ctype_utf8_ilseq.inc
+--let ENGINE=HEAP
+--source include/ctype_utf8_ilseq.inc
+
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc
+
 --echo #
 --echo # End of 5.5 tests
 --echo #
@@ -486,11 +504,11 @@ set collation_connection=ucs2_unicode_ci;
 --source include/weight_string.inc
 --source include/weight_string_euro.inc
 
-set @@collation_connection=utf8_unicode_ci;
+set @@collation_connection=utf8mb3_unicode_ci;
 --source include/weight_string.inc
 --source include/weight_string_euro.inc
 
-set @@collation_connection=utf8_czech_ci;
+set @@collation_connection=utf8mb3_czech_ci;
 --source include/weight_string_chde.inc
 
 set @@collation_connection=ucs2_czech_ci;
@@ -512,7 +530,7 @@ DROP TABLE t1;
 --echo #
 --echo # WL#4013 Unicode german2 collation
 --echo #
-SET collation_connection=utf8_german2_ci;
+SET collation_connection=utf8mb3_german2_ci;
 --source include/ctype_german.inc
 
 --echo #
@@ -533,7 +551,7 @@ SET NAMES utf8mb4 COLLATE utf8mb4_unicode_520_ci;
 --source include/restart_mysqld.inc
 
 --echo # Check whether the new collation is loaded after restart
-SHOW COLLATION LIKE 'utf8_test';
+SHOW COLLATION LIKE 'utf8mb3_test';
 
 --echo # Create a table with the unknown collation.
 --error ER_UNKNOWN_COLLATION
@@ -541,7 +559,7 @@ CREATE TABLE t1(id INT PRIMARY KEY, c CHAR(1) COLLATE utf8mb3_test);
 
 --echo # Below error is caused as a result of this test. The error message
 --echo # contains collation name which is added as a part of the fix.
-call mtr.add_suppression("Shift expected at '' for COLLATION : utf8_test");
+call mtr.add_suppression("Shift expected at '' for COLLATION : utf8mb3_test");
 
 # Cleanup
 --echo #

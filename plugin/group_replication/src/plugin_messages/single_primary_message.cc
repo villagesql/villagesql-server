@@ -30,7 +30,6 @@
 Single_primary_message::Single_primary_message(Single_primary_message_type type)
     : Plugin_gcs_message(CT_SINGLE_PRIMARY_MESSAGE),
       single_primary_message_type(type),
-      primary_uuid(""),
       election_mode(ELECTION_MODE_END) {}
 
 Single_primary_message::Single_primary_message(std::string &uuid,
@@ -44,7 +43,6 @@ Single_primary_message::~Single_primary_message() = default;
 
 Single_primary_message::Single_primary_message(const uchar *buf, size_t len)
     : Plugin_gcs_message(CT_SINGLE_PRIMARY_MESSAGE),
-      primary_uuid(""),
       election_mode(ELECTION_MODE_END) {
   decode(buf, len);
 }
@@ -68,9 +66,7 @@ void Single_primary_message::decode_payload(const unsigned char *buffer,
   single_primary_message_type =
       (Single_primary_message_type)single_primary_message_type_aux;
 
-  while (slider <= end &&
-         static_cast<size_t>(end - slider) >=
-             Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE) {
+  while (slider + Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE <= end) {
     // Read payload item header to find payload item length.
     decode_payload_item_type_and_length(&slider, &payload_item_type,
                                         &payload_item_length);
@@ -115,7 +111,7 @@ void Single_primary_message::encode_payload(
     std::vector<unsigned char> *buffer) const {
   DBUG_TRACE;
 
-  uint16 single_primary_message_type_aux = (uint16)single_primary_message_type;
+  auto single_primary_message_type_aux = (uint16)single_primary_message_type;
   encode_payload_item_int2(buffer, PIT_SINGLE_PRIMARY_MESSAGE_TYPE,
                            single_primary_message_type_aux);
 

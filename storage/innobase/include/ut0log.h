@@ -274,7 +274,7 @@ class fatal : public logger {
 #endif /* !UNIV_NO_ERR_MSGS */
 
   /** Destructor. */
-  ~fatal() override;
+  [[noreturn]] ~fatal() override;
 
  private:
   /** Location of the original caller to report to assertion failure */

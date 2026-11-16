@@ -88,7 +88,8 @@ bool Sql_cmd_alter_table_exchange_partition::execute(THD *thd) {
   */
   const HA_CREATE_INFO create_info(*lex->create_info);
   Alter_info alter_info(*m_alter_info, thd->mem_root);
-  const ulong priv_needed = ALTER_ACL | DROP_ACL | INSERT_ACL | CREATE_ACL;
+  const Access_bitmask priv_needed =
+      ALTER_ACL | DROP_ACL | INSERT_ACL | CREATE_ACL;
 
   DBUG_TRACE;
 
@@ -112,7 +113,7 @@ bool Sql_cmd_alter_table_exchange_partition::execute(THD *thd) {
   /* Not allowed with EXCHANGE PARTITION */
   assert(!create_info.data_file_name && !create_info.index_file_name);
 
-  thd->enable_slow_log = opt_log_slow_admin_statements;
+  thd->set_slow_log_for_admin_command();
   return exchange_partition(thd, first_table, &alter_info);
 }
 

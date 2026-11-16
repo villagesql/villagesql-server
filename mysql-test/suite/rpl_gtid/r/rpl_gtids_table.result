@@ -77,6 +77,8 @@ MASTER_UUID	1	8
 BEGIN;
 INSERT INTO t2 VALUES(2);
 INSERT INTO t1 VALUES(1);
+Warnings:
+Warning	6414	Combining the storage engines InnoDB and MyISAM is deprecated, but the statement or transaction updates both the InnoDB table test.t1 and the MyISAM table test.t2.
 INSERT INTO t1 VALUES(2);
 COMMIT;
 #
@@ -115,6 +117,7 @@ FLUSH LOGS;
 SELECT * FROM mysql.gtid_executed;
 source_uuid	interval_start	interval_end	gtid_tag
 MASTER_UUID	1	11	
+SET DEBUG_SYNC= 'RESET';
 SET GLOBAL DEBUG= @debug_save;
 include/rpl/sync_to_replica.inc
 #

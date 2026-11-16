@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <gtest/gtest.h>
-#include <item.h>
+#include <sql/item.h>
 #include "my_config.h"
 
 #include "test_utils.h"
@@ -36,18 +36,10 @@ class ItemParamTest : public ::testing::Test {
     m_initializer.SetUp();
     // An Item expects to be owned by current_thd->free_list, so allocate with
     // new, and do not delete it.
-    m_item_param = new Item_param(POS(), 1);
   }
 
   void TearDown() override { m_initializer.TearDown(); }
 
   Server_initializer m_initializer;
-  Item_param *m_item_param;
 };
-
-TEST_F(ItemParamTest, convert_str_value) {
-  m_item_param->state = Item_param::LONG_DATA_VALUE;
-  m_item_param->value.cs_info.final_character_set_of_str_value = NULL;
-  EXPECT_TRUE(m_item_param->convert_str_value(m_initializer.thd()));
-}
 }  // namespace item_param_unittest

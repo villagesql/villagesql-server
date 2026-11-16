@@ -114,7 +114,7 @@ int PluginInfoFrontend::run() {
       break;
   }
 
-  auto &rest_args = arg_handler_.get_rest_arguments();
+  const auto &rest_args = arg_handler_.get_rest_arguments();
   auto rest_args_count = rest_args.size();
 
   if (rest_args_count != 2) {
@@ -125,8 +125,8 @@ int PluginInfoFrontend::run() {
   const std::string plugin_name = rest_args[1];
 
   try {
-    Library_file plugin_file(file_name, plugin_name);
-    uint32_t abi_version = plugin_file.get_abi_version();
+    Library_file const plugin_file(file_name, plugin_name);
+    uint32_t const abi_version = plugin_file.get_abi_version();
 
     if (abi_version > mysql_harness::PLUGIN_ABI_VERSION) {
       throw FrontendError("Unsupported plugin ABI version: " +
@@ -135,8 +135,8 @@ int PluginInfoFrontend::run() {
 
     // all the other versions so far have the same structure from our
     // perspective
-    Plugin_v1 *plugin = plugin_file.get_plugin_struct<Plugin_v1>(plugin_name);
-    Plugin_info plugin_info(*plugin);
+    auto *plugin = plugin_file.get_plugin_struct<Plugin_v1>(plugin_name);
+    Plugin_info const plugin_info(*plugin);
 
     cout_ << plugin_info << std::endl;
 

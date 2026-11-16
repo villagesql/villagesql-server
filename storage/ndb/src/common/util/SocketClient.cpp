@@ -53,7 +53,7 @@ SocketClient::SocketClient(SocketAuthenticator *sa)
 
 SocketClient::~SocketClient() {
   if (ndb_socket_valid(m_sockfd)) ndb_socket_close(m_sockfd);
-  if (m_auth) delete m_auth;
+  delete m_auth;
 }
 
 bool SocketClient::init(int af) {
@@ -111,7 +111,7 @@ int SocketClient::bind(ndb_sockaddr local) {
 #define NONBLOCKERR(E) (E != EINPROGRESS)
 #endif
 
-NdbSocket SocketClient::connect(ndb_sockaddr server_addr) {
+NdbSocket SocketClient::connect(const ndb_sockaddr &server_addr) {
   if (!ndb_socket_valid(m_sockfd)) return {};
 
   // Reset last used port(in case connect fails)

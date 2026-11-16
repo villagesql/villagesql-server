@@ -40,12 +40,12 @@
   Please see errmsg_readme.txt in this directory for more information.
 */
 
-#include <assert.h>
 #include <fcntl.h>
 #include <mysql_version.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <new>
 #include <set>
@@ -68,13 +68,13 @@
 #include "nulls.h"
 #include "prealloced_array.h"
 #include "print_version.h"
+#include "scope_guard.h"
 #include "strxmov.h"
 #include "welcome_copyright_notice.h"
 
 #define MAX_ERROR_NAME_LENGTH 64
 #define HEADER_LENGTH 32 /* Length of header in errmsg.sys */
 #define ERRMSG_VERSION 3 /* Version number of errmsg.sys */
-#define DEFAULT_CHARSET_DIR "../share/charsets"
 #define ER_PREFIX "ER_"
 #define WARN_PREFIX "WARN_"
 #define OBSOLETE_ER_PREFIX "OBSOLETE_ER_"
@@ -201,8 +201,6 @@ static struct my_option my_long_options[] = {
      GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"version", 'V', "Prints version", nullptr, nullptr, nullptr, GET_NO_ARG,
      NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"charset", 'C', "Charset dir", &charsets_dir, &charsets_dir, nullptr,
-     GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"in_file_errlog", 'e', "Input file", &MSGS_ERRLOG, &MSGS_ERRLOG, nullptr,
      GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"in_file_toclient", 'c', "Input file", &MSGS_TO_CLIENT, &MSGS_TO_CLIENT,
@@ -262,7 +260,6 @@ int my_main(int argc, char *argv[]) {
   {
     DBUG_TRACE;
 
-    charsets_dir = DEFAULT_CHARSET_DIR;
     my_umask_dir = 0777;
 
     if ((argc > 1) && get_options(&argc, &argv)) goto done;
@@ -380,7 +377,7 @@ static void print_escaped_string(FILE *f, const char *str) {
   }
 }
 
-std::string get_file_contents(std::string filename) {
+std::string get_file_contents(const std::string &filename) {
   std::ifstream ifs(filename);
   if (!ifs.good()) {
     return "";
@@ -389,8 +386,8 @@ std::string get_file_contents(std::string filename) {
                      std::istreambuf_iterator<char>());
 }
 
-static void compare_and_move_file(std::string source_filename,
-                                  std::string destination_filename) {
+static void compare_and_move_file(const std::string &source_filename,
+                                  const std::string &destination_filename) {
   const auto source_contents = get_file_contents(source_filename);
   const auto destination_contents = get_file_contents(destination_filename);
   if (source_contents == destination_contents) {
@@ -402,28 +399,42 @@ static void compare_and_move_file(std::string source_filename,
 }
 
 static int create_header_files(struct errors *error_head) {
-  FILE *er_definef, *er_namef;
-  FILE *er_errmsg;
+  FILE *er_definef = nullptr;
+  FILE *er_namef = nullptr;
+  FILE *er_errmsg = nullptr;
+
+  auto fcgrd = create_scope_guard([&]() {
+    if (er_definef != nullptr) {
+      my_fclose(er_definef, MYF(0));
+      er_definef = nullptr;
+    }
+    if (er_namef != nullptr) {
+      my_fclose(er_namef, MYF(0));
+      er_namef = nullptr;
+    }
+    if (er_errmsg != nullptr) {
+      my_fclose(er_errmsg, MYF(0));
+      er_errmsg = nullptr;
+    }
+  });
+
   struct errors *tmp_error;
   struct message *er_msg;
   const char *er_text;
 
   DBUG_TRACE;
 
-  std::string headerfile_tmp = std::string(HEADERFILE) + "_tmp";
-  std::string namefile_tmp = std::string(NAMEFILE) + "_tmp";
-  std::string msgfile_tmp = std::string(MSGFILE) + "_tmp";
+  std::string const headerfile_tmp = std::string(HEADERFILE) + "_tmp";
+  std::string const namefile_tmp = std::string(NAMEFILE) + "_tmp";
+  std::string const msgfile_tmp = std::string(MSGFILE) + "_tmp";
 
   if (!(er_definef = my_fopen(headerfile_tmp.c_str(), O_WRONLY, MYF(MY_WME)))) {
     return 1;
   }
   if (!(er_namef = my_fopen(namefile_tmp.c_str(), O_WRONLY, MYF(MY_WME)))) {
-    my_fclose(er_definef, MYF(0));
     return 1;
   }
   if (!(er_errmsg = my_fopen(msgfile_tmp.c_str(), O_WRONLY, MYF(MY_WME)))) {
-    my_fclose(er_definef, MYF(0));
-    my_fclose(er_namef, MYF(0));
     return 1;
   }
 
@@ -580,9 +591,8 @@ static int create_header_files(struct errors *error_head) {
   /* finishing off with mysqld_error.h */
   fprintf(er_definef, "#endif\n");
   fprintf(er_errmsg, "#endif\n");
-  my_fclose(er_definef, MYF(0));
-  my_fclose(er_namef, MYF(0));
-  my_fclose(er_errmsg, MYF(0));
+  // Need to close FILEs before call to compare_and_move_file().
+  fcgrd.reset();
 
   compare_and_move_file(headerfile_tmp, HEADERFILE);
   compare_and_move_file(namefile_tmp, NAMEFILE);
@@ -660,11 +670,11 @@ static int create_sys_files(struct languages *lang_head,
     int4store(head + 10, row_count);
     head[30] = csnum;
 
-    my_fseek(to, 0l, MY_SEEK_SET);
+    my_fseek(to, 0L, MY_SEEK_SET);
     if (my_fwrite(to, (uchar *)head, HEADER_LENGTH, MYF(MY_WME | MY_FNABP)))
       goto err;
 
-    for (uint pos : file_pos) {
+    for (uint const pos : file_pos) {
       int4store(head, pos);
       if (my_fwrite(to, (uchar *)head, 4, MYF(MY_WME | MY_FNABP))) goto err;
     }
@@ -694,7 +704,7 @@ static void clean_up(struct languages *lang_head, struct errors *error_head) {
 
   for (tmp_error = error_head; tmp_error; tmp_error = next_error) {
     next_error = tmp_error->next_error;
-    size_t count = (tmp_error->msg).size();
+    size_t const count = (tmp_error->msg).size();
     for (size_t i = 0; i < count; i++) {
       struct message *tmp;
       tmp = &tmp_error->msg[i];
@@ -809,13 +819,15 @@ static int parse_input_file(const char *file_name, struct errors ***last_error,
         fail = "\n";
         goto done;
       }
+      auto current_message_grd = create_scope_guard([&] {
+        my_free(current_message.lang_short_name);
+        my_free(current_message.text);
+      });
       if (!find_language(*top_lang, current_message.lang_short_name)) {
         fprintf(stderr,
                 "Message string for error '%s'"
                 " in unregistered language '%s'",
                 current_error->er_name, current_message.lang_short_name);
-        my_free(current_message.lang_short_name);
-        my_free(current_message.text);
         fail = "\n";
         goto done;
       }
@@ -837,6 +849,7 @@ static int parse_input_file(const char *file_name, struct errors ***last_error,
         goto done;
       }
       if (current_error->msg.push_back(current_message)) goto done;
+      current_message_grd.release();
       continue;
     }
     if (is_prefix(str, ER_PREFIX) || is_prefix(str, WARN_PREFIX) ||
@@ -866,7 +879,7 @@ done:
   *last_error = tail_error;
 
   my_fclose(file, MYF(0));
-
+  reserved_sections.clear();
   if (fail != nullptr) {
     fputs(fail, stderr);
     return 0;
@@ -876,7 +889,7 @@ done:
 }
 
 static uint parse_error_offset(char *str) {
-  char *soffset;
+  char *soffset = nullptr;
   const char *end;
   int error;
   uint ioffset;
@@ -890,6 +903,7 @@ static uint parse_error_offset(char *str) {
 
   /* reading the error offset */
   if (!(soffset = get_word(&str))) return 0; /* OOM: Fatal error */
+  auto soffset_grd = create_scope_guard([&] { my_free(soffset); });
   DBUG_PRINT("info", ("default_error_offset: %s", soffset));
 
   /* skipping space(s) and/or tabs after the error offset */
@@ -914,7 +928,6 @@ static uint parse_error_offset(char *str) {
     }
   }
 
-  my_free(soffset);
   return ioffset;
 }
 
@@ -941,7 +954,8 @@ static bool parse_reserved_error_section(char *str) {
 
   /* reading the section start number */
   if (!(offset = get_word(&str))) return true; /* OOM: Fatal error */
-  uint sec_start = static_cast<uint>(my_strtoll10(offset, nullptr, &error));
+  uint const sec_start =
+      static_cast<uint>(my_strtoll10(offset, nullptr, &error));
   my_free(offset);
   DBUG_PRINT("info", ("reserved_range_start: %u", sec_start));
 
@@ -952,7 +966,7 @@ static bool parse_reserved_error_section(char *str) {
 
   /* reading the section end number */
   if (!(offset = get_word(&str))) return true; /* OOM: Fatal error */
-  uint sec_end = static_cast<uint>(my_strtoll10(offset, nullptr, &error));
+  uint const sec_end = static_cast<uint>(my_strtoll10(offset, nullptr, &error));
   my_free(offset);
   DBUG_PRINT("info", ("reserved_range_end: %u", sec_end));
 
@@ -989,7 +1003,8 @@ static bool parse_reserved_error_section(char *str) {
 /* Parsing of the default language line. e.g. "default-language eng" */
 
 static char *parse_default_language(char *str) {
-  char *slang;
+  char *slang = nullptr;
+  auto slang_grd = create_scope_guard([&] { my_free(slang); });
 
   DBUG_TRACE;
   /* skipping the "default-language" keyword */
@@ -1014,6 +1029,7 @@ static char *parse_default_language(char *str) {
     return nullptr;
   }
   DBUG_PRINT("info", ("str: %s", str));
+  slang_grd.release();
   return slang;
 }
 
@@ -1057,7 +1073,7 @@ static struct message *find_message(struct errors *err, const char *lang,
   struct message *tmp, *return_val = nullptr;
   DBUG_TRACE;
 
-  size_t count = (err->msg).size();
+  size_t const count = (err->msg).size();
   for (size_t i = 0; i < count; i++) {
     tmp = &err->msg[i];
 
@@ -1095,7 +1111,7 @@ static struct message *find_message(struct errors *err, const char *lang,
 
 static ha_checksum checksum_format_specifier(const char *msg) {
   ha_checksum chksum = 0;
-  const uchar *p = (const uchar *)msg;
+  const auto *p = (const uchar *)msg;
   const uchar *start = nullptr;
   uint32 num_format_specifiers = 0;
   while (*p) {
@@ -1213,6 +1229,12 @@ static struct message *parse_message_string(const struct errors *current_error,
                                             struct message *new_message,
                                             char *str) {
   char *start;
+  new_message->lang_short_name = nullptr;
+  new_message->text = nullptr;
+  auto message_grd = create_scope_guard([&] {
+    my_free(new_message->lang_short_name);
+    my_free(new_message->text);
+  });
 
   DBUG_TRACE;
   DBUG_PRINT("enter", ("str: %s", str));
@@ -1258,6 +1280,7 @@ static struct message *parse_message_string(const struct errors *current_error,
     return nullptr; /* Fatal error */
   DBUG_PRINT("info", ("msg_text: %s", new_message->text));
 
+  message_grd.release();
   return new_message;
 }
 
@@ -1275,7 +1298,19 @@ static struct errors *parse_error_string(char *str, int er_count,
   /* create a new element */
   void *rawmem =
       my_malloc(PSI_NOT_INSTRUMENTED, sizeof(*new_error), MYF(MY_WME));
+  if (rawmem == nullptr) return nullptr;
   new_error = new (rawmem) errors();
+  new_error->er_name = nullptr;
+  new_error->sql_code1 = nullptr;
+  new_error->sql_code2 = nullptr;
+  new_error->next_error = nullptr;
+  auto error_grd = create_scope_guard([&] {
+    my_free(const_cast<char *>(new_error->sql_code1));
+    my_free(const_cast<char *>(new_error->sql_code2));
+    my_free(const_cast<char *>(new_error->er_name));
+    new_error->~errors();
+    my_free(new_error);
+  });
 
   /* getting the error name */
   str = skip_delimiters(str);
@@ -1292,7 +1327,7 @@ static struct errors *parse_error_string(char *str, int er_count,
 
   /* Check if code overlaps with any of the reserved error sections */
   for (auto section : reserved_sections) {
-    uint new_code = static_cast<uint>(er_offset + er_count);
+    uint const new_code = static_cast<uint>(er_offset + er_count);
     if (new_code >= section.first && new_code <= section.second) {
       fprintf(
           stderr,
@@ -1325,6 +1360,7 @@ static struct errors *parse_error_string(char *str, int er_count,
 
   /* if we reached EOL => no more codes, but this can happen */
   if (!*str) {
+    error_grd.release();
     new_error->sql_code1 = empty_string;
     new_error->sql_code2 = empty_string;
     DBUG_PRINT("info", ("str: %s", str));
@@ -1341,6 +1377,7 @@ static struct errors *parse_error_string(char *str, int er_count,
 
   /* if we reached EOL => no more codes, but this can happen */
   if (!*str) {
+    error_grd.release();
     new_error->sql_code2 = empty_string;
     DBUG_PRINT("info", ("str: %s", str));
     return new_error;
@@ -1358,6 +1395,7 @@ static struct errors *parse_error_string(char *str, int er_count,
     return nullptr;
   }
 
+  error_grd.release();
   return new_error;
 }
 
@@ -1380,12 +1418,27 @@ static struct languages *parse_charset_string(char *str) {
   }
 
   str = skip_delimiters(str);
-  if (!(*str != ';' && *str)) return nullptr;
+  if (*str == ';' || !*str) return nullptr;
+
+  auto lang_grd = create_scope_guard([&] {
+    struct languages *tmp_lang, *next_language;
+    for (tmp_lang = head; tmp_lang; tmp_lang = next_language) {
+      next_language = tmp_lang->next_lang;
+      my_free(tmp_lang->lang_short_name);
+      my_free(tmp_lang->lang_long_name);
+      my_free(tmp_lang->charset);
+      my_free(tmp_lang);
+    }
+  });
 
   do {
     /*creating new element of the linked list */
     new_lang = (struct languages *)my_malloc(PSI_NOT_INSTRUMENTED,
                                              sizeof(*new_lang), MYF(MY_WME));
+    if (new_lang == nullptr) return nullptr;
+    new_lang->lang_long_name = nullptr;
+    new_lang->lang_short_name = nullptr;
+    new_lang->charset = nullptr;
     new_lang->next_lang = head;
     head = new_lang;
 
@@ -1414,6 +1467,7 @@ static struct languages *parse_charset_string(char *str) {
   } while (*str != ';' && *str);
 
   DBUG_PRINT("info", ("long name: %s", new_lang->lang_long_name));
+  lang_grd.release();
   return head;
 }
 
@@ -1512,7 +1566,7 @@ static char *parse_text_line(char *pos, bool allow_newline_escape) {
     fprintf(stderr, "Could not find a '\"' on the end of the message\n");
     return nullptr;
   }
-  for (auto end_of_line = pos + 1; *end_of_line; end_of_line++) {
+  for (auto *end_of_line = pos + 1; *end_of_line; end_of_line++) {
     if (*end_of_line != '\n' && *end_of_line != '\r') {
       fprintf(stderr,
               "Unexpected character at the end of the line, expected newline, "

@@ -42,7 +42,6 @@ SET @@GLOBAL.group_replication_preemptive_garbage_collection = default;
 --source include/stop_group_replication.inc
 
 --echo # Take backup of group replication variables
---let $saved_gr_allow_local_lower_version_join = `SELECT @@GLOBAL.group_replication_allow_local_lower_version_join;`
 --let $saved_gr_auto_increment_increment = `SELECT @@GLOBAL.group_replication_auto_increment_increment;`
 --let $saved_gr_bootstrap_group = `SELECT @@GLOBAL.group_replication_bootstrap_group;`
 --let $saved_gr_components_stop_timeout = `SELECT @@GLOBAL.group_replication_components_stop_timeout;`
@@ -92,9 +91,11 @@ SET @@GLOBAL.group_replication_preemptive_garbage_collection = default;
 --let $saved_gr_paxos_single_leader = `SELECT @@GLOBAL.group_replication_paxos_single_leader;`
 --let $saved_group_replication_preemptive_garbage_collection = `SELECT @@GLOBAL.group_replication_preemptive_garbage_collection;`
 --let $saved_group_replication_preemptive_garbage_collection_rows_threshold = `SELECT @@GLOBAL.group_replication_preemptive_garbage_collection_rows_threshold;`
+--let $saved_gr_xcom_ssl_socket_timeout = `SELECT @@GLOBAL.group_replication_xcom_ssl_socket_timeout;`
+--let $saved_gr_xcom_ssl_accept_retries = `SELECT @@GLOBAL.group_replication_xcom_ssl_accept_retries;`
 
 # Total number of GR variables.
---let $total_gr_vars= 61
+--let $total_gr_vars= 66
 
 --echo #
 --echo # Test Unit#1
@@ -124,7 +125,6 @@ SET @@GLOBAL.group_replication_gtid_assignment_block_size= default;
 --error ER_WRONG_VALUE_FOR_VAR
 SET @@GLOBAL.group_replication_ip_allowlist= default;
 
-SET @@GLOBAL.group_replication_allow_local_lower_version_join= default;
 SET @@GLOBAL.group_replication_bootstrap_group= default;
 SET @@GLOBAL.group_replication_components_stop_timeout= default;
 SET @@GLOBAL.group_replication_force_members= default;
@@ -166,6 +166,8 @@ SET @@GLOBAL.group_replication_view_change_uuid= default;
 SET @@GLOBAL.group_replication_communication_stack = default;
 SET @@GLOBAL.group_replication_paxos_single_leader = default;
 SET @@GLOBAL.group_replication_preemptive_garbage_collection_rows_threshold = default;
+SET @@GLOBAL.group_replication_xcom_ssl_socket_timeout = default;
+SET @@GLOBAL.group_replication_xcom_ssl_accept_retries = default;
 
 # Session variables
 SET @@SESSION.group_replication_consistency= default;
@@ -174,11 +176,6 @@ SET @@SESSION.group_replication_consistency= default;
 --echo # Test Unit#2
 --echo # Verify default values of the group replication variables.
 --echo #
-
-# group_replication_allow_local_lower_version_join
---let $assert_text= Default group_replication_allow_local_lower_version_join is OFF/0
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_allow_local_lower_version_join]" = 0
---source include/assert.inc
 
 # group_replication_auto_increment_increment
 --let $assert_text= Default group_replication_auto_increment_increment is 7
@@ -276,13 +273,13 @@ SET @@SESSION.group_replication_consistency= default;
 --source include/assert.inc
 
 # group_replication_recovery_use_ssl
---let $assert_text= Default group_replication_recovery_use_ssl is OFF/0
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_recovery_use_ssl]" = 0
+--let $assert_text= Default group_replication_recovery_use_ssl is ON/1
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_recovery_use_ssl]" = 1
 --source include/assert.inc
 
 # group_replication_ssl_mode
---let $assert_text= Default group_replication_ssl_mode is DISABLED
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_ssl_mode]" = "DISABLED"
+--let $assert_text= Default group_replication_ssl_mode is REQUIRED
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_ssl_mode]" = "REQUIRED"
 --source include/assert.inc
 
 # group_replication_start_on_boot
@@ -298,6 +295,11 @@ SET @@SESSION.group_replication_consistency= default;
 # group_replication_communication_debug_options
 --let $assert_text= Default group_replication_communication_debug_options is "GCS_DEBUG_NONE"
 --let $assert_cond= "[SELECT @@GLOBAL.group_replication_communication_debug_options]" = "GCS_DEBUG_NONE"
+--source include/assert.inc
+
+# group_replication_communication_debug_max_file_size
+--let $assert_text= Default group_replication_communication_debug_max_file_size is 0
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_communication_debug_max_file_size]" = 0
 --source include/assert.inc
 
 # group_replication_unreachable_majority_timeout
@@ -405,6 +407,15 @@ SET @@SESSION.group_replication_consistency= default;
 --let $assert_cond= [SELECT @@GLOBAL.group_replication_preemptive_garbage_collection_rows_threshold] = 100000
 --source include/assert.inc
 
+# group_replication_xcom_ssl_socket_timeout
+--let $assert_text= Default group_replication_xcom_ssl_socket_timeout is 0
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_xcom_ssl_socket_timeout]" = 0
+--source include/assert.inc
+
+# group_replication_xcom_ssl_accept_retries
+--let $assert_text= Default group_replication_xcom_ssl_accept_retries is 10
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_xcom_ssl_accept_retries]" = 10
+--source include/assert.inc
 
 --echo #
 --echo # Clean up
@@ -413,7 +424,6 @@ SET @@SESSION.group_replication_consistency= default;
 # No need to print this into result file.
 
 --disable_query_log
---eval SET @@GLOBAL.group_replication_allow_local_lower_version_join= $saved_gr_allow_local_lower_version_join
 --eval SET @@GLOBAL.group_replication_auto_increment_increment= $saved_gr_auto_increment_increment
 --eval SET @@GLOBAL.group_replication_bootstrap_group= $saved_gr_bootstrap_group
 --eval SET @@GLOBAL.group_replication_components_stop_timeout= $saved_gr_components_stop_timeout
@@ -464,6 +474,8 @@ SET @@SESSION.group_replication_consistency= default;
 --eval SET @@GLOBAL.group_replication_paxos_single_leader= $saved_gr_paxos_single_leader
 --eval SET @@GLOBAL.group_replication_preemptive_garbage_collection= $saved_group_replication_preemptive_garbage_collection
 --eval SET @@GLOBAL.group_replication_preemptive_garbage_collection_rows_threshold= $saved_group_replication_preemptive_garbage_collection_rows_threshold
+--eval SET @@GLOBAL.group_replication_xcom_ssl_socket_timeout= $saved_gr_xcom_ssl_socket_timeout
+--eval SET @@GLOBAL.group_replication_xcom_ssl_accept_retries= $saved_gr_xcom_ssl_accept_retries
 --enable_query_log
 
 --let $total_gr_vars=

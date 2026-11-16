@@ -73,6 +73,7 @@ enum_return_status Owned_gtids::add_gtid_owner(const Gtid &gtid,
   assert(gtid.sidno <= get_max_sidno());
   assert(gtid.gno > 0);
   assert(gtid.gno < GNO_END);
+  assert(owner != 0);
   Node *n =
       (Node *)my_malloc(key_memory_tsid_map_Node, sizeof(Node), MYF(MY_WME));
   if (n == nullptr) RETURN_REPORTED_ERROR;
@@ -90,6 +91,7 @@ void Owned_gtids::remove_gtid(const Gtid &gtid, const my_thread_id owner) {
   DBUG_TRACE;
   // printf("Owned_gtids::remove(sidno=%d gno=%lld)\n", sidno, gno);
   // assert(contains_gtid(sidno, gno)); // allow group not owned
+  assert(owner != 0);
   malloc_unordered_multimap<rpl_gno, unique_ptr_my_free<Node>> *hash =
       get_hash(gtid.sidno);
   auto it_range = hash->equal_range(gtid.gno);
@@ -142,6 +144,17 @@ bool Owned_gtids::is_owned_by(const Gtid &gtid,
   auto it_range = hash->equal_range(gtid.gno);
 
   if (thd_id == 0) return it_range.first == it_range.second;
+
+  for (auto it = it_range.first; it != it_range.second; ++it) {
+    if (it->second->owner == thd_id) return true;
+  }
+  return false;
+}
+
+bool Owned_gtids::has_owner(const Gtid &gtid, const my_thread_id thd_id) const {
+  malloc_unordered_multimap<rpl_gno, unique_ptr_my_free<Node>> *hash =
+      get_hash(gtid.sidno);
+  auto it_range = hash->equal_range(gtid.gno);
 
   for (auto it = it_range.first; it != it_range.second; ++it) {
     if (it->second->owner == thd_id) return true;

@@ -26,9 +26,9 @@
 
 // Print all parameters in a default file that will be given to some program.
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cstdio>
+#include <cstdlib>
 
 #include "m_string.h"
 #include "my_alloc.h"

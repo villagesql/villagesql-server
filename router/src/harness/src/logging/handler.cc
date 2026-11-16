@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <exception>
 #include <fstream>
 #include <iostream>  // cerr
 #include <sstream>
@@ -222,12 +223,12 @@ void FileHandler::reopen(const std::string dst) {  // namespace logging
           // console due to closed logfile.
           mysql_harness::Path dstpath(dst);
           if (dstpath.exists()) {
-            eptr = make_exception_ptr(std::system_error(
+            eptr = std::make_exception_ptr(std::system_error(
                 last_error, std::system_category(),
                 "File exists. Cannot rename to " + dstpath.str()));
           } else {
             if (last_error != ENOENT) {
-              eptr = make_exception_ptr(
+              eptr = std::make_exception_ptr(
                   std::system_error(last_error, std::system_category(),
                                     "Cannot rename file in directory " +
                                         dstpath.dirname().str()));

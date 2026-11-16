@@ -24,7 +24,7 @@
 */
 #include "NdbWaitGroup.hpp"
 #include <ndb_global.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include "NdbImpl.hpp"
 #include "TransporterFacade.hpp"
 #include "WakeupHandler.hpp"

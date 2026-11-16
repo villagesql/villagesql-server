@@ -133,8 +133,8 @@ drop table test.t1;
 -->echo ## Error is returned instead of warning for insert operation with xplugin
 SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 
--->expectwarnings ER_DEPRECATED_UTF8_ALIAS
-prepare stmt from 'create table test.t1 (a varchar(10) character set utf8)';
+-->expectwarnings ER_WARN_DEPRECATED_SYNTAX
+prepare stmt from 'create table test.t1 (a varchar(10) character set utf8mb3)';
 execute stmt;
 
 -->expectwarnings WARN_DATA_TRUNCATED
@@ -255,7 +255,7 @@ drop table t1;
 use test;
 
 -->expectwarnings WARN_DATA_TRUNCATED
-create table t1 as select 5.05 / 0.014;
+create table t1 as select 5.05000000000000000000000123456789 + 1;
 
 drop table t1;
 

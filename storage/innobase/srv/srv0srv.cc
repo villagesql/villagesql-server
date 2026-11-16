@@ -77,13 +77,17 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "os0thread-create.h"
 #include "pars0pars.h"
 #include "que0que.h"
+#include "row0log.h"
 #include "row0mysql.h"
+#include "sql/current_thd.h"
 #include "sql/sql_class.h"
 #include "sql_thd_internal_api.h"
 #include "srv0mon.h"
 
+#include "debug_sync.h" /* CONDITIONAL_SYNC_POINT */
 #include "my_dbug.h"
 #include "my_psi_config.h"
+#include "mysql/components/library_mysys/my_system.h" /* my_num_vcpus */
 
 #endif /* !UNIV_HOTBACKUP */
 #include "srv0srv.h"
@@ -95,6 +99,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "usr0sess.h"
 #include "ut0crc32.h"
 #endif /* !UNIV_HOTBACKUP */
+#include "ha_innodb.h"
+#include "sql/handler.h"
 #include "ut0mem.h"
 
 #ifdef UNIV_HOTBACKUP
@@ -107,16 +113,12 @@ Srv_threads srv_threads;
 Srv_cpu_usage srv_cpu_usage;
 #endif /* UNIV_HOTBACKUP */
 
-#ifdef INNODB_DD_TABLE
-/* true when upgrading. */
-/* TODO To be removed in WL#16210 */
-bool srv_is_upgrade_mode = false;
-bool srv_downgrade_logs = false;
-bool srv_upgrade_old_undo_found = false;
-#endif /* INNODB_DD_TABLE */
-
 /* Revert to old partition file name if upgrade fails. */
 bool srv_downgrade_partition_files = false;
+
+#ifdef UNIV_DEBUG
+bool srv_is_uuid_ready = false;
+#endif /* UNIV_DEBUG */
 
 /* The following is the maximum allowed duration of a lock wait. */
 ulong srv_fatal_semaphore_wait_threshold = 600;
@@ -154,13 +156,9 @@ uint32_t srv_rseg_init_threads = 1;
 separated by ';' and can also be absolute paths. */
 char *srv_undo_dir = nullptr;
 
-/** The number of implicit undo tablespaces to use for rollback
-segments. */
-ulong srv_undo_tablespaces = FSP_IMPLICIT_UNDO_TABLESPACES;
-
 #ifndef UNIV_HOTBACKUP
 /* The number of rollback segments per tablespace */
-ulong srv_rollback_segments = TRX_SYS_N_RSEGS;
+ulong srv_rollback_segments = FSP_MAX_ROLLBACK_SEGMENTS;
 
 /* Used for the deprecated setting innodb_undo_logs. This will still get
 put into srv_rollback_segments if it is set to a non-default value. */
@@ -188,6 +186,12 @@ bool srv_undo_log_encrypt = false;
 
 /** Maximum size of undo tablespace. */
 unsigned long long srv_max_undo_tablespace_size;
+
+/** Enable or disable encryption of temporary tablespace.*/
+bool srv_tmp_tablespace_encrypt;
+
+/** Option to enable encryption of system tablespace. */
+bool srv_sys_tablespace_encrypt;
 
 /** Maximum number of recently truncated undo tablespace IDs for
 the same undo number. */
@@ -221,6 +225,14 @@ bool srv_use_native_aio = false;
 
 bool srv_numa_interleave = false;
 
+/** See srv0srv.h. Default off: latches are created eagerly. */
+bool srv_buf_pool_lazy_latch_init = false;
+
+/** Whether buffer pool allocations (huge and regular pages) are pre-populated
+(MAP_POPULATE and the explicit prefault step) at allocation time. Exposed as the
+innodb_buffer_pool_populate system variable. */
+bool srv_buf_pool_populate = true;
+
 #ifdef UNIV_DEBUG
 /** Force all user tables to use page compression. */
 ulong srv_debug_compress;
@@ -239,10 +251,6 @@ char *srv_log_group_home_dir = nullptr;
 
 /** Enable or disable Encrypt of REDO tablespace. */
 bool srv_redo_log_encrypt = false;
-
-ulong srv_log_n_files = 100; /* Deprecated (used only for deprecated sysvar). */
-
-ulonglong srv_log_file_size; /* Deprecated (used only for deprecated sysvar). */
 
 ulonglong srv_redo_log_capacity, srv_redo_log_capacity_used;
 
@@ -293,7 +301,7 @@ ulong srv_log_recent_written_size = INNODB_LOG_RECENT_WRITTEN_SIZE_DEFAULT;
 /** Number of slots in a small buffer, which is used to break requirement
 for total order of dirty pages, when they are added to flush lists.
 The slots are addressed by LSN values modulo number of the slots. */
-ulong srv_log_recent_closed_size = INNODB_LOG_RECENT_CLOSED_SIZE_DEFAULT;
+ulong srv_buf_flush_list_added_size = INNODB_BUF_FLUSH_LIST_ADDED_SIZE_DEFAULT;
 
 /** Number of spin iterations, when spinning and waiting for log buffer
 written up to given LSN, before we fallback to loop with sleeps.
@@ -405,6 +413,8 @@ page_size_t univ_page_size(0, 0, false);
 the checkpoints. */
 bool srv_adaptive_flushing = true;
 
+ulint srv_show_locks_held = 10;
+
 /* Allow IO bursts at the checkpoints ignoring io_capacity setting. */
 bool srv_flush_sync = true;
 
@@ -450,6 +460,8 @@ bool srv_validate_tablespace_paths = true;
 bool srv_use_fdatasync = false;
 /** Scan depth for LRU flush batch i.e.: number of blocks scanned*/
 ulong srv_LRU_scan_depth = 1024;
+/** Whether per-pool LRU manager threads are enabled (after recovery). */
+bool srv_lru_threads_enabled = false;
 /** Whether or not to flush neighbors of a block */
 ulong srv_flush_neighbors = 1;
 /** Previously requested size. Accesses protected by memory barriers. */
@@ -462,6 +474,12 @@ long long srv_buf_pool_curr_size = 0;
 ulong srv_buf_pool_dump_pct;
 /** Lock table size in bytes */
 ulint srv_lock_table_size = ULINT_MAX;
+
+/** Page cleaner LSN age factor formula option */
+ulong srv_cleaner_lsn_age_factor = SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT;
+
+/** Empty free list for a query thread handling algorithm option  */
+ulong srv_empty_free_list_algorithm = SRV_EMPTY_FREE_LIST_BACKOFF;
 
 const ulong srv_idle_flush_pct_default = 100;
 ulong srv_idle_flush_pct = srv_idle_flush_pct_default;
@@ -510,11 +528,43 @@ ulong srv_adaptive_flushing_lwm = 10;
 /* Number of iterations over which adaptive flushing is averaged. */
 ulong srv_flushing_avg_loops = 30;
 
+/* The tids of the purge threads */
+os_tid_t srv_purge_tids[MAX_PURGE_THREADS];
+
+/* The tids of the I/O threads */
+os_tid_t srv_io_tids[SRV_MAX_N_IO_THREADS];
+
+/* The tid of the master thread */
+os_tid_t srv_master_tid;
+
+/* The relative scheduling priority of the purge threads */
+ulint srv_sched_priority_purge = 19;
+
+/* The relative scheduling priority of the I/O threads */
+ulint srv_sched_priority_io = 19;
+
+/* The relative scheduling priority of the master thread */
+ulint srv_sched_priority_master = 19;
+
+/* The relative priority of the current thread.  If 0, low priority; if 1, high
+priority.  */
+thread_local ulint srv_current_thread_priority = 0;
+
+/* The relative priority of the purge coordinator and worker threads.  */
+bool srv_purge_thread_priority = false;
+
+/* The relative priority of the master thread.  */
+bool srv_master_thread_priority = false;
+
 /* The number of purge threads to use.*/
 ulong srv_n_purge_threads = 4;
 
 /* the number of pages to purge in one batch */
 ulong srv_purge_batch_size = 20;
+
+enum_default_table_encryption srv_default_table_encryption;
+
+ulong srv_encrypt_tables = 0;
 
 /* Internal setting for "innodb_stats_method". Decides how InnoDB treats
 NULL value when collecting statistics. By default, it is set to
@@ -546,6 +596,9 @@ bool srv_print_all_deadlocks = false;
 
 /** Print all DDL logs to mysqld stderr */
 bool srv_print_ddl_logs = false;
+
+/** Print lock wait timeout info to mysqld stderr */
+bool srv_print_lock_wait_timeout_info = false;
 
 /** Enable INFORMATION_SCHEMA.innodb_cmp_per_index */
 bool srv_cmp_per_index_enabled = false;
@@ -586,6 +639,8 @@ ulong srv_replication_delay = 0;
 std::chrono::milliseconds get_srv_replication_delay() {
   return std::chrono::milliseconds{srv_replication_delay};
 }
+
+ulint srv_pass_corrupt_table = 0; /* 0:disable 1:enable */
 
 /*-------------------------------------------*/
 ulong srv_n_spin_wait_rounds = 30;
@@ -653,6 +708,12 @@ static ulint srv_main_shutdown_loops = 0;
 static ulint srv_log_writes_and_flush = 0;
 
 #endif /* !UNIV_HOTBACKUP */
+
+/** Number of times secondary index lookup triggered cluster lookup */
+std::atomic<ulint> srv_sec_rec_cluster_reads(0);
+
+/** Number of times prefix optimization avoided triggering cluster lookup */
+std::atomic<ulint> srv_sec_rec_cluster_reads_avoided(0);
 
 /* Interval in seconds at which various tasks are performed by the
 master thread when server is active. In order to balance the workload,
@@ -772,6 +833,10 @@ struct srv_sys_t {
 
   srv_stats_t::ulint_ctr_1_t activity_count; /*!< For tracking server
                                              activity */
+  srv_stats_t::ulint_ctr_1_t
+      ibuf_merge_activity_count; /*!< For tracking change
+                               buffer merge activity, a subset
+                               of overall server activity */
 };
 
 static srv_sys_t *srv_sys = nullptr;
@@ -1146,6 +1211,12 @@ static void srv_init(void) {
       UT_NEW_THIS_FILE_PSI_KEY,
       ut::Count{srv_threads.m_page_cleaner_workers_n});
 
+  /* One LRU manager thread per buf_pool instance. */
+  srv_threads.m_lru_managers_n = srv_buf_pool_instances;
+
+  srv_threads.m_lru_managers = ut::new_arr_withkey<IB_thread>(
+      UT_NEW_THIS_FILE_PSI_KEY, ut::Count{srv_threads.m_lru_managers_n});
+
   srv_sys = static_cast<srv_sys_t *>(
       ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, srv_sys_sz));
 
@@ -1190,10 +1261,10 @@ static void srv_init(void) {
   /* page_zip_stat_per_index_mutex is acquired from:
   1. page_zip_compress() (after SYNC_FSP)
   2. page_zip_decompress()
-  3. i_s_cmp_per_index_fill_low() (where SYNC_DICT is acquired)
+  3. i_s_cmp_per_index_fill_low() (after SYNC_DICT is acquired)
   4. innodb_cmp_per_index_update(), no other latches
-  since we do not acquire any other latches while holding this mutex,
-  it can have very low level. We pick SYNC_ANY_LATCH for it. */
+  5. dict_index_remove_from_cache_low(),
+  6. btr_free_if_exists() (after SYNC_DICT) */
   mutex_create(LATCH_ID_PAGE_ZIP_STAT_PER_INDEX,
                &page_zip_stat_per_index_mutex);
 
@@ -1211,6 +1282,8 @@ static void srv_init(void) {
 
 /** Frees the data structures created in srv_init(). */
 void srv_free(void) {
+  if (!srv_sys) return;
+
   mutex_free(&srv_innodb_monitor_mutex);
   mutex_free(&page_zip_stat_per_index_mutex);
 
@@ -1250,6 +1323,18 @@ void srv_free(void) {
     }
     ut::delete_arr(srv_threads.m_page_cleaner_workers);
     srv_threads.m_page_cleaner_workers = nullptr;
+  }
+
+  if (srv_threads.m_lru_managers != nullptr) {
+    for (size_t i = 0; i < srv_threads.m_lru_managers_n; ++i) {
+      srv_threads.m_lru_managers[i] = {};
+    }
+    /* Allocated with ut::new_arr_withkey<IB_thread>(), so it must be released
+    with ut::delete_arr() (which runs the element destructors and uses the
+    matching array allocator), not ut::free(). This mirrors the
+    m_page_cleaner_workers / m_purge_workers teardown above. */
+    ut::delete_arr(srv_threads.m_lru_managers);
+    srv_threads.m_lru_managers = nullptr;
   }
 
   if (srv_threads.m_purge_workers != nullptr) {
@@ -1330,6 +1415,9 @@ position where the part about transactions starts.
 static void srv_printf_locks_and_transactions(FILE *file,
                                               ulint *trx_start_pos) {
   ut_ad(locksys::owns_exclusive_global_latch());
+
+  if (recv_recovery_on) return;
+
   lock_print_info_summary(file);
   if (trx_start_pos) {
     long t = ftell(file);
@@ -1391,18 +1479,20 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
   low level 135. Therefore we can reserve the latter mutex here without
   a danger of a deadlock of threads. */
 
-  mutex_enter(&dict_foreign_err_mutex);
+  if (!recv_recovery_on) {
+    mutex_enter(&dict_foreign_err_mutex);
 
-  if (!srv_read_only_mode && ftell(dict_foreign_err_file) != 0L) {
-    fputs(
-        "------------------------\n"
-        "LATEST FOREIGN KEY ERROR\n"
-        "------------------------\n",
-        file);
-    ut_copy_file(file, dict_foreign_err_file);
+    if (!srv_read_only_mode && ftell(dict_foreign_err_file) != 0L) {
+      fputs(
+          "------------------------\n"
+          "LATEST FOREIGN KEY ERROR\n"
+          "------------------------\n",
+          file);
+      ut_copy_file(file, dict_foreign_err_file);
+    }
+
+    mutex_exit(&dict_foreign_err_mutex);
   }
-
-  mutex_exit(&dict_foreign_err_mutex);
 
   ret = true;
   if (nowait) {
@@ -1438,12 +1528,14 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
       file);
   os_aio_print(file);
 
-  fputs(
-      "-------------------------------------\n"
-      "INSERT BUFFER AND ADAPTIVE HASH INDEX\n"
-      "-------------------------------------\n",
-      file);
-  ibuf_print(file);
+  if (!recv_recovery_on) {
+    fputs(
+        "-------------------------------------\n"
+        "INSERT BUFFER AND ADAPTIVE HASH INDEX\n"
+        "-------------------------------------\n",
+        file);
+    ibuf_print(file);
+  }
 
   for (ulint i = 0; i < btr_ahi_parts; ++i) {
     auto &part = btr_search_sys->parts[i];
@@ -1458,12 +1550,14 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
   btr_cur_n_sea_old = btr_cur_n_sea;
   btr_cur_n_non_sea_old = btr_cur_n_non_sea;
 
-  fputs(
-      "---\n"
-      "LOG\n"
-      "---\n",
-      file);
-  log_print(*log_sys, file);
+  if (!recv_recovery_on) {
+    fputs(
+        "---\n"
+        "LOG\n"
+        "---\n",
+        file);
+    log_print(*log_sys, file);
+  }
 
   fputs(
       "----------------------\n"
@@ -1474,7 +1568,7 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
           "Total large memory allocated " ULINTPF
           "\n"
           "Dictionary memory allocated %zu\n",
-          os_total_large_mem_allocated.load(), dict_sys->size);
+          os_total_large_mem_allocated.load(), dict_sys ? dict_sys->size : 0UL);
 
   buf_print_io(file);
 
@@ -1490,6 +1584,20 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
   /* This is a dirty read, without holding trx_sys->mutex. */
   fprintf(file, ULINTPF " read views open inside InnoDB\n",
           trx_sys->mvcc->size());
+
+  mutex_enter(&trx_sys->mutex);
+
+  fprintf(file, "%lu RW transactions active inside InnoDB\n",
+          UT_LIST_GET_LEN(trx_sys->rw_trx_list));
+
+  const ReadView *oldest_view = trx_sys->mvcc->get_oldest_view_stats();
+  if (oldest_view) {
+    fprintf(file, "---OLDEST VIEW---\n");
+    oldest_view->print(file);
+    fprintf(file, "-----------------\n");
+  }
+
+  mutex_exit(&trx_sys->mutex);
 
   n_reserved = fil_space_get_n_reserved_extents(0);
   if (n_reserved > 0) {
@@ -1562,6 +1670,10 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
   mutex_exit(&srv_innodb_monitor_mutex);
   fflush(file);
 
+#ifndef NDEBUG
+  srv_debug_monitor_printed = true;
+#endif
+
   return (ret);
 }
 
@@ -1572,6 +1684,7 @@ void srv_export_innodb_status(void) {
   ulint LRU_len;
   ulint free_len;
   ulint flush_list_len;
+  ulint i;
 
   buf_get_total_stat(&stat);
   buf_get_total_list_len(&LRU_len, &free_len, &flush_list_len);
@@ -1591,6 +1704,10 @@ void srv_export_innodb_status(void) {
   // on failure
   ut_ad(export_vars.innodb_data_pending_fsyncs <=
         std::numeric_limits<ulint>::max() - 1000);
+
+  export_vars.innodb_adaptive_hash_hash_searches = btr_cur_n_sea;
+  export_vars.innodb_adaptive_hash_non_hash_searches = btr_cur_n_non_sea;
+  export_vars.innodb_background_log_sync = srv_log_writes_and_flush;
 
   export_vars.innodb_data_fsyncs = os_n_fsyncs;
 
@@ -1620,6 +1737,9 @@ void srv_export_innodb_status(void) {
 
   export_vars.innodb_buffer_pool_read_ahead_evicted = stat.n_ra_pages_evicted;
 
+  export_vars.innodb_buffer_pool_pages_LRU_flushed =
+      stat.buf_lru_flush_page_count;
+
   export_vars.innodb_buffer_pool_pages_data = LRU_len;
 
   export_vars.innodb_buffer_pool_bytes_data =
@@ -1642,6 +1762,47 @@ void srv_export_innodb_status(void) {
 
   export_vars.innodb_buffer_pool_resize_status_progress =
       buf_pool_resize_status_progress.load();
+
+  export_vars.innodb_buffer_pool_pages_made_young = stat.n_pages_made_young;
+  export_vars.innodb_buffer_pool_pages_made_not_young =
+      stat.n_pages_not_made_young;
+  export_vars.innodb_buffer_pool_pages_old = 0;
+  for (i = 0; i < srv_buf_pool_instances; i++) {
+    buf_pool_t *buf_pool = buf_pool_from_array(i);
+    export_vars.innodb_buffer_pool_pages_old += buf_pool->LRU_old_len;
+  }
+  if (!srv_read_only_mode) {
+    export_vars.innodb_checkpoint_age =
+        (log_get_lsn(*log_sys) - log_sys->last_checkpoint_lsn);
+
+    log_limits_mutex_enter(*log_sys);
+    export_vars.innodb_checkpoint_max_age = log_free_check_capacity(*log_sys);
+    log_limits_mutex_exit(*log_sys);
+  } else {
+    export_vars.innodb_checkpoint_age = 0;
+    export_vars.innodb_checkpoint_max_age = 0;
+  }
+
+  ibuf_export_ibuf_status(&export_vars.innodb_ibuf_free_list,
+                          &export_vars.innodb_ibuf_segment_size);
+  export_vars.innodb_lsn_current = log_get_lsn(*log_sys);
+  export_vars.innodb_lsn_flushed = log_sys->flushed_to_disk_lsn;
+  export_vars.innodb_lsn_last_checkpoint = log_sys->last_checkpoint_lsn;
+  export_vars.innodb_master_thread_active_loops = srv_main_active_loops;
+  export_vars.innodb_master_thread_idle_loops = srv_main_idle_loops;
+  export_vars.innodb_max_trx_id = trx_sys_get_next_trx_id_or_no();
+
+  mutex_enter(&trx_sys->mutex);
+  auto *const oldest_view_for_low_limit_trx_id =
+      trx_sys->mvcc->get_oldest_view_stats();
+  export_vars.innodb_oldest_view_low_limit_trx_id =
+      oldest_view_for_low_limit_trx_id
+          ? oldest_view_for_low_limit_trx_id->low_limit_id()
+          : 0;
+  mutex_exit(&trx_sys->mutex);
+
+  export_vars.innodb_purge_trx_id = purge_sys->limit.trx_no;
+  export_vars.innodb_purge_undo_no = purge_sys->limit.undo_no;
 
   export_vars.innodb_page_size = UNIV_PAGE_SIZE;
 
@@ -1666,6 +1827,8 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_pages_created = stat.n_pages_created;
 
   export_vars.innodb_pages_read = stat.n_pages_read;
+
+  export_vars.innodb_page0_read = srv_stats.page0_read;
 
   export_vars.innodb_pages_written = stat.n_pages_written;
 
@@ -1734,6 +1897,18 @@ void srv_export_innodb_status(void) {
   }
   undo::spaces->s_unlock();
 
+  export_vars.innodb_n_merge_blocks_encrypted =
+      srv_stats.n_merge_blocks_encrypted;
+
+  export_vars.innodb_n_merge_blocks_decrypted =
+      srv_stats.n_merge_blocks_decrypted;
+
+  export_vars.innodb_n_rowlog_blocks_encrypted =
+      srv_stats.n_rowlog_blocks_encrypted;
+
+  export_vars.innodb_n_rowlog_blocks_decrypted =
+      srv_stats.n_rowlog_blocks_decrypted;
+
 #ifdef UNIV_DEBUG
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
   trx_id_t done_trx_no = purge_sys->done.trx_no;
@@ -1743,7 +1918,7 @@ void srv_export_innodb_status(void) {
   below the low limit. */
   ReadView oldest_view;
   trx_sys->mvcc->clone_oldest_view(&oldest_view);
-  trx_id_t low_limit_no = oldest_view.view_low_limit_no();
+  trx_id_t low_limit_no = oldest_view.low_limit_no();
 
   rw_lock_s_unlock(&purge_sys->latch);
 
@@ -1768,8 +1943,24 @@ void srv_export_innodb_status(void) {
   }
 #endif /* UNIV_DEBUG */
 
+  export_vars.innodb_sec_rec_cluster_reads =
+      srv_sec_rec_cluster_reads.load(std::memory_order_relaxed);
+  export_vars.innodb_sec_rec_cluster_reads_avoided =
+      srv_sec_rec_cluster_reads_avoided.load(std::memory_order_relaxed);
+
+  export_vars.innodb_buffered_aio_submitted = srv_stats.n_aio_submitted;
+
+  thd_get_fragmentation_stats(current_thd,
+                              &export_vars.innodb_fragmentation_stats);
+
   mutex_exit(&srv_innodb_monitor_mutex);
 }
+
+#ifndef NDEBUG
+/** false before InnoDB monitor has been printed at least once, true
+afterwards */
+bool srv_debug_monitor_printed = false;
+#endif
 
 /** A thread which prints the info output by various InnoDB monitors. */
 void srv_monitor_thread() {
@@ -1902,8 +2093,13 @@ loop:
   }
 }
 
-/** Increment the server activity count. */
-void srv_inc_activity_count(void) { srv_sys->activity_count.inc(); }
+/** Increment the server activity count.
+@param[in]	ibuf_merge_activity	whether this activity bump is caused by
+                                        the background change buffer merge */
+void srv_inc_activity_count(bool ibuf_merge_activity) noexcept {
+  srv_sys->activity_count.inc();
+  if (ibuf_merge_activity) srv_sys->ibuf_merge_activity_count.inc();
+}
 
 /** Check whether the master thread is active.
 This is polled during the final phase of shutdown.
@@ -1982,12 +2178,43 @@ ulint srv_get_activity_count(void) {
   return (srv_sys == nullptr ? 0 : srv_sys->activity_count);
 }
 
-/** Check if there has been any activity.
- @return false if no change in activity counter. */
-bool srv_check_activity(ulint old_activity_count) /*!< in: old activity count */
-{
-  return (srv_sys == nullptr ? false
-                             : srv_sys->activity_count != old_activity_count);
+/** Get current server ibuf merge activity count.
+@return ibuf merge activity count */
+static ulint srv_get_ibuf_merge_activity_count() noexcept {
+  return (srv_sys->ibuf_merge_activity_count);
+}
+
+/** Check if there has been any activity. Considers background change buffer
+merge as regular server activity unless a non-default
+old_ibuf_merge_activity_count value is passed, in which case the merge will be
+treated as keeping server idle.
+@param[in]	old_activity_count	old activity count
+@param[in]	old_ibuf_merge_activity_count	old change buffer merge
+                                                activity count, or
+                                                ULINT_UNDEFINED
+@return false if no change in activity counter. */
+bool srv_check_activity(ulint old_activity_count,
+                        ulint old_ibuf_merge_activity_count) noexcept {
+  if (srv_sys == nullptr) return false;
+
+  const ulint new_activity_count = srv_sys->activity_count;
+  if (old_ibuf_merge_activity_count == ULINT_UNDEFINED)
+    return (new_activity_count != old_activity_count);
+
+  /* If we care about ibuf merge activity, then the server is considered dle if
+  all activity, if any, was due to ibuf merge. */
+  const ulint new_ibuf_merge_activity_count =
+      srv_sys->ibuf_merge_activity_count;
+
+  ut_ad(new_ibuf_merge_activity_count <= new_activity_count);
+  ut_ad(new_ibuf_merge_activity_count >= old_ibuf_merge_activity_count);
+  ut_ad(new_activity_count >= old_activity_count);
+
+  const auto ibuf_merge_activity_delta =
+      new_ibuf_merge_activity_count - old_ibuf_merge_activity_count;
+  const auto activity_delta = new_activity_count - old_activity_count;
+
+  return (activity_delta > ibuf_merge_activity_delta);
 }
 
 /** Make room in the table cache by evicting an unused table.
@@ -2139,15 +2366,7 @@ static void srv_update_cpu_usage() {
   srv_cpu_usage.stime_abs = cpu_stime;
 
   /* Calculate relative. */
-
-  cpu_set_t cs;
-  CPU_ZERO(&cs);
-  if (sched_getaffinity(0, sizeof(cs), &cs) != 0) {
-    return;
-  }
-
-  const int n_cpu = CPU_COUNT(&cs);
-
+  const int n_cpu = my_num_vcpus();
   srv_cpu_usage.n_cpu = n_cpu;
   MONITOR_SET(MONITOR_CPU_N, int64_t(n_cpu));
 
@@ -2235,32 +2454,7 @@ static void srv_update_cpu_usage() {
   srv_cpu_usage.stime_abs = cpu_stime;
 
   /* Calculate relative. */
-
-  DWORD_PTR process_affinity_mask;
-  DWORD_PTR system_affinity_mask;
-  if (!GetProcessAffinityMask(GetCurrentProcess(), &process_affinity_mask,
-                              &system_affinity_mask)) {
-    return;
-  }
-
-  /* If the system has more than 64 processors and the current process
-     contains threads in multiple groups, GetProcessAffinityMask returns
-     zero for both affinity masks.
-  */
-  if ((process_affinity_mask == 0) && (system_affinity_mask == 0)) {
-    return;
-  }
-
-  int n_cpu = 0;
-  constexpr int MAX_CPU_N = 64;
-  uint64_t j = 1;
-  for (int i = 0; i < MAX_CPU_N; ++i) {
-    if (j & process_affinity_mask) {
-      ++n_cpu;
-    }
-    j = j << 1;
-  }
-
+  const int n_cpu = my_num_vcpus();
   srv_cpu_usage.n_cpu = n_cpu;
   MONITOR_SET(MONITOR_CPU_N, int64_t(n_cpu));
 
@@ -2282,7 +2476,7 @@ static void srv_update_cpu_usage() {
   srv_cpu_usage.utime_abs = 0;
   srv_cpu_usage.stime_pct = 0;
   srv_cpu_usage.stime_abs = 0;
-  srv_cpu_usage.n_cpu = 1;
+  srv_cpu_usage.n_cpu = my_num_vcpus();
 }
 #endif
 
@@ -2503,6 +2697,95 @@ static bool srv_master_do_shutdown_tasks(
   return (n_bytes_merged != 0);
 }
 
+/** Set temporary tablespace to be encrypted if global variable
+innodb_temp_tablespace_encrypt is TRUE
+@param[in]	enable	true to enable encryption, false to disable
+@return DB_SUCCESS on success, DB_ERROR on failure */
+dberr_t srv_temp_encryption_update(bool enable) {
+  ut_ad(!srv_read_only_mode);
+
+  fil_space_t *const space = fil_space_get(srv_tmp_space.space_id());
+  bool is_encrypted = FSP_FLAGS_GET_ENCRYPTION(space->flags);
+
+  ut_ad(fsp_is_system_temporary(space->id));
+
+  if (enable) {
+    if (is_encrypted) {
+      /* Encryption already enabled */
+      return (DB_SUCCESS);
+    } else {
+      /* Enable encryption now */
+      dberr_t err = fil_temp_update_encryption(space);
+      if (err == DB_SUCCESS) {
+        srv_tmp_space.set_flags(space->flags);
+      }
+      return (err);
+    }
+
+  } else {
+    if (!is_encrypted) {
+      /* Encryption already disabled */
+      return (DB_SUCCESS);
+    } else {
+      // TODO: Disabling encryption is not allowed yet
+      return (DB_SUCCESS);
+    }
+  }
+}
+
+void undo_rotate_default_master_key() {
+  fil_space_t *space;
+
+  if (srv_shutdown_state.load() >= SRV_SHUTDOWN_CLEANUP) {
+    return;
+  }
+
+  /* If the undo log space is using default key, rotate
+  it. We need the server_uuid initialized, otherwise,
+  the keyname will not contains server uuid. */
+  if (Encryption::get_master_key_id() != 0 || srv_read_only_mode ||
+      strlen(server_uuid) == 0) {
+    return;
+  }
+
+  DBUG_EXECUTE_IF("skip_rotating_default_master_key", return;);
+
+  undo::spaces->s_lock();
+  for (auto undo_space : undo::spaces->m_spaces) {
+    ut_ad(fsp_is_undo_tablespace(undo_space->id()));
+
+    space = fil_space_get(undo_space->id());
+
+    if (space == nullptr ||
+        space->m_encryption_metadata.m_type != Encryption::AES) {
+      continue;
+    }
+
+    byte encrypt_info[Encryption::INFO_SIZE];
+    mtr_t mtr;
+
+    ut_ad(FSP_FLAGS_GET_ENCRYPTION(space->flags));
+
+    /* Make sure that there is enough reusable
+    space in the redo log files. */
+    log_free_check();
+
+    mtr_start(&mtr);
+
+    mtr_x_lock_space(space, &mtr);
+
+    memset(encrypt_info, 0, Encryption::INFO_SIZE);
+
+    if (!fsp_header_rotate_encryption(space, encrypt_info, &mtr)) {
+      ib::error(ER_IB_MSG_1056, undo_space->space_name());
+    } else {
+      ib::info(ER_IB_MSG_1057, undo_space->space_name());
+    }
+    mtr_commit(&mtr);
+  }
+  undo::spaces->s_unlock();
+}
+
 /* Enable REDO tablespace encryption */
 bool srv_enable_redo_encryption() {
   log_t &log = *log_sys;
@@ -2538,7 +2821,7 @@ bool srv_enable_redo_encryption() {
 }
 
 /* Set encryption for UNDO tablespace with given space id. */
-bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr) {
+bool set_undo_tablespace_encryption(THD *thd, space_id_t space_id, mtr_t *mtr) {
   ut_ad(fsp_is_undo_tablespace(space_id));
   fil_space_t *space = fil_space_get(space_id);
 
@@ -2557,6 +2840,9 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr) {
   if (!Encryption::fill_encryption_info(encryption_metadata, true,
                                         encrypt_info)) {
     ib::error(ER_IB_MSG_1052, space->name);
+    if (thd != nullptr) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1052, space->name);
+    }
     return true;
   }
 
@@ -2566,6 +2852,9 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr) {
   if (!fsp_header_write_encryption(space->id, new_flags, encrypt_info, true,
                                    false, mtr)) {
     ib::error(ER_IB_MSG_1053, space->name);
+    if (thd != nullptr) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1053, space->name);
+    }
     return true;
   }
 
@@ -2575,6 +2864,10 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr) {
                            encryption_metadata.m_key, encryption_metadata.m_iv);
   if (err != DB_SUCCESS) {
     ib::error(ER_IB_MSG_1054, space->name, int{err}, ut_strerr(err));
+    if (thd != nullptr) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1054, space->name, int{err},
+                  ut_strerr(err));
+    }
     return true;
   }
 
@@ -2582,7 +2875,7 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr) {
 }
 
 /* Enable UNDO tablespace encryption */
-bool srv_enable_undo_encryption() {
+bool srv_enable_undo_encryption(THD *thd) {
   /* Make sure undo::ddl_mutex is owned. */
   ut_ad(mutex_own(&undo::ddl_mutex));
   bool ret_val = false;
@@ -2599,7 +2892,7 @@ bool srv_enable_undo_encryption() {
     ut_ad(fsp_is_undo_tablespace(undo_space->id()));
 
     /* While enabling encryption, make sure not to overwrite the tablespace key.
-    Otherwise, pages encrypted with the old tablespace key can't be read. */
+       Otherwise, pages encrypted with the old tablespace key can't be read. */
     if (FSP_FLAGS_GET_ENCRYPTION(space->flags)) {
       continue;
     }
@@ -2617,10 +2910,11 @@ bool srv_enable_undo_encryption() {
     log_free_check();
 
     mtr_t mtr;
+
     mtr_start(&mtr);
     mtr_x_lock_space(space, &mtr);
 
-    if (set_undo_tablespace_encryption(undo_space->id(), &mtr)) {
+    if (set_undo_tablespace_encryption(thd, undo_space->id(), &mtr)) {
       mtr_commit(&mtr);
       undo_space->rsegs()->s_unlock();
       ret_val = true;
@@ -2644,6 +2938,7 @@ bool srv_enable_undo_encryption() {
 static void srv_master_sleep(void) {
   srv_main_thread_op_info = "sleeping";
   std::this_thread::sleep_for(std::chrono::seconds(1));
+  CONDITIONAL_SYNC_POINT("srv_master_sleep");
   srv_main_thread_op_info = "";
 }
 
@@ -2679,6 +2974,7 @@ static void srv_master_main_loop(srv_slot_t *slot) {
   }
 
   ulint old_activity_count = srv_get_activity_count();
+  ulint old_ibuf_merge_activity_count = srv_get_ibuf_merge_activity_count();
 
   while (srv_shutdown_state.load() <
          SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS) {
@@ -2686,18 +2982,24 @@ static void srv_master_main_loop(srv_slot_t *slot) {
 
     MONITOR_INC(MONITOR_MASTER_THREAD_SLEEP);
 
+    srv_current_thread_priority = srv_master_thread_priority;
+
     /* Just in case - if there is not much free space in redo,
     try to avoid asking for troubles because of extra work
     performed in such background thread. */
     srv_main_thread_op_info = "checking free log space";
     log_free_check();
 
-    if (srv_check_activity(old_activity_count)) {
+    if (srv_check_activity(old_activity_count, old_ibuf_merge_activity_count)) {
       old_activity_count = srv_get_activity_count();
+      old_ibuf_merge_activity_count = srv_get_ibuf_merge_activity_count();
       srv_master_do_active_tasks();
     } else {
       srv_master_do_idle_tasks();
     }
+
+    /* Enable undo log encryption if it is set */
+    undo_rotate_default_master_key();
 
     /* Purge any deleted tablespace pages. */
     fil_purge();
@@ -2831,12 +3133,22 @@ static bool srv_task_execute(void) {
   return (thr != nullptr);
 }
 
+static std::atomic<ulint> purge_tid_i(0);
+
 /** Worker thread that reads tasks from the work queue and executes them. */
 void srv_worker_thread() {
   srv_slot_t *slot;
 
   ut_ad(!srv_read_only_mode);
   ut_a(srv_force_recovery < SRV_FORCE_NO_BACKGROUND);
+  const auto tid_i = purge_tid_i.fetch_add(1, std::memory_order_relaxed);
+  srv_purge_tids[tid_i] = os_thread_get_tid();
+  const auto actual_priority =
+      os_thread_set_priority(srv_purge_tids[tid_i], srv_sched_priority_purge);
+  if (UNIV_UNLIKELY(actual_priority != srv_sched_priority_purge))
+    ib::warn() << "Failed to set purge thread priority to "
+               << srv_sched_priority_master << " the current priority is "
+               << actual_priority;
 
   THD *thd = create_internal_thd();
 
@@ -2860,6 +3172,8 @@ void srv_worker_thread() {
     srv_suspend_thread(slot);
 
     os_event_wait(slot->event);
+
+    srv_current_thread_priority = srv_purge_thread_priority;
 
     if (srv_task_execute()) {
       /* If there are tasks in the queue, wakeup
@@ -2913,6 +3227,8 @@ static ulint srv_do_purge(ulint *n_total_purged) {
   }
 
   do {
+    srv_current_thread_priority = srv_purge_thread_priority;
+
     if (trx_sys->rseg_history_len.load() > rseg_history_len ||
         (srv_max_purge_lag > 0 && rseg_history_len > srv_max_purge_lag)) {
       /* History length is now longer than what it was
@@ -3092,6 +3408,14 @@ void srv_purge_coordinator_thread() {
   ut_a(trx_purge_state() == PURGE_STATE_INIT);
   ut_a(srv_force_recovery < SRV_FORCE_NO_BACKGROUND);
 
+  srv_purge_tids[0] = os_thread_get_tid();
+  const auto actual_priority =
+      os_thread_set_priority(srv_purge_tids[0], srv_sched_priority_purge);
+  if (UNIV_UNLIKELY(actual_priority != srv_sched_priority_purge))
+    ib::warn() << "Failed to set purge coordinator thread priority to "
+               << srv_sched_priority_master << " the current priority is "
+               << actual_priority;
+
   rw_lock_x_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
   purge_sys->running = true;
@@ -3119,7 +3443,13 @@ void srv_purge_coordinator_thread() {
 
     n_total_purged = 0;
 
+    srv_current_thread_priority = srv_purge_thread_priority;
+
     rseg_history_len = srv_do_purge(&n_total_purged);
+
+    if (n_total_purged != 0) {
+      srv_inc_activity_count();
+    }
 
   } while (!srv_purge_should_exit(n_total_purged));
 

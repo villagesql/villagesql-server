@@ -64,11 +64,8 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
                        bool for_show_create_stmt);
 
 void append_identifier(const THD *thd, String *packet, const char *name,
-                       size_t length, const CHARSET_INFO *from_cs,
-                       const CHARSET_INFO *to_cs);
-
-void append_identifier(const THD *thd, String *packet, const char *name,
-                       size_t length);
+                       size_t length, const CHARSET_INFO *from_cs = nullptr,
+                       const CHARSET_INFO *to_cs = nullptr);
 
 void mysqld_list_fields(THD *thd, Table_ref *table, const char *wild);
 bool mysqld_show_create(THD *thd, Table_ref *table_list);
@@ -145,7 +142,8 @@ int get_quote_char_for_identifier(const THD *thd, const char *name,
                                   size_t length);
 
 void show_sql_type(enum_field_types type, bool is_array, uint metadata,
-                   String *str, const CHARSET_INFO *field_cs = nullptr);
+                   String *str, const CHARSET_INFO *field_cs = nullptr,
+                   unsigned int vector_dimensionality = 0);
 
 bool do_fill_information_schema_table(THD *thd, Table_ref *table_list,
                                       Item *condition);
@@ -304,6 +302,16 @@ class Sql_cmd_show_create_function : public Sql_cmd_show_noplan {
   bool execute_inner(THD *thd) override;
 };
 
+/// Represents SHOW CREATE LIBRARY statement.
+
+class Sql_cmd_show_create_library : public Sql_cmd_show_noplan {
+ public:
+  Sql_cmd_show_create_library()
+      : Sql_cmd_show_noplan(SQLCOM_SHOW_CREATE_LIBRARY) {}
+  bool check_privileges(THD *thd) override;
+  bool execute_inner(THD *thd) override;
+};
+
 /// Represents SHOW CREATE PROCEDURE statement.
 
 class Sql_cmd_show_create_procedure : public Sql_cmd_show_noplan {
@@ -349,11 +357,65 @@ class Sql_cmd_show_create_user : public Sql_cmd_show {
   bool execute_inner(THD *thd) override;
 };
 
+/// Represents SHOW CREATE MASKING POLICY statement.
+
+class Sql_cmd_show_create_masking_policy : public Sql_cmd_show_noplan {
+ public:
+  explicit Sql_cmd_show_create_masking_policy(LEX_CSTRING policy_name)
+      : Sql_cmd_show_noplan{SQLCOM_SHOW_CREATE_MASKING_POLICY},
+        m_policy_name{policy_name} {}
+  bool check_privileges(THD *thd) override;
+  bool execute_inner(THD *thd) override;
+
+ private:
+  LEX_CSTRING m_policy_name;
+};
+
 /// Represents SHOW DATABASES statement.
 
 class Sql_cmd_show_databases : public Sql_cmd_show {
  public:
   Sql_cmd_show_databases() : Sql_cmd_show(SQLCOM_SHOW_DATABASES) {}
+  bool check_privileges(THD *thd) override;
+};
+
+/// Represents SHOW CLIENT_STATISTICS statement.
+
+class Sql_cmd_show_client_stats : public Sql_cmd_show {
+ public:
+  Sql_cmd_show_client_stats() : Sql_cmd_show(SQLCOM_SHOW_CLIENT_STATS) {}
+  bool check_privileges(THD *thd) override;
+};
+
+/// Represents SHOW INDEX_STATISTICS statement.
+
+class Sql_cmd_show_index_stats : public Sql_cmd_show {
+ public:
+  Sql_cmd_show_index_stats() : Sql_cmd_show(SQLCOM_SHOW_INDEX_STATS) {}
+  bool check_privileges(THD *thd) override;
+};
+
+/// Represents SHOW TABLE_STATISTICS statement.
+
+class Sql_cmd_show_table_stats : public Sql_cmd_show {
+ public:
+  Sql_cmd_show_table_stats() : Sql_cmd_show(SQLCOM_SHOW_TABLE_STATS) {}
+  bool check_privileges(THD *thd) override;
+};
+
+/// Represents SHOW THREAD_STATISTICS statement.
+
+class Sql_cmd_show_thread_stats : public Sql_cmd_show {
+ public:
+  Sql_cmd_show_thread_stats() : Sql_cmd_show(SQLCOM_SHOW_THREAD_STATS) {}
+  bool check_privileges(THD *thd) override;
+};
+
+/// Represents SHOW USER_STATISTICS statement.
+
+class Sql_cmd_show_user_stats : public Sql_cmd_show {
+ public:
+  Sql_cmd_show_user_stats() : Sql_cmd_show(SQLCOM_SHOW_USER_STATS) {}
   bool check_privileges(THD *thd) override;
 };
 
@@ -417,10 +479,12 @@ class Sql_cmd_show_events : public Sql_cmd_show_schema_base {
 class Sql_cmd_show_grants : public Sql_cmd_show_noplan {
  public:
   Sql_cmd_show_grants(const LEX_USER *for_user_arg,
-                      const List<LEX_USER> *using_users_arg)
+                      const List<LEX_USER> *using_users_arg,
+                      bool effective_grants_arg)
       : Sql_cmd_show_noplan(SQLCOM_SHOW_GRANTS),
         for_user(for_user_arg),
-        using_users(using_users_arg) {}
+        using_users(using_users_arg),
+        effective_grants(effective_grants_arg) {}
 
   bool check_privileges(THD *thd) override;
   bool execute_inner(THD *thd) override;
@@ -428,6 +492,7 @@ class Sql_cmd_show_grants : public Sql_cmd_show_noplan {
  private:
   const LEX_USER *for_user;
   const List<LEX_USER> *using_users;
+  const bool effective_grants;
 };
 
 /// Represents the SHOW INDEX statement.
@@ -551,6 +616,13 @@ class Sql_cmd_show_status : public Sql_cmd_show {
  public:
   Sql_cmd_show_status() : Sql_cmd_show(SQLCOM_SHOW_STATUS) {}
   bool execute(THD *thd) override;
+};
+
+/// Represents SHOW STATUS LIBRARY statement.
+
+class Sql_cmd_show_status_library : public Sql_cmd_show {
+ public:
+  Sql_cmd_show_status_library() : Sql_cmd_show(SQLCOM_SHOW_STATUS_LIBRARY) {}
 };
 
 /// Represents SHOW STATUS FUNCTION statement.

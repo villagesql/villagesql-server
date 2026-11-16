@@ -54,6 +54,47 @@
 #include "template_utils.h"
 #include "typelib.h"
 
+namespace {
+/**
+  Apply system default check to a variable value. This will
+  not take into account custom check method provided for a
+  variable during its definition.
+
+  @param[in]     thd   Thread context.
+  @param[in]     var   Plugin variable.
+  @param[in,out] dest  Destination memory pointer.
+  @param[in]     value New value.
+
+  @return Completion status
+  @retval 0 Success
+  @retval 1 Failure
+*/
+int do_def_check(THD *thd, SYS_VAR *var, void *dest,
+                 struct st_mysql_value *value) {
+  switch (var->flags & PLUGIN_VAR_TYPEMASK) {
+    case PLUGIN_VAR_BOOL:
+      return check_func_bool(thd, var, dest, value);
+    case PLUGIN_VAR_INT:
+      return check_func_int(thd, var, dest, value);
+    case PLUGIN_VAR_LONG:
+      return check_func_long(thd, var, dest, value);
+    case PLUGIN_VAR_LONGLONG:
+      return check_func_longlong(thd, var, dest, value);
+    case PLUGIN_VAR_STR:
+      return check_func_str(thd, var, dest, value);
+    case PLUGIN_VAR_ENUM:
+      return check_func_enum(thd, var, dest, value);
+    case PLUGIN_VAR_SET:
+      return check_func_set(thd, var, dest, value);
+    case PLUGIN_VAR_DOUBLE:
+      return check_func_double(thd, var, dest, value);
+    default:
+      assert(0);
+      return 1;
+  }
+}
+}  // namespace
+
 /**
   Set value for global variable with PLUGIN_VAR_MEMALLOC flag.
 
@@ -388,6 +429,9 @@ bool sys_var_pluginvar::do_check(THD *thd, set_var *var) {
   value.is_unsigned = item_is_unsigned;
   value.item = var->value;
 
+  if (var->type == OPT_PERSIST_ONLY) {
+    return do_def_check(thd, plugin_var, &var->save_result, &value);
+  }
   return plugin_var->check(thd, plugin_var, &var->save_result, &value);
 }
 
@@ -595,6 +639,74 @@ void sys_var_pluginvar::saved_value_to_string(THD *, set_var *var,
   }
 }
 
+/**
+  Set a PERSIST_ONLY value for a variable. The resulting value should be
+  set to a string representation of the actual value.
+
+  @param[in]     thd   Thread context.
+  @param[in]     var   Plugin variable.
+  @param[in,out] dest  Destination string pointer.
+*/
+void sys_var_pluginvar::persist_only_to_string(THD *thd, set_var *var,
+                                               String *dest) {
+  if (var->value) {
+    const auto *val = static_cast<const void *>(&var->save_result);
+    switch (plugin_var->flags & PLUGIN_VAR_TYPEMASK) {
+      case PLUGIN_VAR_BOOL: {
+        if (*static_cast<const bool *>(val)) {
+          dest->set("ON", 2, system_charset_info);
+        } else {
+          dest->set("OFF", 3, system_charset_info);
+        }
+        return;
+      }
+      case PLUGIN_VAR_INT:
+        dest->set_int(*static_cast<const int *>(val), false,
+                      system_charset_info);
+        return;
+      case PLUGIN_VAR_LONG:
+        dest->set_int(*static_cast<const long *>(val), false,
+                      system_charset_info);
+        return;
+      case PLUGIN_VAR_LONGLONG:
+        dest->set(*static_cast<const ulonglong *>(val), system_charset_info);
+        return;
+      case PLUGIN_VAR_STR: {
+        const char *str =
+            *(static_cast<const char **>(const_cast<void *>(val)));
+        if (str != nullptr) {
+          dest->copy(str, strlen(str), system_charset_info);
+        }
+        return;
+      }
+      case PLUGIN_VAR_SET: {
+        const auto *str =
+            set_to_string(thd, nullptr, *static_cast<const ulonglong *>(val),
+                          plugin_var_typelib()->type_names);
+        if (str != nullptr) {
+          dest->copy(str, strlen(str), system_charset_info);
+        }
+        return;
+      }
+      case PLUGIN_VAR_ENUM: {
+        const auto *str =
+            plugin_var_typelib()->type_names[*static_cast<const long *>(val)];
+        if (str != nullptr) {
+          dest->copy(str, strlen(str), system_charset_info);
+        }
+        return;
+      }
+      case PLUGIN_VAR_DOUBLE:
+        dest->set_real(*static_cast<const double *>(val), 6,
+                       system_charset_info);
+        return;
+      default:
+        assert(0);
+        return;
+    }
+  }
+}
+
 /****************************************************************************
   default variable data check and update functions
 ****************************************************************************/
@@ -608,7 +720,7 @@ int check_func_bool(THD *, SYS_VAR *, void *save, st_mysql_value *value) {
   if (value->value_type(value) == MYSQL_VALUE_TYPE_STRING) {
     length = sizeof(buff);
     if (!(str = value->val_str(value, buff, &length)) ||
-        (result = find_type(&bool_typelib, str, length, true) - 1) < 0)
+        (result = find_type(&bool_typelib, str, length, false) - 1) < 0)
       goto err;
   } else {
     if (value->val_int(value, &tmp) < 0) goto err;
@@ -941,4 +1053,193 @@ void plugin_opt_set_limits(struct my_option *options, const SYS_VAR *opt) {
   options->arg_type = REQUIRED_ARG;
   if (opt->flags & PLUGIN_VAR_NOCMDARG) options->arg_type = NO_ARG;
   if (opt->flags & PLUGIN_VAR_OPCMDARG) options->arg_type = OPT_ARG;
+}
+
+/****************************************************************************
+  System Variables support
+****************************************************************************/
+
+/*
+  returns a bookmark for thd-local variables, creating if necessary.
+  returns null for non thd-local variables.
+  Requires that a write lock is obtained on LOCK_system_variables_hash
+*/
+st_bookmark *register_var(const char *plugin, const char *name, int flags) {
+  const size_t length = strlen(plugin) + strlen(name) + 3;
+  size_t size = 0, offset, new_size;
+  st_bookmark *result;
+  char *varname, *p;
+
+  if (!(flags & PLUGIN_VAR_THDLOCAL)) return nullptr;
+
+  switch (flags & PLUGIN_VAR_TYPEMASK) {
+    case PLUGIN_VAR_BOOL:
+      size = sizeof(bool);
+      break;
+    case PLUGIN_VAR_INT:
+      size = sizeof(int);
+      break;
+    case PLUGIN_VAR_LONG:
+    case PLUGIN_VAR_ENUM:
+      size = sizeof(long);
+      break;
+    case PLUGIN_VAR_LONGLONG:
+    case PLUGIN_VAR_SET:
+      size = sizeof(ulonglong);
+      break;
+    case PLUGIN_VAR_STR:
+      size = sizeof(char *);
+      break;
+    case PLUGIN_VAR_DOUBLE:
+      size = sizeof(double);
+      break;
+    default:
+      assert(0);
+      return nullptr;
+  };
+
+  varname = ((char *)my_alloca(length));
+  strxmov(varname + 1, plugin, "_", name, NullS);
+  for (p = varname + 1; *p; p++)
+    if (*p == '-') *p = '_';
+
+  if (!(result = find_bookmark(nullptr, varname + 1, flags))) {
+    result =
+        (st_bookmark *)plugin_mem_root.Alloc(sizeof(st_bookmark) + length - 1);
+    varname[0] = flags & PLUGIN_VAR_TYPEMASK;
+    memcpy(result->key, varname, length);
+    result->name_len = length - 2;
+    result->offset = -1;
+
+    assert(size && !(size & (size - 1))); /* must be power of 2 */
+
+    offset = global_system_variables.dynamic_variables_size;
+    offset = (offset + size - 1) & ~(size - 1);
+    result->offset = (int)offset;
+
+    new_size = (offset + size + 63) & ~63;
+
+    if (new_size > global_variables_dynamic_size) {
+      global_system_variables.dynamic_variables_ptr = (char *)my_realloc(
+          key_memory_global_system_variables,
+          global_system_variables.dynamic_variables_ptr, new_size,
+          MYF(MY_WME | MY_FAE | MY_ALLOW_ZERO_PTR));
+      max_system_variables.dynamic_variables_ptr = (char *)my_realloc(
+          key_memory_global_system_variables,
+          max_system_variables.dynamic_variables_ptr, new_size,
+          MYF(MY_WME | MY_FAE | MY_ALLOW_ZERO_PTR));
+      /*
+        Clear the new variable value space. This is required for string
+        variables. If their value is non-NULL, it must point to a valid
+        string.
+      */
+      memset(global_system_variables.dynamic_variables_ptr +
+                 global_variables_dynamic_size,
+             0, new_size - global_variables_dynamic_size);
+      memset(max_system_variables.dynamic_variables_ptr +
+                 global_variables_dynamic_size,
+             0, new_size - global_variables_dynamic_size);
+      global_variables_dynamic_size = new_size;
+    }
+
+    global_system_variables.dynamic_variables_head = offset;
+    max_system_variables.dynamic_variables_head = offset;
+    global_system_variables.dynamic_variables_size = offset + size;
+    max_system_variables.dynamic_variables_size = offset + size;
+    global_system_variables.dynamic_variables_version++;
+    max_system_variables.dynamic_variables_version++;
+
+    result->version = global_system_variables.dynamic_variables_version;
+
+    /* this should succeed because we have already checked if a dup exists */
+    std::string key(result->key, result->name_len + 1);
+    bookmark_hash->emplace(key, result);
+
+    /*
+      Hashing vars of string type with MEMALLOC flag.
+    */
+    if (((flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) &&
+        (flags & PLUGIN_VAR_MEMALLOC) &&
+        !malloced_string_type_sysvars_bookmark_hash->emplace(key, result)
+             .second) {
+      fprintf(stderr,
+              "failed to add placeholder to"
+              " hash of malloced string type sysvars");
+      assert(0);
+    }
+  }
+  return result;
+}
+
+/**
+  For correctness and simplicity's sake, a pointer to a function
+  must be compatible with pointed-to type, that is, the return and
+  parameters types must be the same. Thus, a callback function is
+  defined for each scalar type. The functions are assigned in
+  construct_options to their respective types.
+*/
+bool *mysql_sys_var_bool(THD *thd, int offset) {
+  return (bool *)intern_sys_var_ptr(thd, offset, true);
+}
+
+int *mysql_sys_var_int(THD *thd, int offset) {
+  return (int *)intern_sys_var_ptr(thd, offset, true);
+}
+
+unsigned int *mysql_sys_var_uint(THD *thd, int offset) {
+  return (unsigned int *)intern_sys_var_ptr(thd, offset, true);
+}
+
+unsigned long *mysql_sys_var_ulong(THD *thd, int offset) {
+  return (unsigned long *)intern_sys_var_ptr(thd, offset, true);
+}
+
+unsigned long long *mysql_sys_var_ulonglong(THD *thd, int offset) {
+  return (unsigned long long *)intern_sys_var_ptr(thd, offset, true);
+}
+
+char **mysql_sys_var_str(THD *thd, int offset) {
+  return (char **)intern_sys_var_ptr(thd, offset, true);
+}
+
+double *mysql_sys_var_double(THD *thd, int offset) {
+  return (double *)intern_sys_var_ptr(thd, offset, true);
+}
+
+static Item *alloc_and_copy_string(const char *str) {
+  if (str != nullptr) {
+    char *tmp_str = sql_strmake(str, strlen(str));
+    return new Item_string(tmp_str, strlen(tmp_str), system_charset_info);
+  } else {
+    return new Item_null();
+  }
+}
+
+Item *sys_var_pluginvar::copy_value(THD *thd) {
+  const auto *val_ptr = session_value_ptr(thd, thd, {});
+
+  switch (plugin_var->flags & PLUGIN_VAR_TYPEMASK) {
+    case PLUGIN_VAR_BOOL:
+      return new Item_int(*(const bool *)val_ptr);
+    case PLUGIN_VAR_INT:
+      return new Item_int(*(const int *)val_ptr);
+    case PLUGIN_VAR_LONG:
+      return new Item_int((longlong) * (const long *)val_ptr);
+    case PLUGIN_VAR_LONGLONG:
+      return new Item_int(*(const longlong *)val_ptr);
+    case PLUGIN_VAR_SET:
+    case PLUGIN_VAR_ENUM: {
+      const auto *val_str = pointer_cast<const char *>(val_ptr);
+      return (alloc_and_copy_string(val_str));
+    }
+    case PLUGIN_VAR_STR: {
+      const auto *val_str = *pointer_cast<const char *const *>(val_ptr);
+      return (alloc_and_copy_string(val_str));
+    }
+    case PLUGIN_VAR_DOUBLE:
+      return new Item_float(*(const double *)val_ptr, DECIMAL_NOT_SPECIFIED);
+    default:
+      assert(0);
+  }
+  return (nullptr);
 }

@@ -34,7 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "mach0data.h"
 
-#include <stddef.h>
+#include <cstddef>
 
 /** Read a 64-bit integer in a much compressed form.
 @param[in,out]  ptr     pointer to memory from where to read,

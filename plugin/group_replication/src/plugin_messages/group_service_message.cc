@@ -22,21 +22,21 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/group_replication/include/plugin_messages/group_service_message.h"
-#include <string.h>
+
+#include <cstring>
+
 #include "my_byteorder.h"
 #include "my_dbug.h"
 #include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 
 Group_service_message::Group_service_message()
     : Plugin_gcs_message(CT_MESSAGE_SERVICE_MESSAGE),
-      m_tag(""),
       m_data(Malloc_allocator<uchar>(key_message_service_received_message)),
       m_data_pointer(nullptr),
       m_data_pointer_length(0) {}
 
 Group_service_message::Group_service_message(const uchar *buf, size_t len)
     : Plugin_gcs_message(CT_MESSAGE_SERVICE_MESSAGE),
-      m_tag(""),
       m_data(Malloc_allocator<uchar>(key_message_service_received_message)),
       m_data_pointer(nullptr),
       m_data_pointer_length(0) {
@@ -60,9 +60,8 @@ const uchar *Group_service_message::get_data() {
 
   if (nullptr != m_data_pointer) {
     return m_data_pointer; /* purecov: inspected */
-  } else {
-    return m_data.data();
   }
+  return m_data.data();
 }
 
 size_t Group_service_message::get_data_length() {
@@ -70,9 +69,8 @@ size_t Group_service_message::get_data_length() {
 
   if (nullptr != m_data_pointer) {
     return m_data_pointer_length; /* purecov: inspected */
-  } else {
-    return m_data.size();
   }
+  return m_data.size();
 }
 
 void Group_service_message::encode_payload(std::vector<uchar> *buffer) const {

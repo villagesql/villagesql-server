@@ -311,7 +311,8 @@ const Plugin_data router_plugins[]{
         "router_openssl",
         "io",
         "connection_pool",
-        "destination_status"
+        "destination_status",
+        "host_cache"
     )",
      ""},
     {"metadata_cache",

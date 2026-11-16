@@ -67,8 +67,6 @@ class NodeAttributesTest : public RouterComponentMetadataTest {
                      const bool no_primary = false) {
     assert(nodes_count > 0);
 
-    const std::string json_metadata = get_data_dir().join(tracefile).str();
-
     for (size_t i = 0; i < nodes_count; ++i) {
       // if we are "relaunching" the cluster we want to use the same port as
       // before as router has them in the configuration
@@ -78,8 +76,10 @@ class NodeAttributesTest : public RouterComponentMetadataTest {
       }
 
       cluster_nodes.push_back(
-          &launch_mysql_server_mock(json_metadata, node_ports[i], EXIT_SUCCESS,
-                                    false, node_http_ports[i]));
+          &mock_server_spawner().spawn(mock_server_cmdline(tracefile)
+                                           .port(node_ports[i])
+                                           .http_port(node_http_ports[i])
+                                           .args()));
     }
 
     for (size_t i = 0; i < nodes_count; ++i) {
@@ -110,7 +110,7 @@ class NodeAttributesTest : public RouterComponentMetadataTest {
                     const bool read_only = false) {
     const std::string metadata_cache_section =
         get_metadata_cache_section(cluster_type, ttl);
-    std::string routing_rw_section{""};
+    std::string routing_rw_section;
     if (!read_only) {
       routing_rw_section = get_metadata_cache_routing_section(
           router_rw_port, "PRIMARY", "first-available", "rw");
@@ -163,7 +163,7 @@ class NodeAttributesTest : public RouterComponentMetadataTest {
 
   std::vector<uint16_t> node_ports, node_http_ports;
   std::vector<ProcessWrapper *> cluster_nodes;
-  ProcessWrapper *router;
+  ProcessWrapper *router{};
 
   const uint16_t router_rw_port{port_pool_.get_next_available()};
   const uint16_t router_ro_port{port_pool_.get_next_available()};
@@ -1203,32 +1203,17 @@ TEST_P(InvalidAttributesTagsTest, InvalidAttributesTags) {
 
   SCOPED_TRACE("// Check the expected warnings were logged once");
   check_log_contains(
-      *router,
-      "Error parsing _hidden from attributes JSON string: not a valid JSON "
-      "object",
-      1);
-  check_log_contains(
-      *router,
-      "Error parsing _disconnect_existing_sessions_when_hidden from "
-      "attributes "
-      "JSON string: not a valid JSON object",
+      *router, "Error parsing attributes JSON string: not a valid JSON object",
       1);
 
   SCOPED_TRACE("// Set the node's attributes.tags to invalid JSON");
   set_nodes_attributes({R"({"tags" : false})"});
 
   SCOPED_TRACE("// Check the expected warnings were logged once");
-  check_log_contains(
-      *router,
-      "Error parsing _hidden from attributes JSON string: tags - not a valid "
-      "JSON object",
-      1);
-  check_log_contains(
-      *router,
-      "Error parsing _disconnect_existing_sessions_when_hidden from "
-      "attributes "
-      "JSON string: tags - not a valid JSON object",
-      1);
+  check_log_contains(*router,
+                     "Error parsing attributes JSON string: tags field is not "
+                     "a valid JSON object",
+                     1);
 
   SCOPED_TRACE("// Set the attributes.tags to be invalid types");
   set_nodes_attributes(

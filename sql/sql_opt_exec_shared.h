@@ -176,8 +176,6 @@ struct Index_lookup {
   }
 };
 
-struct CACHE_FIELD;
-class QEP_operation;
 class Filesort;
 class Semijoin_mat_exec;
 
@@ -439,7 +437,7 @@ class QEP_shared {
   /**
     Whether the condition in m_condition is evaluated in front of a sort,
     so that it does not need to be evaluated again (unless it is outer to
-    an inner join; see the relevant comments in SortingIterator::Init().
+    an inner join; see the relevant comments in SortingIterator::DoInit().
 
     Note that m_condition remains non-nullptr in this case, for purposes
     of the (non-tree) EXPLAIN and for filesort to build up its read maps.

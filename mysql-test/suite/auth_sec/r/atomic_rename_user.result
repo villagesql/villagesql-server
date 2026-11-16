@@ -52,6 +52,8 @@ userZ
 # This event sequence pattern MUST NOT be present in binlog: !Q(RENAME USER.*userA.*TO.*userX.*,.*userB.*TO.*userY.*,.*userC.*TO.*userZ.*)
 include/rpl/assert_binlog_events.inc
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 include/rpl/save_binlog_file_position.inc
 # Try renaming two different user and use same user as target
 RENAME USER userA TO userX, userB TO userX;
@@ -86,13 +88,17 @@ Warnings:
 Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.user]
 FLUSH PRIVILEGES;
 Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 Warning	1805	Column count of mysql.user is wrong. Expected 51, found 1. The table is probably corrupted
 SHOW WARNINGS;
 Level	Code	Message
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 Warning	1805	Column count of mysql.user is wrong. Expected 51, found 1. The table is probably corrupted
 DROP TABLE mysql.user;
 RENAME TABLE mysql.user_bak TO mysql.user;
 FLUSH PRIVILEGES;
+Warnings:
+Warning	1681	'FLUSH PRIVILEGES' is deprecated and will be removed in a future release.
 #
 # Bug #32068470: TO_HOST AND TO_USER NOT SET
 # Self-renaming isuses
@@ -147,22 +153,6 @@ SELECT user(), current_user();
 user()	current_user()
 a@localhost	b@1
 DROP USER b@1;
-# Proxy user
-CREATE USER a IDENTIFIED with 'mysql_native_password', b;
-GRANT CREATE USER ON *.* TO b;
-GRANT PROXY ON b TO a;
-SET @@global.check_proxy_users = ON;
-SET @@global.mysql_native_password_proxy_users = ON;
-SELECT user(), current_user(), @@proxy_user;
-user()	current_user()	@@proxy_user
-a@localhost	b@%	'a'@'%'
-RENAME USER a TO c;
-SELECT user(), current_user(), @@proxy_user;
-user()	current_user()	@@proxy_user
-a@localhost	b@%	'c'@'%'
-DROP USER b, c;
-SET @@global.check_proxy_users = OFF;
-SET @@global.mysql_native_password_proxy_users = OFF;
 # Anonymous user
 CREATE USER ''@'localhost';
 GRANT CREATE USER ON *.* TO ''@'localhost';

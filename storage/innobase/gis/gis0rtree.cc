@@ -927,6 +927,7 @@ rec_t *rtr_page_split_and_insert(
   }
 
 func_start:
+  ut_ad(*heap != nullptr);
   ut_ad(tuple->m_heap != *heap);
   mem_heap_empty(*heap);
   *offsets = nullptr;

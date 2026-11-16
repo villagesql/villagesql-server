@@ -22,7 +22,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <mysql/components/component_implementation.h>
-#include <string.h>
+#include <cstring>
 
 #include "mysql/components/services/mysql_query_attributes.h"
 #include "mysql/components/services/mysql_string.h"

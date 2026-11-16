@@ -73,7 +73,7 @@ Compressor::Grow_constraint_t Compressor::get_grow_constraint_hint() const {
 }
 
 Compressor::Grow_constraint_t Compressor::do_get_grow_constraint_hint() const {
-  return Grow_constraint_t();
+  return {};
 }
 
 void Compressor::set_pledged_input_size(Size_t size) {

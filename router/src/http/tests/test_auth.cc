@@ -97,8 +97,9 @@ class ChallengeTest
                      std::vector<std::pair<std::string, std::string>>>> {};
 
 TEST_P(ChallengeTest, to_string) {
-  HttpAuthChallenge challenge(std::get<1>(GetParam()), std::get<2>(GetParam()),
-                              std::get<3>(GetParam()));
+  HttpAuthChallenge const challenge(std::get<1>(GetParam()),
+                                    std::get<2>(GetParam()),
+                                    std::get<3>(GetParam()));
   EXPECT_EQ(challenge.str(), std::get<0>(GetParam()));
 }
 

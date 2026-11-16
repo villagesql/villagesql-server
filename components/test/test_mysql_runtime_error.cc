@@ -21,11 +21,11 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <assert.h>
 #include <mysql/components/component_implementation.h>
 #include <mysql/components/services/udf_registration.h>
 #include <mysqld_error.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
 
 namespace mysql_runtime_error {  // To avoid ODR asan error
 #include <mysql/components/services/mysql_runtime_error_service.h>

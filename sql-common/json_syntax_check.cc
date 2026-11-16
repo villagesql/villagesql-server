@@ -23,7 +23,7 @@
 
 #include "sql-common/json_syntax_check.h"
 
-#include <assert.h>
+#include <cassert>
 #include <string>
 #include <utility>
 

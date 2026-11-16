@@ -152,7 +152,7 @@ static Component_db_intact table_intact;
   @retval false success
 */
 static bool open_component_table(THD *thd, enum thr_lock_type lock_type,
-                                 TABLE **table, ulong acl_to_check) {
+                                 TABLE **table, Access_bitmask acl_to_check) {
   Table_ref tables("mysql", "component", lock_type);
 
   if (mysql_persistent_dynamic_loader_imp::initialized() && !opt_noacl &&

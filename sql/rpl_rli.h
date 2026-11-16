@@ -50,7 +50,9 @@
 #include "mysql/thread_type.h"
 #include "prealloced_array.h"  // Prealloced_array
 #include "sql/binlog.h"        // MYSQL_BIN_LOG
-#include "sql/log_event.h"     //Gtid_log_event
+#include "sql/changestreams/apply/metrics/applier_metrics.h"
+#include "sql/changestreams/apply/metrics/applier_metrics_stub.h"
+#include "sql/log_event.h"  //Gtid_log_event
 #include "sql/psi_memory_key.h"
 #include "sql/query_options.h"
 #include "sql/rpl_gtid.h"         // Gtid_set
@@ -73,7 +75,6 @@ class Slave_committed_queue;
 class Slave_worker;
 class String;
 struct LEX_SOURCE_INFO;
-struct db_worker_hash_entry;
 
 extern uint sql_replica_skip_counter;
 
@@ -83,6 +84,7 @@ typedef struct slave_job_item {
   Log_event *data;
   my_off_t relay_pos;
   char event_relay_log_name[FN_REFLEN + 1];
+  bool m_is_after_metrics_breakpoint;
 } Slave_job_item;
 
 /**
@@ -682,6 +684,11 @@ class Relay_log_info : public Rpl_info {
     happen when, for example, the relay log gets rotated because of
     max_binlog_size.
   */
+
+  // overridden new and delete operators for 64 byte alignment
+  static void *operator new(size_t request);
+  static void operator delete(void *ptr);
+
  protected:
   /**
      Event group means a group of events of a transaction. group_relay_log_name
@@ -1155,15 +1162,6 @@ class Relay_log_info : public Rpl_info {
   // number's is determined by global replica_parallel_workers
   Slave_worker_array workers;
 
-  // To map a database to a worker
-  malloc_unordered_map<std::string,
-                       unique_ptr_with_deleter<db_worker_hash_entry>>
-      mapping_db_to_worker{key_memory_db_worker_hash_entry};
-  bool inited_hash_workers;  //  flag to check if mapping_db_to_worker is inited
-
-  mysql_mutex_t slave_worker_hash_lock;  // for mapping_db_to_worker
-  mysql_cond_t slave_worker_hash_cond;   // for mapping_db_to_worker
-
   /*
     For the purpose of reporting the worker status in performance schema table,
     we need to preserve the workers array after worker thread was killed. So, we
@@ -1206,16 +1204,12 @@ class Relay_log_info : public Rpl_info {
   /*
     Container for references of involved partitions for the current event group
   */
-  // CGAP dynarray holds id:s of partitions of the Current being executed Group
-  Prealloced_array<db_worker_hash_entry *, 4> curr_group_assigned_parts;
   // deferred array to hold partition-info-free events
   Prealloced_array<Slave_job_item, 8> curr_group_da;
 
   bool curr_group_seen_gtid;   // current group started with Gtid-event or not
   bool curr_group_seen_begin;  // current group started with B-event or not
   bool curr_group_isolated;    // current group requires execution in isolation
-  bool mts_end_group_sets_max_dbs;  // flag indicates if partitioning info is
-                                    // discovered
   volatile ulong
       mts_wq_underrun_w_id;  // Id of a Worker whose queue is getting empty
   /*
@@ -1229,6 +1223,7 @@ class Relay_log_info : public Rpl_info {
      Coordinator in order to avoid reaching WQ limits.
   */
   std::atomic<long> mts_wq_excess_cnt;
+  ulonglong mts_groups_assigned;    // number of groups (transactions) scheduled
   long mts_worker_underrun_level;   // % of WQ size at which W is considered
                                     // hungry
   ulong mts_coordinator_basic_nap;  // C sleeps to avoid WQs overrun
@@ -1275,44 +1270,22 @@ class Relay_log_info : public Rpl_info {
     MTS_KILLED_GROUP /* Coordinator gave up to reach MTS_END_GROUP */
   } mts_group_status;
 
-  /*
-    MTS statistics:
-  */
-  long mts_online_stat_curr;      // counter to decide on generating
-                                  // ER_RPL_MTA_STATISTICS message
-  ulonglong mts_events_assigned;  // number of events (statements) scheduled
-  ulonglong mts_groups_assigned;  // number of groups (transactions) scheduled
-  std::atomic<ulong>
-      mts_wq_overrun_cnt;   // counter of all mts_wq_excess_cnt increments
-  ulong wq_size_waits_cnt;  // number of times C slept due to WQ:s oversize
-  /*
-    Counter of how many times Coordinator saw Workers are filled up
-    "enough" with assignments. The enough definition depends on
-    the scheduler type.
-  */
-  ulong mts_wq_no_underrun_cnt;
-  std::atomic<longlong>
-      mts_total_wait_overlap;  // Waiting time corresponding to above
-  /*
-    Stats to compute Coordinator waiting time for any Worker available,
-    applies solely to the Commit-clock scheduler.
-  */
-  ulonglong mts_total_wait_worker_avail;
-  ulong mts_wq_overfill_cnt;  // counter of C waited due to a WQ queue was full
-  /*
-    Statistics (todo: replace with WL5631) applies to either Coordinator and
-    Worker. The exec time in the Coordinator case means scheduling. The read
-    time in the Worker case means getting an event out of Worker queue
-  */
-  ulonglong stats_exec_time;
-  ulonglong stats_read_time;
-  struct timespec ts_exec[2];   // per event pre- and post- exec timestamp
-  struct timespec stats_begin;  // applier's bootstrap time
+ private:
+  /// @brief The applier metrics aggregator
+  cs::apply::instruments::Applier_metrics m_coordinator_metrics;
+  /// @brief Empty metric aggregator when metric collection is not active
+  cs::apply::instruments::Applier_metrics_stub m_disabled_metric_aggregator;
 
-  time_t mts_last_online_stat;
+ public:
+  /// @brief Returns the replication applier metrics aggregator
+  /// @return the MTA metrics aggregator
+  cs::apply::instruments::Applier_metrics_interface &get_applier_metrics();
+
+  /// Number of times queue memory is exceeded
+  ulong worker_queue_mem_exceeded_count{0};
+
   /// Last moment in time the MTA printed a coordinator waited stats
   time_t mta_coordinator_has_waited_stat;
-  /* end of MTS statistics */
 
   /**
     Storage for holding newly computed values for the last executed
@@ -1398,6 +1371,9 @@ class Relay_log_info : public Rpl_info {
   inline bool is_mts_in_group() {
     return is_parallel_exec() && mts_group_status == MTS_IN_GROUP;
   }
+
+  bool mts_workers_queue_empty() const;
+  bool cannot_safely_rollback() const;
 
   /**
      Check if it is time to compute MTS checkpoint.
@@ -2178,11 +2154,6 @@ bool mysql_show_relaylog_events(THD *thd);
 inline bool is_mts_worker(const THD *thd) {
   return thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER;
 }
-
-/**
- Auxiliary function to check if we have a db partitioned MTS
- */
-bool is_mts_db_partitioned(Relay_log_info *rli);
 
 /**
   Checks whether the supplied event encodes a (2pc-aware) DDL

@@ -1,5 +1,4 @@
 /* Copyright (c) 2007, 2026, Oracle and/or its affiliates.
-   Use is subject to license terms
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,7 +30,7 @@ bool printBUILD_INDX_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const BuildIndxReq *sig = (const BuildIndxReq *)theData;
+  const auto *sig = (const BuildIndxReq *)theData;
   fprintf(output, " clientRef: 0x%x", sig->clientRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, "\n");
@@ -57,7 +56,7 @@ bool printBUILD_INDX_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const BuildIndxConf *sig = (const BuildIndxConf *)theData;
+  const auto *sig = (const BuildIndxConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, "\n");
@@ -77,7 +76,7 @@ bool printBUILD_INDX_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const BuildIndxRef *sig = (const BuildIndxRef *)theData;
+  const auto *sig = (const BuildIndxRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, "\n");

@@ -392,7 +392,7 @@ fail:
 // See log_service_imp::get_log_name below for description
 static log_service_error get_json_log_name(void *instance, char *buf,
                                            size_t bufsize) {
-  my_state *mi = (my_state *)instance;
+  auto *mi = (my_state *)instance;
   int stream_id = 0;  // default stream-ID
   size_t len;
 

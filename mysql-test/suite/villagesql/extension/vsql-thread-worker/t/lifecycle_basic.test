@@ -18,17 +18,17 @@ INSTALL EXTENSION vsql_lifecycle_test;
 
 --echo # Thread should NOT be running yet (enabled defaults to OFF)
 SELECT COUNT(*) FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+WHERE info = 'vsql_lifecycle_test/monitor';
 
 SET GLOBAL vsql_lifecycle_test.monitor_enabled = ON;
 
---let $wait_condition = SELECT COUNT(*) > 0 FROM performance_schema.processlist WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+--let $wait_condition = SELECT COUNT(*) > 0 FROM performance_schema.processlist WHERE info = 'vsql_lifecycle_test/monitor'
 --source include/wait_condition.inc
 
 --echo # Thread should appear in processlist after enable
 --replace_column 1 <id>
 SELECT id, user, info FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor'
+WHERE info = 'vsql_lifecycle_test/monitor'
 ORDER BY id;
 
 --let $wait_condition = SELECT vsql_lifecycle_test.tick_count() > 0
@@ -41,6 +41,6 @@ SET GLOBAL vsql_lifecycle_test.monitor_enabled = OFF;
 
 --echo # Thread is gone from processlist after disable
 SELECT COUNT(*) FROM performance_schema.processlist
-WHERE user = 'vef_worker' AND info = 'vsql_lifecycle_test/monitor';
+WHERE info = 'vsql_lifecycle_test/monitor';
 
 UNINSTALL EXTENSION vsql_lifecycle_test;

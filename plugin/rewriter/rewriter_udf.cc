@@ -28,9 +28,9 @@
 
 #include "my_config.h"
 
-#include <assert.h>
-#include <ctype.h>
 #include <mysql.h>
+#include <cassert>
+#include <cctype>
 
 #include "my_inttypes.h"
 #include "my_sys.h"

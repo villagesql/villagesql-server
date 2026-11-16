@@ -1,0 +1,2 @@
+$KEYRING_UDF_OPT
+--loose-percona-telemetry-disable=ON

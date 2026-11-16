@@ -36,11 +36,13 @@
 #include "plugin/group_replication/include/gcs_event_handlers.h"
 #include "plugin/group_replication/include/leave_group_on_failure.h"
 #include "plugin/group_replication/include/observer_trans.h"
+#include "plugin/group_replication/include/opt_tracker.h"
 #include "plugin/group_replication/include/pipeline_stats.h"
 #include "plugin/group_replication/include/plugin.h"
 #include "plugin/group_replication/include/plugin_handlers/member_actions_handler.h"
 #include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 #include "plugin/group_replication/include/plugin_handlers/primary_election_invocation_handler.h"
+#include "plugin/group_replication/include/plugin_handlers/primary_election_most_uptodate.h"
 #include "plugin/group_replication/include/plugin_handlers/remote_clone_handler.h"
 #include "plugin/group_replication/include/plugin_messages/group_action_message.h"
 #include "plugin/group_replication/include/plugin_messages/group_service_message.h"
@@ -1229,7 +1231,7 @@ void Plugin_gcs_events_handler::handle_joining_members(const Gcs_view &new_view,
     /**
       Set the read mode if not set during start (auto-start)
     */
-    if (enable_server_read_mode()) {
+    if (enable_server_read_mode("(GR) join group")) {
       /*
         The notification will be triggered in the top level handle function
         that calls this one. In this case, the on_view_changed handle.
@@ -1662,6 +1664,7 @@ Gcs_message_data *Plugin_gcs_events_handler::get_exchangeable_data() const {
   std::string server_executed_gtids;
   std::string server_purged_gtids;
   std::string applier_retrieved_gtids;
+  bool most_uptodate_enabled{false};
   Replication_thread_api applier_channel("group_replication_applier");
 
   Get_system_variable *get_system_variable = new Get_system_variable();
@@ -1686,6 +1689,11 @@ Gcs_message_data *Plugin_gcs_events_handler::get_exchangeable_data() const {
   group_member_mgr->update_gtid_sets(local_member_info->get_uuid(),
                                      server_executed_gtids, server_purged_gtids,
                                      applier_retrieved_gtids);
+
+  most_uptodate_enabled = Primary_election_most_update::is_enabled();
+  group_member_mgr->update_component_primary_election_enabled(
+      local_member_info->get_uuid(), most_uptodate_enabled);
+
 sending:
 
   delete get_system_variable;
@@ -1892,7 +1900,6 @@ int Plugin_gcs_events_handler::check_group_compatibility(
 
 Compatibility_type
 Plugin_gcs_events_handler::check_version_compatibility_with_group() const {
-  bool override_lower_incompatibility = false;
   Compatibility_type compatibility_type = COMPATIBLE;
   bool read_compatible = false;
 
@@ -1933,23 +1940,8 @@ Plugin_gcs_events_handler::check_version_compatibility_with_group() const {
     }
 
     if (compatibility_type == INCOMPATIBLE_LOWER_VERSION) {
-      if (get_allow_local_lower_version_join()) {
-        /*
-          Despite between these two members the compatibility type
-          is INCOMPATIBLE_LOWER_VERSION, when compared with others
-          group members this server may be INCOMPATIBLE, so we need
-          to test with all group members.
-        */
-        override_lower_incompatibility = true;
-        compatibility_type = COMPATIBLE;
-      } else {
-        compatibility_type = INCOMPATIBLE;
-      }
+      compatibility_type = INCOMPATIBLE;
     }
-  }
-
-  if (compatibility_type != INCOMPATIBLE && override_lower_incompatibility) {
-    LogPluginErr(INFORMATION_LEVEL, ER_GRP_RPL_MEMBER_VERSION_LOWER_THAN_GRP);
   }
 
   if (read_compatible && compatibility_type != INCOMPATIBLE) {
@@ -2242,6 +2234,8 @@ void Plugin_gcs_events_handler::disable_read_mode_for_compatible_members(
       if (disable_server_read_mode()) {
         LogPluginErr(WARNING_LEVEL,
                      ER_GRP_RPL_DISABLE_SRV_READ_MODE_RESTRICTED);
+      } else {
+        track_group_replication_enabled(true);
       }
     }
   }

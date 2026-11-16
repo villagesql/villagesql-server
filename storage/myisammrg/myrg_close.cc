@@ -23,7 +23,7 @@
 
 /* close a isam-database */
 
-#include <stddef.h>
+#include <cstddef>
 
 #include "my_dbug.h"
 #include "storage/myisam/myisamdef.h"

@@ -25,8 +25,7 @@
 
 #include "plugin/x/src/json_utils.h"
 
-namespace xpl {
-namespace test {
+namespace xpl::test {
 
 struct Param_is_id_in_json {
   bool expect;
@@ -62,5 +61,4 @@ Param_is_id_in_json is_id_in_json_param[] = {
 INSTANTIATE_TEST_SUITE_P(is_id_in_json, Is_id_in_json_test,
                          testing::ValuesIn(is_id_in_json_param));
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

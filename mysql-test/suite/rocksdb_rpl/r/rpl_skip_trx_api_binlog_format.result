@@ -1,0 +1,54 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("Masters binlog format is not ROW and storage engine can not handle non-ROW events at this time.*");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+set @orig_rocksdb_rpl_skip_tx_api=@@global.rocksdb_rpl_skip_tx_api;
+set @orig_read_only=@@global.read_only;
+set @orig_super_read_only=@@global.super_read_only;
+set @@global.rocksdb_rpl_skip_tx_api=ON;
+set rocksdb_unsafe_for_binlog=1;
+create table t1(a int) engine=rocksdb;
+insert into t1 values(1);
+include/rpl/wait_for_applier_error.inc [errno=13117]
+"Table after error"
+select * from t1;
+a
+set @@global.super_read_only=ON;
+include/rpl/start_replica.inc
+include/rpl/sync_to_replica.inc
+"Table after error fixed"
+select * from t1;
+a
+1
+drop table t1;
+include/rpl/sync_to_replica.inc
+set @@global.rocksdb_rpl_skip_tx_api=@orig_rocksdb_rpl_skip_tx_api;
+set @@global.super_read_only=@orig_super_read_only;
+set @@global.read_only=@orig_read_only;
+set @@global.rocksdb_rpl_skip_tx_api=ON;
+set rocksdb_unsafe_for_binlog=1;
+create table t1(a int, primary key (a)) engine=rocksdb partition by key(a) partitions 2;
+insert into t1 values(1), (2), (3), (4);
+include/rpl/wait_for_applier_error.inc [errno=13117]
+"Table after error"
+select * from t1;
+a
+set @@global.super_read_only=ON;
+include/rpl/start_replica.inc
+include/rpl/sync_to_replica.inc
+"Table after error fixed"
+select * from t1;
+a
+1
+3
+2
+4
+drop table t1;
+include/rpl/sync_to_replica.inc
+set @@global.rocksdb_rpl_skip_tx_api=@orig_rocksdb_rpl_skip_tx_api;
+set @@global.super_read_only=@orig_super_read_only;
+set @@global.read_only=@orig_read_only;
+include/rpl/deinit.inc

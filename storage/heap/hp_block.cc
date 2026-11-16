@@ -23,8 +23,8 @@
 
 /* functions on blocks; Keys and records are saved in blocks */
 
-#include <stddef.h>
 #include <sys/types.h>
+#include <cstddef>
 
 #include "my_inttypes.h"
 #include "mysql/service_mysql_alloc.h"

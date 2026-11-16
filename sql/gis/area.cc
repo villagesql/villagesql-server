@@ -28,9 +28,9 @@
 #include "sql/gis/area.h"
 #include "sql/gis/area_functor.h"
 
-#include <assert.h>
 #include <boost/geometry.hpp>  // boost::geometry
-#include <cmath>               // isfinite
+#include <cassert>
+#include <cmath>  // isfinite
 
 // assert
 #include "my_inttypes.h"                            // MYF

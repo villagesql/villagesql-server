@@ -32,9 +32,8 @@
 
 #include "my_config.h"
 
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
+#include <cerrno>
+#include <cstring>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif

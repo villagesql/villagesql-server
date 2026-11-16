@@ -13,7 +13,7 @@ id	val_double	val_complex
 DROP TABLE t_implicit_default;
 CREATE TABLE t_empty (id INT, val_double DOUBLE, val_complex COMPLEX);
 INSERT INTO t_empty VALUES (1, '', '(1,2)');
-ERROR 01000: Data truncated for column 'val_double' at row 1
+ERROR HY000: Incorrect DOUBLE value: '' for column 'val_double' at row 1
 INSERT INTO t_empty VALUES (2, 3.14, '');
 ERROR HY000: Incorrect COMPLEX value: '' for column 'val_complex' at row 1
 DROP TABLE t_empty;

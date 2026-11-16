@@ -44,10 +44,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sys/time.h>
 #endif
 
-#ifndef UNIV_HOTBACKUP
-#include <mysql_com.h>
-#endif /* !UNIV_HOTBACKUP */
-
 #include "my_compiler.h"
 #include "mysql_com.h"
 #include "os0thread.h"
@@ -489,6 +485,8 @@ const char *ut_strerr(dberr_t num) {
       return "Data is not sorted.";
     case DB_BULK_TOO_BIG_RECORD:
       return "Row is too big for LOAD BULK DATA operation.";
+    case DB_BULK_GCOL_INVALID_DATA:
+      return "Data for generated column is invalid";
     case DB_VILLAGESQL_ERROR:
       return "VillageSQL: Error in custom type operation.";
     case DB_ERROR_UNSET:;

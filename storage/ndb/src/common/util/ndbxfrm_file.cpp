@@ -22,8 +22,8 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "util/ndbxfrm_file.h"
-#include <math.h>
 #include <algorithm>
+#include <cmath>
 #include "portlib/ndb_file.h"
 #include "util/ndb_az31.h"
 #include "util/ndb_math.h"
@@ -461,7 +461,7 @@ int ndbxfrm_file::close(bool abort) {
 
     if (!abort) {
       ndbxfrm_input_iterator in = m_file_buffer.get_input_iterator();
-      while (in.size() > 0) {
+      while (!in.empty()) {
         int n = m_file->append(in.cbegin(), in.size());
         if (n == -1) {
           RETURN(-1);
@@ -865,11 +865,7 @@ int ndbxfrm_file::read_trailer(ndbxfrm_input_reverse_iterator *rin,
     m_data_size = data_size;
 
     Uint32 data_crc32 = 0;
-    if (ndbxfrm_trailer.get_data_crc32(&data_crc32) == 0) {
-      m_have_data_crc32 = true;
-    } else {
-      m_have_data_crc32 = false;
-    }
+    m_have_data_crc32 = (ndbxfrm_trailer.get_data_crc32(&data_crc32) == 0);
     m_data_crc32 = data_crc32;
   } else {
     require(m_file_format == FF_RAW);

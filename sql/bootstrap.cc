@@ -157,7 +157,26 @@ static bool handle_bootstrap_impl(handle_bootstrap_args *args) {
     const Disable_binlog_guard disable_binlog(thd);
     const Disable_sql_log_bin_guard disable_sql_log_bin(thd);
 
-    std::ignore = dd::execute_query(thd, "SET @is_mysql_encrypted = 'N'");
+    /*
+      Tables created in the mysql shared tablespace must specify an ENCRYPTION
+      attribute matching that of the tablespace, so mysql_system_tables.sql
+      needs to know whether the mysql tablespace is encrypted.
+
+      Upstream hard-codes 'N' here because during --initialize the mysql
+      tablespace is known not to be encrypted. That does not hold for Percona
+      Server: with default_table_encryption=ON, mysql.ibd is created encrypted
+      already at bootstrap (PS-5926), so the actual state must be queried.
+
+      Only a handful of tablespaces exist during --initialize, so using
+      I_S.INNODB_TABLESPACES here does not reintroduce the scalability problem
+      that made upstream move this query out of mysql_system_tables.sql
+      (Bug#39114059). That concern applies to the upgrade path, which queries
+      mysql.tablespaces separately in dd::upgrade::fix_mysql_tables().
+    */
+    std::ignore = dd::execute_query(
+        thd,
+        "SET @is_mysql_encrypted = (SELECT ENCRYPTION FROM "
+        "information_schema.INNODB_TABLESPACES WHERE NAME = 'mysql')");
     Compiled_in_command_iterator comp_iter;
     rc = process_iterator(thd, &comp_iter, true);
 
@@ -270,7 +289,7 @@ static int process_iterator(THD *thd, Command_iterator *it,
 
     // Ignore ER_TOO_LONG_KEY for system tables.
     thd->push_internal_handler(&error_handler);
-    dispatch_sql_command(thd, &parser_state);
+    dispatch_sql_command(thd, &parser_state, true);
     thd->pop_internal_handler();
 
     error = thd->is_error();
@@ -383,6 +402,20 @@ bool run_bootstrap_thread(const char *file_name, MYSQL_FILE *file,
   thd->security_context()->skip_grants();
 
   thd->set_new_thread_id();
+
+  DBUG_EXECUTE_IF("bootstrap_crash", DBUG_SUICIDE(););
+  DBUG_EXECUTE_IF("bootstrap_hang", {
+    while (1) my_sleep(1000000);
+  });
+  DBUG_EXECUTE_IF("bootstrap_buffer_overrun", {
+    int *mem = static_cast<int *>(my_malloc(PSI_NOT_INSTRUMENTED, 127, 0));
+    // Allocations are usually aligned, so even if 127 bytes were requested,
+    // it's mostly safe to assume there are 128 bytes. Writing into the last
+    // byte is safe for the rest of the code, but still enough to trigger
+    // AddressSanitizer (ASAN) or Valgrind.
+    *static_cast<volatile int *>(mem + (128 / sizeof(*mem)) - 1) = 1;
+    my_free(mem);
+  });
 
   handle_bootstrap_args args;
 

@@ -28,6 +28,7 @@
 #include "include/mysql.h"
 #include "include/mysqld_errmsg.h"
 #include "include/sql_common.h"
+#include "my_dbug.h"
 #include "mysql/service_srv_session.h"
 #include "mysql_command_delegates.h"
 #include "sql/current_thd.h"
@@ -211,6 +212,20 @@ mysql_state_machine_status cssm_begin_connect(mysql_async_connect *ctx) {
   mysql_service_registry_t *registry_service =
       no_lock_registry ? srv_registry_no_lock : srv_registry;
 
+  /* We need to handle the failure in this function.
+     Setting mcs_extn->session_svc right after session open is not enough
+     to handle user lookup errors (and following errors as well)
+     because in case of this function returns error, mysql->extension is
+     cleaned up immediately by the caller. The caller does not take care of
+     session_svc, because it is not aware of this structure.
+  */
+  std::shared_ptr<MYSQL_SESSION> mysql_session_close_guard(
+      &mysql_session, [mcs_extn](MYSQL_SESSION *mysql_session_ptr) {
+        if (*mysql_session_ptr == nullptr) return;
+        mcs_extn->session_svc = nullptr;
+        srv_session_close(*mysql_session_ptr);
+      });
+
   if (mcs_extn->mcs_thd == nullptr || mcs_extn->session_svc == nullptr) {
     /*
      Avoid possibility of nested txn in the current thd.
@@ -223,12 +238,12 @@ mysql_state_machine_status cssm_begin_connect(mysql_async_connect *ctx) {
     thd = mysql_session->get_thd();
     mcs_extn->is_thd_associated = false;
     Security_context_handle sc;
+    mcs_extn->session_svc = mysql_session;
     if (mysql_security_context_imp::get(thd, &sc)) return STATE_MACHINE_FAILED;
     if (mysql_security_context_imp::lookup(sc, user, host, nullptr, db))
       return STATE_MACHINE_FAILED;
     mcs_extn->mcs_thd = thd;
     mysql->thd = thd;
-    mcs_extn->session_svc = mysql_session;
   } else {
     mysql->thd = reinterpret_cast<void *>(mcs_extn->mcs_thd);
   }
@@ -253,6 +268,7 @@ mysql_state_machine_status cssm_begin_connect(mysql_async_connect *ctx) {
   if (status == STATE_MACHINE_FAILED) return status;
   mysql->client_flag = 0; /* For handshake */
   mysql->server_status = SERVER_STATUS_AUTOCOMMIT;
+  mysql_session = nullptr;  // disable delete quard
   return STATE_MACHINE_DONE;
 }
 
@@ -317,11 +333,18 @@ bool csi_advanced_command(MYSQL *mysql, enum enum_server_command command,
           ->error_srv->error(srv_ctx_h, &err_num,
                              const_cast<const char **>(ch_ptr));
       strcpy(*err_msg, *ch_ptr);
+      // Forward the errno from the srv-session to the mysql handle
+      mysql->net.last_errno = err_num;
       goto error;
     }
   }
   ret = false;
 error:
+  // Debug hook to simulate a successful command execution even if an error
+  // occurred. Useful for testing how consumers handle error codes without
+  // triggering a failure.
+  DBUG_EXECUTE_IF("mysql_command_services_component_test_errno", return true;);
+
   if (ret) my_error(ER_COMMAND_SERVICE_BACKEND_FAILED, MYF(0), err_msg);
   return ret ? true : false;
 }

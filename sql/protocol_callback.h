@@ -198,12 +198,12 @@ class Protocol_callback final : public Protocol {
   /**
     Sends DATE value
 
-    @param time      value
+    @param date      value
 
     @retval false  success
     @retval true   failure
   */
-  bool store_date(const MYSQL_TIME &time) override;
+  bool store_date(const Date_val date) override;
 
   /**
     Sends TIME value
@@ -214,7 +214,7 @@ class Protocol_callback final : public Protocol {
     @retval false  success
     @retval true   failure
   */
-  bool store_time(const MYSQL_TIME &time, uint precision) override;
+  bool store_time(const Time_val time, uint precision) override;
 
   /**
     Sends Field

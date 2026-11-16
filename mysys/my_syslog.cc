@@ -32,21 +32,18 @@
   @file mysys/my_syslog.cc
 */
 
-#include <stddef.h>
+#include <cassert>
 
-#include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_sys.h"
 #include "mysql/my_loglevel.h"
-#include "mysql/strings/m_ctype.h"
+#include "mysql/strings/m_ctype.h"  // IWYU pragma: keep
 #if defined(_WIN32)
 #include <stdio.h>
 
 #include "mysql/service_mysql_alloc.h"
 #include "mysys/mysys_priv.h"
 #endif
-
-extern CHARSET_INFO my_charset_utf16le_bin;
 
 #ifndef _WIN32
 #include <syslog.h>
@@ -128,9 +125,9 @@ int my_syslog(const CHARSET_INFO *cs [[maybe_unused]], enum loglevel level,
   }
 
   if (hEventLog) {
-    nbytes =
-        my_convert((char *)buff, sizeof(buff) - sizeof(buff[0]),
-                   &my_charset_utf16le_bin, msg, msg_len, cs, &dummy_errors);
+    nbytes = my_convert((char *)buff, sizeof(buff) - sizeof(buff[0]),
+                        get_charset_by_name("utf16le_bin", MYF(0)), msg,
+                        msg_len, cs, &dummy_errors);
 
     // terminate it with NULL
     buff[nbytes / sizeof(wchar_t)] = L'\0';
@@ -285,7 +282,7 @@ static int windows_eventlog_create_registry_entry(const char *key) {
 */
 int my_openlog(const char *name, int option, int facility) {
 #ifndef _WIN32
-  int opts = (option & MY_SYSLOG_PIDS) ? LOG_PID : 0;
+  int const opts = (option & MY_SYSLOG_PIDS) ? LOG_PID : 0;
 
   DBUG_TRACE;
   openlog(name, opts | LOG_NDELAY, facility);
@@ -325,7 +322,7 @@ int my_openlog(const char *name, int option, int facility) {
      0 Success
     -1 Error
 */
-int my_closelog(void) {
+int my_closelog() {
   DBUG_TRACE;
 #ifndef _WIN32
   closelog();

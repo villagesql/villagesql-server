@@ -347,7 +347,6 @@ my @mysqld_rules = (
   { 'veb-dir'                                      => \&fix_veb_dir },
   { 'loose-sha256_password_auto_generate_rsa_keys' => "0" },
   { 'loose-caching_sha2_password_auto_generate_rsa_keys' => "0" },
-  { 'loose-mysql-native-password' => "ON" },
 
   { '#mtr_basedir' => sub { return shift->{ARGS}->{basedir}; }
   },

@@ -27,10 +27,9 @@
 #define ZSTD_STATIC_LINKING_ONLY 1
 #include <zstd.h>
 
-#include "mysql/binlog/event/compression/buffer/buffer_sequence_view.h"
+#include "mysql/allocators/memory_resource.h"  // Memory_resource
 #include "mysql/binlog/event/compression/compressor.h"
-#include "mysql/binlog/event/nodiscard.h"
-#include "mysql/binlog/event/resource/memory_resource.h"  // Memory_resource
+#include "mysql/containers/buffers/buffer_sequence_view.h"
 
 struct ZSTD_outBuffer_s;
 
@@ -42,9 +41,9 @@ class Zstd_comp : public Compressor {
   using typename Compressor::Char_t;
   using typename Compressor::Managed_buffer_sequence_t;
   using typename Compressor::Size_t;
-  using Memory_resource_t = mysql::binlog::event::resource::Memory_resource;
+  using Memory_resource_t = mysql::allocators::Memory_resource;
   using Compression_level_t = int;
-  static constexpr type type_code = ZSTD;
+  static constexpr type type_code = ALGORITHM_ZSTD;
 
   /// The default compression level for this compressor.
   static constexpr Compression_level_t default_compression_level = 3;
@@ -78,15 +77,15 @@ class Zstd_comp : public Compressor {
   void do_feed(const Char_t *input_data, Size_t input_size) override;
 
   /// @copydoc Compressor::do_compress
-  [[NODISCARD]] Compress_status do_compress(
+  [[nodiscard]] Compress_status do_compress(
       Managed_buffer_sequence_t &out) override;
 
   /// @copydoc Compressor::do_finish
-  [[NODISCARD]] Compress_status do_finish(
+  [[nodiscard]] Compress_status do_finish(
       Managed_buffer_sequence_t &out) override;
 
   /// @copydoc Compressor::do_get_grow_constraint_hint
-  [[NODISCARD]] Grow_constraint_t do_get_grow_constraint_hint() const override;
+  [[nodiscard]] Grow_constraint_t do_get_grow_constraint_hint() const override;
 
   /// Deallocate the ZSTD compression context.
   void destroy();
@@ -112,7 +111,7 @@ class Zstd_comp : public Compressor {
   ///
   /// @retval exceeds_max_size buffer_sequence was full and at its max
   /// capacity.  buffer_sequence has not been modified.
-  [[NODISCARD]] Compress_status get_obuf(
+  [[nodiscard]] Compress_status get_obuf(
       Managed_buffer_sequence_t &managed_buffer_sequence,
       ZSTD_outBuffer_s &obuf);
 

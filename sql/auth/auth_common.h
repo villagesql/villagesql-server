@@ -32,6 +32,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -71,6 +72,7 @@ enum class Consumer_type;
 class LEX_GRANT_AS;
 class ACL_temporary_lock_state;
 typedef std::vector<ACL_temporary_lock_state> Lock_state_list;
+enum class Acl_type;
 
 namespace consts {
 extern const std::string mysql;
@@ -701,7 +703,6 @@ class User_table_schema_factory {
   virtual ~User_table_schema_factory() = default;
 };
 
-extern bool mysql_user_table_is_in_short_password_format;
 extern bool disconnect_on_expired_password;
 extern const char *any_db;  // Special symbol for check_access
 /** controls the extra checks on plugin availability for mysql.user records */
@@ -736,7 +737,8 @@ bool acl_check_host(THD *thd, const char *host, const char *ip);
 #define USER_ATTRIBUTES (1L << 8) /* Request to update user attributes */
 
 /* sql_user */
-void log_user(THD *thd, String *str, LEX_USER *user, bool comma);
+void log_user(THD *thd, String *str, LEX_USER *user, bool comma,
+              const char *reason);
 bool check_change_password(THD *thd, const char *host, const char *user,
                            bool retain_current_password);
 bool change_password(THD *thd, LEX_USER *user, const char *password,
@@ -756,6 +758,7 @@ int wild_case_compare(CHARSET_INFO *cs, const char *str, const char *wildstr);
 int wild_case_compare(CHARSET_INFO *cs, const char *str, size_t str_len,
                       const char *wildstr, size_t wildstr_len);
 bool hostname_requires_resolving(const char *hostname);
+bool is_localhost_string(const char *hostname);
 bool acl_init(bool dont_read_acl_tables);
 bool is_acl_inited();
 void acl_free(bool end = false);
@@ -787,7 +790,7 @@ bool mysql_grant(THD *thd, const char *db, List<LEX_USER> &list,
                  Access_bitmask rights, bool revoke_grant, bool is_proxy,
                  const List<LEX_CSTRING> &dynamic_privilege,
                  bool grant_all_current_privileges, LEX_GRANT_AS *grant_as);
-bool mysql_routine_grant(THD *thd, Table_ref *table, bool is_proc,
+bool mysql_routine_grant(THD *thd, Table_ref *table, Acl_type routine_acl_type,
                          List<LEX_USER> &user_list, Access_bitmask rights,
                          bool revoke, bool write_to_binlog,
                          bool all_current_privileges);
@@ -805,7 +808,7 @@ bool check_column_grant_in_table_ref(THD *thd, Table_ref *table_ref,
 bool check_grant_all_columns(THD *thd, Access_bitmask want_access,
                              Field_iterator_table_ref *fields);
 bool check_grant_routine(THD *thd, Access_bitmask want_access, Table_ref *procs,
-                         bool is_proc, bool no_error);
+                         Acl_type routine_acl_type, bool no_error);
 bool check_grant_db(THD *thd, const char *db,
                     const bool check_table_grant = false);
 bool acl_check_proxy_grant_access(THD *thd, const char *host, const char *user,
@@ -817,13 +820,13 @@ Access_bitmask get_column_grant(THD *thd, GRANT_INFO *grant,
                                 const char *db_name, const char *table_name,
                                 const char *field_name);
 bool mysql_show_grants(THD *, LEX_USER *, const List_of_auth_id_refs &, bool,
-                       bool);
+                       bool, bool);
 bool mysql_show_create_user(THD *thd, LEX_USER *user, bool are_both_users_same);
 bool mysql_revoke_all(THD *thd, List<LEX_USER> &list);
 bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
-                          bool is_proc);
+                          Acl_type routine_acl_type);
 bool sp_grant_privileges(THD *thd, const char *sp_db, const char *sp_name,
-                         bool is_proc);
+                         Acl_type routine_acl_type);
 void fill_effective_table_privileges(THD *thd, GRANT_INFO *grant,
                                      const char *db, const char *table);
 int fill_schema_user_privileges(THD *thd, Table_ref *tables, Item *cond);
@@ -832,6 +835,8 @@ int fill_schema_table_privileges(THD *thd, Table_ref *tables, Item *cond);
 int fill_schema_column_privileges(THD *thd, Table_ref *tables, Item *cond);
 const ACL_internal_schema_access *get_cached_schema_access(
     GRANT_INTERNAL_INFO *grant_internal_info, const char *schema_name);
+bool acl_is_utility_user(const char *user, const char *host, const char *ip);
+bool acl_utility_user_has_global_grant(const std::string &privilege);
 
 bool lock_tables_precheck(THD *thd, Table_ref *tables);
 bool create_table_precheck(THD *thd, Table_ref *tables,
@@ -850,13 +855,15 @@ bool check_one_table_access(THD *thd, Access_bitmask privilege,
 bool check_single_table_access(THD *thd, Access_bitmask privilege,
                                Table_ref *tables, bool no_errors);
 bool check_routine_access(THD *thd, Access_bitmask want_access, const char *db,
-                          char *name, bool is_proc, bool no_errors);
+                          const char *name, Acl_type routine_acl_type,
+                          bool no_errors);
 bool check_some_access(THD *thd, Access_bitmask want_access, Table_ref *table);
 bool has_full_view_routine_access(THD *thd, const char *db,
                                   const char *definer_user,
                                   const char *definer_host);
 bool has_partial_view_routine_access(THD *thd, const char *db,
-                                     const char *routine_name, bool is_proc);
+                                     const char *routine_name,
+                                     Acl_type routine_acl_type);
 bool check_access(THD *thd, Access_bitmask want_access, const char *db,
                   Access_bitmask *save_priv,
                   GRANT_INTERNAL_INFO *grant_internal_info,
@@ -883,8 +890,9 @@ bool has_grant_role_privilege(THD *thd, const List<LEX_USER> *roles);
 Auth_id_ref create_authid_from(const LEX_USER *user);
 std::string create_authid_str_from(const LEX_USER *user);
 std::pair<std::string, std::string> get_authid_from_quoted_string(
-    std::string str);
-void append_identifier(String *packet, const char *name, size_t length);
+    std::string_view str);
+void append_identifier_with_backtick(String *packet, const char *name,
+                                     size_t length);
 bool is_role_id(LEX_USER *authid);
 void shutdown_acl_cache();
 bool is_granted_role(LEX_CSTRING user, LEX_CSTRING host, LEX_CSTRING role,
@@ -1105,6 +1113,8 @@ class Auth_id {
   std::string m_key;
 };
 
+using Auth_id_list = std::vector<Auth_id>;
+
 /*
   As of now Role_id is an alias of Auth_id.
   We may extend the Auth_id as Role_id once
@@ -1133,9 +1143,6 @@ typedef std::list<random_password_info> Userhostpassword_list;
 bool send_password_result_set(THD *thd,
                               const Userhostpassword_list &generated_passwords);
 bool lock_and_get_mandatory_roles(std::vector<Role_id> *mandatory_roles);
-bool mysql_alter_user_comment(THD *thd, const List<LEX_USER> *users,
-                              const std::string &json_blob, bool expect_text);
-
 /* helper method to check if sandbox mode should be turned off or not */
 bool turn_off_sandbox_mode(THD *thd, LEX_USER *user);
 
@@ -1148,5 +1155,10 @@ bool decrypt_RSA_private_key(uchar *pkt, int cipher_length,
                              unsigned char *plain_text, size_t plain_text_len,
                              RSA *private_key);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+void iterate_comma_separated_quoted_string(
+    std::string_view str, const std::function<bool(std::string_view)> &f);
+Auth_id_ref create_authid_from(const Role_id &user);
+bool operator==(const Role_id &a, const Role_id &b);
 
 #endif /* AUTH_COMMON_INCLUDED */

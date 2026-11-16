@@ -31,16 +31,16 @@
 */
 #include "my_compress.h"
 
-#include <string.h>
+#include <assert.h>
 #include <sys/types.h>
+#include <zconf.h>
 #include <zlib.h>
 #include <zstd.h>
-#include <algorithm>
+
 #include <cstddef>
+#include <cstring>
+#include <utility>
 
-#include <mysql_com.h>
-
-#include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
@@ -112,7 +112,7 @@ uchar *zstd_compress_alloc(mysql_zstd_compress_context *comp_ctx,
     }
   }
 
-  size_t zstd_len = ZSTD_compressBound(*len);
+  size_t const zstd_len = ZSTD_compressBound(*len);
   void *compbuf;
   size_t zstd_res;
 
@@ -245,7 +245,7 @@ static uchar *zlib_compress_alloc(mysql_zlib_compress_context *comp_ctx,
 
 static bool zlib_uncompress(uchar *packet, size_t len, size_t *complen) {
   uLongf tmp_complen;
-  uchar *compbuf =
+  auto *compbuf =
       (uchar *)my_malloc(key_memory_my_compress_alloc, *complen, MYF(MY_WME));
   int error;
   if (!compbuf) return true; /* Not enough memory */

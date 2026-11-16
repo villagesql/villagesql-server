@@ -33,8 +33,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "os0event.h"
 
-#include <errno.h>
-#include <time.h>
+#include <cerrno>
+#include <ctime>
 
 #include "ha_prototypes.h"
 #include "ut0mutex.h"
@@ -72,7 +72,7 @@ struct os_event {
   Destroys a condition variable */
   void destroy() UNIV_NOTHROW {
 #ifndef _WIN32
-    int ret = pthread_cond_destroy(&cond_var);
+    int const ret = pthread_cond_destroy(&cond_var);
     ut_a(ret == 0);
 #endif /* !_WIN32 */
 
@@ -113,7 +113,7 @@ struct os_event {
       m_set = false;
     }
 
-    int64_t ret = signal_count;
+    int64_t const ret = signal_count;
 
     mutex.exit();
 
@@ -611,7 +611,7 @@ bool os_event::global_initialized{false};
 std::atomic_size_t os_event::n_objects_alive{0};
 #endif /* UNIV_DEBUG */
 
-void os_event_global_init(void) {
+void os_event_global_init() {
   ut_ad(os_event::n_objects_alive.load() == 0);
 #ifndef _WIN32
   int ret = pthread_condattr_init(&os_event::cond_attr);
@@ -636,9 +636,8 @@ void os_event_global_init(void) {
   os_event::global_initialized = true;
 }
 
-void os_event_global_destroy(void) {
-  ut_a(os_event::global_initialized);
-  ut_ad(os_event::n_objects_alive.load() == 0);
+void os_event_global_destroy() {
+  if (!os_event::global_initialized) return;
 #ifndef _WIN32
   os_event::cond_attr_has_monotonic_clock = false;
 #ifdef UNIV_DEBUG
@@ -647,5 +646,4 @@ void os_event_global_destroy(void) {
       pthread_condattr_destroy(&os_event::cond_attr);
   ut_ad(ret == 0);
 #endif /* !_WIN32 */
-  os_event::global_initialized = false;
 }

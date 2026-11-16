@@ -131,7 +131,7 @@ EXPLAIN
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
             -> Filter: (x.b > 1)  (rows=2)
-                -> Covering index lookup on x using <auto_key0> (b=<cache>(t1.a))  (rows=2)
+                -> Covering index lookup on x using <auto_key0> (b = <cache>(t1.a))  (rows=2)
                     -> Materialize  (rows=2)
                         -> Limit: 2 row(s)  (rows=2)
                             -> Sort: t2.b, limit input to 2 row(s) per chunk  (rows=3)

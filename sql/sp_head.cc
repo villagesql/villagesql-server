@@ -91,7 +91,7 @@
 #include "sql/sql_error.h"
 #include "sql/sql_parse.h"  // cleanup_items
 #include "sql/sql_profile.h"
-#include "sql/sql_show.h"  // append_identifier
+#include "sql/sql_show.h"  // append_identifier_*
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
 #include "sql/transaction.h"  // trans_commit_stmt
@@ -192,7 +192,7 @@ proc_param).
 
   - #Table_trigger_dispatcher::create_trigger()
 
-  - #Table_trigger_dispatcher::check_n_load()
+  - #dd::load_triggers()
 
   See the C++ class #Table_trigger_dispatcher in general.
 
@@ -1921,7 +1921,11 @@ sp_head::~sp_head() {
 
   for (uint ip = 0; (i = get_instr(ip)) != nullptr; ip++) ::destroy_at(i);
 
-  ::destroy_at(m_root_parsing_ctx);
+  // The libraries do not have parsing context.
+  if (m_type == enum_sp_type::LIBRARY)
+    assert(m_root_parsing_ctx == nullptr);
+  else
+    ::destroy_at(m_root_parsing_ctx);
 
   /*
     If we have non-empty LEX stack then we just came out of parser with
@@ -2037,6 +2041,7 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
   bool cur_db_changed = false;
   bool err_status = false;
   uint ip = 0;
+  bool save_enable_slow_log = thd->enable_slow_log;
   sql_mode_t save_sql_mode;
   Query_arena *old_arena;
   /* per-instruction arena */
@@ -2053,6 +2058,10 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
   Diagnostics_area *caller_da = thd->get_stmt_da();
   Diagnostics_area sp_da(false);
 
+  assert(thd->secondary_engine_optimization() !=
+         Secondary_engine_optimization::SECONDARY);
+  thd->set_secondary_engine_optimization(
+      Secondary_engine_optimization::PRIMARY_ONLY);
   /*
     Just reporting a stack overrun error
     (@sa check_stack_overrun()) requires stack memory for error
@@ -2278,6 +2287,8 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
 
     thd->m_digest = parent_digest;
 
+    thd->enable_slow_log = save_enable_slow_log;
+
     cleanup_items(i->m_arena.item_list());
 
     /*
@@ -2446,6 +2457,10 @@ done:
               m_recursion_level + 1));
   m_first_instance->m_first_free_instance = this;
 
+  // CALL statement or similar can only be executed in primary engine:
+  thd->set_secondary_engine_optimization(
+      Secondary_engine_optimization::PRIMARY_ONLY);
+
   return err_status;
 }
 
@@ -2455,7 +2470,7 @@ bool sp_head::execute_external_routine_core(THD *thd) {
   my_service<SERVICE_TYPE(external_program_execution)> service(
       "external_program_execution", srv_registry);
 
-  if ((err_status = init_external_routine(service))) return err_status;
+  if ((err_status = init_external_routine(&service))) return err_status;
 
   Diagnostics_area *caller_da = thd->get_stmt_da();
   Diagnostics_area sp_da(false);
@@ -2740,23 +2755,23 @@ bool sp_head::set_external_program_handle(external_program_handle sp) {
 }
 
 bool sp_head::init_external_routine(
-    my_service<SERVICE_TYPE(external_program_execution)> &service) {
+    my_service<SERVICE_TYPE(external_program_execution)> *service) {
   assert(!is_sql());
 
-  if (!service.is_valid()) {
+  if (!service->is_valid()) {
     my_error(ER_LANGUAGE_COMPONENT_NOT_AVAILABLE, MYF(0));
     return true;
   }
 
   if (m_language_stored_program == nullptr) {
-    if (service->init(reinterpret_cast<stored_program_handle>(this), nullptr,
-                      &m_language_stored_program)) {
+    if ((*service)->init(reinterpret_cast<stored_program_handle>(this), nullptr,
+                         &m_language_stored_program)) {
       my_error(ER_LANGUAGE_COMPONENT_UNSUPPORTED_LANGUAGE, MYF(0),
                m_chistics->language.str);
       m_language_stored_program = nullptr;
       return true;
     }
-    if (service->parse(m_language_stored_program, nullptr)) return true;
+    if ((*service)->parse(m_language_stored_program, nullptr)) return true;
   }
   return false;
 }
@@ -3125,7 +3140,8 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
     DBUG_PRINT("info",
                (" %.*s: eval args done", (int)m_name.length, m_name.str));
   }
-  if (!(m_flags & LOG_SLOW_STATEMENTS) && thd->enable_slow_log) {
+  if (!(m_flags & LOG_SLOW_STATEMENTS || opt_log_slow_sp_statements == 1) &&
+      thd->enable_slow_log) {
     DBUG_PRINT("info", ("Disabling slow log for the execution"));
     save_enable_slow_log = true;
     thd->enable_slow_log = false;
@@ -3325,6 +3341,15 @@ void sp_head::set_info(longlong created, longlong modified,
     m_chistics->comment.str = strmake_root(
         &main_mem_root, m_chistics->comment.str, m_chistics->comment.length);
 
+  m_chistics->m_imported_libraries = nullptr;
+  if (chistics->m_imported_libraries != nullptr)
+    for (auto &library : *chistics->m_imported_libraries)
+      if (m_chistics->add_imported_library(
+              {library.m_db.str, library.m_db.length},
+              {library.m_name.str, library.m_name.length},
+              {library.m_alias.str, library.m_alias.length}, &main_mem_root))
+        break;
+
   m_sql_mode = sql_mode;
 }
 
@@ -3412,7 +3437,7 @@ void sp_head::optimize() {
     }
   }
 
-  m_instructions.resize(dst);
+  m_instructions.erase(m_instructions.begin() + dst, m_instructions.end());
   bp.clear();
 }
 
@@ -3684,13 +3709,18 @@ bool sp_head::check_show_access(THD *thd, bool *full_access) {
 
   *full_access = has_full_view_routine_access(thd, m_db.str, m_definer_user.str,
                                               m_definer_host.str);
-  return *full_access ? false
-                      : !has_partial_view_routine_access(
-                            thd, m_db.str, m_name.str,
-                            m_type == enum_sp_type::PROCEDURE);
+  // User has full access
+  if (*full_access) return false;
+  return !has_partial_view_routine_access(thd, m_db.str, m_name.str,
+                                          enum_sp_type_to_acl_type(m_type));
 }
 
 bool sp_head::set_security_ctx(THD *thd, Security_context **save_ctx) {
+  if (m_type == enum_sp_type::LIBRARY) {
+    // Security context is never switched for the LIBRARY.
+    assert(false);
+    return true;
+  }
   *save_ctx = nullptr;
   const LEX_CSTRING definer_user = {m_definer_user.str, m_definer_user.length};
   const LEX_CSTRING definer_host = {m_definer_host.str, m_definer_host.length};
@@ -3709,7 +3739,7 @@ bool sp_head::set_security_ctx(THD *thd, Security_context **save_ctx) {
 
   if (*save_ctx &&
       check_routine_access(thd, EXECUTE_ACL, m_db.str, m_name.str,
-                           m_type == enum_sp_type::PROCEDURE, false)) {
+                           enum_sp_type_to_acl_type(m_type), false)) {
     m_security_ctx.restore_security_context(thd, *save_ctx);
     *save_ctx = nullptr;
     return true;

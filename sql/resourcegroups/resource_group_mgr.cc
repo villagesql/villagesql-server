@@ -36,6 +36,7 @@
 #include "my_compiler.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
+#include "mysql/components/library_mysys/my_system.h"  // my_num_vcpus
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/log_builtins.h"  // LogErr
 #include "mysql/psi/mysql_rwlock.h"
@@ -55,7 +56,6 @@
 #include "sql/handler.h"
 #include "sql/log.h"     // LogErr
 #include "sql/mysqld.h"  // key_resource_group_mgr*
-#include "sql/resourcegroups/platform/thread_attrs_api.h"
 #include "sql/resourcegroups/resource_group.h"
 #include "sql/resourcegroups/thread_resource_control.h"
 #include "sql/sql_class.h"  // class THD
@@ -415,7 +415,7 @@ bool Resource_group_mgr::init() {
       std::unique_ptr<Resource_group>(m_sys_default_resource_group));
 
   // Initialize number of VCPUs.
-  m_num_vcpus = platform::num_vcpus();
+  m_num_vcpus = my_num_vcpus();
   return false;
 }
 
@@ -538,9 +538,9 @@ bool Resource_group_mgr::switch_resource_group_if_needed(
     resourcegroups::Resource_group **dest_res_grp, MDL_ticket **ticket,
     MDL_ticket **cur_ticket) {
   bool switched = false;
-  auto res_grp_name = thd->resource_group_ctx()->m_switch_resource_group_str;
 
-  if (!opt_initialize && res_grp_name[0] != '\0') {
+  if (!opt_initialize && thd->lex->switch_resource_group != nullptr) {
+    auto res_grp_name = thd->lex->switch_resource_group;
     resourcegroups::Resource_group_mgr *mgr_instance =
         resourcegroups::Resource_group_mgr::instance();
 
@@ -548,7 +548,6 @@ bool Resource_group_mgr::switch_resource_group_if_needed(
             thd, res_grp_name, MDL_EXPLICIT, ticket, false)) {
       LogErr(WARNING_LEVEL, ER_FAILED_TO_ACQUIRE_LOCK_ON_RESOURCE_GROUP,
              res_grp_name);
-      res_grp_name[0] = '\0';
       return false;
     }
 
@@ -591,7 +590,6 @@ bool Resource_group_mgr::switch_resource_group_if_needed(
       LogErr(WARNING_LEVEL, ER_FAILED_TO_ACQUIRE_LOCK_ON_RESOURCE_GROUP,
              src_res_grp_str);
       mysql_mutex_unlock(&thd->LOCK_thd_data);
-      res_grp_name[0] = '\0';
       return false;
     }
     assert(*dest_res_grp != nullptr);

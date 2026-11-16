@@ -32,15 +32,14 @@ namespace temptable_storage_unittest {
 
 TEST(StorageTest, Iterate) {
   /* Set appropriate temptable_max_mmap */
-  temptable_use_mmap = 1;
   temptable_max_mmap = 1073741824;
 
   std::thread t([]() {
     temptable::TableResourceMonitor table_resource_monitor(16 * 1024 * 1024);
     temptable::Block shared_block;
-    temptable::Allocator<uint8_t> allocator(&shared_block,
-                                            table_resource_monitor);
     {
+      temptable::Allocator<uint8_t> allocator(&shared_block,
+                                              table_resource_monitor);
       temptable::Storage storage(&allocator);
 
       storage.element_size(sizeof(uint64_t));
@@ -73,7 +72,6 @@ TEST(StorageTest, AllocatorRebind) {
   // Turns out it is the rebind which confuses the compiler.
 
   /* Set appropriate temptable_max_mmap */
-  temptable_use_mmap = 1;
   temptable_max_mmap = 1073741824;
 
   auto thread_function = []() {

@@ -49,12 +49,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
-#include "dict0upgrade.h"
 #include "page0page.h"
 #include "pars0pars.h"
 #include "que0que.h"
 #include "row0ins.h"
 #include "row0mysql.h"
+#include "row0sel.h"
 #include "srv0start.h"
 #include "trx0roll.h"
 #include "usr0sess.h"
@@ -62,6 +62,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "villagesql/custom_column.h"
 #include "villagesql/custom_index.h"
+#include "fil0fil.h"
+#include "sql/sql_zip_dict.h"
 
 dberr_t dict_build_table_def(dict_table_t *table,
                              const HA_CREATE_INFO *create_info, trx_t *trx) {
@@ -77,11 +79,18 @@ dberr_t dict_build_table_def(dict_table_t *table,
   during bootstrap or upgrade */
   static uint32_t dd_table_id = 1;
 
-  if (is_dd_table) {
+  /* Treat mysql.compression_dictionary like DD table during bootstrap or
+  during upgrade. Only exemption is when this table is created by Percona
+  server started on mysql datadir. In that scenario, we should
+  use the next available table id */
+  if (is_dd_table ||
+      (compression_dict::is_hardcoded(db_name.c_str(), tbl_name.c_str()) &&
+       dd_table_id != 1)) {
     table->id = dd_table_id++;
     table->is_dd_table = true;
 
-    ut_ad(strcmp(tbl_name.c_str(), innodb_dd_table[table->id - 1].name) == 0);
+    ut_ad(compression_dict::is_hardcoded(db_name.c_str(), tbl_name.c_str()) ||
+          strcmp(tbl_name.c_str(), innodb_dd_table[table->id - 1].name) == 0);
 
   } else {
     dict_table_assign_new_id(table);
@@ -181,6 +190,50 @@ dberr_t dict_build_tablespace(trx_t *trx, Tablespace *tablespace) {
   }
 
   return (err);
+}
+
+/** Determine the session temporary tablespace for temp or intrinsic tables
+@param[in]   innodb_session   InnoDB session context(thd)
+@param[in]   is_intrinsic     true if temp table is created by optimizer
+@param[in]   is_slave_thd     true if temp table is created by slave thread
+                              (happens only with binlog row format)
+@return Session temporary tablespace on success, else nullptr on failure */
+static ibt::Tablespace *determine_session_temp_tblsp(
+    innodb_session_t *innodb_session, bool is_intrinsic, bool is_slave_thd) {
+  ibt::Tablespace *tblsp = nullptr;
+  bool encrypted = false;
+  switch (srv_default_table_encryption) {
+    case DEFAULT_TABLE_ENC_ON:
+      encrypted = true;
+      break;
+    case DEFAULT_TABLE_ENC_OFF:
+      if (srv_tmp_tablespace_encrypt) {
+        encrypted = true;
+      }
+      break;
+    default:
+      ut_ad(0);
+  }
+
+  if (encrypted) {
+    if (is_slave_thd) {
+      tblsp = ibt::get_enc_rpl_slave_tblsp();
+    } else if (is_intrinsic) {
+      tblsp = innodb_session->get_enc_instrinsic_temp_tblsp();
+    } else {
+      tblsp = innodb_session->get_enc_usr_temp_tblsp();
+    }
+
+  } else {
+    if (is_slave_thd) {
+      tblsp = ibt::get_rpl_slave_tblsp();
+    } else if (is_intrinsic) {
+      tblsp = innodb_session->get_instrinsic_temp_tblsp();
+    } else {
+      tblsp = innodb_session->get_usr_temp_tblsp();
+    }
+  }
+  return (tblsp);
 }
 
 dberr_t dict_build_tablespace_for_table(dict_table_t *table,
@@ -324,16 +377,11 @@ dberr_t dict_build_tablespace_for_table(dict_table_t *table,
       ut_ad(dict_tf_get_rec_format(table->flags) != REC_FORMAT_COMPRESSED);
 
       innodb_session_t *innodb_session = thd_to_innodb_session(trx->mysql_thd);
-      ibt::Tablespace *tblsp = nullptr;
 
       bool is_slave_thd = thd_is_replication_slave_thread(trx->mysql_thd);
-      if (is_slave_thd) {
-        tblsp = ibt::get_rpl_slave_tblsp();
-      } else if (table->is_intrinsic()) {
-        tblsp = innodb_session->get_instrinsic_temp_tblsp();
-      } else {
-        tblsp = innodb_session->get_usr_temp_tblsp();
-      }
+      bool is_intrinsic = table->is_intrinsic();
+      const ibt::Tablespace *tblsp = determine_session_temp_tblsp(
+          innodb_session, is_intrinsic, is_slave_thd);
 
       /* Session temporary tablespace couldn't be allocated. This means,
       we have run out of disk space */
@@ -363,13 +411,7 @@ void dict_build_index_def(const dict_table_t *table, /*!< in: table */
   ut_ad((UT_LIST_GET_LEN(table->indexes) > 0) || index->is_clustered());
 
   if (!table->is_intrinsic()) {
-    if (srv_is_upgrade_mode) {
-      index->id = dd_upgrade_indexes_num++;
-      ut_ad(index->id <= dd_get_total_indexes_num());
-    } else {
-      dict_hdr_get_new_id(nullptr, &index->id, nullptr, table, false);
-    }
-
+    dict_hdr_get_new_id(nullptr, &index->id, nullptr, table, false);
   } else {
     /* Index are re-loaded in process of creation using id.
     If same-id is used for all indexes only first index will always
@@ -475,7 +517,8 @@ void dict_drop_temporary_table_index(const dict_index_t *index,
   tablespace and the .ibd file is missing do nothing,
   else free the all the pages */
   if (root_page_no != FIL_NULL && found) {
-    btr_free(page_id_t(space, root_page_no), page_size);
+    btr_free(page_id_t(space, root_page_no), page_size,
+             index->table->is_intrinsic());
   }
 }
 

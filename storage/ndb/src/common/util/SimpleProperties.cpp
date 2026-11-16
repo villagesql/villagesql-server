@@ -84,9 +84,8 @@ int SimpleProperties::Writer::append(const char *buf, Uint32 buf_size) {
     if (add(buf, bytesToAdd)) {
       m_bytes_written += bytesToAdd;
       return bytesToAdd;
-    } else {
-      return -1;
     }
+    return -1;
   }
   return 0;
 }

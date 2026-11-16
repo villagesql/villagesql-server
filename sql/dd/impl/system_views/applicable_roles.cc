@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/applicable_roles.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const String_type &Applicable_roles::cte_expression() {
-  static String_type s_cte_expression(
+  static String_type const s_cte_expression(
       "WITH RECURSIVE role_graph (c_parent_user, c_parent_host,"
       "                                 c_from_user, c_from_host,"
       "                                 c_to_user, c_to_host, role_path,"
@@ -120,7 +119,7 @@ const String_type &Applicable_roles::cte_expression() {
 }
 
 const Applicable_roles &Applicable_roles::instance() {
-  static Applicable_roles *s_instance = new Applicable_roles();
+  static auto *s_instance = new Applicable_roles();
   return *s_instance;
 }
 
@@ -157,5 +156,4 @@ Applicable_roles::Applicable_roles() {
   m_target_def.add_where("c_to_user != ''");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

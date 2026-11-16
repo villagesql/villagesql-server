@@ -26,7 +26,7 @@
 #if defined(__clang__)
 
 #include <ndb_types.h>
-#include <stddef.h>
+#include <cstddef>
 
 #include <Checksum.hpp>
 

@@ -24,6 +24,7 @@
 #ifndef PLUGIN_INCLUDE
 #define PLUGIN_INCLUDE
 
+#include <mysql/components/services/bits/system_variables_bits.h>
 #include <mysql/components/services/mysql_runtime_error_service.h>
 #include <mysql/plugin.h>
 #include <mysql/plugin_group_replication.h>
@@ -63,12 +64,6 @@ class Consensus_leaders_handler;
 class Mysql_thread;
 
 // Definition of system var structures
-
-// Definition of system vars structure for access their information in the
-// plugin
-struct SYS_VAR {
-  MYSQL_PLUGIN_VAR_HEADER;
-};
 
 /**
   Position of channel observation manager's in channel_observation_manager_list
@@ -208,7 +203,6 @@ int terminate_plugin_modules(gr_modules::mask modules_to_terminate,
                              char **error_message = nullptr,
                              bool rejoin = false);
 void register_server_reset_master();
-bool get_allow_local_lower_version_join();
 ulong get_transaction_size_limit();
 bool is_plugin_waiting_to_set_server_read_mode();
 bool check_async_channel_running_on_secondary();
@@ -226,6 +220,7 @@ uint get_number_of_autorejoin_tries();
 ulonglong get_rejoin_timeout();
 void declare_plugin_cloning(bool is_running);
 bool get_allow_single_leader();
+uint get_auto_evict_timeout();
 /**
   Encapsulates the logic necessary to attempt a rejoin, i.e. gracefully leave
   the group, terminate GCS infrastructure, terminate auto-rejoin relevant plugin
@@ -248,6 +243,10 @@ const char *get_group_name_var();
 const char *get_view_change_uuid_var();
 ulong get_exit_state_action_var();
 ulong get_flow_control_mode_var();
+ulong get_certification_loop_sleep_time_var();
+ulong get_certification_loop_chunk_size_var();
+ulong get_xcom_ssl_socket_timeout_var();
+ulong get_xcom_ssl_accept_retries_var();
 long get_flow_control_certifier_threshold_var();
 long get_flow_control_applier_threshold_var();
 long get_flow_control_min_quota_var();

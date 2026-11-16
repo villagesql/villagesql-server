@@ -161,7 +161,7 @@ NdbScanFilter::NdbScanFilter(class NdbOperation *op)
 
   if (likely((opType == NdbOperation::TableScan) ||
              (opType == NdbOperation::OrderedIndexScan))) {
-    NdbScanOperation *scanOp = (NdbScanOperation *)op;
+    auto *scanOp = (NdbScanOperation *)op;
 
     /* We ask the NdbScanOperation to allocate an InterpretedCode
      * object for us.  It will look after freeing it when
@@ -849,8 +849,8 @@ int NdbScanFilter::cmp(BinaryCondition cond, int ColId1, int ColId2) {
 }
 
 static void update(NdbError &_err) {
-  NdbError &error = (NdbError &)_err;
-  ndberror_struct ndberror = (ndberror_struct)error;
+  auto &error = (NdbError &)_err;
+  auto ndberror = (ndberror_struct)error;
   ndberror_update(&ndberror);
   error = NdbError(ndberror);
 }

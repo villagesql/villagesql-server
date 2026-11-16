@@ -30,8 +30,8 @@
 #define helpers_hpp
 
 #include <my_config.h>
-#include <stdio.h>   // not using namespaces yet
-#include <stdlib.h>  // not using namespaces yet
+#include <cstdio>   // not using namespaces yet
+#include <cstdlib>  // not using namespaces yet
 
 /************************************************************
  * Helper Macros & Functions

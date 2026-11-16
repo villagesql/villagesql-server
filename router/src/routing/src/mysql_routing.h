@@ -38,13 +38,9 @@
  *
  */
 
-#include <array>
 #include <atomic>
 #include <chrono>
-#include <map>
 #include <memory>
-#include <mutex>
-#include <stdexcept>
 
 #ifndef _WIN32
 #include <arpa/inet.h>
@@ -74,12 +70,13 @@
 #include "mysql_routing_base.h"
 #include "mysqlrouter/base_protocol.h"
 #include "mysqlrouter/io_thread.h"
+#include "mysqlrouter/metadata_cache_datatypes.h"
 #include "mysqlrouter/routing.h"
 #include "mysqlrouter/routing_component.h"
 #include "mysqlrouter/uri.h"
 #include "plugin_config.h"
+#include "routing_guidelines/routing_guidelines.h"
 #include "socket_container.h"
-#include "tcp_address.h"
 
 namespace mysql_harness {
 class PluginFuncEnv;
@@ -173,14 +170,17 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
    *
    * @param routing_config routing configuration
    * @param io_ctx IO context
+   * @param guidelines routing guidelines engine
    * @param route_name Name of connection routing (can be empty string)
    * @param client_ssl_ctx SSL context of the client side
    * @param dest_ssl_ctx SSL contexts of the destinations
    */
-  MySQLRouting(const RoutingConfig &routing_config, net::io_context &io_ctx,
-               const std::string &route_name = {},
-               TlsServerContext *client_ssl_ctx = nullptr,
-               DestinationTlsContext *dest_ssl_ctx = nullptr);
+  MySQLRouting(
+      const RoutingConfig &routing_config, net::io_context &io_ctx,
+      std::shared_ptr<routing_guidelines::Routing_guidelines_engine> guidelines,
+      const std::string &route_name = {},
+      TlsServerContext *client_ssl_ctx = nullptr,
+      DestinationTlsContext *dest_ssl_ctx = nullptr);
 
   /** @brief Runs the service and accept incoming connections
    *
@@ -192,17 +192,15 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
    */
   void run(mysql_harness::PluginFuncEnv *env);
 
-  /** @brief Sets the destinations from URI
+  void set_destinations(const std::string &dests);
+
+  /**
+   * Sets the destinations.
    *
-   * Sets destinations using the given string. The string should be a comma
-   * separated list of MySQL servers.
-   *
-   * Example of destinations:
-   *   "10.0.10.5,10.0.11.6:3307"
-   *
-   * @param csv destinations as comma-separated-values
+   * @param dests destinations
    */
-  void set_destinations_from_csv(const std::string &csv);
+  void set_destinations_from_dests(
+      const std::vector<mysql_harness::Destination> &dests);
 
   void set_destinations_from_uri(const mysqlrouter::URI &uri);
 
@@ -254,22 +252,30 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
       typename ClientProtocol::socket client_socket,
       const typename ClientProtocol::endpoint &client_endpoint);
 
-  routing::RoutingStrategy get_routing_strategy() const override;
+  std::optional<routing::RoutingStrategy> get_routing_strategy()
+      const override {
+    return routing_strategy_;
+  }
 
-  std::vector<mysql_harness::TCPAddress> get_destinations() const override;
+  std::vector<mysql_harness::Destination> get_destination_candidates()
+      const override;
 
   std::vector<MySQLRoutingAPI::ConnData> get_connections() override;
 
   MySQLRoutingConnectionBase *get_connection(const std::string &) override;
 
-  RouteDestination *destinations() { return destination_.get(); }
+  DestinationManager *destination_manager() override {
+    return destination_manager_.get();
+  }
 
   void disconnect_all();
 
   /**
    * Stop accepting new connections on a listening socket.
+   *
+   * @param shutting_down is plugin shutting down.
    */
-  void stop_socket_acceptors() override;
+  void stop_socket_acceptors(const bool shutting_down) override;
 
   /**
    * Check if we are accepting connections on a routing socket.
@@ -293,6 +299,37 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
    */
   stdx::expected<void, std::string> restart_accepting_connections() override;
 
+  /**
+   * In case when routing guideline was updated go through each established
+   * connection and verify if it is allowed according to the new guideline. If
+   * not then such connection is dropped.
+   *
+   * @param affected_routing_sources list of routing guideline route names that
+   * were affected by the guideline update
+   */
+  void on_routing_guidelines_update(
+      const routing_guidelines::Routing_guidelines_engine::RouteChanges
+          &affected_routing_sources);
+
+  /**
+   * Try to update routing guideline with a new guideline.
+   *
+   * @return list of routing guideline route names that were affected by the
+   * guideline update
+   */
+  routing_guidelines::Routing_guidelines_engine::RouteChanges
+  update_routing_guidelines(const std::string &routing_guidelines_document);
+
+  /**
+   * If the router info was updated then register this info in routing context.
+   *
+   * @param router_info updated router info
+   */
+  void on_router_info_update(
+      const routing_guidelines::Router_info &router_info);
+
+  bool is_standalone() const override { return is_destination_standalone_; }
+
  private:
   /** @brief Sets unix socket permissions so that the socket is accessible
    *         to all users (no-op on Windows)
@@ -303,6 +340,9 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
   static void set_unix_socket_permissions(const char *socket_file);
 
   stdx::expected<void, std::string> run_acceptor(
+      mysql_harness::PluginFuncEnv *env);
+
+  stdx::expected<void, std::string> run_with_no_acceptor(
       mysql_harness::PluginFuncEnv *env);
 
  public:
@@ -330,6 +370,8 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
   mysqlrouter::ServerMode purpose() const override;
 
  private:
+  bool accept_connections_{true};
+
   /** Monitor for notifying socket acceptor */
   WaitableMonitor<Nothing> acceptor_waitable_{Nothing{}};
 
@@ -339,12 +381,12 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
   net::io_context &io_ctx_;
 
   /** @brief Destination object to use when getting next connection */
-  std::unique_ptr<RouteDestination> destination_;
+  std::unique_ptr<DestinationManager> destination_manager_{nullptr};
 
   bool is_destination_standalone_{false};
 
   /** @brief Routing strategy to use when getting next destination */
-  routing::RoutingStrategy routing_strategy_;
+  std::optional<routing::RoutingStrategy> routing_strategy_;
 
   /** @brief access_mode of the servers in the routing */
   routing::AccessMode access_mode_;

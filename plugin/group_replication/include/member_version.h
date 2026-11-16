@@ -51,7 +51,7 @@ class Member_version {
   /**
     @return returns the member version in string format.
   */
-  const std::string get_version_string() const;
+  std::string get_version_string() const;
   /**
     @return returns the major version (Major.v.v)
   */

@@ -56,10 +56,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 namespace Btree_multi {
 
 #ifdef UNIV_DEBUG
+thread_local uint64_t debug_counter = 0;
 static bool g_slow_io_debug = false;
 void bulk_load_enable_slow_io_debug() { g_slow_io_debug = true; }
 void bulk_load_disable_slow_io_debug() { g_slow_io_debug = false; }
 #endif /* UNIV_DEBUG */
+
+#ifndef UNIV_PFS_THREAD
+#define bulk_flusher_thread_key PFS_NOT_INSTRUMENTED
+#define bulk_alloc_thread_key PFS_NOT_INSTRUMENTED
+#endif
 
 void Bulk_flusher::start(space_id_t space_id, size_t flusher_number,
                          size_t queue_size) {
@@ -102,12 +108,22 @@ Bulk_flusher::~Bulk_flusher() {
 
 void Bulk_flusher::wait_to_stop() {
   ut_ad(m_flush_thread.joinable());
-  m_stop = true;
+  m_stop.store(true);
   m_flush_thread.join();
+  ut_ad(m_priv_queue.empty());
+  ut_ad(m_queue.empty());
+#ifdef UNIV_DEBUG
+  for (auto &page_extent : m_free_queue) {
+    ut_ad(!page_extent->m_is_owned_by_bulk_flusher.load());
+  }
+#endif /* UNIV_DEBUG */
 }
 
 void Bulk_flusher::do_work(fil_node_t *node, void *iov, size_t iov_size) {
   for (auto &page_extent : m_priv_queue) {
+    ut_ad(page_extent != nullptr);
+    ut_ad(!page_extent->is_btree_load_nullptr());
+    ut_ad(page_extent->m_is_owned_by_bulk_flusher.load());
 #ifdef UNIV_DEBUG
     if (g_slow_io_debug) {
       std::this_thread::sleep_for(std::chrono::milliseconds{2});
@@ -118,8 +134,14 @@ void Bulk_flusher::do_work(fil_node_t *node, void *iov, size_t iov_size) {
       auto err = page_extent->flush(node, iov, iov_size);
       set_error(err);
     }
-    page_extent->destroy();
-    Page_extent::drop(page_extent);
+    page_extent->free_memory_blocks();
+    IF_DEBUG(page_extent->m_is_owned_by_bulk_flusher.store(false));
+    if (page_extent->is_blob()) {
+      add_to_free_queue(page_extent);
+    } else {
+      page_extent->destroy();
+      Page_extent::drop(page_extent);
+    }
   }
   m_priv_queue.clear();
 }
@@ -135,11 +157,30 @@ dberr_t Bulk_flusher::check_and_notify() const {
   return DB_SUCCESS;
 }
 
+Page_extent *Bulk_flusher::get_free_extent() {
+  std::unique_lock lk(m_free_mutex);
+  if (m_free_queue.empty()) {
+    return nullptr;
+  }
+  Page_extent *page_extent = m_free_queue.back();
+  m_free_queue.pop_back();
+  return page_extent;
+}
+
+void Bulk_flusher::add_to_free_queue(Page_extent *page_extent) {
+  std::unique_lock lk(m_free_mutex);
+  m_free_queue.push_back(page_extent);
+}
+
 void Bulk_flusher::add(Page_extent *page_extent,
                        std::function<void()> &fn_wait_begin,
                        std::function<void()> &fn_wait_end) {
+  ut_ad(!m_stop.load());
+  ut_ad(!page_extent->m_is_owned_by_bulk_flusher.load());
   const size_t max_queue_size = get_max_queue_size();
   std::unique_lock lk(m_mutex);
+  ut_ad(page_extent != nullptr);
+  ut_ad(!page_extent->is_btree_load_nullptr());
 
   if (m_queue.size() >= max_queue_size) {
     if (fn_wait_begin) {
@@ -152,6 +193,7 @@ void Bulk_flusher::add(Page_extent *page_extent,
     }
   }
   m_queue.push_back(page_extent);
+  IF_DEBUG(page_extent->m_is_owned_by_bulk_flusher.store(true));
 
   /* If queue is full, wake up the flusher thread. */
   if ((m_queue.size() + 1) >= max_queue_size) {
@@ -326,7 +368,7 @@ void Page_load::init_for_writing() {
 dberr_t Page_extent::bulk_flush_linux(fil_node_t *node, struct iovec *iov,
                                       size_t iov_size) {
   dberr_t err{DB_SUCCESS};
-  const page_no_t n_pages = m_page_loads.size();
+  const page_no_t n_pages = used_pages();
   ut_ad(n_pages > 0);
 
 #ifdef UNIV_DEBUG
@@ -344,8 +386,8 @@ dberr_t Page_extent::bulk_flush_linux(fil_node_t *node, struct iovec *iov,
 
   const size_t page_size = m_page_loads[0]->get_page_size();
 
-  size_t i = 0;
-  for (auto &page_load : m_page_loads) {
+  for (size_t i = 0; i < n_pages; ++i) {
+    auto &page_load = m_page_loads[i];
     ut_ad(page_load->is_memory());
     page_load->init_for_writing();
     auto buf = page_load->get_page();
@@ -360,7 +402,6 @@ dberr_t Page_extent::bulk_flush_linux(fil_node_t *node, struct iovec *iov,
     ut_ad(disk_page_no == page_load->get_page_no());
     m_btree_load->track_page_flush(disk_page_no);
 #endif /* UNIV_DEBUG */
-    i++;
   }
   page_no_t min_page_no = m_range.first;
   const os_offset_t offset = min_page_no * page_size;
@@ -399,6 +440,10 @@ dberr_t Page_extent::flush_one_by_one(fil_node_t *node) {
   const size_t physical_page_size = m_page_loads[0]->get_page_size();
 
   for (auto &page_load : m_page_loads) {
+    if (page_load->get_block() == nullptr) {
+      break;
+    }
+
     ut_ad(page_load->is_memory());
 
     file::Block *compressed_block = nullptr;
@@ -460,13 +505,16 @@ dberr_t Page_extent::flush_one_by_one(fil_node_t *node) {
       file::Block::free(compressed_block);
       const size_t hole_offset = offset + page_size;
       const size_t hole_size = physical_page_size - page_size;
-      ut_ad(hole_size < physical_page_size);
-      dberr_t err =
-          os_file_punch_hole(node->handle.m_file, hole_offset, hole_size);
-      if (err != DB_SUCCESS) {
-        LogErr(WARNING_LEVEL, ER_IB_BULK_FLUSHER_PUNCH_HOLE, index->table_name,
-               index->name(), (size_t)space_id, (size_t)page_no,
-               physical_page_size, hole_size, file_name.c_str(), (size_t)err);
+      if (hole_size > 0) {
+        ut_ad(hole_size < physical_page_size);
+        dberr_t err =
+            os_file_punch_hole(node->handle.m_file, hole_offset, hole_size);
+        if (err != DB_SUCCESS) {
+          LogErr(WARNING_LEVEL, ER_IB_BULK_FLUSHER_PUNCH_HOLE,
+                 index->table_name, index->name(), (size_t)space_id,
+                 (size_t)page_no, physical_page_size, hole_size,
+                 file_name.c_str(), (size_t)err);
+        }
       }
     }
     if (e_block != nullptr) {
@@ -496,28 +544,31 @@ struct Page_load_compare {
 
 dberr_t Page_extent::flush(fil_node_t *node, void *iov, size_t iov_size) {
   dberr_t err{DB_SUCCESS};
+  ut_ad(m_btree_load != nullptr);
 
   /* No need to flush any pages if index build has been interrupted. */
   if (m_btree_load->is_interrupted()) {
     return DB_INTERRUPTED;
   }
 
-  const page_no_t n_pages = m_page_loads.size();
+  const page_no_t n_pages = used_pages();
   if (n_pages == 0) {
     /* Nothing to do. */
     return err;
   }
 
-  std::sort(m_page_loads.begin(), m_page_loads.end(), Page_load_compare());
+  std::sort(m_page_loads.begin(), m_page_loads.begin() + n_pages,
+            Page_load_compare());
 
 #ifdef UNIV_DEBUG
-  for (size_t i = m_range.first, j = 0;
-       i < m_range.second && j < m_page_loads.size(); ++i, ++j) {
+  for (size_t i = m_range.first, j = 0; i < m_range.second && j < n_pages;
+       ++i, ++j) {
     ut_ad(i == m_page_loads[j]->get_page_no());
   }
 #endif /* UNIV_DEBUG */
 
-  for (auto &page_load : m_page_loads) {
+  for (size_t i = 0; i < n_pages; ++i) {
+    auto &page_load = m_page_loads[i];
     ut_ad(page_load->verify_space_id());
     const page_no_t page_no = page_load->get_page_no();
     /* In the debug build we assert, but in the release build we report a
@@ -611,6 +662,7 @@ bool Level_ctx::is_page_tracked(const page_no_t &page_no) const {
 
 dberr_t Level_ctx::alloc_extent() {
   ut_ad(m_extent_full);
+  ut_ad(m_page_extent->is_fully_used());
 
   if (!load_extent_from_cache()) {
     const bool is_leaf = (m_level == 0);
@@ -830,13 +882,13 @@ dberr_t Level_ctx::init() {
   m_pages_allocated.push_back(new_page_no);
 #endif /* UNIV_DEBUG */
 
-  if (m_page_extent->is_fully_used()) {
-    m_extent_full = true;
-  }
-
   er = m_page_load->init_mem(new_page_no, m_page_extent);
   if (er != DB_SUCCESS) {
     return er;
+  }
+
+  if (m_page_extent->is_fully_used()) {
+    m_extent_full = true;
   }
 
   return er;
@@ -888,15 +940,80 @@ Page_load::Page_load(dict_index_t *index, Btree_load *btree_load)
   m_is_cached.store(false);
 }
 
+[[nodiscard]] buf_block_t *alloc_mem_block(
+    dict_index_t *index, const page_no_t new_page_no) noexcept {
+  ut_ad(!dict_index_is_spatial(index));
+
+  const page_id_t new_page_id(index->space, new_page_no);
+  const page_size_t page_size = dict_table_page_size(index->table);
+  ut_ad(!page_size.is_compressed());
+
+  buf_pool_t *buf_pool = buf_pool_get(new_page_id);
+  buf_block_t *block = buf_block_alloc(buf_pool);
+
+  block->page.reset_page_id(new_page_id);
+  block->page.set_page_size(page_size);
+
+  page_t *new_page = buf_block_get_frame(block);
+  mach_write_to_4(new_page + FIL_PAGE_OFFSET, block->page.id.page_no());
+
+  fsp_init_file_page_low(block);
+  btr_page_set_next(new_page, nullptr, FIL_NULL, nullptr);
+  btr_page_set_prev(new_page, nullptr, FIL_NULL, nullptr);
+
+  ut_ad(buf_block_get_page_zip(block) == nullptr);
+  return block;
+}
+
+dberr_t Page_load::init_mem_blob(const page_no_t page_no,
+                                 Page_extent *page_extent) noexcept {
+  ut_ad(page_extent != nullptr);
+  ut_ad(page_no >= page_extent->m_range.first);
+  ut_ad(page_no < page_extent->m_range.second);
+  ut_ad(m_heap == nullptr);
+
+#ifdef UNIV_DEBUG
+  auto guard = create_scope_guard([this, page_no]() {
+    ut_ad(m_block != nullptr);
+    ut_ad(m_mtr == nullptr);
+    ut_ad(m_heap == nullptr);
+    ut_ad(m_page_no != 0);
+    ut_ad(m_page_no != FIL_NULL);
+    ut_ad(m_page_no == page_no);
+  });
+#endif /* UNIV_DEBUG */
+
+  m_page_extent = page_extent;
+  m_page_no = page_no;
+  m_mtr = nullptr;
+  m_trx_id = m_btree_load->get_trx_id();
+
+  /* Going to use BUF_BLOCK_MEMORY.  Allocate a new page. */
+  m_block = alloc_mem_block(m_index, page_no);
+
+  ut_ad(buf_block_get_page_zip(m_block) == nullptr);
+  ut_ad(!dict_index_is_spatial(m_index));
+  ut_ad(!dict_index_is_sdi(m_index));
+
+  auto new_page = buf_block_get_frame(m_block);
+  btr_page_set_next(new_page, nullptr, FIL_NULL, nullptr);
+  btr_page_set_prev(new_page, nullptr, FIL_NULL, nullptr);
+
+  return DB_SUCCESS;
+}
+
 dberr_t Page_load::init_mem(const page_no_t page_no,
                             Page_extent *page_extent) noexcept {
   ut_ad(page_extent != nullptr);
   ut_ad(page_no >= page_extent->m_range.first);
   ut_ad(page_no < page_extent->m_range.second);
   ut_ad(m_heap == nullptr || is_cached());
-  ut_ad(m_page_no == FIL_NULL);
+  ut_ad(page_no != FIL_NULL);
+  ut_ad(m_btree_load != nullptr);
 
+  m_trx_id = m_btree_load->get_trx_id();
   m_page_extent = page_extent;
+  m_page_extent->set_page_load(page_no, this);
   m_mtr = nullptr;
 
   if (m_heap == nullptr) {
@@ -1034,7 +1151,7 @@ void Page_load::reset() noexcept {
   mem_heap_free(m_heap);
   m_heap = nullptr;
   /* m_index is not modified. */
-  /* m_trx_id is not modified. */
+  m_trx_id = 0;
   m_block = nullptr;
   m_page = nullptr;
   m_cur_rec = nullptr;
@@ -1210,6 +1327,11 @@ dberr_t Page_load::insert(const dtuple_t *tuple, const big_rec_t *big_rec,
   offsets = rec_get_offsets(rec, m_index, offsets, ULINT_UNDEFINED,
                             UT_LOCATION_HERE, &m_heap);
 
+#ifndef NDEBUG
+  const size_t rec_size_2 = rec_offs_size(offsets);
+  assert(rec_size == rec_size_2);
+#endif /* NDEBUG */
+
   /* Insert the record.*/
   auto err = insert(rec, offsets);
 
@@ -1274,13 +1396,21 @@ void Page_load::finish() noexcept {
   page_header_set_field(m_page, nullptr, PAGE_N_DIRECTION, 0);
   m_modified = false;
   ut_d(const bool check_min_rec = false;);
+
+  if (!m_index->is_clustered()) {
+    mach_write_to_8(m_page + (PAGE_HEADER + PAGE_MAX_TRX_ID), m_trx_id);
+  }
   ut_ad(page_validate(m_page, m_index, check_min_rec));
 }
 
 dberr_t Page_load::commit() noexcept {
   /* It is assumed that finish() was called before commit */
   ut_a(!m_modified);
-  ut_ad(page_validate(m_page, m_index));
+
+  /* The page_validate() routine is a costly validation routine.  So better,
+  to reduce the number of times it will be called. */
+  ut_ad(debug_counter++ % 10 != 0 || page_validate(m_page, m_index));
+
   ut_a(m_rec_no > 0);
   ut_ad(!is_memory() || m_level_ctx->is_page_tracked(m_page_no));
 
@@ -1408,6 +1538,9 @@ page_no_t Page_load::get_prev() noexcept {
 }
 
 bool Page_load::is_space_available(size_t rec_size) const noexcept {
+  ut_ad(m_block != nullptr);
+  ut_ad(m_block->is_memory());
+
   auto slot_size = page_dir_calc_reserved_space(m_rec_no + 1) -
                    page_dir_calc_reserved_space(m_rec_no);
 
@@ -1426,6 +1559,24 @@ bool Page_load::is_space_available(size_t rec_size) const noexcept {
   }
 
   return true;
+}
+
+bool Page_load::make_ext(dtuple_t *tuple) {
+  auto dfield = tuple->choose_ext(m_index);
+
+  if (dfield != nullptr) {
+    byte buf[lob::ref_t::SIZE];
+    lob::ref_t ref(buf);
+    auto err = m_btree_load->insert_blob(ref, dfield);
+    if (err == DB_SUCCESS) {
+      memcpy(dfield->data, buf, lob::ref_t::SIZE);
+      dfield->len = lob::ref_t::SIZE;
+      dfield_set_ext(dfield);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool Page_load::need_ext(const dtuple_t *tuple,
@@ -1491,11 +1642,15 @@ Btree_load::Btree_load(dict_index_t *index, trx_t *trx, size_t loader_num,
     : m_index(index),
       m_trx(trx),
       m_allocator(allocator),
-      m_compare_key(m_index, nullptr, !m_index->is_clustered()),
+      m_compare_key(m_index, nullptr,
+                    !m_index->is_clustered() && !dict_index_is_unique(m_index)),
       m_loader_num(loader_num),
-      m_page_size(dict_table_page_size(m_index->table)) {
+      m_page_size(dict_table_page_size(m_index->table)),
+      m_blob_inserter(*this),
+      m_full_blob_inserter(*this) {
   ut_d(fil_space_inc_redo_skipped_count(m_index->space));
   ut_d(m_index_online = m_index->online_status);
+  ut_ad(!index->is_fts_index());
   m_bulk_flusher.start(m_index->space, m_loader_num, flush_queue_size);
 }
 
@@ -1573,16 +1728,35 @@ dberr_t Btree_load::prepare_space(Page_load *&page_loader, size_t level,
   m_last_page_nos[level] = new_page_no;
 
   /* If the cached extent for the page is full, add to flush queue. */
-  if (extent_cached && page_extent->is_page_loads_full()) {
+  if (extent_cached && page_extent->is_fully_used() &&
+      sibling_page_loader->m_page_extent != page_extent) {
     ut_ad(!is_extent_tracked(page_extent));
-    ut_ad(sibling_page_loader->m_page_extent != page_extent);
     add_to_bulk_flusher(page_extent);
   }
   return DB_SUCCESS;
 }
 
 void Btree_load::add_to_bulk_flusher(Page_extent *page_extent) {
+  ut_ad(page_extent != nullptr);
+  ut_ad(page_extent->is_any_used());
+
   m_bulk_flusher.add(page_extent, m_fn_wait_begin, m_fn_wait_end);
+}
+
+void Btree_load::add_blobs_to_bulk_flusher() {
+  const size_t n = m_extents_tracked.size();
+  for (size_t i = 0; i < n; ++i) {
+    auto page_extent = m_extents_tracked.front();
+    m_extents_tracked.pop_front();
+    if (page_extent->is_blob()) {
+      m_bulk_flusher.add(page_extent, m_fn_wait_begin, m_fn_wait_end);
+    } else {
+      m_extents_tracked.push_back(page_extent);
+    }
+  }
+  while (m_bulk_flusher.is_work_available()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
 }
 
 void Btree_load::add_to_bulk_flusher(bool finish) {
@@ -1590,11 +1764,15 @@ void Btree_load::add_to_bulk_flusher(bool finish) {
   for (size_t i = 0; i < n; ++i) {
     auto page_extent = m_extents_tracked.front();
     m_extents_tracked.pop_front();
-    if (page_extent->is_page_loads_full() || finish) {
+    if (page_extent->is_fully_used() || finish) {
       m_bulk_flusher.add(page_extent, m_fn_wait_begin, m_fn_wait_end);
     } else {
       m_extents_tracked.push_back(page_extent);
     }
+  }
+  if (finish) {
+    m_blob_inserter.finish();
+    m_full_blob_inserter.finish();
   }
 }
 
@@ -1639,8 +1817,6 @@ dberr_t Btree_load::insert(dtuple_t *tuple, size_t level) noexcept {
 
     auto page_loader = lvl_ctx->get_page_load();
 
-    DEBUG_SYNC_C("bulk_load_insert");
-
     m_level_ctxs.push_back(lvl_ctx);
     ut_a(level + 1 == m_level_ctxs.size());
     m_root_level = level;
@@ -1662,10 +1838,13 @@ dberr_t Btree_load::insert(dtuple_t *tuple, size_t level) noexcept {
 
   auto rec_size = rec_get_converted_size(m_index, tuple);
 
-  if (page_loader->need_ext(tuple, rec_size)) {
+  while (page_loader->need_ext(tuple, rec_size)) {
     /* The record is so big that we have to store some fields
     externally on separate database pages. */
-    return DB_BULK_TOO_BIG_RECORD;
+    if (!page_loader->make_ext(tuple)) {
+      return DB_BULK_TOO_BIG_RECORD;
+    }
+    rec_size = rec_get_converted_size(m_index, tuple);
   }
 
   err = prepare_space(page_loader, level, rec_size);
@@ -1837,9 +2016,12 @@ dberr_t Btree_load::finish(bool is_err, const bool subtree) noexcept {
   /* Assert that the index online status has not changed */
 
   ut_ad(m_index->online_status == m_index_online || is_err);
+
   if (m_level_ctxs.empty()) {
-    /* The table is empty. The root page of the index tree
-    is already in a consistent state. No need to flush. */
+    /* Even if the table is empty, there might be blob data inserted. So,
+    always flush. */
+    add_to_bulk_flusher(true);
+    m_bulk_flusher.wait_to_stop();
     return DB_SUCCESS;
   }
 
@@ -1872,7 +2054,6 @@ dberr_t Btree_load::finish(bool is_err, const bool subtree) noexcept {
 
   if (!is_err && !subtree) {
     err = load_root_page(last_page_no);
-    ut_ad(validate_index(m_index));
   }
 
   /* Ensure that remaining pages modified without redo log is flushed here. */
@@ -1959,9 +2140,11 @@ void Btree_load::get_root_page_stat(Page_stat &stat) {
 }
 
 void Page_load::free() {
-  ut_ad(m_block->is_memory());
-  buf_block_free(m_block);
-  m_block = nullptr;
+  if (m_block != nullptr) {
+    ut_ad(m_block->is_memory());
+    buf_block_free(m_block);
+    m_block = nullptr;
+  }
 }
 
 void Btree_load::track_extent(Page_extent *page_extent) {
@@ -2025,6 +2208,14 @@ dberr_t Btree_load::init() {
   if (m_heap_order == nullptr) {
     return DB_OUT_OF_MEMORY;
   }
+  dberr_t err = m_blob_inserter.init();
+  if (err != DB_SUCCESS) {
+    return err;
+  }
+  err = m_full_blob_inserter.init();
+  if (err != DB_SUCCESS) {
+    return err;
+  }
 
   return DB_SUCCESS;
 }
@@ -2044,10 +2235,11 @@ void Bulk_extent_allocator::Extent_cache::init(size_t max_range) {
   m_num_consumed.store(0);
 }
 
-uint64_t Bulk_extent_allocator::init(dict_table_t *table, trx_t *trx,
-                                     size_t size, size_t num_threads,
-                                     bool in_pages) {
+uint64_t Bulk_extent_allocator::init(dict_table_t *table, dict_index_t *index,
+                                     trx_t *trx, size_t size,
+                                     size_t num_threads, bool in_pages) {
   m_table = table;
+  m_index = index;
   m_concurrency = num_threads;
   m_trx = trx;
   auto size_extent = size / (FSP_EXTENT_SIZE * UNIV_PAGE_SIZE);
@@ -2153,13 +2345,12 @@ bool Bulk_extent_allocator::is_interrupted() {
 
 dberr_t Bulk_extent_allocator::allocate_page(bool is_leaf,
                                              Page_range_t &range) {
-  auto index = m_table->first_index();
-  const space_id_t space_id = index->space;
+  const space_id_t space_id = m_index->space;
 
   log_free_check();
   mtr_t mtr;
   mtr.start();
-  mtr.x_lock(dict_index_get_lock(index), UT_LOCATION_HERE);
+  mtr.x_lock(dict_index_get_lock(m_index), UT_LOCATION_HERE);
 
   const page_no_t n_pages = 1;
   const ulint n_ext = 1;
@@ -2171,12 +2362,12 @@ dberr_t Bulk_extent_allocator::allocate_page(bool is_leaf,
     return DB_OUT_OF_FILE_SPACE;
   }
 
-  page_t *root = btr_root_get(index, &mtr);
+  page_t *root = btr_root_get(m_index, &mtr);
 
   size_t header_offset = is_leaf ? PAGE_BTR_SEG_LEAF : PAGE_BTR_SEG_TOP;
   fseg_header_t *seg_header = root + PAGE_HEADER + header_offset;
 
-  const page_size_t page_size = dict_table_page_size(index->table);
+  const page_size_t page_size = dict_table_page_size(m_index->table);
 
   fil_space_t *space = fil_space_acquire(space_id);
 
@@ -2199,8 +2390,7 @@ dberr_t Bulk_extent_allocator::allocate_page(bool is_leaf,
 
 dberr_t Bulk_extent_allocator::allocate_extent(bool is_leaf, mtr_t &mtr,
                                                Page_range_t &range) {
-  auto index = m_table->first_index();
-  return btr_extent_alloc(index, is_leaf, range, &mtr);
+  return btr_extent_alloc(m_index, is_leaf, range, &mtr);
 }
 
 dberr_t Bulk_extent_allocator::allocate(bool is_leaf, bool alloc_page,
@@ -2363,13 +2553,12 @@ dberr_t Bulk_extent_allocator::allocate_extents(bool is_leaf,
   if (num_extents == 0) {
     return DB_SUCCESS;
   }
-  auto index = m_table->first_index();
-  const space_id_t space_id = index->space;
+  const space_id_t space_id = m_index->space;
 
   log_free_check();
   mtr_t mtr;
   mtr.start();
-  mtr.x_lock(dict_index_get_lock(index), UT_LOCATION_HERE);
+  mtr.x_lock(dict_index_get_lock(m_index), UT_LOCATION_HERE);
 
   const page_no_t n_pages = 1;
   ulint n_reserved = 0;
@@ -2486,6 +2675,13 @@ dberr_t Btree_load::Merger::merge(bool sort) {
   if (m_btree_loads.empty()) {
     return DB_SUCCESS;
   }
+
+  /* When the PK is generated DB_ROW_ID, each loader thread can build multiple
+  subtrees. Try to keep the subtrees as minimal as possible (ideally 1).
+  But we also don't want to waste rowid values, so find a balance. */
+  ib::info(ER_BULK_LOADER_INFO)
+      << "Merging " << m_btree_loads.size() << " subtrees created by "
+      << m_n_threads << " threads";
 
   if (sort) {
     Btree_load_compare cmp_obj(m_index);
@@ -3442,4 +3638,353 @@ void Btree_load::split_leftmost(buf_block_t *&block, size_t level,
   /* Update the left most block in the argument. */
   block = new_block;
 }
+
+namespace bulk {
+
+using Btree_multi::Page_load;
+
+/** Used to insert a single blob into InnoDB.  The plan is to keep this private
+to this module.  */
+class Blob_handle {
+ public:
+  /** Constructor.  Initialize a blob handle.
+  @param[in]  inserter   a Blob_inserter object that is inserting the blob.  */
+  Blob_handle(Blob_inserter &inserter) : m_blob_inserter(inserter) {
+    memcpy(m_ref, field_ref_zero, lob::ref_t::SIZE);
+  }
+
+  /** Open a blob.
+  @param[out]  ref  reference of the blob created.  It must have
+    lob::ref_t::SIZE bytes to hold a blob reference.
+  @return DB_SUCCESS on success, an error code on failure. */
+  dberr_t open(lob::ref_t &ref);
+
+  /** Write data into a blob. The write is done at the end of the blob.
+  @param[in,out] ref  blob reference object.
+  @param[in] data  pointer to blob data
+  @param[in] len  number of bytes to write.
+  @return DB_SUCCESS on success, an error code on failure. */
+  dberr_t write(lob::ref_t &ref [[maybe_unused]], const byte *data, size_t len);
+
+  /** Close the blob.
+  @param[in,out] ref  blob reference object.
+  @return DB_SUCCESS on success, an error code on failure. */
+  dberr_t close(lob::ref_t &ref);
+
+ private:
+  dberr_t extend();
+
+  /** Member of Blob_handle. Allocate the first page of the blob.  The
+  returned Page_load object needs to contain a valid page_no and an associated
+  buf_block_t of type BUF_BLOCK_MEMORY. The returned Page_load object is part
+  of an extent that is managed by the m_blob_inserter.
+  @return a pointer to Page_load object or nullptr. */
+  Page_load *alloc_first_page();
+  Page_load *alloc_data_page();
+  Page_load *alloc_index_page();
+
+  /** Get the current transaction id.
+  @return the current transaction id. */
+  trx_id_t get_trx_id() const { return m_blob_inserter.get_trx_id(); }
+
+ private:
+  /** The first page of the blob. */
+  lob::bulk::first_page_t m_first_page;
+
+  /** The LOB index page. */
+  lob::bulk::node_page_t m_node_page;
+
+  /** The LOB data page. */
+  lob::bulk::data_page_t m_data_page;
+
+  /** Contains the BUF_BLOCK_MEMORY for the first blob page.  Once initialized
+  this will not change. */
+  Page_load *m_first_page_load{nullptr};
+
+  /** Contains the BUF_BLOCK_MEMORY for the current index page. */
+  Page_load *m_node_page_load{nullptr};
+
+  /** Contains the BUF_BLOCK_MEMORY for the current data page. */
+  Page_load *m_data_page_load{nullptr};
+
+  /** True if m_ptr points within first page. */
+  bool is_first_page{true};
+
+  /** Location where blob data needs to be written. */
+  byte *m_ptr;
+
+  /** Space available at m_ptr for writing blob data. */
+  size_t m_len;
+
+  /** Total length of the blob. */
+  size_t m_blob_length{0};
+
+  lob::bulk::index_entry_t *m_index_entry{nullptr};
+
+  /** This is the blob reference.  Valid after create() call. */
+  byte m_ref[lob::ref_t::SIZE];
+
+  /** A reference to the Blob_inserter, through which extents would be
+  allocated. */
+  Blob_inserter &m_blob_inserter;
+};
+
+inline Page_load *Blob_handle::alloc_first_page() {
+  m_first_page_load = m_blob_inserter.alloc_first_page();
+  return m_first_page_load;
+}
+
+Blob_inserter::Blob_inserter(Btree_load &btree_load)
+    : m_btree_load(btree_load),
+      m_blob_handle(
+          ut::make_unique<Blob_handle>(UT_NEW_THIS_FILE_PSI_KEY, *this))
+
+{}
+
+dberr_t Blob_inserter::init() {
+  dberr_t err =
+      m_page_load_cache.init(64, 64, m_btree_load.m_index, &m_btree_load);
+  if (err != DB_SUCCESS) {
+    return err;
+  }
+  return m_page_extent_cache.init(32, 32, &m_btree_load, true);
+}
+
+dberr_t Blob_handle::extend() {
+  ut_ad(m_first_page_load->is_memory());
+
+  /* Allocate a data page. */
+  m_data_page_load = m_blob_inserter.alloc_data_page();
+  m_data_page.init(m_data_page_load);
+
+  flst_node_t *node = m_first_page.alloc_index_entry();
+  if (node == nullptr) {
+    m_node_page_load = m_blob_inserter.alloc_index_page();
+    m_node_page.init(m_node_page_load, m_first_page);
+    node = m_first_page.alloc_index_entry();
+    if (node == nullptr) {
+      return DB_FAIL;
+    }
+  }
+  m_first_page.reset_index_entry(node);
+  m_index_entry->set_versions_null();
+  m_index_entry->set_trx_id(get_trx_id());
+  m_index_entry->set_trx_id_modifier(get_trx_id());
+  m_index_entry->set_trx_undo_no(0);
+  m_index_entry->set_trx_undo_no_modifier(0);
+  m_index_entry->set_page_no(m_data_page_load->get_page_no());
+  m_index_entry->set_data_len(0);
+  m_index_entry->set_lob_version(1);
+  m_first_page.append_to_index(node);
+
+  m_ptr = m_data_page.data_begin();
+  m_len = m_data_page.payload();
+  is_first_page = false;
+  return DB_SUCCESS;
+}
+
+dberr_t Blob_handle::open(lob::ref_t &ref) {
+  ut_ad(m_first_page_load == nullptr);
+  m_first_page_load = m_blob_inserter.alloc_first_page();
+  m_first_page.init(m_first_page_load);
+  m_blob_length = 0;
+  is_first_page = true;
+
+  ref.init();
+  ref.set_space_id(m_first_page_load->space());
+  ref.set_page_no(m_first_page_load->get_page_no());
+  ref.set_version(1);
+
+  m_ptr = m_first_page.data_begin();
+  m_len = m_first_page.max_space_available();
+  m_index_entry = m_first_page.get_index_entry();
+  return DB_SUCCESS;
+}
+
+dberr_t Blob_handle::write(lob::ref_t &ref [[maybe_unused]], const byte *data,
+                           size_t len) {
+  ut_ad(len > 0);
+
+  if (m_len == 0) {
+    /* Need more space to write the requested data. */
+    auto err = extend();
+    if (err != DB_SUCCESS) {
+      return err;
+    }
+  }
+
+  const byte *data_ptr = data;
+  size_t remain = len;
+
+  while (remain > 0) {
+    size_t n_bytes = std::min(m_len, remain);
+    memcpy(m_ptr, data_ptr, n_bytes);
+    m_len -= n_bytes;
+    remain -= n_bytes;
+    m_ptr += n_bytes;
+    data_ptr += n_bytes;
+
+    m_index_entry->incr_data_len(n_bytes);
+
+    if (is_first_page) {
+      m_first_page.incr_data_len(n_bytes);
+    } else {
+      m_data_page.incr_data_len(n_bytes);
+    }
+
+    m_blob_length += n_bytes;
+
+    if (remain == 0) {
+      /* requested data has been written. */
+      break;
+    }
+
+    if (m_len == 0) {
+      /* Need more space to write the requested data. */
+      auto err = extend();
+      if (err != DB_SUCCESS) {
+        return err;
+      }
+    }
+  }
+  return DB_SUCCESS;
+}
+
+dberr_t Blob_handle::close(lob::ref_t &ref) {
+  ref.set_length(m_blob_length);
+  m_first_page_load = nullptr;
+  return DB_SUCCESS;
+}
+
+dberr_t Blob_inserter::open_blob(Blob_context &blob_ctx, lob::ref_t &ref) {
+  blob_ctx = m_blob_handle.get();
+  return m_blob_handle->open(ref);
+}
+
+dberr_t Blob_inserter::write_blob(Blob_context blob_ctx, lob::ref_t &ref,
+                                  const byte *data, size_t len) {
+  Blob_handle *handle = static_cast<Blob_handle *>(blob_ctx);
+  return handle->write(ref, data, len);
+}
+
+dberr_t Blob_inserter::close_blob(Blob_context blob_ctx, lob::ref_t &ref) {
+  Blob_handle *handle = static_cast<Blob_handle *>(blob_ctx);
+  ut_ad(handle == m_blob_handle.get());
+  handle->close(ref);
+
+  /* Check if any extents can be added to the bulk flusher. */
+  if (m_page_extent_first->is_fully_used()) {
+    m_btree_load.add_to_bulk_flusher(m_page_extent_first);
+    m_page_extent_first = nullptr;
+  }
+  if (m_page_extent_data != nullptr && m_page_extent_data->is_fully_used()) {
+    m_btree_load.add_to_bulk_flusher(m_page_extent_data);
+    m_page_extent_data = nullptr;
+  }
+
+  while (!m_index_extents.empty()) {
+    auto extent = m_index_extents.front();
+    if (extent->is_fully_used()) {
+      m_btree_load.add_to_bulk_flusher(extent);
+      m_index_extents.pop_front();
+    } else {
+      break;
+    }
+  }
+
+  return DB_SUCCESS;
+}
+
+Page_extent *Blob_inserter::alloc_free_extent() {
+  Bulk_flusher &bulk_flusher = m_btree_load.m_bulk_flusher;
+  auto extent = bulk_flusher.get_free_extent();
+  if (extent == nullptr) {
+    extent = m_page_extent_cache.allocate(&m_btree_load, true);
+  }
+  return extent;
+}
+
+Page_load *Blob_inserter::alloc_page_from_extent(Page_extent *&m_page_extent) {
+  if (m_page_extent == nullptr) {
+    m_page_extent = alloc_free_extent();
+    ut_a(m_page_extent != nullptr);
+    const size_t leaf_level = 0;
+    m_btree_load.alloc_extent(m_page_extent->m_range, leaf_level);
+    m_page_extent->init();
+    m_page_extent->set_blob();
+  }
+  page_no_t page_no = m_page_extent->alloc();
+  if (unlikely(page_no == FIL_NULL)) {
+    return nullptr;
+  }
+
+  Page_load *page_load = m_page_extent->get_page_load(page_no);
+  if (page_load == nullptr) {
+    dict_index_t *index = m_btree_load.m_index;
+    page_load = m_page_load_cache.allocate(index, &m_btree_load);
+    m_page_extent->set_page_load(page_no, page_load);
+  }
+  ut_ad(m_page_extent->is_any_used());
+
+  auto err = page_load->init_mem_blob(page_no, m_page_extent);
+  if (err != DB_SUCCESS) {
+    return nullptr;
+  }
+  ut_ad(page_load->is_memory());
+  ut_ad(page_load->get_page_no() != 0);
+  ut_ad(page_load->get_page_no() != FIL_NULL);
+  return page_load;
+}
+
+Page_load *Blob_inserter::alloc_first_page() {
+  return alloc_page_from_extent(m_page_extent_first);
+}
+
+Page_load *Blob_inserter::alloc_index_page() {
+  Page_extent *extent{nullptr};
+  if (m_index_extents.empty() || m_index_extents.back()->is_fully_used()) {
+    extent = alloc_free_extent();
+    ut_a(extent != nullptr);
+    const size_t leaf_level = 0;
+    m_btree_load.alloc_extent(extent->m_range, leaf_level);
+    extent->init();
+    extent->set_blob();
+    m_index_extents.push_back(extent);
+  } else {
+    extent = m_index_extents.back();
+  }
+  return alloc_page_from_extent(extent);
+}
+
+Page_load *Blob_inserter::alloc_data_page() {
+  if (m_page_extent_data != nullptr && m_page_extent_data->is_fully_used()) {
+    m_btree_load.add_to_bulk_flusher(m_page_extent_data);
+    m_page_extent_data = nullptr;
+  }
+  return alloc_page_from_extent(m_page_extent_data);
+}
+
+void Blob_inserter::finish() {
+  if (m_page_extent_first != nullptr && m_page_extent_first->is_any_used()) {
+    m_btree_load.add_to_bulk_flusher(m_page_extent_first);
+    m_page_extent_first = nullptr;
+  }
+
+  if (m_page_extent_data != nullptr && m_page_extent_data->is_any_used()) {
+    m_btree_load.add_to_bulk_flusher(m_page_extent_data);
+    m_page_extent_data = nullptr;
+  }
+
+  while (!m_index_extents.empty()) {
+    auto extent = m_index_extents.front();
+    ut_ad(extent->is_any_used());
+    m_btree_load.add_to_bulk_flusher(extent);
+    m_index_extents.pop_front();
+  }
+}
+
+Blob_inserter::~Blob_inserter() { ut_a(m_index_extents.empty()); }
+
+}  // namespace bulk
+
 } /* namespace Btree_multi */

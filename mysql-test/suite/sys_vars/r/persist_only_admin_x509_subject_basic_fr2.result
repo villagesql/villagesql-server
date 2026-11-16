@@ -39,7 +39,6 @@ SET PERSIST_ONLY innodb_read_only = DEFAULT;
 SET PERSIST_ONLY innodb_temp_data_file_path = DEFAULT;
 SET PERSIST_ONLY innodb_temp_tablespaces_dir = DEFAULT;
 SET PERSIST_ONLY innodb_undo_directory = DEFAULT;
-SET PERSIST_ONLY innodb_undo_tablespaces = DEFAULT;
 SET PERSIST_ONLY sha256_password_auto_generate_rsa_keys = DEFAULT;
 SET PERSIST_ONLY sha256_password_private_key_path = DEFAULT;
 SET PERSIST_ONLY sha256_password_public_key_path = DEFAULT;
@@ -85,8 +84,6 @@ SET PERSIST_ONLY skip_external_locking = DEFAULT;
 ERROR HY000: Variable 'skip_external_locking' is a non persistent read only variable
 SET PERSIST_ONLY system_time_zone = DEFAULT;
 ERROR HY000: Variable 'system_time_zone' is a non persistent read only variable
-SET PERSIST_ONLY version_comment = DEFAULT;
-ERROR HY000: Variable 'version_comment' is a non persistent read only variable
 SET PERSIST_ONLY version_compile_machine = DEFAULT;
 ERROR HY000: Variable 'version_compile_machine' is a non persistent read only variable
 SET PERSIST_ONLY version_compile_os = DEFAULT;

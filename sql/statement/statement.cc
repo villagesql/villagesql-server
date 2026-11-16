@@ -79,8 +79,12 @@ int dummy_function_to_ensure_we_are_linked_into_the_server() { return 1; }
  */
 class Diagnostics_area_handler_raii {
  public:
-  Diagnostics_area_handler_raii(THD *thd, bool reset_cond_info = false)
-      : m_thd(thd), m_stmt_da(false) {
+  Diagnostics_area_handler_raii(THD *thd,
+                                bool clear_diagnostics_area_on_success,
+                                bool reset_cond_info = false)
+      : m_thd(thd),
+        m_stmt_da(false),
+        m_clear_diagnostics_area_on_success(clear_diagnostics_area_on_success) {
     if (m_thd->is_error()) {
       /*
         If a statement is being executed after an error is occurred, then push
@@ -118,13 +122,140 @@ class Diagnostics_area_handler_raii {
       }
     } else {
       // Reset caller DA if statement execution is successful.
-      if (!m_thd->is_error()) m_thd->get_stmt_da()->reset_diagnostics_area();
+      if (m_clear_diagnostics_area_on_success && !m_thd->is_error()) {
+        m_thd->get_stmt_da()->reset_diagnostics_area();
+      }
     }
   }
 
  private:
   THD *m_thd;
   Diagnostics_area m_stmt_da;
+  bool m_clear_diagnostics_area_on_success;
+};
+
+#ifdef HAVE_PSI_INTERFACE
+PSI_statement_info Regular_statement_handle::stmt_psi_info = {
+    0, "regular", 0, "Regular Statement Handle: SQL Statement"};
+
+PSI_statement_info Prepared_statement_handle::prepare_psi_info = {
+    0, "prepare", 0, "Prepared Statement Handle: PREPARE Statement"};
+PSI_statement_info Prepared_statement_handle::execute_psi_info = {
+    0, "execute", 0, "Prepared Statement Handle: EXECUTE Statement"};
+PSI_statement_info Prepared_statement_handle::fetch_psi_info = {
+    0, "fetch", 0, "Prepared Statement Handle: FETCH cursor"};
+PSI_statement_info Prepared_statement_handle::reset_psi_info = {
+    0, "reset", 0, "Prepared Statement Handle: RESET Statement"};
+PSI_statement_info Prepared_statement_handle::close_psi_info = {
+    0, "close", 0, "Prepared Statement Handle: CLOSE Statement"};
+
+void init_statement_handle_interface_psi_keys() {
+  const char *category = "stmt_handle";
+  mysql_statement_register(category, &Regular_statement_handle::stmt_psi_info,
+                           1);
+
+  mysql_statement_register(category,
+                           &Prepared_statement_handle::prepare_psi_info, 1);
+  mysql_statement_register(category,
+                           &Prepared_statement_handle::execute_psi_info, 1);
+  mysql_statement_register(category, &Prepared_statement_handle::fetch_psi_info,
+                           1);
+  mysql_statement_register(category, &Prepared_statement_handle::reset_psi_info,
+                           1);
+  mysql_statement_register(category, &Prepared_statement_handle::close_psi_info,
+                           1);
+}
+#endif
+
+/**
+  RAII class to manage PFS statement instrumentation for statement executed
+  using Statement Handle interface.
+
+  This class mainly manages setting query text of statement being executed
+  for PFS instrumentation and starts the PFS statement instrumentation. In the
+  destructor of this RAII class, reset query text (i.e. set query text of parent
+  query) ands end the PFS statement instrumentation.
+*/
+class PFS_instrumentation_handle_raii {
+ public:
+  PFS_instrumentation_handle_raii(THD *thd, std::string *new_query,
+                                  PSI_statement_info *psi_info)
+      : m_thd(thd) {
+    // Set query text of statement being execution for PFS instrumentation.
+    assert(new_query != nullptr);
+    m_saved_query_string = thd->query();
+    thd->set_query(new_query->c_str(), new_query->length());
+
+    if (thd->rewritten_query().length() > 0) {
+      m_saved_rewritten_query.copy(
+          thd->rewritten_query()); /* purecov: inspected */
+    }
+    rewrite_query(thd);
+
+    m_saved_safe_to_display = thd->safe_to_display();
+    set_query_for_display(thd);
+
+    // Start statement instrumentation.
+#ifdef HAVE_PSI_INTERFACE
+    // Set PSI_sp_share if statement is executed within SP.
+    PSI_sp_share *sp_share = nullptr;
+    if (m_thd->sp_runtime_ctx != nullptr)
+      sp_share = m_thd->sp_runtime_ctx->sp->m_sp_share;
+
+    m_saved_parent_statement_psi = m_thd->m_statement_psi;
+    m_thd->m_statement_psi =
+        MYSQL_START_STATEMENT(&m_psi_state, psi_info->m_key, m_thd->db().str,
+                              m_thd->db().length, m_thd->charset(), sp_share);
+#endif
+
+    // Set statement digest.
+    m_saved_parent_digest = m_thd->m_digest;
+    m_thd->m_digest = &m_digest;
+  }
+
+  ~PFS_instrumentation_handle_raii() {
+    // Use parent digest.
+    m_thd->m_digest = m_saved_parent_digest;
+    m_saved_parent_digest = nullptr;
+
+    // End statement instrumentation.
+#ifdef HAVE_PSI_INTERFACE
+    MYSQL_END_STATEMENT(m_thd->m_statement_psi, m_thd->get_stmt_da());
+
+    m_thd->m_statement_psi = m_saved_parent_statement_psi;
+    m_saved_parent_statement_psi = nullptr;
+#endif
+
+    // Set query text of a parent statement.
+    m_thd->set_query(m_saved_query_string);
+
+    if (m_saved_rewritten_query.length() > 0) {
+      m_thd->swap_rewritten_query(m_saved_rewritten_query);
+      m_saved_rewritten_query.mem_free();
+    } else {
+      m_thd->reset_rewritten_query();
+    }
+
+    set_query_for_display(m_thd);
+    m_thd->set_safe_display(m_saved_safe_to_display);
+
+    DEBUG_SYNC(m_thd, "wait_after_resetting_pfs_query_text");
+  }
+
+ private:
+  THD *m_thd{nullptr};
+
+  LEX_CSTRING m_saved_query_string;
+  String m_saved_rewritten_query;
+  bool m_saved_safe_to_display{false};
+
+#ifdef HAVE_PSI_INTERFACE
+  PSI_statement_locker_state m_psi_state;
+  PSI_statement_locker *m_saved_parent_statement_psi{nullptr};
+#endif
+
+  sql_digest_state m_digest;
+  sql_digest_state *m_saved_parent_digest{nullptr};
 };
 
 void Statement_handle::send_statement_status() {
@@ -169,7 +300,15 @@ void Statement_handle::send_statement_status() {
 }
 
 bool Regular_statement_handle::execute() {
+  if (m_thd->m_regular_statement_handle_count >=
+      MAX_REGULAR_STATEMENT_HANDLES_LIMIT) {
+    my_error(ER_EXCEEDED_MAX_REGULAR_STATEMENT_HANDLE_LIMIT, MYF(0),
+             MAX_REGULAR_STATEMENT_HANDLES_LIMIT);
+    return true;
+  }
+  m_thd->m_regular_statement_handle_count++;
   m_is_executed = true;
+
   LEX_STRING sql_text{const_cast<char *>(m_query.c_str()), m_query.length()};
   Statement_runnable stmt_runnable(sql_text);
   return execute(&stmt_runnable);
@@ -178,7 +317,8 @@ bool Regular_statement_handle::execute() {
 bool Regular_statement_handle::execute(Server_runnable *server_runnable) {
   DBUG_TRACE;
 
-  if (m_thd->in_sub_stmt ||
+  if ((m_thd->in_sub_stmt == SUB_STMT_FUNCTION ||
+       m_thd->in_sub_stmt == SUB_STMT_TRIGGER) ||
       (m_thd->in_loadable_function &&
        DBUG_EVALUATE_IF("skip_statement_execution_within_UDF_check", false,
                         true))) {
@@ -189,9 +329,6 @@ bool Regular_statement_handle::execute(Server_runnable *server_runnable) {
 
   free_old_result(); /* Delete all data from previous execution, if any */
 
-  query_id_t old_query_id = m_thd->query_id;
-  m_thd->set_query_id(next_query_id());
-
   set_thd_protocol();
 
   MEM_ROOT *saved_user_var_events_alloc = m_thd->user_var_events_alloc;
@@ -200,14 +337,106 @@ bool Regular_statement_handle::execute(Server_runnable *server_runnable) {
   m_thd->set_secondary_engine_optimization(
       Secondary_engine_optimization::PRIMARY_TENTATIVELY);
 
-  bool rc = false;
+  query_id_t old_query_id = m_thd->query_id;
+  bool error = false;
   {
-    Diagnostics_area_handler_raii da_handler(m_thd);
+    Diagnostics_area_handler_raii da_handler(
+        m_thd, clear_diagnostics_area_on_success());
+    bool general_log_temporarily_disabled = true;
+
+    PFS_instrumentation_handle_raii pfs_instr_handle_raii(
+        m_thd, &m_query, &Regular_statement_handle::stmt_psi_info);
+    m_thd->set_query_id(next_query_id());
 
     Prepared_statement stmt(m_thd);
-    rc = stmt.execute_server_runnable(m_thd, server_runnable);
+    while (true) {
+      error = stmt.execute_server_runnable(m_thd, server_runnable);
+      DEBUG_SYNC(m_thd, "regular_statement_execute_after");
+
+      /*
+        Re-enable the general log if it was temporarily disabled while
+        re-executing a statement for a secondary engine.
+      */
+      if (general_log_temporarily_disabled) {
+        m_thd->variables.option_bits &= ~OPTION_LOG_OFF;
+        general_log_temporarily_disabled = false;
+      }
+
+      // Exit immediately if execution is successful.
+      if (!error) {
+        break;
+      }
+
+      // Exit if a fatal error has occurred or statement execution was killed.
+      if (m_thd->is_fatal_error() || m_thd->is_killed()) {
+        break;
+      }
+
+      LEX *lex = stmt.m_lex;
+      Query_arena *arena = &stmt.m_arena;
+      const int my_errno = m_thd->get_stmt_da()->mysql_errno();
+      if (my_errno == ER_PREPARE_FOR_PRIMARY_ENGINE ||
+          my_errno == ER_PREPARE_FOR_SECONDARY_ENGINE) {
+        assert(m_thd->secondary_engine_optimization() ==
+               Secondary_engine_optimization::PRIMARY_TENTATIVELY);
+        assert(!lex->unit->is_executed());
+        if (my_errno == ER_PREPARE_FOR_SECONDARY_ENGINE) {
+          m_thd->set_secondary_engine_optimization(
+              Secondary_engine_optimization::SECONDARY);
+        } else {
+          m_thd->set_secondary_engine_optimization(
+              Secondary_engine_optimization::PRIMARY_ONLY);
+        }
+      } else {
+        if (lex->m_sql_cmd == nullptr ||
+            m_thd->secondary_engine_optimization() !=
+                Secondary_engine_optimization::SECONDARY ||
+            lex->unit->is_executed() || m_thd->is_secondary_engine_forced()) {
+          break;
+        }
+        /*
+          Some error occurred during resolving or optimization in
+          the secondary engine, and secondary engine execution is not forced.
+          Retry execution of the statement in the primary engine.
+        */
+        m_thd->set_secondary_engine_optimization(
+            Secondary_engine_optimization::PRIMARY_ONLY);
+      }
+
+      /*
+        Disable the general log. The query was written to the general log in
+        the first attempt to execute it. No need to write it twice.
+      */
+      if ((m_thd->variables.option_bits & OPTION_LOG_OFF) == 0) {
+        m_thd->variables.option_bits |= OPTION_LOG_OFF;
+        general_log_temporarily_disabled = true;
+      }
+
+      /*
+        Prepare for re-prepare and re-optimization:
+        - Clear the current diagnostics area.
+        - Clean up the statement's LEX, including release of plugins.
+        - Clean up and free items, both permanent in stmt. and transient in THD.
+      */
+      m_thd->clear_error();
+      error = false;
+      lex_end(lex);
+      cleanup_items(m_thd->item_list());
+      m_thd->free_items();
+      cleanup_items(arena->item_list());
+      stmt.m_lex = nullptr;
+    }
+    m_thd->set_secondary_engine_statement_context(nullptr);
+
+    // Re-enable the general log if it was temporarily disabled while
+    // re-executing a statement for a secondary engine.
+    if (general_log_temporarily_disabled)
+      m_thd->variables.option_bits &= ~OPTION_LOG_OFF;
+
     send_statement_status();
   }
+
+  m_thd->set_query_id(old_query_id);
 
   reset_thd_protocol();
 
@@ -217,15 +446,6 @@ bool Regular_statement_handle::execute(Server_runnable *server_runnable) {
     Reset it to point to the first result set instead.
   */
   m_current_rset = m_result_sets;
-
-  /*
-    Prepared_statement::execute_server_runnable() sets m_query as query being
-    executed for the PFS events. So reset it back to the query invoking this
-    method.
-  */
-  set_query_for_display(m_thd);
-
-  m_thd->set_query_id(old_query_id);
 
   m_thd->set_secondary_engine_optimization(saved_secondary_engine);
 
@@ -239,9 +459,7 @@ bool Regular_statement_handle::execute(Server_runnable *server_runnable) {
   */
   m_thd->user_var_events_alloc = saved_user_var_events_alloc;
 
-  DEBUG_SYNC(m_thd, "wait_after_query_execution");
-
-  return rc;
+  return error;
 }
 
 void Statement_handle::add_result_set(Result_set *result_set) {
@@ -341,69 +559,12 @@ void Statement_handle::reset_thd_protocol() {
   m_saved_protocol = nullptr;
 }
 
-/**
-  RAII class to set query text to PFS.
-
-  Constructor sets new query text for PFS events. New query text is
-  rewritten if needed before setting it for PFS events.
-
-  Destructor restores original query string for PFS events.
-*/
-class PFS_query_text_handler_raii {
- public:
-  PFS_query_text_handler_raii(THD *thd, std::string *new_query) {
-    assert(new_query->length() > 0);
-
-    m_thd = thd;
-
-    m_saved_query_string = thd->query();
-    thd->set_query(new_query->c_str(), new_query->length());
-
-    if (thd->rewritten_query().length() > 0) {
-      m_saved_rewritten_query.copy(
-          thd->rewritten_query()); /* purecov: inspected */
-    }
-    rewrite_query(thd);
-
-    m_saved_safe_to_display = thd->safe_to_display();
-    /*
-      Setting query text for PFS events during executed phase of prepared
-      statement. In `Prepared_statement::prepare()` function, the query being
-      prepared is initially set for the PFS events, but it is later reset back
-      to the invoker query after preparation is complete. However, during the
-      execute phase, rewritten query text for a query may not be readily
-      available. To address this, setting the query after rewrite for PFS
-      events.
-    */
-    set_query_for_display(thd);
-  }
-
-  ~PFS_query_text_handler_raii() {
-    m_thd->set_query(m_saved_query_string);
-
-    if (m_saved_rewritten_query.length() > 0) {
-      m_thd->swap_rewritten_query(m_saved_rewritten_query);
-      m_saved_rewritten_query.mem_free();
-    } else {
-      m_thd->reset_rewritten_query();
-    }
-
-    set_query_for_display(m_thd);
-    m_thd->set_safe_display(m_saved_safe_to_display);
-  }
-
- private:
-  THD *m_thd{nullptr};
-  LEX_CSTRING m_saved_query_string;
-  String m_saved_rewritten_query;
-  bool m_saved_safe_to_display{false};
-};
-
 bool Prepared_statement_handle::internal_prepare() {
   DBUG_TRACE;
   DBUG_PRINT("Prepared_statement_handle", ("Got query %s\n", m_query.c_str()));
 
-  Diagnostics_area_handler_raii da_handler(m_thd, true);
+  Diagnostics_area_handler_raii da_handler(
+      m_thd, clear_diagnostics_area_on_success(), true);
 
   // Close the current statement and create new
   if (m_stmt) {
@@ -459,8 +620,9 @@ bool Prepared_statement_handle::internal_prepare() {
 
   m_thd->set_secondary_engine_optimization(saved_secondary_engine);
 
-  // Set multi-result state if statement belongs to SP.
+  // Set multi-result state if statement belongs to Stored procedure.
   if (m_use_thd_protocol && m_thd->sp_runtime_ctx != nullptr &&
+      m_thd->sp_runtime_ctx->sp->m_type == enum_sp_type::PROCEDURE &&
       set_sp_multi_result_state(m_thd, m_stmt->m_lex)) {
     return true; /* purecov: inspected */
   }
@@ -469,8 +631,6 @@ bool Prepared_statement_handle::internal_prepare() {
     // OOM
     return true; /* purecov: inspected */
   }
-
-  DEBUG_SYNC(m_thd, "wait_after_query_prepare");
 
   return false;
 }
@@ -500,7 +660,8 @@ bool Prepared_statement_handle::enable_cursor() {
 bool Prepared_statement_handle::internal_execute() {
   DBUG_TRACE;
 
-  Diagnostics_area_handler_raii da_handler(m_thd, true);
+  Diagnostics_area_handler_raii da_handler(
+      m_thd, clear_diagnostics_area_on_success(), true);
 
   // Stop if prepare is not done yet.
   if (!m_stmt) {
@@ -551,15 +712,13 @@ bool Prepared_statement_handle::internal_execute() {
   expanded_query.set_charset(default_charset_info);
 
   // If no error happened while setting the parameters, execute statement.
-  bool rc = false;
-  if (!m_stmt->set_parameters(
+  bool rc =
+      m_stmt->set_parameters(
           m_thd, &expanded_query, m_bound_new_parameter_types, m_parameters,
-          Prepared_statement::enum_param_pack_type::UNPACKED)) {
-    PFS_query_text_handler_raii pfs_query_text_handler(m_thd, &m_query);
-    rc = m_stmt->execute_loop(m_thd, &expanded_query, enable_cursor());
-    m_bound_new_parameter_types = false;
-    if (!is_cursor_open()) send_statement_status();
-  }
+          Prepared_statement::enum_param_pack_type::UNPACKED) ||
+      m_stmt->execute_loop(m_thd, &expanded_query, enable_cursor());
+  m_bound_new_parameter_types = false;
+  if (!is_cursor_open()) send_statement_status();
 
   m_thd->set_secondary_engine_optimization(saved_secondary_engine);
 
@@ -572,8 +731,6 @@ bool Prepared_statement_handle::internal_execute() {
   */
   m_thd->user_var_events_alloc = saved_user_var_events_alloc;
 
-  DEBUG_SYNC(m_thd, "wait_after_query_execution");
-
   return rc;
 }
 
@@ -582,7 +739,8 @@ bool Prepared_statement_handle::internal_fetch() {
   DBUG_PRINT("Prepared_statement_handle",
              ("Asked for %zu rows\n", m_num_rows_per_fetch));
 
-  Diagnostics_area_handler_raii da_handler(m_thd, true);
+  Diagnostics_area_handler_raii da_handler(
+      m_thd, clear_diagnostics_area_on_success(), true);
 
   // Stop if statement is not prepared.
   if (!m_stmt) {
@@ -687,27 +845,33 @@ bool Prepared_statement_handle::internal_close() {
 }
 
 bool Prepared_statement_handle::prepare() {
-  return run([this]() { return this->internal_prepare(); });
+  return run([this]() { return this->internal_prepare(); },
+             &Prepared_statement_handle::prepare_psi_info);
 }
 
 bool Prepared_statement_handle::execute() {
-  return run([this]() { return this->internal_execute(); });
+  return run([this]() { return this->internal_execute(); },
+             &Prepared_statement_handle::execute_psi_info);
 }
 
 bool Prepared_statement_handle::fetch() {
-  return run([this]() { return this->internal_fetch(); });
+  return run([this]() { return this->internal_fetch(); },
+             &Prepared_statement_handle::fetch_psi_info);
 }
 
 bool Prepared_statement_handle::reset() {
-  return run([this]() { return this->internal_reset(); });
+  return run([this]() { return this->internal_reset(); },
+             &Prepared_statement_handle::reset_psi_info);
 }
 
 bool Prepared_statement_handle::close() {
-  return run([this]() { return this->internal_close(); });
+  return run([this]() { return this->internal_close(); },
+             &Prepared_statement_handle::close_psi_info);
 }
 
 template <typename Function>
-bool Prepared_statement_handle::run(Function exec_func) {
+bool Prepared_statement_handle::run(Function exec_func,
+                                    PSI_statement_info *psi_info) {
   DBUG_TRACE;
 
   if (m_thd->in_sub_stmt ||
@@ -718,9 +882,6 @@ bool Prepared_statement_handle::run(Function exec_func) {
              "Prepared");
     return true;
   }
-
-  query_id_t old_query_id = m_thd->query_id;
-  m_thd->set_query_id(next_query_id());
 
   set_thd_protocol();
 
@@ -737,7 +898,17 @@ bool Prepared_statement_handle::run(Function exec_func) {
   Item_change_list save_change_list;
   m_thd->change_list.move_elements_to(&save_change_list);
 
-  bool error = exec_func();
+  query_id_t old_query_id = m_thd->query_id;
+  bool error = false;
+  {
+    PFS_instrumentation_handle_raii pfs_instr_handle_raii(m_thd, &m_query,
+                                                          psi_info);
+    m_thd->set_query_id(next_query_id());
+
+    error = exec_func();
+  }
+
+  m_thd->set_query_id(old_query_id);
 
   m_thd->cleanup_after_query();
 
@@ -756,7 +927,6 @@ bool Prepared_statement_handle::run(Function exec_func) {
 
   reset_thd_protocol();
 
-  m_thd->set_query_id(old_query_id);
   copy_warnings();
 
   return error;

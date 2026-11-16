@@ -27,11 +27,10 @@
 
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Columns &Columns::instance() {
-  static Columns *s_instance = new Columns();
+  static auto *s_instance = new Columns();
   return *s_instance;
 }
 
@@ -81,6 +80,7 @@ Columns::Columns() {
       "  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN (IF (cs.name='binary',NULL, "
       "cs.name))"
       "  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))"
+      "  WHEN 'MYSQL_TYPE_VECTOR' THEN (IF (cs.name='binary',NULL, cs.name))"
       "  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, cs.name))"
       "  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, cs.name))"
       "  WHEN 'MYSQL_TYPE_SET' THEN (IF (cs.name='binary',NULL, cs.name))"
@@ -98,6 +98,7 @@ Columns::Columns() {
       "  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN "
       "    (IF (cs.name='binary',NULL, coll.name))"
       "  WHEN 'MYSQL_TYPE_BLOB' THEN (IF (cs.name='binary',NULL, coll.name))"
+      "  WHEN 'MYSQL_TYPE_VECTOR' THEN (IF (cs.name='binary',NULL, coll.name))"
       "  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN (IF (cs.name='binary',NULL, "
       "coll.name))"
       "  WHEN 'MYSQL_TYPE_ENUM' THEN (IF (cs.name='binary',NULL, coll.name))"
@@ -144,5 +145,4 @@ Columns::Columns() {
       "'User'), col.options)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

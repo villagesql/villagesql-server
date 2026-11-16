@@ -27,9 +27,8 @@
 #define ZSTD_STATIC_LINKING_ONLY 1
 #include <zstd.h>
 
+#include "mysql/allocators/memory_resource.h"  // Memory_resource
 #include "mysql/binlog/event/compression/decompressor.h"
-#include "mysql/binlog/event/nodiscard.h"
-#include "mysql/binlog/event/resource/memory_resource.h"  // Memory_resource
 
 namespace mysql::binlog::event::compression {
 
@@ -39,8 +38,8 @@ class Zstd_dec : public Decompressor {
   using typename Decompressor::Char_t;
   using typename Decompressor::Grow_constraint_t;
   using typename Decompressor::Size_t;
-  using Memory_resource_t = mysql::binlog::event::resource::Memory_resource;
-  static constexpr type type_code = ZSTD;
+  using Memory_resource_t = mysql::allocators::Memory_resource;
+  static constexpr type type_code = ALGORITHM_ZSTD;
 
   Zstd_dec(const Memory_resource_t &memory_resource = Memory_resource_t());
   ~Zstd_dec() override;
@@ -61,7 +60,7 @@ class Zstd_dec : public Decompressor {
   void do_feed(const Char_t *input_data, Size_t input_size) override;
 
   /// @copydoc Decompressor::do_decompress
-  [[NODISCARD]] std::pair<Decompress_status, Size_t> do_decompress(
+  [[nodiscard]] std::pair<Decompress_status, Size_t> do_decompress(
       Char_t *out, Size_t output_size) override;
 
   /// @copydoc Decompressor::do_get_grow_constraint_hint

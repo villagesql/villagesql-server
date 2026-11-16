@@ -16,6 +16,7 @@
 --source include/villagesql/install_complex_extension.inc
 
 connection master;
+--let $master_uuid= `SELECT @@GLOBAL.SERVER_UUID`
 
 # Create table with COMPLEX type
 CREATE TABLE t1 (
@@ -38,9 +39,11 @@ call mtr.add_suppression("The replica coordinator and worker threads are stopped
 --source include/rpl/wait_for_applier_error.inc
 
 # Show the replication error
-# Filter out binlog file name and position to make test less sensitive to changes
+# Filter out source UUID, binlog file name and position to make test less
+# sensitive to changes
 --echo Replication error occurred (expected):
 --disable_query_log
+--replace_result $master_uuid MASTER_UUID
 --replace_regex /master-bin\.[0-9]+/master-bin.NNNNNN/ /end_log_pos [0-9]+/end_log_pos POSITION/
 SELECT Last_Error_Message FROM performance_schema.replication_applier_status_by_worker;
 --enable_query_log

@@ -40,7 +40,7 @@ struct st_error {
 /// @param error_name Error name string
 ///
 /// @retval -1 if error name is unknown, error code otherwise.
-int get_errcode_from_name(std::string error_name);
+int get_errcode_from_name(const std::string &error_name);
 
 /// Get an error name from an error code.
 ///

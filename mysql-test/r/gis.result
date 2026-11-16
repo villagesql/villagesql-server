@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 SET sql_mode = 'ONLY_FULL_GROUP_BY,NO_ENGINE_SUBSTITUTION';
 DROP TABLE IF EXISTS t1, gis_point, gis_line, gis_polygon, gis_multi_point, gis_multi_line, gis_multi_polygon, gis_geometrycollection, gis_geometry;
 CREATE TABLE gis_point (fid INTEGER NOT NULL PRIMARY KEY, g POINT);
@@ -1514,7 +1515,7 @@ DROP DATABASE gis_ogs;
 #
 # Bug#13362660 ASSERTION `FIELD_POS < FIELD_COUNT' FAILED. IN PROTOCOL_TEXT::STORE
 #
-SELECT ST_Union('', ''), md5(1);
+SELECT ST_Union('', ''), SHA2(1,256);
 ERROR 22023: Invalid GIS data provided to function st_union.
 #
 # Bug#18413646: SINCE 5.7 ERROR 1416 IS CONSIDERED FATAL,
@@ -2918,12 +2919,12 @@ SELECT ST_ISVALID(ST_INTERSECTION(ST_GEOMFROMTEXT('POLYGON((0 5,-6
 ST_ISVALID(ST_INTERSECTION(ST_GEOMFROMTEXT('POLYGON((0 5,-6
 -17,12 17,0 5),(4 6,5 5,0 1,4 6))'), ST_GEOMFROMTEXT('POLYGON((3 9,-15 -5,13
 -11,3 9))')))
-0
+1
 SELECT ST_ISVALID(ST_INTERSECTION(ST_GEOMFROMTEXT('POLYGON((5 6,-15 -13,1 -8,5 6))'), 
 ST_GEOMFROMTEXT('POLYGON((0 8,-19 6,18 -17,20 8,11 17,0 8),(3 2,3 -1,1 0,3 2),(1 3,4 4,0 -1,1 3))')));
 ST_ISVALID(ST_INTERSECTION(ST_GEOMFROMTEXT('POLYGON((5 6,-15 -13,1 -8,5 6))'), 
 ST_GEOMFROMTEXT('POLYGON((0 8,-19 6,18 -17,20 8,11 17,0 8),(3 2,3 -1,1 0,3 2),(1 3,4 4,0 -1,1 3))')))
-0
+1
 #
 # Bug#21823135 INVALID READ OF MEMORY FREED BY GIS_WKB_RAW_FREE
 #
@@ -4752,3 +4753,10 @@ UPDATE t1 SET geom = DEFAULT;
 ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field
 SET sql_mode= @orig_sql_mode;
 DROP TABLE t1;
+#
+# Bug#39300278: Item_func_latlongfromgeohash::val_real():
+# Assertion 'input_value != nullptr || args[0]->null_value' failed
+#
+DO ST_LONGFROMGEOHASH((@c:= ST_ASGEOJSON(POINT(28, 63), 51, 156)));
+ERROR HY000: Incorrect options value: '156' for function st_asgeojson
+include/rpl/set_gtid_mode_on.inc

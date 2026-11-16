@@ -35,8 +35,15 @@ IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
   ENDIF()
 ENDIF()
 
+IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
+  IF(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+    STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-error=alloc-size-larger-than=")
+  ENDIF()
+ENDIF()
+
 SET(TESTS
   #example
+  dict0boot
   fil_path
   fts0vlc
   ha_innodb
@@ -53,6 +60,7 @@ SET(TESTS
   ut0math
   ut0mem
   ut0new
+  ut0object_cache
   ut0rbt
   ut0rnd
 )

@@ -24,6 +24,7 @@
 SET(LINK_LIBRARIES
   ext::zstd
   ext::zlib
+  mysql_containers
   mysql_gtid
   mysql_serialization
 )
@@ -78,13 +79,19 @@ SET(TARGET_SRCS
   compression/payload_event_buffer_istream.cpp
   compression/zstd_comp.cpp
   compression/zstd_dec.cpp
-  compression/buffer/grow_calculator.cpp
-  compression/buffer/grow_constraint.cpp
-  compression/buffer/grow_status.cpp
 )
 
 ADD_WSHADOW_WARNING()
 DISABLE_MISSING_PROFILE_WARNING()
+
+# GCC 16's -O2 analysis emits false-positive -Wmaybe-uninitialized warnings
+# inside Write/Update/Delete_rows_event constructors and their inlined
+# Event_reader helpers. The events are populated by READER_TRY_INITIALIZATION
+# down a path the optimizer cannot fully follow.
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+  ADD_COMPILE_FLAGS(rows_event.cpp
+    COMPILE_FLAGS "-Wno-maybe-uninitialized")
+ENDIF()
 
 LIBS_MYSQL_CREATE_LIBRARY(mysql_binlog_event
   TARGET_SRCS ${TARGET_SRCS}

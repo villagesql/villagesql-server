@@ -55,6 +55,8 @@ show create table file_summary_by_event_name;
 show create table file_summary_by_instance;
 show create table host_cache;
 show create table hosts;
+show create table malloc_stats;
+show create table malloc_stats_totals;
 show create table mutex_instances;
 show create table objects_summary_global_by_type;
 show create table performance_timers;
@@ -72,6 +74,7 @@ show create table table_handles;
 show create table table_io_waits_summary_by_index_usage;
 show create table table_io_waits_summary_by_table;
 show create table table_lock_waits_summary_by_table;
+show create table temporary_account_locks;
 show create table threads;
 show create table users;
 

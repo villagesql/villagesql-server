@@ -29,33 +29,18 @@
 #include <chrono>
 #include <string>
 
-#ifndef _WIN32
-#include <netdb.h>        // addrinfo
-#include <netinet/tcp.h>  // TCP_NODELAY
-#include <sys/socket.h>   // SOCK_NONBLOCK, ...
-#else
-#include <windows.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#endif
-
-#include "common.h"  // serial_comma
-#include "mysql/harness/logging/logging.h"
-#include "mysql/harness/net_ts/impl/resolver.h"
-#include "mysql/harness/net_ts/impl/socket.h"
-#include "mysql/harness/net_ts/impl/socket_error.h"
-
-IMPORT_LOG_FUNCTIONS()
+#include "common.h"                     // serial_comma
+#include "mysql/harness/stdx/ranges.h"  // enumerate
 
 namespace routing {
 
 // unused constant
 // const int kMaxConnectTimeout = INT_MAX / 1000;
 
-static const std::array<const char *, 2> kAccessModeNames{{
-    nullptr,
+static const std::array kAccessModeNames{
+    static_cast<const char *>(nullptr),
     "auto",
-}};
+};
 
 AccessMode get_access_mode(const std::string &value) {
   for (unsigned int i = 1; i < kAccessModeNames.size(); ++i)
@@ -76,35 +61,37 @@ std::string get_access_mode_name(AccessMode mode) noexcept {
 }
 
 // keep in-sync with enum RoutingStrategy
-static const std::array<const char *, 5> kRoutingStrategyNames{{
-    nullptr,
+static const std::array kRoutingStrategyNames{
     "first-available",
     "next-available",
     "round-robin",
     "round-robin-with-fallback",
-}};
+};
 
-RoutingStrategy get_routing_strategy(const std::string &value) {
-  for (unsigned int i = 1; i < kRoutingStrategyNames.size(); ++i)
-    if (kRoutingStrategyNames[i] == value)
-      return static_cast<RoutingStrategy>(i);
-  return RoutingStrategy::kUndefined;
+stdx::expected<RoutingStrategy, std::error_code> get_routing_strategy(
+    std::string_view value) {
+  for (const auto [i, strategy_name] :
+       stdx::views::enumerate(kRoutingStrategyNames)) {
+    if (strategy_name == value) return static_cast<RoutingStrategy>(i);
+  }
+
+  return stdx::unexpected(make_error_code(std::errc::invalid_argument));
 }
 
 std::string get_routing_strategy_names(bool metadata_cache) {
   // round-robin-with-fallback is not supported for static routing
-  const std::array<const char *, 3> kRoutingStrategyNamesStatic{{
+  constexpr std::array kRoutingStrategyNamesStatic{
       "first-available",
       "next-available",
       "round-robin",
-  }};
+  };
 
   // next-available is not supported for metadata-cache routing
-  const std::array<const char *, 3> kRoutingStrategyNamesMetadataCache{{
+  constexpr std::array kRoutingStrategyNamesMetadataCache{
       "first-available",
       "round-robin",
       "round-robin-with-fallback",
-  }};
+  };
 
   const auto &v = metadata_cache ? kRoutingStrategyNamesMetadataCache
                                  : kRoutingStrategyNamesStatic;
@@ -113,10 +100,7 @@ std::string get_routing_strategy_names(bool metadata_cache) {
 
 std::string get_routing_strategy_name(
     RoutingStrategy routing_strategy) noexcept {
-  if (routing_strategy == RoutingStrategy::kUndefined)
-    return "<not set>";
-  else
-    return kRoutingStrategyNames[static_cast<int>(routing_strategy)];
+  return kRoutingStrategyNames[static_cast<int>(routing_strategy)];
 }
 
 RoutingBootstrapSectionType get_section_type_from_routing_name(

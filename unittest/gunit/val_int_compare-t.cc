@@ -24,7 +24,7 @@
 #include "my_config.h"
 
 #include <gtest/gtest.h>
-#include <limits.h>
+#include <climits>
 
 #include "sql/val_int_compare.h"
 

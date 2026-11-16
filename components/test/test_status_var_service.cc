@@ -29,9 +29,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <mysql/components/component_implementation.h>
 #include <mysql/components/services/component_status_var_service.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #define MAX_BUFFER_LENGTH 100
@@ -67,7 +67,6 @@ static void char_ptr_foo() {
   swap(char_ptr, char_ptr_variable_value);
 
   if (char_ptr) free(char_ptr);
-  return;
 }
 
 /*

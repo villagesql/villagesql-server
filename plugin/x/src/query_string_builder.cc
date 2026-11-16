@@ -25,14 +25,15 @@
 
 #include "plugin/x/src/query_string_builder.h"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdint>
 
 #include <mutex>  // NOLINT(build/c++11)
 
-#include "my_sys.h"  // escape_quotes_for_mysql, escape_string_for_mysql NOLINT(build/include_subdir)
+#include "my_sys.h"  // escape_string_for_mysql NOLINT(build/include_subdir)
 #include "mysql/plugin.h"
 #include "mysql/strings/m_ctype.h"
+#include "plugin/x/src/helper/sql_literal_escaping.h"
 
 namespace xpl {
 
@@ -73,16 +74,14 @@ Query_string_builder &Query_string_builder::quote_identifier_if_needed(
   } else {
     need_quote = true;
   }
-  if (need_quote)
-    return quote_identifier(s, length);
-  else
-    return put(s, length);
+  if (need_quote) return quote_identifier(s, length);
+  return put(s, length);
 }
 
 namespace {
 inline void escape_char(const char *s, const size_t length, const char escape,
                         ngs::PFS_string *buff) {
-  size_t str_pos = buff->size();
+  size_t const str_pos = buff->size();
   // resize the buffer to fit the original size + worst case length of s
   buff->resize(str_pos + length * 2);
 
@@ -106,15 +105,15 @@ Query_string_builder &Query_string_builder::escape_identifier(const char *s,
 
 Query_string_builder &Query_string_builder::escape_string(const char *s,
                                                           size_t length) {
-  size_t str_pos = m_str.size();
+  size_t const str_pos = m_str.size();
   // resize the buffer to fit the original size + worst case length of s
   m_str.resize(str_pos + 2 * length + 1);
 
-  size_t r = m_no_backslash_escapes
-                 ? escape_quotes_for_mysql(m_charset, &m_str[str_pos],
-                                           2 * length + 1, s, length, '\'')
-                 : escape_string_for_mysql(m_charset, &m_str[str_pos],
-                                           2 * length + 1, s, length);
+  size_t const r = m_no_backslash_escapes
+                       ? escape_sql_quote(m_charset, &m_str[str_pos],
+                                          2 * length + 1, s, length, '\'')
+                       : escape_string_for_mysql(m_charset, &m_str[str_pos],
+                                                 2 * length + 1, s, length);
   m_str.resize(str_pos + r);
 
   return *this;

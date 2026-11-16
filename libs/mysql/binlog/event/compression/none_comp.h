@@ -24,8 +24,7 @@
 #ifndef MYSQL_BINLOG_EVENT_COMPRESSION_NONE_COMP_H
 #define MYSQL_BINLOG_EVENT_COMPRESSION_NONE_COMP_H
 
-#include "compressor.h"
-#include "mysql/binlog/event/nodiscard.h"
+#include "mysql/binlog/event/compression/compressor.h"
 
 namespace mysql::binlog::event::compression {
 
@@ -54,13 +53,13 @@ class None_comp : public Compressor {
   ///
   /// For None_comp, this is guaranteed to produce all output on
   /// success.
-  [[NODISCARD]] Compress_status do_compress(
+  [[nodiscard]] Compress_status do_compress(
       Managed_buffer_sequence_t &out) override;
 
   /// @copydoc Compressor::do_finish
   ///
   /// For None_comp, this is equivalent to @c compress.
-  [[NODISCARD]] Compress_status do_finish(
+  [[nodiscard]] Compress_status do_finish(
       Managed_buffer_sequence_t &out) override;
 
   /// Data previously provided to @c do_feed.

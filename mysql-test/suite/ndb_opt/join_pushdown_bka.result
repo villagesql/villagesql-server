@@ -1,7 +1,7 @@
 set @@global.optimizer_switch='batched_key_access=on';
 select @@session.optimizer_switch;
 @@session.optimizer_switch
-index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on,engine_condition_pushdown=on,index_condition_pushdown=on,mrr=on,mrr_cost_based=on,block_nested_loop=on,batched_key_access=on,materialization=on,semijoin=on,loosescan=on,firstmatch=on,duplicateweedout=on,subquery_materialization_cost_based=on,use_index_extensions=on,condition_fanout_filter=on,derived_merge=on,use_invisible_indexes=off,skip_scan=on,hash_join=on,subquery_to_derived=off,prefer_ordering_index=on,hypergraph_optimizer=off,derived_condition_pushdown=on,hash_set_operations=on
+index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on,engine_condition_pushdown=on,index_condition_pushdown=on,mrr=on,mrr_cost_based=on,block_nested_loop=on,batched_key_access=on,materialization=on,semijoin=on,loosescan=on,firstmatch=on,duplicateweedout=on,subquery_materialization_cost_based=on,use_index_extensions=on,condition_fanout_filter=on,derived_merge=on,use_invisible_indexes=off,skip_scan=on,hash_join=on,subquery_to_derived=off,prefer_ordering_index=on,hypergraph_optimizer=off,derived_condition_pushdown=on,hash_set_operations=on,favor_range_scan=off
 create temporary table server_counts_at_startup
 select * from performance_schema.global_status 
 where variable_name in 
@@ -53,6 +53,7 @@ a	b	c	d	a	b	c	d
 4	1	4	5	1	4	2	3
 4	3	1	2	3	1	1	2
 4	4	4	4	4	4	4	4
+SET explain_json_format_version = 1;
 explain format=JSON
 select *
 from t1
@@ -147,6 +148,7 @@ EXPLAIN
 Warnings:
 Note	1003	Can't push table 't2' as child, access type 'Batched-key' not implemented
 Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`d` AS `d`,`test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b`,`test`.`t2`.`c` AS `c`,`test`.`t2`.`d` AS `d` from `test`.`t1` join `test`.`t1` `t2` where ((`test`.`t2`.`b` = `test`.`t1`.`c`) and (`test`.`t2`.`a` = `test`.`t1`.`b`))
+SET explain_json_format_version = DEFAULT;
 explain
 select straight_join count(*) 
 from t1 as x1 
@@ -2073,7 +2075,7 @@ EXPLAIN
                     -> Batched key access inner join
                         -> Batch input rows
                             -> Table scan on t1  (cost=4002 rows=16)
-                        -> Multi-range index lookup on t2 using PRIMARY (a=t1.c)  (cost=0.506 rows=1)
+                        -> Multi-range index lookup on t2 using PRIMARY (a = t1.c)  (cost=0.506 rows=1)
 
 Warnings:
 Note	1003	Can't push table 't2' as child, access type 'Multi-range' not implemented
@@ -3560,7 +3562,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	SIMPLE	y	p0,p1,p2,p3,p4,p5,p6,p7	eq_ref	b3	b3	9	const,test.x.d3	1	100.00	Using join buffer (Batched Key Access)
 Warnings:
 Note	1003	Can't push table 'y' as child, access type 'Batched-key' not implemented
-Note	1003	/* select#1 */ select straight_join `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`d3` = `test`.`x`.`d3`) and (`test`.`y`.`b3` = (0x20 + 0x2f)))
+Note	1003	/* select#1 */ select straight_join `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`d3` = `test`.`x`.`d3`) and (`test`.`y`.`b3` = 79))
 select straight_join * 
 from t3 as x join t3 as y on x.d3 = y.d3
 where y.b3 = 0x20+0x2f;
@@ -4122,7 +4124,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	SIMPLE	y	p0,p1,p2,p3,p4,p5,p6,p7	eq_ref	PRIMARY	PRIMARY	5	test.x.d3,const	1	100.00	Using join buffer (Batched Key Access)
 Warnings:
 Note	1003	Can't push table 'y' as child, access type 'Batched-key' not implemented
-Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`b3` = (60 + 3)) and (`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f))
+Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f) and (`test`.`y`.`b3` = 63))
 select * from t3 x, t3 y where x.a3=0x2f and y.a3=x.d3 and y.b3=(60+3);
 a3	b3	c3	d3	a3	b3	c3	d3
 47	63	2	47	47	63	2	47
@@ -4158,7 +4160,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	SIMPLE	y	p0,p1,p2,p3,p4,p5,p6,p7	eq_ref	PRIMARY	PRIMARY	6	test.x.d3,const	1	100.00	Using join buffer (Batched Key Access)
 Warnings:
 Note	1003	Can't push table 'y' as child, access type 'Batched-key' not implemented
-Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`b3` = (60 + 3)) and (`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f))
+Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f) and (`test`.`y`.`b3` = 63))
 select * from t3 x, t3 y where x.a3=0x2f and y.a3=x.d3 and y.b3=(60+3);
 a3	b3	c3	d3	a3	b3	c3	d3
 47	63	2	47	47	63	2	47
@@ -4194,7 +4196,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	SIMPLE	y	p0,p1,p2,p3,p4,p5,p6,p7	eq_ref	PRIMARY	PRIMARY	7	test.x.d3,const	1	100.00	Using join buffer (Batched Key Access)
 Warnings:
 Note	1003	Can't push table 'y' as child, access type 'Batched-key' not implemented
-Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`b3` = (60 + 3)) and (`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f))
+Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f) and (`test`.`y`.`b3` = 63))
 select * from t3 x, t3 y where x.a3=0x2f and y.a3=x.d3 and y.b3=(60+3);
 a3	b3	c3	d3	a3	b3	c3	d3
 47	63	2	47	47	63	2	47
@@ -4230,7 +4232,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	SIMPLE	y	p0,p1,p2,p3,p4,p5,p6,p7	eq_ref	PRIMARY	PRIMARY	8	test.x.d3,const	1	100.00	Using join buffer (Batched Key Access)
 Warnings:
 Note	1003	Can't push table 'y' as child, access type 'Batched-key' not implemented
-Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`b3` = (60 + 3)) and (`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f))
+Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f) and (`test`.`y`.`b3` = 63))
 select * from t3 x, t3 y where x.a3=0x2f and y.a3=x.d3 and y.b3=(60+3);
 a3	b3	c3	d3	a3	b3	c3	d3
 47	63	2	47	47	63	2	47
@@ -4500,7 +4502,7 @@ explain
 select * from t3 x, t3 y where x.a3=0x2f and y.a3=x.d3 and y.b3='Dole';
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	x	p0,p1,p2,p3,p4,p5,p6,p7	ref	PRIMARY	PRIMARY	4	const	3	100.00	NULL
-1	SIMPLE	y	p0,p1,p2,p3,p4,p5,p6,p7	eq_ref	PRIMARY	PRIMARY	22	test.x.d3,const	1	100.00	Using where; Using join buffer (Batched Key Access)
+1	SIMPLE	y	p0,p1,p2,p3,p4,p5,p6,p7	eq_ref	PRIMARY	PRIMARY	22	test.x.d3,const	1	100.00	Using pushed condition (`test`.`y`.`b3` = 'Dole'); Using join buffer (Batched Key Access)
 Warnings:
 Note	1003	Can't push table 'y' as child, access type 'Batched-key' not implemented
 Note	1003	/* select#1 */ select `test`.`x`.`a3` AS `a3`,`test`.`x`.`b3` AS `b3`,`test`.`x`.`c3` AS `c3`,`test`.`x`.`d3` AS `d3`,`test`.`y`.`a3` AS `a3`,`test`.`y`.`b3` AS `b3`,`test`.`y`.`c3` AS `c3`,`test`.`y`.`d3` AS `d3` from `test`.`t3` `x` join `test`.`t3` `y` where ((`test`.`y`.`b3` = 'Dole') and (`test`.`y`.`a3` = `test`.`x`.`d3`) and (`test`.`x`.`a3` = 0x2f))
@@ -6576,11 +6578,11 @@ EXPLAIN
         -> Filter: ((x2.c is null) or (x4.d = x0.d))
             -> Nested loop left join
                 -> Nested loop inner join
-                    -> Index lookup on x1 using PRIMARY (a=x0.d)
+                    -> Index lookup on x1 using PRIMARY (a = x0.d)
                     -> Table scan on x2, activating pushed join of 3 tables
                 -> Nested loop inner join
-                    -> Index lookup on x3 using PRIMARY (a=x2.d), child of x2 in pushed join
-                    -> Index lookup on x4 using PRIMARY (a=x3.d), child of x3 in pushed join
+                    -> Index lookup on x3 using PRIMARY (a = x2.d), child of x2 in pushed join
+                    -> Index lookup on x4 using PRIMARY (a = x3.d), child of x3 in pushed join
 
 Warnings:
 Note	1003	Can't push outer joined table 'x1' as child of 'x0', join-nest containing the table has FILTER conditions
@@ -6726,11 +6728,11 @@ i int,
 name varchar(32),
 key (name)
 )
-default charset = utf8
+default charset = utf8mb3
 engine = ndb
 comment="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 Warnings:
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 insert into t1 values (1, 1, 'Ole');
 insert into t1 values (2, 2, 'Dole');
 insert into t1 values (3, 3, 'Doffen');
@@ -7305,8 +7307,8 @@ EXPLAIN
                     -> Table scan on <subquery2>
                         -> Materialize with deduplication
                             -> Table scan on t3
-                -> Multi-range index lookup on t1 using c (c=`<subquery2>`.c)
-        -> Multi-range index lookup on t2 using PRIMARY (a=t1.b)
+                -> Multi-range index lookup on t1 using c (c = `<subquery2>`.c)
+        -> Multi-range index lookup on t2 using PRIMARY (a = t1.b)
 
 Warnings:
 Note	1003	Can't push table 't1' as child, access type 'Multi-range' not implemented
@@ -7330,8 +7332,8 @@ EXPLAIN
                     -> Table scan on <subquery2>
                         -> Materialize with deduplication
                             -> Table scan on t3
-                -> Multi-range index lookup on t1 using c (c=`<subquery2>`.c)
-        -> Multi-range index lookup on t2 using PRIMARY (a=t1.b, b=`<subquery2>`.c)
+                -> Multi-range index lookup on t1 using c (c = `<subquery2>`.c)
+        -> Multi-range index lookup on t2 using PRIMARY (a = t1.b, b = `<subquery2>`.c)
 
 Warnings:
 Note	1003	Can't push table 't1' as child, access type 'Multi-range' not implemented
@@ -7354,8 +7356,8 @@ EXPLAIN
                     -> Table scan on <subquery3>
                         -> Materialize with deduplication
                             -> Table scan on t3
-                -> Multi-range index lookup on t1 using c (c=`<subquery3>`.c)
-        -> Multi-range index lookup on t2 using PRIMARY (a=t1.b, b=`<subquery3>`.c)
+                -> Multi-range index lookup on t1 using c (c = `<subquery3>`.c)
+        -> Multi-range index lookup on t2 using PRIMARY (a = t1.b, b = `<subquery3>`.c)
 
 Warnings:
 Note	1003	Can't push table 't1' as child, access type 'Multi-range' not implemented
@@ -7379,10 +7381,10 @@ EXPLAIN
                         -> Table scan on <subquery3>
                             -> Materialize with deduplication
                                 -> Table scan on t3
-                    -> Multi-range index lookup on t1 using c (c=`<subquery3>`.c)
-            -> Multi-range index lookup on t2 using PRIMARY (a=t1.b, b=`<subquery3>`.c)
+                    -> Multi-range index lookup on t1 using c (c = `<subquery3>`.c)
+            -> Multi-range index lookup on t2 using PRIMARY (a = t1.b, b = `<subquery3>`.c)
         -> Filter: (`<subquery4>`.c = `<subquery3>`.c)
-            -> Single-row index lookup on <subquery4> using <auto_distinct_key> (c=t1.c)
+            -> Single-row index lookup on <subquery4> using <auto_distinct_key> (c = t1.c)
                 -> Materialize with deduplication
                     -> Table scan on t4
 
@@ -7412,8 +7414,8 @@ EXPLAIN
                         -> Batched key access inner join
                             -> Batch input rows
                                 -> Table scan on t3s
-                            -> Multi-range index lookup on t4s using PRIMARY (a=t3s.b)
-        -> Multi-range index lookup on t2 using c (c=`<subquery2>`.c)
+                            -> Multi-range index lookup on t4s using PRIMARY (a = t3s.b)
+        -> Multi-range index lookup on t2 using c (c = `<subquery2>`.c)
 
 Warnings:
 Note	1003	Can't push table 't3s' as child, 'type' must be a 'ref' access
@@ -7608,9 +7610,9 @@ EXPLAIN
                             -> Batched key access inner join
                                 -> Batch input rows
                                     -> Table scan on t3s
-                                -> Multi-range index lookup on t4s using PRIMARY (a=t3s.b)
-                -> Multi-range index lookup on t1 using c (c=`<subquery2>`.c)
-        -> Multi-range index lookup on t2 using PRIMARY (a=t1.b)
+                                -> Multi-range index lookup on t4s using PRIMARY (a = t3s.b)
+                -> Multi-range index lookup on t1 using c (c = `<subquery2>`.c)
+        -> Multi-range index lookup on t2 using PRIMARY (a = t1.b)
 
 Warnings:
 Note	1003	Can't push table 't4s' as child, access type 'Multi-range' not implemented
@@ -7647,15 +7649,15 @@ EXPLAIN
                                 -> Batched key access inner join
                                     -> Batch input rows
                                         -> Table scan on t3s1
-                                    -> Multi-range index lookup on t4s1 using PRIMARY (a=t3s1.b)
-                    -> Multi-range index lookup on t1 using c (c=`<subquery2>`.c)
-            -> Multi-range index lookup on t2 using PRIMARY (a=t1.b)
-        -> Single-row index lookup on <subquery3> using <auto_distinct_key> (c=t1.d)
+                                    -> Multi-range index lookup on t4s1 using PRIMARY (a = t3s1.b)
+                    -> Multi-range index lookup on t1 using c (c = `<subquery2>`.c)
+            -> Multi-range index lookup on t2 using PRIMARY (a = t1.b)
+        -> Single-row index lookup on <subquery3> using <auto_distinct_key> (c = t1.d)
             -> Materialize with deduplication
                 -> Batched key access inner join
                     -> Batch input rows
                         -> Table scan on t3s2
-                    -> Multi-range index lookup on t4s2 using PRIMARY (a=t3s2.b)
+                    -> Multi-range index lookup on t4s2 using PRIMARY (a = t3s2.b)
 
 Warnings:
 Note	1003	Can't push table 't4s1' as child, access type 'Multi-range' not implemented
@@ -7800,22 +7802,22 @@ node_id int(10) unsigned NOT NULL,
 user_id int(10) unsigned NOT NULL,
 sort_number int(10) unsigned NOT NULL,
 KEY node_id (node_id,sort_number)
-) ENGINE=ndbcluster DEFAULT CHARSET=utf8
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb3
 comment="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 Warnings:
 Warning	1681	Integer display width is deprecated and will be removed in a future release.
 Warning	1681	Integer display width is deprecated and will be removed in a future release.
 Warning	1681	Integer display width is deprecated and will be removed in a future release.
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 CREATE TABLE ndb_user_test (
 user_id int(10) unsigned NOT NULL AUTO_INCREMENT,
 name varchar(20) NOT NULL,
 PRIMARY KEY (user_id)
-) ENGINE=ndbcluster DEFAULT CHARSET=utf8 AUTO_INCREMENT=2
+) ENGINE=ndbcluster DEFAULT CHARSET=utf8mb3 AUTO_INCREMENT=2
 comment="NDB_TABLE=PARTITION_BALANCE=FOR_RP_BY_LDM";
 Warnings:
 Warning	1681	Integer display width is deprecated and will be removed in a future release.
-Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 INSERT INTO ndb_order_test (node_id, user_id, sort_number) VALUES
 (68, 1, 1398029),
 (68, 1, 549053);
@@ -7976,20 +7978,26 @@ insert into t3 values(1, 3), (2, 3);
 explain format=tree select a,
 (select sum(a) over w from t2 window w as(order by t3.a) limit 1)
 from t3;
-EXPLAIN
--> Table scan on t3
--> Select #2 (subquery in projection; dependent)
-    -> Limit: 1 row(s)
-        -> Window aggregate with buffering: sum(t2.a) OVER w
-            -> Sort: t3.a
-                -> Table scan on t2
-
-Warnings:
-Note	1276	Field or reference 'test.t3.a' of SELECT #2 was resolved in SELECT #1
+ERROR HY000: Outer reference test.t3.a in window's ORDER BY or PARTITION BY clause not allowed.
 select a,
 (select sum(a) over w from t2 window w as(order by t3.a) limit 1)
 from t3;
-a	(select sum(a) over w from t2 window w as(order by t3.a) limit 1)
+ERROR HY000: Outer reference test.t3.a in window's ORDER BY or PARTITION BY clause not allowed.
+explain format=tree select a,
+(select sum(a) over w from t2 window w as(order by "whatever") limit 1)
+from t3;
+EXPLAIN
+-> Table scan on t3
+-> Select #2 (subquery in projection; run only once)
+    -> Limit: 1 row(s)
+        -> Window aggregate with buffering: sum(t2.a) OVER w
+            -> Sort: whatever
+                -> Table scan on t2
+
+select a,
+(select sum(a) over w from t2 window w as(order by "whatever") limit 1)
+from t3;
+a	(select sum(a) over w from t2 window w as(order by "whatever") limit 1)
 1	3
 2	3
 drop table t2,t3;
@@ -8023,19 +8031,19 @@ EXPLAIN
             -> Batch input rows
                 -> Batched key access inner join
                     -> Batch input rows
-                        -> Index lookup on t1 using PRIMARY (a=1), with pushed condition: (t1.d = 1)
+                        -> Index lookup on t1 using PRIMARY (a = 1), with pushed condition: (t1.d = 1)
                     -> Filter: (t2.a = (t1.b + 0))
-                        -> Multi-range index lookup on t2 using PRIMARY (a=(t1.b + 0), b=t1.c)
-            -> Multi-range index lookup on t3 using PRIMARY (a=t1.b, b=t1.c)
+                        -> Multi-range index lookup on t2 using PRIMARY (a = (t1.b + 0), b = t1.c)
+            -> Multi-range index lookup on t3 using PRIMARY (a = t1.b, b = t1.c)
     -> Stream results
         -> Batched key access inner join
             -> Batch input rows
                 -> Batched key access inner join
                     -> Batch input rows
-                        -> Index lookup on t1 using PRIMARY (a=1), with pushed condition: (t1.d = 1)
+                        -> Index lookup on t1 using PRIMARY (a = 1), with pushed condition: (t1.d = 1)
                     -> Filter: (t2.a = (t1.b + 0))
-                        -> Multi-range index lookup on t2 using PRIMARY (a=(t1.b + 0), b=t1.c)
-            -> Multi-range index lookup on t3 using PRIMARY (a=t1.b, b=t1.c)
+                        -> Multi-range index lookup on t2 using PRIMARY (a = (t1.b + 0), b = t1.c)
+            -> Multi-range index lookup on t3 using PRIMARY (a = t1.b, b = t1.c)
 
 Warnings:
 Note	1003	Can't push table 't2' as child, access type 'Multi-range' not implemented
@@ -8070,18 +8078,18 @@ EXPLAIN
             -> Batch input rows
                 -> Batched key access inner join
                     -> Batch input rows
-                        -> Index lookup on t1 using PRIMARY (a=1), with pushed condition: (t1.d = 1)
+                        -> Index lookup on t1 using PRIMARY (a = 1), with pushed condition: (t1.d = 1)
                     -> Filter: (t2.a = (t1.b + 0))
-                        -> Multi-range index lookup on t2 using PRIMARY (a=(t1.b + 0), b=t1.c)
-            -> Multi-range index lookup on t3 using PRIMARY (a=t1.b, b=t1.c)
+                        -> Multi-range index lookup on t2 using PRIMARY (a = (t1.b + 0), b = t1.c)
+            -> Multi-range index lookup on t3 using PRIMARY (a = t1.b, b = t1.c)
         -> Batched key access inner join
             -> Batch input rows
                 -> Batched key access inner join
                     -> Batch input rows
-                        -> Index lookup on t1 using PRIMARY (a=1), with pushed condition: (t1.d = 1)
+                        -> Index lookup on t1 using PRIMARY (a = 1), with pushed condition: (t1.d = 1)
                     -> Filter: (t2.a = (t1.b + 0))
-                        -> Multi-range index lookup on t2 using PRIMARY (a=(t1.b + 0), b=t1.c)
-            -> Multi-range index lookup on t3 using PRIMARY (a=t1.b, b=t1.c)
+                        -> Multi-range index lookup on t2 using PRIMARY (a = (t1.b + 0), b = t1.c)
+            -> Multi-range index lookup on t3 using PRIMARY (a = t1.b, b = t1.c)
 
 Warnings:
 Note	1003	Can't push table 't2' as child, access type 'Multi-range' not implemented
@@ -8145,12 +8153,12 @@ EXPLAIN
         -> Table scan on t1, activating pushed join of 3 tables
         -> Batched key access inner join
             -> Batch input rows
-                -> Single-row index lookup on t2 using PRIMARY (pk=t1.a), child of t1 in pushed join
-            -> Multi-range index lookup on t3 using PRIMARY (pk=t2.b)
+                -> Single-row index lookup on t2 using PRIMARY (pk = t1.a), child of t1 in pushed join
+            -> Multi-range index lookup on t3 using PRIMARY (pk = t2.b)
     -> Batched key access inner join
         -> Batch input rows
-            -> Single-row index lookup on t4 using PRIMARY (pk=t1.c), child of t1 in pushed join
-        -> Multi-range index lookup on t5 using PRIMARY (pk=t3.d)
+            -> Single-row index lookup on t4 using PRIMARY (pk = t1.c), child of t1 in pushed join
+        -> Multi-range index lookup on t5 using PRIMARY (pk = t3.d)
 
 Warnings:
 Note	1003	Can't push table 't3' as child, access type 'Multi-range' not implemented
@@ -8207,7 +8215,7 @@ EXPLAIN
     -> Batched key access inner join
         -> Batch input rows
             -> Zero rows (Impossible filter)
-        -> Multi-range index lookup on table2 using col_int_key (col_int_key=table1.col_int_key), with pushed condition: (table2.col_int = table1.col_int)
+        -> Multi-range index lookup on table2 using col_int_key (col_int_key = table1.col_int_key), with pushed condition: (table2.col_int = table1.col_int)
 
 Warnings:
 Note	1003	Can't push table 'table2' as child, access type 'Multi-range' not implemented
@@ -8258,8 +8266,8 @@ EXPLAIN
         -> Batched key access inner join
             -> Batch input rows
                 -> Table scan on t10, with pushed condition: (t10.i is not null)
-            -> Multi-range index lookup on t1000 using i (i=t10.i)
-    -> Multi-range index lookup on t100 using PRIMARY (k=t1000.k)
+            -> Multi-range index lookup on t1000 using i (i = t10.i)
+    -> Multi-range index lookup on t100 using PRIMARY (k = t1000.k)
 
 Warnings:
 Note	1003	Can't push table 't1000' as child, access type 'Multi-range' not implemented
@@ -8274,8 +8282,8 @@ EXPLAIN
         -> Batched key access inner join
             -> Batch input rows
                 -> Table scan on t10, with pushed condition: (t10.i is not null)
-            -> Multi-range index lookup on t1000 using i (i=t10.i)
-    -> Multi-range index lookup on t100 using PRIMARY (k=t10.k)
+            -> Multi-range index lookup on t1000 using i (i = t10.i)
+    -> Multi-range index lookup on t100 using PRIMARY (k = t10.k)
 
 Warnings:
 Note	1003	Can't push table 't1000' as child, access type 'Multi-range' not implemented
@@ -8307,8 +8315,8 @@ EXPLAIN
         -> Batched key access inner join
             -> Batch input rows
                 -> Table scan on t1, with pushed condition: (t1.k is not null)
-            -> Multi-range index lookup on t2 using ix2 (a=t1.k)
-    -> Multi-range index lookup on t3 using ix1 (k=t1.k)
+            -> Multi-range index lookup on t2 using ix2 (a = t1.k)
+    -> Multi-range index lookup on t3 using ix1 (k = t1.k)
 
 Warnings:
 Note	1003	Can't push table 't2' as child, access type 'Multi-range' not implemented
@@ -8335,8 +8343,8 @@ EXPLAIN
         -> Batched key access inner join
             -> Batch input rows
                 -> Table scan on t1, with pushed condition: (t1.k is not null)
-            -> Multi-range index lookup on t2 using ix2 (a=t1.k)
-    -> Multi-range index lookup on t3 using ix1 (k=t1.k)
+            -> Multi-range index lookup on t2 using ix2 (a = t1.k)
+    -> Multi-range index lookup on t3 using ix1 (k = t1.k)
 
 Warnings:
 Note	1003	Can't push table 't2' as child, access type 'Multi-range' not implemented
@@ -8363,8 +8371,8 @@ EXPLAIN
         -> Batched key access left join
             -> Batch input rows
                 -> Table scan on t1, with pushed condition: (t1.k is not null)
-            -> Multi-range index lookup on t2 using ix2 (a=t1.k)
-    -> Multi-range index lookup on t3 using ix1 (k=t1.k)
+            -> Multi-range index lookup on t2 using ix2 (a = t1.k)
+    -> Multi-range index lookup on t3 using ix1 (k = t1.k)
 
 Warnings:
 Note	1003	Can't push table 't2' as child, access type 'Multi-range' not implemented
@@ -8430,7 +8438,7 @@ EXPLAIN
 -> Batched key access inner join
     -> Batch input rows
         -> Table scan on table2, with pushed condition: (table2.col_int_key is not null)  (...)
-    -> Multi-range index lookup on table4 using ix1 (col_int=1, col_int_unique=table2.col_int_key)  (...)
+    -> Multi-range index lookup on table4 using ix1 (col_int = 1, col_int_unique = table2.col_int_key)  (...)
 
 Warnings:
 Note	1003	Can't push table 'table4' as child, access type 'Multi-range' not implemented
@@ -8445,7 +8453,7 @@ EXPLAIN
 -> Nested loop inner join  (...)
     -> Table scan on table2, activating pushed join of 2 tables, with pushed condition: (table2.col_int_key is not null)  (...)
     -> Filter: (table4.col_int <=> table2.col_int_key)  (...)
-        -> Index lookup on table4 using ix1 (col_int=table2.col_int_key, col_int_unique=table2.col_int_key), child of table2 in pushed join  (...)
+        -> Index lookup on table4 using ix1 (col_int = table2.col_int_key, col_int_unique = table2.col_int_key), child of table2 in pushed join  (...)
 
 SELECT * FROM f AS table2
 STRAIGHT_JOIN p AS table4 ON table4.col_int <=> table2.col_int_key
@@ -8458,7 +8466,7 @@ EXPLAIN
 -> Nested loop inner join  (...)
     -> Table scan on table2, activating pushed join of 2 tables, with pushed condition: (table2.col_int_key is not null)  (...)
     -> Filter: (table4.col_int_unique <=> table2.col_int_key)  (...)
-        -> Index lookup on table4 using ix1 (col_int=table2.col_int_key, col_int_unique=table2.col_int_key), child of table2 in pushed join  (...)
+        -> Index lookup on table4 using ix1 (col_int = table2.col_int_key, col_int_unique = table2.col_int_key), child of table2 in pushed join  (...)
 
 SELECT * FROM f AS table2
 STRAIGHT_JOIN p AS table4 ON table4.col_int = table2.col_int_key
@@ -8471,7 +8479,7 @@ EXPLAIN
 -> Batched key access inner join
     -> Batch input rows
         -> Table scan on table2, with pushed condition: (table2.col_int_key is not null)  (...)
-    -> Multi-range index lookup on table4 using ix1 (col_int=table2.col_int_key, col_int_unique=table2.col_int_key)  (...)
+    -> Multi-range index lookup on table4 using ix1 (col_int = table2.col_int_key, col_int_unique = table2.col_int_key)  (...)
 
 Warnings:
 Note	1003	Can't push table 'table4' as child, access type 'Multi-range' not implemented
@@ -8480,4 +8488,4 @@ STRAIGHT_JOIN p AS table4 ON table4.col_int = table2.col_int_key
 AND table4.col_int_unique = table2.col_int_key;
 col_int_key	col_int	col_int_unique
 DROP TABLE f,p;
-set @@global.optimizer_switch=default;
+set @@global.optimizer_switch='batched_key_access=off';

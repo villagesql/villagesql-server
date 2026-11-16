@@ -51,6 +51,11 @@ MACRO(MSVC_CPPCHECK_ADD_SUPPRESSIONS)
       STRING_APPEND(suppress_warnings " /wd26860") # Potentially empty optional ''...'' is unwrapped, may throw exception.: Lines: ...
     ENDIF()
 
+    IF((NOT FORCE_UNSUPPORTED_COMPILER) AND MSVC_VERSION GREATER_EQUAL 1943)
+      STRING_APPEND(suppress_warnings " /wd26838") # Allocation size is the result of a signed to unsigned conversion that could overflow if negative
+      STRING_APPEND(suppress_warnings " /wd26839") # Array new allocation size is the result of a signed to unsigned conversion that could overflow if
+    ENDIF()
+
     IF((NOT FORCE_UNSUPPORTED_COMPILER) AND MSVC_VERSION GREATER_EQUAL 1937)
       STRING_APPEND(suppress_warnings " /wd26831") # Allocation size might be the result of a numerical overflow
       STRING_APPEND(suppress_warnings " /wd26832") # Allocation size is the result of a narrowing conversion that could result in overflow
@@ -69,6 +74,7 @@ MACRO(MSVC_CPPCHECK_ADD_SUPPRESSIONS)
     STRING_APPEND(suppress_warnings " /wd26402") # Return a scoped object instead of a heap-allocated if it has a move constructor (r.3).
     STRING_APPEND(suppress_warnings " /wd26403") # Reset or explicitly delete an owner<T> pointer '...' (r.3).
     STRING_APPEND(suppress_warnings " /wd26405") # Do not assign to an owner<t> which may be in a valid state (r.3).
+    STRING_APPEND(suppress_warnings " /wd26407") # Prefer scoped objects, don't heap-allocate unnecessarily
     STRING_APPEND(suppress_warnings " /wd26408") # Avoid malloc() and free(), prefer the nothrow version of new with delete (r.10).
     STRING_APPEND(suppress_warnings " /wd26409") # Avoid calling new and delete explicitly, use std::make_unique<T> instead (r.11).
     STRING_APPEND(suppress_warnings " /wd26410") # The parameter '...' is a reference to const unique pointer, use const T* or const T& instead(r.32)

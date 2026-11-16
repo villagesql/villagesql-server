@@ -43,10 +43,8 @@
   @retval true   Failure, array is full
 */
 
-#include <assert.h>
-#include <string.h>
-
-#include "my_inttypes.h"
+#include <cassert>
+#include <cstring>
 
 bool array_append_string_unique(const char *str, const char **array,
                                 size_t size) {

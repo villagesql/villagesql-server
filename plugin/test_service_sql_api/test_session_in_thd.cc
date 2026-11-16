@@ -21,11 +21,11 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <ctype.h>
 #include <fcntl.h>
 #include <mysql/plugin.h>
 #include <mysql_version.h>
-#include <stdlib.h>
+#include <cctype>
+#include <cstdlib>
 
 #include "m_string.h"  // strlen
 #include "my_dbug.h"
@@ -135,7 +135,7 @@ struct test_thread_context {
 
 static void *test_sql_threaded_wrapper(void *param) {
   char buffer[STRING_BUFFER_SIZE];
-  struct test_thread_context *context = (struct test_thread_context *)param;
+  auto *context = (struct test_thread_context *)param;
 
   WRITE_SEP();
   WRITE_STR("init thread\n");

@@ -24,6 +24,8 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include <mutex>
+#include <thread>
+
 #include "plugin/group_replication/include/certification/gtid_generator.h"
 
 using namespace mysql::gtid;

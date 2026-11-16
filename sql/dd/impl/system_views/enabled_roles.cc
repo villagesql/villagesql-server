@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/enabled_roles.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Enabled_roles &Enabled_roles::instance() {
-  static Enabled_roles *s_instance = new Enabled_roles();
+  static auto *s_instance = new Enabled_roles();
   return *s_instance;
 }
 
@@ -56,5 +55,4 @@ Enabled_roles::Enabled_roles() {
       " ) current_user_enabled_roles");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

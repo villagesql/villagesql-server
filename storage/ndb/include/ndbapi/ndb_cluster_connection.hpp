@@ -287,7 +287,7 @@ class Ndb_cluster_connection {
               int verbose = 1);
 
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
-  int start_connect_thread(int (*connect_callback)(void) = nullptr);
+  int start_connect_thread(int (*connect_callback)() = nullptr);
 #endif
 
   /**

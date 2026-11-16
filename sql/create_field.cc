@@ -31,6 +31,7 @@
 #include "sql/field.h"
 #include "sql/item.h"
 #include "sql/sql_class.h"
+#include "sql/sql_masking_policy.h"
 #include "sql_string.h"
 #include "template_utils.h"
 
@@ -64,29 +65,24 @@ struct CHARSET_INFO;
 Create_field::Create_field(Field *old_field, Field *orig_field)
     : hidden(old_field->hidden()),
       field_name(old_field->field_name),
-      change(nullptr),
       comment(old_field->comment),
       sql_type(old_field->real_type()),
       decimals(old_field->decimals()),
       flags(old_field->all_flags()),
       auto_flags(old_field->auto_flags),
       charset(old_field->charset()),  // May be NULL ptr
-      is_explicit_collation(false),
-      geom_type(Field::GEOM_GEOMETRY),
       field(old_field),
       custom_type_context(old_field->has_type_context()
                               ? old_field->get_type_context()
                               : nullptr),
       is_nullable(old_field->is_nullable()),
-      is_zerofill(false),  // Init to avoid UBSAN warnings
-      is_unsigned(false),  // Init to avoid UBSAN warnings
-      treat_bit_as_char(
-          false),  // Init to avoid valgrind warnings in opt. build
-      pack_length_override(0),
+      zip_dict_name(old_field->zip_dict_name),
       gcol_info(old_field->gcol_info),
       stored_in_db(old_field->stored_in_db),
       m_default_val_expr(old_field->m_default_val_expr),
+      m_masking_policy_name(old_field->masking_policy()),
       is_array(old_field->is_array()),
+      zip_dict_id(0),
       m_engine_attribute(old_field->m_engine_attribute),
       m_secondary_engine_attribute(old_field->m_secondary_engine_attribute),
       m_max_display_width_in_codepoints(old_field->char_length()) {
@@ -190,8 +186,11 @@ Create_field::Create_field(Field *old_field, Field *orig_field)
   @param fld_charset           Column charset.
   @param has_explicit_collation Column has an explicit COLLATE attribute.
   @param fld_geom_type         Column geometry type (if any.)
+  @param fld_zip_dict_name     Column compression dictionary.
   @param fld_gcol_info         Generated column data
   @param fld_default_val_expr  The expression for generating default values
+  @param fld_masking_policy    The name of the masking policy of this column,
+                               or an empty string if it has no masking policy.
   @param srid                  The SRID specification. This might be null
                                (has_value() may return false).
   @param hidden                Whether this column should be hidden or not.
@@ -210,9 +209,9 @@ bool Create_field::init(
     const LEX_CSTRING *fld_comment, const char *fld_change,
     List<String> *fld_interval_list, const CHARSET_INFO *fld_charset,
     bool has_explicit_collation, uint fld_geom_type,
-    Value_generator *fld_gcol_info, Value_generator *fld_default_val_expr,
-    std::optional<gis::srid_t> srid, dd::Column::enum_hidden_type hidden,
-    bool is_array_arg) {
+    const LEX_CSTRING *fld_zip_dict_name, Value_generator *fld_gcol_info, Value_generator *fld_default_val_expr,
+    LEX_CSTRING fld_masking_policy, std::optional<gis::srid_t> srid,
+    dd::Column::enum_hidden_type hidden, bool is_array_arg) {
   uint sign_len, allowed_type_modifier = 0;
   ulong max_field_charlength = MAX_FIELD_CHARLENGTH;
 
@@ -284,6 +283,8 @@ bool Create_field::init(
     auto_flags |= Field::GENERATED_FROM_EXPRESSION;
     m_default_val_expr = fld_default_val_expr;
   }
+
+  m_masking_policy_name = fld_masking_policy;
 
   // Initialize data for a virtual field or default value expression
   if (gcol_info || m_default_val_expr) {
@@ -400,11 +401,22 @@ bool Create_field::init(
       break;
     case MYSQL_TYPE_STRING:
       break;
+    case MYSQL_TYPE_VECTOR: {
+      auto max_dimension_bytes =
+          Field_vector::dimension_bytes(Field_vector::max_dimensions);
+      if (m_max_display_width_in_codepoints > max_dimension_bytes) {
+        my_error(ER_EXCEEDS_VECTOR_MAX_DIMENSIONS, MYF(0),
+                 m_max_display_width_in_codepoints,
+                 m_max_display_width_in_codepoints / Field_vector::precision,
+                 max_dimension_bytes, Field_vector::max_dimensions, fld_name);
+        break;
+      }
+      [[fallthrough]];
+    }
     case MYSQL_TYPE_BLOB:
     case MYSQL_TYPE_TINY_BLOB:
     case MYSQL_TYPE_LONG_BLOB:
     case MYSQL_TYPE_MEDIUM_BLOB:
-    case MYSQL_TYPE_JSON:
       if (fld_default_value) {
         /* Allow empty as default value. */
         String str, *res;
@@ -426,10 +438,12 @@ bool Create_field::init(
                               ER_THD(thd, ER_BLOB_CANT_HAVE_DEFAULT), fld_name);
         }
         constant_default = nullptr;
+        flags |= NO_DEFAULT_VALUE_FLAG;
       }
 
       flags |= BLOB_FLAG;
       break;
+    case MYSQL_TYPE_JSON:
     case MYSQL_TYPE_GEOMETRY:
       if (fld_default_value) {
         my_error(ER_BLOB_CANT_HAVE_DEFAULT, MYF(0), fld_name);
@@ -572,6 +586,7 @@ bool Create_field::init(
     return true;
   }
 
+  if (fld_zip_dict_name) zip_dict_name = *fld_zip_dict_name;
   /*
     After all checks were carried out we should be able guarantee that column
     can't have AUTO_INCREMENT and DEFAULT/ON UPDATE CURRENT_TIMESTAMP at the
@@ -788,6 +803,10 @@ size_t Create_field::key_length() const {
       }
       return pack_length() + (max_display_width_in_bytes() & 7 ? 1 : 0);
     }
+    /* LCOV_EXCL_START */
+    case MYSQL_TYPE_VECTOR:
+      assert(false);  // Key on VECTOR type column is not supported.
+    /* LCOV_EXCL_STOP */
     default: {
       return pack_length(is_array);
     }

@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sys/types.h>
 
 #include <algorithm>
+#include <bit>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -451,6 +452,8 @@ void lock_sys_close(void) {
     lock_latest_err_file = nullptr;
   }
 
+  if (!lock_sys) return;
+
   os_event_destroy(lock_sys->timeout_event);
 
   mutex_destroy(&lock_sys->wait_mutex);
@@ -848,7 +851,7 @@ bool Trx_locks_cache::has_granted_blocker(const trx_t *trx,
 #ifdef UNIV_DEBUG
 /** Checks if some other transaction has a lock request in the queue.
  @return lock or NULL */
-static const lock_t *lock_rec_other_has_expl_req(
+[[nodiscard]] static const lock_t *lock_rec_other_has_expl_req(
     lock_mode mode,           /*!< in: LOCK_S or LOCK_X */
     const buf_block_t *block, /*!< in: buffer block containing
                               the record */
@@ -959,34 +962,19 @@ The difficulties to keep in mind here:
                  the seen trx_id is still active or not
 */
 static bool can_older_trx_be_still_active(trx_id_t max_old_active_id) {
-  if (mutex_enter_nowait(&trx_sys->mutex) != 0) {
-    ut_ad(!trx_sys_mutex_own());
-    /* The mutex is currently locked by somebody else. Instead of wasting time
-    on spinning and waiting to acquire it, we loop over the shards and check if
-    any of them contains a value in the range (-infinity,max_old_active_id].
-    NOTE: Do not be tempted to "cache" the minimum, until you also enforce that
-    transactions are inserted to shards in a monotone order!
-    Current implementation heavily depends on the property that even if we put
-    a trx with smaller id to any structure later, it could not have modified a
-    row the caller saw earlier. */
-    static_assert(TRX_SHARDS_N < 1000, "The loop should be short");
-    for (auto &shard : trx_sys->shards) {
-      if (shard.active_rw_trxs.peek().min_id() <= max_old_active_id) {
-        return true;
-      }
-    }
-    return false;
-  }
-  ut_ad(trx_sys_mutex_own());
-  const trx_t *trx = UT_LIST_GET_LAST(trx_sys->rw_trx_list);
-  if (trx == nullptr) {
-    trx_sys_mutex_exit();
-    return false;
-  }
-  assert_trx_in_rw_list(trx);
-  const trx_id_t min_active_now_id = trx->id;
-  trx_sys_mutex_exit();
-  return min_active_now_id <= max_old_active_id;
+  /* We call get_better_lower_bound_for_already_active_id() only if the
+  secondary index page is one of those (hopefully few) which were modified
+  "recently" w.r.t. get_cheap_lower_bound_for_already_active_id(). This update
+  is made here, as opposed to Trx_by_id_with_min::erase(id), because the later
+  is called for each commit and in a typical workload, where transactions commit
+  roughly in FIFO order, the erased id would indeed be minimal most of the time,
+  so we'd probably try to update the lower bound on almost each commit, even
+  though a better upper bound is needed only when the old one is not good
+  enough, which we check here. */
+  return Trx_by_id_with_min::get_cheap_lower_bound_for_already_active_id() <=
+             max_old_active_id &&
+         Trx_by_id_with_min::get_better_lower_bound_for_already_active_id() <=
+             max_old_active_id;
 }
 
 /** Checks if some transaction has an implicit x-lock on a record in a secondary
@@ -1451,6 +1439,8 @@ void RecLock::set_wait_state(lock_t *lock) {
   m_trx->lock.que_state = TRX_QUE_LOCK_WAIT;
 
   m_trx->lock.was_chosen_as_deadlock_victim = false;
+
+  m_trx->stats.start_lock_wait();
 
   bool stopped = que_thr_stop(m_thr);
   ut_a(stopped);
@@ -3493,6 +3483,8 @@ static dberr_t lock_table_enqueue_waiting(ulint mode, dict_table_t *table,
       std::chrono::system_clock::from_time_t(time(nullptr));
   trx->lock.was_chosen_as_deadlock_victim = false;
 
+  trx->stats.start_lock_wait();
+
   auto stopped = que_thr_stop(thr);
   ut_a(stopped);
 
@@ -3590,9 +3582,6 @@ dberr_t lock_table(ulint flags, /*!< in: if BTR_NO_LOCKING_FLAG bit is set,
           row_discard_tablespace
             (there is some long explanation starting with "How do we prevent
             crashes caused by ongoing operations...")
-    lock_remove_recovered_trx_record_locks
-      (this seems to be used to remove locks of recovered transactions from
-      table being dropped, and recovered transactions shouldn't call lock_table)
   */
 
   if (lock_table_has(trx, table, mode)) {
@@ -4227,68 +4216,6 @@ static void lock_remove_all_on_table_for_trx(
   trx_mutex_exit(trx);
 }
 
-/** Remove any explicit record locks held by recovering transactions on
- the table.
- @return number of recovered transactions examined */
-static ulint lock_remove_recovered_trx_record_locks(
-    dict_table_t *table) /*!< in: check if there are any locks
-                         held on records in this table or on the
-                         table itself */
-{
-  ut_a(table != nullptr);
-  /* We need exclusive lock_sys latch, as we are about to iterate over locks
-  held by multiple transactions while they might be operating. */
-  ut_ad(locksys::owns_exclusive_global_latch());
-
-  ulint n_recovered_trx = 0;
-
-  mutex_enter(&trx_sys->mutex);
-
-  for (trx_t *trx : trx_sys->rw_trx_list) {
-    assert_trx_in_rw_list(trx);
-
-    if (!trx->is_recovered) {
-      continue;
-    }
-    /* We need trx->mutex to iterate over trx->lock.trx_lock and it is needed by
-    lock_table_remove_low() but we haven't acquired it yet. */
-    ut_ad(!trx_mutex_own(trx));
-    trx_mutex_enter(trx);
-    /* Because we are holding the exclusive global lock_sys latch,
-    implicit locks cannot be converted to explicit ones
-    while we are scanning the explicit locks. */
-
-    for (auto lock : trx->lock.trx_locks.removable()) {
-      ut_a(lock->trx == trx);
-
-      /* Recovered transactions can't wait on a lock. */
-
-      ut_a(!lock_get_wait(lock));
-
-      switch (lock_get_type_low(lock)) {
-        default:
-          ut_error;
-        case LOCK_TABLE:
-          if (lock->tab_lock.table == table) {
-            lock_table_remove_low(lock);
-          }
-          break;
-        case LOCK_REC:
-          if (lock->index->table == table) {
-            lock_rec_discard(lock);
-          }
-      }
-    }
-
-    trx_mutex_exit(trx);
-    ++n_recovered_trx;
-  }
-
-  mutex_exit(&trx_sys->mutex);
-
-  return (n_recovered_trx);
-}
-
 /** Removes locks on a table to be dropped.
  If remove_also_table_sx_locks is true then table-level S and X locks are
  also removed in addition to other table-level and record-level locks.
@@ -4313,16 +4240,6 @@ void lock_remove_all_on_table(
 
     lock_remove_all_on_table_for_trx(table, lock->trx,
                                      remove_also_table_sx_locks);
-  }
-
-  /* Note: Recovered transactions don't have table level IX or IS locks
-  but can have implicit record locks that have been converted to explicit
-  record locks. Such record locks cannot be freed by traversing the
-  transaction lock list in dict_table_t (as above). */
-
-  if (!lock_sys->rollback_complete &&
-      lock_remove_recovered_trx_record_locks(table) == 0) {
-    lock_sys->rollback_complete = true;
   }
 }
 
@@ -4779,9 +4696,9 @@ static bool lock_trx_print_locks(
       lock_table_print(file, lock);
     }
 
-    if (iter.next() >= 10) {
+    if (iter.next() >= srv_show_locks_held) {
       fprintf(file,
-              "10 LOCKS PRINTED FOR THIS TRX:"
+              "TOO MANY LOCKS PRINTED FOR THIS TRX:"
               " SUPPRESSING FURTHER PRINTS\n");
 
       break;
@@ -4814,7 +4731,7 @@ void lock_print_info_all_transactions(FILE *file) {
 
   /* Control whether a block should be fetched from the buffer pool. */
   bool load_block = true;
-  bool monitor = srv_print_innodb_lock_monitor;
+  bool monitor = srv_print_innodb_lock_monitor && (srv_show_locks_held != 0);
 
   while ((trx = trx_iter.current()) != nullptr) {
     check_trx_state(trx);
@@ -5152,6 +5069,7 @@ dberr_t lock_rec_insert_check_and_lock(
   ut_ad(block->frame == page_align(rec));
   ut_ad(!dict_index_is_online_ddl(index) || index->is_clustered() ||
         (flags & BTR_CREATE_FLAG));
+  ut_ad((flags & BTR_NO_LOCKING_FLAG) || thr);
 
   if (flags & BTR_NO_LOCKING_FLAG) {
     return (DB_SUCCESS);

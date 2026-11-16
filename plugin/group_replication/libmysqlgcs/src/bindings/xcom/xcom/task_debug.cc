@@ -26,9 +26,9 @@
 #endif
 #include "xcom/task_debug.h"
 
-#include <assert.h>
-#include <stdarg.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdarg>
+#include <cstdio>
 
 /* purecov: begin deadcode */
 static int mystrcat_core_sprintf(char *dest, int size, const char *format,

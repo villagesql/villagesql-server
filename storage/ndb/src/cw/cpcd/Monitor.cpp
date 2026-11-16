@@ -33,9 +33,9 @@
 #include "common.hpp"
 
 static void *monitor_thread_create_wrapper(void *arg) {
-  CPCD::Monitor *mon = (CPCD::Monitor *)arg;
+  auto *mon = (CPCD::Monitor *)arg;
   mon->run();
-  return NULL;
+  return nullptr;
 }
 
 CPCD::Monitor::Monitor(CPCD *cpcd, int poll) {
@@ -57,7 +57,7 @@ CPCD::Monitor::~Monitor() {
 }
 
 void CPCD::Monitor::run() {
-  while (1) {
+  while (true) {
     NdbMutex_Lock(m_changeMutex);
     NdbCondition_WaitTimeout(m_changeCondition, m_changeMutex,
                              m_pollingInterval * 1000);

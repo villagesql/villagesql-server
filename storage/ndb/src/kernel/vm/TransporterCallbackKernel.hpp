@@ -54,8 +54,8 @@ class TransporterReceiveHandleKernel : public TransporterReceiveHandle {
 
   void assign_trpman(void *trpman) { m_trpman = trpman; }
   /* TransporterCallback interface. */
-  bool deliver_signal(SignalHeader *const header, Uint8 prio,
-                      TransporterError &error_code, Uint32 *const signalData,
+  bool deliver_signal(SignalHeader *header, Uint8 prio,
+                      TransporterError &error_code, Uint32 *signalData,
                       LinearSectionPtr ptr[3]) override;
   void reportReceiveLen(NodeId nodeId, Uint32 count, Uint64 bytes) override;
   void reportConnect(NodeId nodeId) override;

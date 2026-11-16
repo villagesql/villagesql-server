@@ -59,6 +59,7 @@ file_instances
 file_summary_by_event_name
 file_summary_by_instance
 global_status
+global_variable_attributes
 global_variables
 host_cache
 hosts
@@ -66,6 +67,8 @@ innodb_redo_log_files
 keyring_component_status
 keyring_keys
 log_status
+malloc_stats
+malloc_stats_totals
 memory_summary_by_account_by_event_name
 memory_summary_by_host_by_event_name
 memory_summary_by_thread_by_event_name
@@ -114,6 +117,7 @@ table_handles
 table_io_waits_summary_by_index_usage
 table_io_waits_summary_by_table
 table_lock_waits_summary_by_table
+temporary_account_locks
 threads
 tls_channel_status
 user_defined_functions
@@ -121,6 +125,7 @@ user_variables_by_thread
 users
 variables_by_thread
 variables_info
+variables_metadata
 show create table accounts;
 Table	Create Table
 accounts	CREATE TABLE `accounts` (
@@ -1160,6 +1165,8 @@ host_cache	CREATE TABLE `host_cache` (
   `COUNT_DEFAULT_DATABASE_ERRORS` bigint NOT NULL,
   `COUNT_INIT_CONNECT_ERRORS` bigint NOT NULL,
   `COUNT_LOCAL_ERRORS` bigint NOT NULL,
+  `COUNT_ACCOUNT_LOCKED_ERRORS` bigint NOT NULL,
+  `COUNT_TEMPORARY_ACCOUNT_LOCKED_ERRORS` bigint NOT NULL,
   `COUNT_UNKNOWN_ERRORS` bigint NOT NULL,
   `FIRST_SEEN` timestamp NOT NULL,
   `LAST_SEEN` timestamp NOT NULL,
@@ -1177,6 +1184,25 @@ hosts	CREATE TABLE `hosts` (
   `MAX_SESSION_CONTROLLED_MEMORY` bigint unsigned NOT NULL,
   `MAX_SESSION_TOTAL_MEMORY` bigint unsigned NOT NULL,
   UNIQUE KEY `HOST` (`HOST`)
+) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table malloc_stats;
+Table	Create Table
+malloc_stats	CREATE TABLE `malloc_stats` (
+  `TYPE` char(8) NOT NULL,
+  `ALLOCATED` bigint unsigned NOT NULL,
+  `NMALLOC` bigint unsigned NOT NULL,
+  `NDALLOC` bigint unsigned NOT NULL,
+  `NREQUESTS` bigint unsigned NOT NULL
+) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table malloc_stats_totals;
+Table	Create Table
+malloc_stats_totals	CREATE TABLE `malloc_stats_totals` (
+  `ALLOCATED` bigint unsigned NOT NULL,
+  `ACTIVE` bigint unsigned NOT NULL,
+  `MAPPED` bigint unsigned NOT NULL,
+  `RESIDENT` bigint unsigned NOT NULL,
+  `RETAINED` bigint unsigned NOT NULL,
+  `METADATA` bigint unsigned NOT NULL
 ) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show create table mutex_instances;
 Table	Create Table
@@ -1551,6 +1577,19 @@ table_lock_waits_summary_by_table	CREATE TABLE `table_lock_waits_summary_by_tabl
   `AVG_TIMER_WRITE_EXTERNAL` bigint unsigned NOT NULL,
   `MAX_TIMER_WRITE_EXTERNAL` bigint unsigned NOT NULL,
   UNIQUE KEY `OBJECT` (`OBJECT_TYPE`,`OBJECT_SCHEMA`,`OBJECT_NAME`)
+) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table temporary_account_locks;
+Table	Create Table
+temporary_account_locks	CREATE TABLE `temporary_account_locks` (
+  `USER` char(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `HOST` char(255) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  `LOCKED` enum('YES','NO') NOT NULL,
+  `FAILED_LOGIN_ATTEMPTS` int NOT NULL,
+  `REMAINING_LOGIN_ATTEMPTS` int NOT NULL,
+  `PASSWORD_LOCK_TIME` int NOT NULL,
+  `LOCKED_SINCE` date DEFAULT NULL,
+  `LOCKED_UNTIL` date DEFAULT NULL,
+  UNIQUE KEY `ACCOUNT` (`USER`,`HOST`)
 ) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 show create table threads;
 Table	Create Table

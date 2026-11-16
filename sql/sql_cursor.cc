@@ -132,6 +132,8 @@ class Query_result_materialize final : public Query_result_union {
   void cleanup() override { m_result->cleanup(); }
   Server_side_cursor *cursor() const override { return m_cursor; }
 
+  bool use_protocol_wrapper() const override { return true; }
+
  private:
   /// The materialized cursor associated with this result
   Materialized_cursor *m_cursor{nullptr};
@@ -475,7 +477,7 @@ bool Query_result_materialize::prepare(THD *thd,
   */
   if (create_result_table(thd, *unit->get_unit_column_types(), false,
                           thd->variables.option_bits | TMP_TABLE_ALL_COLUMNS,
-                          "", false, false)) {
+                          "", false)) {
     ::destroy_at(m_cursor);
     return true;
   }

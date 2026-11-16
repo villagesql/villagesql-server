@@ -2087,7 +2087,7 @@ void Dbdict::readSchemaConf(Signal *signal, FsConnectRecordPtr fsPtr) {
   for (Uint32 n = 0; n < xsf->noOfPages; n++) {
     SchemaFile *sf = &xsf->schemaPage[n];
     bool ok = false;
-    const char *reason;
+    const char *reason = nullptr;
     if (memcmp(sf->Magic, NDB_SF_MAGIC, sizeof(sf->Magic)) != 0) {
       jam();
       reason = "magic code";
@@ -6130,14 +6130,13 @@ void Dbdict::handleTabInfo(SimpleProperties::Reader &it,
        * A new charset is first accessed here on this node.
        * TODO use separate thread (e.g. via NDBFS) if need to load from file
        */
-      CHARSET_INFO *cs = get_charset(csNumber, MYF(0));
+      const CHARSET_INFO *cs = get_charset(csNumber, MYF(0));
       if (cs == NULL) {
         parseP->errorCode = CreateTableRef::InvalidCharset;
         parseP->errorLine = __LINE__;
         return;
       }
-      // XXX should be done somewhere in mysql
-      all_charsets[cs->number] = cs;
+      ndbassert(cs->number == csNumber);
       unsigned i = 0;
       while (i < noOfCharsets) {
         if (charsets[i] == csNumber) break;

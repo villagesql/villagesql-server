@@ -25,9 +25,9 @@
 
 #include <fcntl.h>
 #include <mysql/plugin.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cstdio>
+#include <cstdlib>
 
 #include <mysql/components/my_service.h>
 #include <mysql/components/services/log_builtins.h>
@@ -69,6 +69,10 @@ static void WRITE_STR(const char *format) {
   my_write(outfile, (uchar *)buffer, strlen(buffer), MYF(0));
 }
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-format-attribute"
+#endif
 template <typename T>
 void WRITE_VAL(const char *format, T value) {
   char buffer[STRING_BUFFER_SIZE];
@@ -82,6 +86,9 @@ void WRITE_VAL(const char *format, T1 value1, T2 value2) {
   snprintf(buffer, sizeof(buffer), format, value1, value2);
   my_write(outfile, (uchar *)buffer, strlen(buffer), MYF(0));
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 static const char *user_localhost = "localhost";
 static const char *user_local = "127.0.0.1";
@@ -183,7 +190,7 @@ struct st_plugin_ctx {
 
 static int sql_start_result_metadata(void *ctx, uint num_cols, uint,
                                      const CHARSET_INFO *resultcs) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   DBUG_PRINT("info", ("resultcs->number: %d", resultcs->number));
   DBUG_PRINT("info", ("resultcs->csname: %s", resultcs->csname));
@@ -196,7 +203,7 @@ static int sql_start_result_metadata(void *ctx, uint num_cols, uint,
 
 static int sql_field_metadata(void *ctx, struct st_send_field *field,
                               const CHARSET_INFO *) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   st_send_field_n *cfield = &pctx->sql_field[pctx->current_col];
   DBUG_TRACE;
   DBUG_PRINT("info", ("field->db_name: %s", field->db_name));
@@ -227,7 +234,7 @@ static int sql_field_metadata(void *ctx, struct st_send_field *field,
 
 static int sql_end_result_metadata(void *ctx, uint server_status,
                                    uint warn_count) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   pctx->meta_server_status = server_status;
   pctx->meta_warn_count = warn_count;
@@ -236,21 +243,21 @@ static int sql_end_result_metadata(void *ctx, uint server_status,
 }
 
 static int sql_start_row(void *ctx) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   pctx->current_col = 0;
   return false;
 }
 
 static int sql_end_row(void *ctx) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   pctx->num_rows++;
   return false;
 }
 
 static void sql_abort_row(void *ctx) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   pctx->current_col = 0;
 }
@@ -261,7 +268,7 @@ static ulong sql_get_client_capabilities(void *) {
 }
 
 static int sql_get_null(void *ctx) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -274,7 +281,7 @@ static int sql_get_null(void *ctx) {
 }
 
 static int sql_get_integer(void *ctx, longlong value) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -290,7 +297,7 @@ static int sql_get_integer(void *ctx, longlong value) {
 }
 
 static int sql_get_longlong(void *ctx, longlong value, uint is_unsigned) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -308,7 +315,7 @@ static int sql_get_longlong(void *ctx, longlong value, uint is_unsigned) {
 }
 
 static int sql_get_decimal(void *ctx, const decimal_t *value) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -331,7 +338,7 @@ static int sql_get_decimal(void *ctx, const decimal_t *value) {
 }
 
 static int sql_get_double(void *ctx, double value, uint32 decimals) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -350,7 +357,7 @@ static int sql_get_double(void *ctx, double value, uint32 decimals) {
 }
 
 static int sql_get_date(void *ctx, const MYSQL_TIME *value) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -376,7 +383,7 @@ static int sql_get_date(void *ctx, const MYSQL_TIME *value) {
 }
 
 static int sql_get_time(void *ctx, const MYSQL_TIME *value, uint decimals) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -405,7 +412,7 @@ static int sql_get_time(void *ctx, const MYSQL_TIME *value, uint decimals) {
 }
 
 static int sql_get_datetime(void *ctx, const MYSQL_TIME *value, uint decimals) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -434,7 +441,7 @@ static int sql_get_datetime(void *ctx, const MYSQL_TIME *value, uint decimals) {
 
 static int sql_get_string(void *ctx, const char *const value, size_t length,
                           const CHARSET_INFO *const) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   const uint row = pctx->num_rows;
   const uint col = pctx->current_col;
@@ -449,7 +456,7 @@ static int sql_get_string(void *ctx, const char *const value, size_t length,
 static void sql_handle_ok(void *ctx, uint server_status,
                           uint statement_warn_count, ulonglong affected_rows,
                           ulonglong last_insert_id, const char *const message) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   /* This could be an EOF */
   if (!pctx->num_cols) pctx->num_rows = 0;
@@ -464,7 +471,7 @@ static void sql_handle_ok(void *ctx, uint server_status,
 static void sql_handle_error(void *ctx, uint sql_errno,
                              const char *const err_msg,
                              const char *const sqlstate) {
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   pctx->sql_errno = sql_errno;
   if (pctx->sql_errno) {
@@ -585,7 +592,6 @@ static char *fieldflags2str(uint f) {
   ff2s_check_flag(NO_DEFAULT_VALUE);
   ff2s_check_flag(NUM);
   ff2s_check_flag(PART_KEY);
-  ff2s_check_flag(GROUP);
   ff2s_check_flag(UNIQUE);
   ff2s_check_flag(BINCMP);
   ff2s_check_flag(ON_UPDATE_NOW);
@@ -641,7 +647,7 @@ static void handle_error(struct st_plugin_ctx *pctx) {
 static void exec_test_cmd(MYSQL_SESSION session, const char *test_cmd,
                           void *p [[maybe_unused]], void *ctx) {
   WRITE_VAL("%s\n", test_cmd);
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   COM_DATA cmd;
   pctx->reset();
   memset(&cmd, 0, sizeof(cmd));
@@ -670,7 +676,7 @@ static SYS_VAR *test_services_sysvars[] = {MYSQL_SYSVAR(nb_sessions), nullptr};
 
 static void test_sql(void *p) {
   DBUG_TRACE;
-  struct st_plugin_ctx *plugin_ctx = new st_plugin_ctx();
+  auto *plugin_ctx = new st_plugin_ctx();
 
   /* Session declarations */
   MYSQL_SESSION session_1, session_2;
@@ -785,7 +791,7 @@ static void create_log_file(const char *log_name) {
 }
 
 static void *test_sql_threaded_wrapper(void *param) {
-  struct test_thread_context *context = (struct test_thread_context *)param;
+  auto *context = (struct test_thread_context *)param;
 
   WRITE_SEP();
   WRITE_STR("init thread\n");

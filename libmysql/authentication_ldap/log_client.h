@@ -53,7 +53,7 @@ class Ldap_log_writer_error {
   /**
    Destructor.
   */
-  ~Ldap_log_writer_error();
+  ~Ldap_log_writer_error() = default;
   /**
    Writes the data to the log.
 

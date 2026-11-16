@@ -25,7 +25,7 @@
 #include "my_config.h"
 
 #if defined(HAVE_POSIX_MEMALIGN)
-#include <stdlib.h>
+#include <cstdlib>
 #elif defined(HAVE_MEMALIGN)
 #include <memory.h>
 #elif defined(HAVE_ALIGNED_MALLOC)

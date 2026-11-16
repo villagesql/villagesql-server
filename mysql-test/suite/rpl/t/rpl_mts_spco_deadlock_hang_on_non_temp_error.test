@@ -59,14 +59,8 @@ CREATE TABLE t2(c1 INT PRIMARY KEY) ENGINE = InnoDB;
 --source include/rpl/stop_applier.inc
 SET @saved_replica_preserve_commit_order = @@GLOBAL.replica_preserve_commit_order;
 SET GLOBAL replica_preserve_commit_order = ON;
-SET @saved_replica_parallel_type = @@GLOBAL.replica_parallel_type;
 SET @saved_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
-SET GLOBAL replica_parallel_type = "LOGICAL_CLOCK";
 SET GLOBAL replica_parallel_workers = 3;
-
-# switched to slave connection
---source include/have_replica_parallel_type_logical_clock.inc
---source include/have_replica_parallel_workers.inc
 
 --echo #
 --echo # 2.3 Set innodb_lock_wait_timeout to 300 to make test work without issues
@@ -119,7 +113,7 @@ INSERT INTO t1 VALUES(3, 1);
 --echo # 3.4 Execute Transaction-2
 --echo #
 BEGIN;
-DELETE FROM t1 WHERE c2 <= 1;
+DELETE t1 FROM t1 FORCE INDEX (c2) WHERE c2 <= 1;
 INSERT INTO t2 values(1);
 COMMIT;
 
@@ -227,7 +221,6 @@ DROP TABLE t1, t2;
 --echo #
 SET GLOBAL replica_preserve_commit_order = @saved_replica_preserve_commit_order;
 SET GLOBAL innodb_lock_wait_timeout = @saved_innodb_lock_wait_timeout;
-SET GLOBAL replica_parallel_type = @saved_replica_parallel_type;
 --disable_warnings
 SET GLOBAL replica_parallel_workers = @saved_replica_parallel_workers;
 --enable_warnings

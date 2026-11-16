@@ -80,7 +80,7 @@ void Tty::echo(bool on) {
   }
 #else
   // local flags
-  size_t bit = Flags::Posix::Local::kEcho;
+  size_t const bit = Flags::Posix::Local::kEcho;
   if (on) {
     tp.c_lflag |= bit;
   } else {

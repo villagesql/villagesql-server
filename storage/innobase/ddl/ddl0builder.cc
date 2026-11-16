@@ -31,6 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 Created 2020-11-01 by Sunny Bains. */
 
 #include <debug_sync.h>
+#include <mutex>
 #include "clone0api.h"
 #include "ddl0fts.h"
 #include "ddl0impl-builder.h"
@@ -47,6 +48,53 @@ Created 2020-11-01 by Sunny Bains. */
 #include "villagesql/custom_column.h"
 
 namespace ddl {
+
+#if defined(ENABLED_DEBUG_SYNC)
+/** Execute a sync point on the DDL context's THD, serialized against the other
+DDL threads sharing that THD.
+
+The tasks that run the builder state machine (Task::operator()) are pulled off
+a shared queue by whichever DDL thread is free, see
+Loader::Task_queue::mt_execute(). An ALTER that builds several indexes
+therefore runs setup_sort()/btree_build()/finalize() for different builders at
+the same time, on different threads, and the sort tasks of a single builder
+are parallel by design. All of those threads pass the *same* THD - the owning
+connection's, m_ctx.thd() - to DEBUG_SYNC, and the worker threads do not even
+have a current_thd (Loader::load() clears it).
+
+debug_sync() does no locking of its own: the facility assumes a sync point is
+only ever hit by the thread owning the THD. It tests action->activation_count
+and only then calls debug_sync_execute(), which asserts the very same thing
+before decrementing it, so a lone thread can never trip
+
+  sql/debug_sync.cc:1769: Assertion `action->activation_count' failed
+
+Two DDL threads can: both pass the test, then the first consumes the last
+activation and removes the action while the second is still on its way into
+debug_sync_execute() - a genuine data race on thd->debug_sync_control, not
+just a bad assertion.
+
+Take the context's mutex, so the first thread executes the action and the
+ones behind it find it already gone and return without touching the control
+block. The lock is per context, i.e. per DDL statement and hence per THD, and
+must stay that way: a DDL parked inside a sync point may only be released by
+a signal that arrives after another connection's DDL has reached the same
+sync point, so a lock shared between statements would deadlock them.
+
+The mutex is only taken when debug sync is armed, mirroring the DEBUG_SYNC
+macro's own fast path, and the whole thing compiles away without DEBUG_SYNC. */
+#define DDL_DEBUG_SYNC(_ctx_, _sync_point_name_)                           \
+  do {                                                                     \
+    if (unlikely(opt_debug_sync_timeout)) {                                \
+      const std::lock_guard<std::mutex> guard{(_ctx_).m_debug_sync_mutex}; \
+      DEBUG_SYNC((_ctx_).thd(), _sync_point_name_);                        \
+    }                                                                      \
+  } while (false)
+#else
+#define DDL_DEBUG_SYNC(_ctx_, _sync_point_name_) \
+  do {                                           \
+  } while (false)
+#endif /* defined(ENABLED_DEBUG_SYNC) */
 
 /** Context for copying cluster index row for the index to being created. */
 struct Copy_ctx {
@@ -184,8 +232,8 @@ struct File_cursor : public Load_cursor {
   @param[in] range              Offsets of the chunk to read from the file
   @param[in,out] stage          PFS observability. */
   File_cursor(Builder *builder, const Unique_os_file_descriptor &file,
-              size_t buffer_size, const Range &range,
-              Alter_stage *stage) noexcept;
+              size_t buffer_size, const Range &range, Alter_stage *stage,
+              const Write_offsets &write_offsets) noexcept;
 
   /** Destructor. */
   ~File_cursor() override;
@@ -252,9 +300,11 @@ dberr_t File_reader::get_tuple(Builder *builder, mem_heap_t *heap,
 File_cursor::File_cursor(Builder *builder,
                          const Unique_os_file_descriptor &file,
                          size_t buffer_size, const Range &range,
-                         Alter_stage *stage) noexcept
+                         Alter_stage *stage,
+                         const Write_offsets &write_offsets) noexcept
     : Load_cursor(builder, nullptr),
-      m_reader(file, builder->index(), buffer_size, range),
+      m_reader(file, builder->index(), buffer_size, range,
+               builder->get_space_id(), write_offsets),
       m_stage(stage) {
   ut_a(m_reader.m_file.is_open());
 }
@@ -367,7 +417,7 @@ dberr_t Merge_cursor::add_file(const ddl::file_t &file, size_t buffer_size,
   ut_a(file.m_file.is_open());
   auto cursor = ut::new_withkey<File_cursor>(
       ut::make_psi_memory_key(mem_key_ddl), m_builder, file.m_file, buffer_size,
-      range, m_stage);
+      range, m_stage, file.m_write_offsets);
 
   if (cursor == nullptr) {
     m_err = DB_OUT_OF_MEMORY;
@@ -576,7 +626,7 @@ dberr_t Key_sort_buffer_cursor::next() noexcept {
 }
 
 Builder::Thread_ctx::Thread_ctx(size_t id, Key_sort_buffer *key_buffer) noexcept
-    : m_id(id), m_key_buffer(key_buffer) {}
+    : m_id(id), m_key_buffer(key_buffer), m_compress_heap(nullptr) {}
 
 Builder::Thread_ctx::~Thread_ctx() noexcept {
   if (m_key_buffer != nullptr) {
@@ -585,6 +635,10 @@ Builder::Thread_ctx::~Thread_ctx() noexcept {
 
   if (m_rtree_inserter != nullptr) {
     ut::delete_(m_rtree_inserter);
+  }
+
+  if (m_compress_heap != nullptr) {
+    mem_heap_free(m_compress_heap);
   }
 }
 
@@ -680,6 +734,19 @@ dberr_t Builder::init(Cursor &cursor, size_t n_threads) noexcept {
     thread_ctx->m_io_buffer = {thread_ctx->m_aligned_buffer.get(),
                                buffer_size.second};
 
+    if (log_tmp_is_encrypted()) {
+      thread_ctx->m_aligned_buffer_crypt =
+          ut::make_unique_aligned<byte[]>(ut::make_psi_memory_key(mem_key_ddl),
+                                          UNIV_SECTOR_SIZE, buffer_size.second);
+
+      if (!thread_ctx->m_aligned_buffer_crypt) {
+        return DB_OUT_OF_MEMORY;
+      }
+
+      thread_ctx->m_io_buffer_crypt = {thread_ctx->m_aligned_buffer_crypt.get(),
+                                       buffer_size.second};
+    }
+
     if (is_spatial_index()) {
       thread_ctx->m_rtree_inserter = ut::new_withkey<RTree_inserter>(
           ut::make_psi_memory_key(mem_key_ddl), m_ctx, index);
@@ -738,10 +805,10 @@ dberr_t Builder::init(Cursor &cursor, size_t n_threads) noexcept {
     }
   }
 
-  if (cursor.m_row_heap.get() == nullptr) {
+  if (cursor.m_row_heap.is_null()) {
     cursor.m_row_heap.create(sizeof(mrec_buf_t), UT_LOCATION_HERE);
 
-    if (cursor.m_row_heap.get() == nullptr) {
+    if (cursor.m_row_heap.is_null()) {
       set_error(DB_OUT_OF_MEMORY);
       set_next_state();
       return get_error();
@@ -793,6 +860,7 @@ dberr_t Builder::get_virtual_column(Copy_ctx &ctx, const dict_field_t *ifield,
   const auto n_added = mv_rows_added;
   auto v_col = reinterpret_cast<const dict_v_col_t *>(col);
   auto key_buffer = m_thread_ctxs[ctx.m_thread_id]->m_key_buffer;
+  mem_heap_t **compress_heap = &m_thread_ctxs[ctx.m_thread_id]->m_compress_heap;
 
   if (col->is_multi_value()) {
     ut_a(m_index->is_multi_value());
@@ -802,11 +870,12 @@ dberr_t Builder::get_virtual_column(Copy_ctx &ctx, const dict_field_t *ifield,
     src_field = dtuple_get_nth_v_field(ctx.m_row.m_ptr, v_col->v_pos);
 
     if (ctx.m_n_mv_rows_to_add == 0) {
-      auto p = m_v_heap.get();
+      auto p = m_v_heap.is_null() ? nullptr : m_v_heap.get();
 
       src_field = innobase_get_computed_value(
-          ctx.m_row.m_ptr, v_col, m_ctx.m_new_table, &p, key_buffer->heap(),
-          m_ctx.thd(), ctx.m_my_table, ifield, m_ctx.m_old_table);
+          compress_heap, ctx.m_row.m_ptr, v_col, m_ctx.m_new_table, &p,
+          key_buffer->heap(), m_ctx.thd(), ctx.m_my_table, ifield,
+          m_ctx.m_old_table);
 
       m_v_heap.reset(p);
 
@@ -833,11 +902,11 @@ dberr_t Builder::get_virtual_column(Copy_ctx &ctx, const dict_field_t *ifield,
       src_field->len = mv->data_len[n_added];
     }
   } else {
-    auto p = m_v_heap.get();
+    auto p = m_v_heap.is_null() ? nullptr : m_v_heap.get();
 
     src_field = innobase_get_computed_value(
-        ctx.m_row.m_ptr, v_col, m_ctx.m_new_table, &p, nullptr, m_ctx.thd(),
-        ctx.m_my_table, ifield, m_ctx.m_old_table);
+        compress_heap, ctx.m_row.m_ptr, v_col, m_ctx.m_new_table, &p, nullptr,
+        m_ctx.thd(), ctx.m_my_table, ifield, m_ctx.m_old_table);
 
     m_v_heap.reset(p);
 
@@ -923,7 +992,7 @@ dberr_t Builder::copy_columns(Copy_ctx &ctx, size_t &mv_rows_added,
 
       if (field->len != UNIV_SQL_NULL && col->mtype == DATA_MYSQL &&
           col->len != field->len) {
-        if (m_conv_heap.get() != nullptr) {
+        if (!m_conv_heap.is_null()) {
           convert(m_ctx.m_old_table->first_index(), src_field, field, col->len,
                   page_size,
                   IF_DEBUG(dict_table_is_sdi(m_ctx.m_old_table->id), )
@@ -984,7 +1053,11 @@ dberr_t Builder::copy_columns(Copy_ctx &ctx, size_t &mv_rows_added,
     }
 
     ut_a(len <= col->len || DATA_LARGE_MTYPE(col->mtype) ||
-         (col->mtype == DATA_POINT && len == DATA_MBR_LEN));
+         (col->mtype == DATA_POINT && len == DATA_MBR_LEN) ||
+         ((col->mtype == DATA_VARCHAR || col->mtype == DATA_BINARY ||
+           col->mtype == DATA_VARMYSQL) &&
+          (col->len == 0 ||
+           len <= col->len + prtype_get_compression_extra(col->prtype))));
 
     auto fixed_len = ifield->fixed_len;
 
@@ -1119,8 +1192,7 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
     format. There is an assert ut_ad(size < UNIV_PAGE_SIZE) in
     rec_offs_data_size(). It may hit the assert before attempting to
     insert the row. */
-    if (unlikely(m_conv_heap.get() != nullptr &&
-                 ctx.m_data_size > UNIV_PAGE_SIZE)) {
+    if (unlikely(!m_conv_heap.is_null() && ctx.m_data_size > UNIV_PAGE_SIZE)) {
       ctx.m_n_rows_added = 0;
       return DB_TOO_BIG_RECORD;
     }
@@ -1149,7 +1221,7 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
     ctx.m_n_fields = 0;
     ++ctx.m_n_rows_added;
 
-    if (m_conv_heap.get() != nullptr) {
+    if (!m_conv_heap.is_null()) {
       mem_heap_empty(m_conv_heap.get());
     }
 
@@ -1190,15 +1262,18 @@ bool Builder::create_file(ddl::file_t &file) noexcept {
   }
 }
 
-dberr_t Builder::append(ddl::file_t &file, IO_buffer io_buffer) noexcept {
+dberr_t Builder::append(ddl::file_t &file, IO_buffer io_buffer,
+                        void *crypt_buffer, uint32_t space_id) noexcept {
   auto err = ddl::pwrite(file.m_file.get(), io_buffer.first, io_buffer.second,
-                         file.m_size);
+                         file.m_size, crypt_buffer, space_id);
 
   if (err != DB_SUCCESS) {
     set_error(DB_TEMP_FILE_WRITE_FAIL);
     return get_error();
   } else {
     file.m_size += io_buffer.second;
+    file.m_write_offsets.push_back(file.m_size);
+
     return err;
   }
 }
@@ -1229,7 +1304,9 @@ dberr_t Builder::key_buffer_sort(size_t thread_id) noexcept {
     key_buffer->sort(&dup);
 
     if (dup.m_n_dup > 0) {
-      set_error(DB_DUPLICATE_KEY);
+      if (set_error(DB_DUPLICATE_KEY)) {
+        dup.report();
+      }
       return get_error();
     }
   } else {
@@ -1505,7 +1582,9 @@ dberr_t Builder::add_to_key_buffer(Copy_ctx &ctx,
     fields. Which is fine for key comparison, but not enough for reporting. */
     if (m_prev_fields != nullptr &&
         Key_sort_buffer::compare(fields, m_prev_fields, &m_clust_dup) == 0) {
-      set_error(DB_DUPLICATE_KEY);
+      if (set_error(DB_DUPLICATE_KEY)) {
+        m_clust_dup.report();
+      }
       return get_error();
     }
 
@@ -1631,8 +1710,9 @@ dberr_t Builder::bulk_add_row(Cursor &cursor, Row &row, size_t thread_id,
       ut_a(n != 0);
       ut_a(n % IO_BLOCK_SIZE == 0);
 
-      auto err =
-          ddl::pwrite(file.m_file.get(), io_buffer.first, n, file.m_size);
+      auto crypt_buffer = thread_ctx->m_io_buffer_crypt;
+      auto err = ddl::pwrite(file.m_file.get(), io_buffer.first, n, file.m_size,
+                             crypt_buffer.first, get_space_id());
 
       if (DBUG_EVALUATE_IF("builder_bulk_add_row_trigger_error_4", true,
                            false)) {
@@ -1645,6 +1725,7 @@ dberr_t Builder::bulk_add_row(Cursor &cursor, Row &row, size_t thread_id,
       }
 
       file.m_size += n;
+      file.m_write_offsets.push_back(file.m_size);
 
       return DB_SUCCESS;
     };
@@ -1787,10 +1868,11 @@ dberr_t Builder::dtuple_copy_blobs(dtuple_t *dtuple, ulint *offsets,
   return DB_SUCCESS;
 }
 
-dberr_t Builder::check_duplicates(Thread_ctxs &dupcheck, Dup *dup) noexcept {
+dberr_t Builder::check_duplicates(Thread_ctxs &dupcheck) noexcept {
   Merge_cursor cursor(this, nullptr, m_local_stage);
   const auto buffer_size = m_ctx.scan_buffer_size(m_thread_ctxs.size());
 
+  Dup dup = {m_index, m_ctx.m_table, m_ctx.m_col_map, 0};
   size_t n_files_to_check{};
 
   for (auto thread_ctx : dupcheck) {
@@ -1816,7 +1898,7 @@ dberr_t Builder::check_duplicates(Thread_ctxs &dupcheck, Dup *dup) noexcept {
 
   /* For secondary indexes we have to compare all the columns for the index,
   this includes the cluster index primary key columns too. */
-  Compare_key compare_key(m_index, dup, !m_sort_index->is_clustered());
+  Compare_key compare_key(m_index, &dup, !m_sort_index->is_clustered());
 
   const auto n_compare = dict_index_get_n_unique_in_tree(m_index);
 
@@ -1831,6 +1913,9 @@ dberr_t Builder::check_duplicates(Thread_ctxs &dupcheck, Dup *dup) noexcept {
         return DB_CORRUPTION;
       }
       if (cmp == 0) {
+        if (set_error(DB_DUPLICATE_KEY)) {
+          dup.report();
+        }
         return DB_DUPLICATE_KEY;
       }
     }
@@ -1858,7 +1943,7 @@ dberr_t Builder::check_duplicates(Thread_ctxs &dupcheck, Dup *dup) noexcept {
 dberr_t Builder::btree_build() noexcept {
   ut_a(!is_skip_file_sort());
 
-  DEBUG_SYNC(m_ctx.thd(), "ddl_btree_build_interrupt");
+  DDL_DEBUG_SYNC(m_ctx, "ddl_btree_build_interrupt");
   if (m_local_stage != nullptr) {
     m_local_stage->begin_phase_insert();
   }
@@ -1939,7 +2024,6 @@ dberr_t Builder::create_merge_sort_tasks() noexcept {
 
   Thread_ctxs dupcheck{};
   size_t n_runs_to_merge{};
-  Dup dup = {m_index, m_ctx.m_table, m_ctx.m_col_map, 0};
 
   for (auto thread_ctx : m_thread_ctxs) {
     ut_a(thread_ctx->m_file.m_n_recs == 0);
@@ -1976,7 +2060,7 @@ dberr_t Builder::create_merge_sort_tasks() noexcept {
            (n_single == 0 && n_multiple + n_empty == dupcheck.size()));
     }
 #endif /* UNIV_DEBUG */
-    auto err = check_duplicates(dupcheck, &dup);
+    auto err = check_duplicates(dupcheck);
 
     if (err != DB_SUCCESS) {
       return err;
@@ -2052,7 +2136,13 @@ dberr_t Builder::fts_sort_and_build() noexcept {
   }
 }
 
-dberr_t Builder::finalize() noexcept {
+space_id_t Builder::get_space_id() {
+  auto new_table = m_ctx.m_new_table;
+  return new_table != nullptr ? new_table->space
+                              : dict_sys_t::s_invalid_space_id;
+}
+
+dberr_t Builder::finalize(bool apply_log) noexcept {
   ut_a(m_ctx.m_need_observer);
   ut_a(get_state() == State::FINISH);
 
@@ -2061,9 +2151,7 @@ dberr_t Builder::finalize() noexcept {
   observer->flush();
 
   dberr_t err = DB_SUCCESS;
-  auto new_table = m_ctx.m_new_table;
-  auto space_id =
-      new_table != nullptr ? new_table->space : dict_sys_t::s_invalid_space_id;
+  auto space_id = get_space_id();
 
   Clone_notify notifier(Clone_notify::Type::SPACE_ALTER_INPLACE_BULK, space_id,
                         false);
@@ -2074,11 +2162,13 @@ dberr_t Builder::finalize() noexcept {
   if (err == DB_SUCCESS) {
     write_redo(m_index);
 
-    DEBUG_SYNC(m_ctx.thd(), "row_log_apply_before");
+    if (apply_log) {
+      DDL_DEBUG_SYNC(m_ctx, "row_log_apply_before");
 
-    err = row_log_apply(m_ctx.m_trx, m_index, m_ctx.m_table, m_local_stage);
+      err = row_log_apply(m_ctx.m_trx, m_index, m_ctx.m_table, m_local_stage);
 
-    DEBUG_SYNC(m_ctx.thd(), "row_log_apply_after");
+      DDL_DEBUG_SYNC(m_ctx, "row_log_apply_after");
+    }
   }
 
   if (err != DB_SUCCESS) {
@@ -2129,7 +2219,7 @@ dberr_t Builder::setup_sort() noexcept {
   ut_a(!is_skip_file_sort());
   ut_a(get_state() == State::SETUP_SORT);
 
-  DEBUG_SYNC(m_ctx.thd(), "ddl_merge_sort_interrupt");
+  DDL_DEBUG_SYNC(m_ctx, "ddl_merge_sort_interrupt");
 
   const auto err = create_merge_sort_tasks();
 
@@ -2155,19 +2245,17 @@ dberr_t Builder::finish() noexcept {
   }
 
   dberr_t err{DB_SUCCESS};
-
-  if (get_error() != DB_SUCCESS || !m_ctx.m_online) {
+  if (get_error() == DB_SUCCESS && !m_index->table->is_temporary()) {
+    bool apply_log = true;
     /* Do not apply any online log. */
-  } else if (m_ctx.m_old_table != m_ctx.m_new_table) {
-    ut_a(!m_index->online_log);
-    ut_a(m_index->online_status == ONLINE_INDEX_COMPLETE);
-
-    auto observer = m_ctx.m_trx->flush_observer;
-    observer->flush();
-
-  } else {
-    err = finalize();
-
+    if (!m_ctx.m_online) {
+      apply_log = false;
+    } else if (m_ctx.m_old_table != m_ctx.m_new_table) {
+      ut_a(!m_index->online_log);
+      ut_a(m_index->online_status == ONLINE_INDEX_COMPLETE);
+      apply_log = false;
+    }
+    err = finalize(apply_log);
     if (err != DB_SUCCESS) {
       set_error(err);
     }

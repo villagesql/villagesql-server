@@ -25,6 +25,8 @@
 
 #include "plugin/x/src/account_verification_handler.h"
 
+#include <mysql/components/my_service.h>
+#include <mysql/components/services/mysql_global_variable_attributes_service.h>
 #include "my_sys.h"  // NOLINT(build/include_subdir)
 
 #include "plugin/x/src/client.h"
@@ -37,22 +39,39 @@
 
 namespace xpl {
 
+bool Account_verification_handler::parse_sasl_message(
+    const std::string &sasl_message,
+    iface::Authentication_info *out_authenication_info, std::string *out_schema,
+    std::string *out_account, std::string *out_passwd) {
+  std::size_t message_position = 0;
+
+  *out_schema = "";
+  *out_account = "";
+  *out_passwd = "";
+
+  if (sasl_message.empty() ||
+      !extract_sub_message(sasl_message, message_position, *out_schema) ||
+      !extract_sub_message(sasl_message, message_position, *out_account) ||
+      !extract_last_sub_message(sasl_message, message_position, *out_passwd))
+    return false;
+
+  out_authenication_info->m_tried_account_name = *out_account;
+  out_authenication_info->m_was_using_password = !out_passwd->empty();
+
+  return true;
+}
+
 ngs::Error_code Account_verification_handler::authenticate(
     const iface::Authentication &account_verificator,
-    iface::Authentication_info *authenication_info,
+    iface::Authentication_info *authentication_info,
     const std::string &sasl_message) const {
-  std::size_t message_position = 0;
   std::string schema = "";
   std::string account = "";
   std::string passwd = "";
-  if (sasl_message.empty() ||
-      !extract_sub_message(sasl_message, message_position, schema) ||
-      !extract_sub_message(sasl_message, message_position, account) ||
-      !extract_last_sub_message(sasl_message, message_position, passwd))
-    return ngs::SQLError_access_denied();
 
-  authenication_info->m_tried_account_name = account;
-  authenication_info->m_was_using_password = !passwd.empty();
+  if (!parse_sasl_message(sasl_message, authentication_info, &schema, &account,
+                          &passwd))
+    return ngs::SQLError_access_denied();
 
   if (account.empty()) return ngs::SQLError_access_denied();
 
@@ -72,7 +91,7 @@ ngs::Error_code Account_verification_handler::authenticate(
 
 bool Account_verification_handler::extract_last_sub_message(
     const std::string &message, std::size_t &element_position,
-    std::string &sub_message) const {
+    std::string &sub_message) {
   if (element_position >= message.size()) return true;
 
   sub_message = message.substr(element_position);
@@ -83,7 +102,7 @@ bool Account_verification_handler::extract_last_sub_message(
 
 bool Account_verification_handler::extract_sub_message(
     const std::string &message, std::size_t &element_position,
-    std::string &sub_message) const {
+    std::string &sub_message) {
   if (element_position >= message.size()) return true;
 
   if (message[element_position] == '\0') {
@@ -123,6 +142,12 @@ Account_verification_handler::get_account_verificator_id(
   return iface::Account_verification::Account_type::k_unsupported;
 }
 
+bool Account_verification_handler::is_caching_sha2_password(
+    const std::string &plugin_name) const {
+  return get_account_verificator_id(plugin_name) ==
+         iface::Account_verification::Account_type::k_sha2;
+}
+
 ngs::Error_code Account_verification_handler::verify_account(
     const std::string &user, const std::string &host, const std::string &passwd,
     const iface::Authentication_info *authenication_info) const {
@@ -131,6 +156,8 @@ ngs::Error_code Account_verification_handler::verify_account(
     return error;
 
   iface::Account_verification::Account_type account_verificator_id;
+  const bool is_cache_sha2 = is_caching_sha2_password(record.auth_plugin_name);
+  bool is_password_compilant{true};
   // If SHA256_MEMORY is used then no matter what auth_plugin is used we
   // will be using cache-based verification
   if (m_account_type ==
@@ -143,9 +170,16 @@ ngs::Error_code Account_verification_handler::verify_account(
   }
   auto *p = get_account_verificator(account_verificator_id);
 
+  if (!p) return ngs::SQLError_access_denied();
+
+  if (is_cache_sha2 && record.cache2_enforced_format.has_value()) {
+    is_password_compilant = p->is_cache2_password_compliant(
+        record.cache2_enforced_format.value(), record.db_password_hash);
+  }
+
   // password check
-  if (!p || !p->verify_authentication_string(user, host, passwd,
-                                             record.db_password_hash))
+  if (!p->verify_authentication_string(
+          user, host, passwd, record.db_password_hash, is_password_compilant))
     return ngs::SQLError_access_denied();
 
   // password check succeeded but...
@@ -155,8 +189,12 @@ ngs::Error_code Account_verification_handler::verify_account(
                          m_session->client().client_hostname_or_address());
   }
 
+  if (!is_password_compilant) {
+    record.is_password_expired = true;
+  }
+
   if (record.is_offline_mode_and_not_super_user)
-    return ngs::SQLError(ER_SERVER_OFFLINE_MODE);
+    return get_offline_mode_error();
 
   // password expiration check must come last, because password expiration
   // is not a fatal error, a client that supports expired password state,
@@ -189,14 +227,14 @@ ngs::Error_code Account_verification_handler::get_account_record(
   // The query asks for primary key, thus here we should get only one row
   if (result.size() != 1)
     return ngs::Error_code(ER_NO_SUCH_USER, "Invalid user or password");
-  result.get(&record.require_secure_transport, &record.db_password_hash,
-             &record.auth_plugin_name, &record.is_account_locked,
-             &record.is_password_expired,
-             &record.disconnect_on_expired_password,
-             &record.is_offline_mode_and_not_super_user,
-             &record.user_required.ssl_type, &record.user_required.ssl_cipher,
-             &record.user_required.ssl_x509_issuer,
-             &record.user_required.ssl_x509_subject);
+  result.get(
+      &record.require_secure_transport, &record.db_password_hash,
+      &record.auth_plugin_name, &record.is_account_locked,
+      &record.is_password_expired, &record.disconnect_on_expired_password,
+      &record.is_offline_mode_and_not_super_user,
+      &record.user_required.ssl_type, &record.user_required.ssl_cipher,
+      &record.user_required.ssl_x509_issuer,
+      &record.user_required.ssl_x509_subject, &record.cache2_enforced_format);
 
   if (result.is_server_status_set(SERVER_STATUS_IN_TRANS))
     result.query("COMMIT");
@@ -204,6 +242,32 @@ ngs::Error_code Account_verification_handler::get_account_record(
   return ngs::Success();
 } catch (const ngs::Error_code &e) {
   return e;
+}
+
+ngs::Error_code Account_verification_handler::get_offline_mode_error() const {
+  char attr_value[1024] = "";
+  size_t len_attr = sizeof(attr_value);
+
+  char time_value[30] = "";
+  size_t len_time = sizeof(time_value);
+
+  SERVICE_TYPE(registry) *plugin_registry = mysql_plugin_registry_acquire();
+  // protection needed for plugin unit tests
+  if (plugin_registry != nullptr) {
+    my_service<SERVICE_TYPE(mysql_global_variable_attributes)> service{
+        "mysql_global_variable_attributes", plugin_registry};
+    if (service.is_valid()) {
+      service->get(nullptr, "offline_mode", "reason", attr_value, &len_attr);
+      service->get_time(nullptr, "offline_mode", time_value, &len_time);
+    }
+    mysql_plugin_registry_release(plugin_registry);
+  }
+
+  if (attr_value[0] != '\0') {
+    return ngs::SQLError(ER_SERVER_OFFLINE_MODE_REASON, time_value, attr_value);
+  }
+
+  return ngs::SQLError(ER_SERVER_OFFLINE_MODE);
 }
 
 ngs::PFS_string Account_verification_handler::get_sql(
@@ -232,7 +296,9 @@ ngs::PFS_string Account_verification_handler::get_sql(
         "`disconnect_on_expired_password`, "
         "@@offline_mode and (`Super_priv`='N') as "
         "`is_offline_mode_and_not_super_user`, "
-        "`ssl_type`, `ssl_cipher`, `x509_issuer`, `x509_subject` "
+        "`ssl_type`, `ssl_cipher`, `x509_issuer`, `x509_subject`, "
+        "IF(@@caching_sha2_password_enforce_storage_format,@@caching_sha2_"
+        "password_storage_format,NULL) AS result "
         "FROM mysql.user WHERE ")
       .quote_string(user)
       .put(" = `user` AND ")

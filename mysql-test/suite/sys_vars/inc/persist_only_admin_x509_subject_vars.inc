@@ -74,8 +74,6 @@ SET PERSIST_ONLY innodb_temp_tablespaces_dir = DEFAULT;
 --error $persist_only_admin_x509_subject_vars_result
 SET PERSIST_ONLY innodb_undo_directory = DEFAULT;
 --error $persist_only_admin_x509_subject_vars_result
-SET PERSIST_ONLY innodb_undo_tablespaces = DEFAULT;
---error $persist_only_admin_x509_subject_vars_result
 SET PERSIST_ONLY sha256_password_auto_generate_rsa_keys = DEFAULT;
 --error $persist_only_admin_x509_subject_vars_result
 SET PERSIST_ONLY sha256_password_private_key_path = DEFAULT;
@@ -126,8 +124,6 @@ SET PERSIST_ONLY server_uuid = DEFAULT;
 SET PERSIST_ONLY skip_external_locking = DEFAULT;
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
 SET PERSIST_ONLY system_time_zone = DEFAULT;
---error ER_INCORRECT_GLOBAL_LOCAL_VAR
-SET PERSIST_ONLY version_comment = DEFAULT;
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
 SET PERSIST_ONLY version_compile_machine = DEFAULT;
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR

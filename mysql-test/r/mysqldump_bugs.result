@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 #
 # Bug #28380961: CONTRIBUTION BY FACEBOOK: ADD MY_APPEND_EXT FLAG
 #  WHEN DETERMINING FILE NAME ...
@@ -17,6 +18,15 @@ INSERT INTO `b28380961.p2` VALUES (1),(2),(3),(4);
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!50717 SELECT COUNT(*) INTO @rocksdb_has_p_s_session_variables FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'performance_schema' AND TABLE_NAME = 'session_variables' */;
+/*!50717 SET @rocksdb_get_is_supported = IF (@rocksdb_has_p_s_session_variables, 'SELECT COUNT(*) INTO @rocksdb_is_supported FROM performance_schema.session_variables WHERE VARIABLE_NAME=\'rocksdb_bulk_load\'', 'SELECT 0') */;
+/*!50717 PREPARE s FROM @rocksdb_get_is_supported */;
+/*!50717 EXECUTE s */;
+/*!50717 DEALLOCATE PREPARE s */;
+/*!50717 SET @rocksdb_enable_bulk_load = IF (@rocksdb_is_supported, 'SET SESSION rocksdb_bulk_load = 1', 'SET @rocksdb_dummy_bulk_load = 0') */;
+/*!50717 PREPARE s FROM @rocksdb_enable_bulk_load */;
+/*!50717 EXECUTE s */;
+/*!50717 DEALLOCATE PREPARE s */;
 DROP TABLE IF EXISTS `b28380961.p2`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -25,6 +35,10 @@ CREATE TABLE `b28380961.p2` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+/*!50112 SET @disable_bulk_load = IF (@is_rocksdb_supported, 'SET SESSION rocksdb_bulk_load = @old_rocksdb_bulk_load', 'SET @dummy_rocksdb_bulk_load = 0') */;
+/*!50112 PREPARE s FROM @disable_bulk_load */;
+/*!50112 EXECUTE s */;
+/*!50112 DEALLOCATE PREPARE s */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -118,6 +132,15 @@ CREATE TABLE t1 (i int not null, j int);
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!50717 SELECT COUNT(*) INTO @rocksdb_has_p_s_session_variables FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'performance_schema' AND TABLE_NAME = 'session_variables' */;
+/*!50717 SET @rocksdb_get_is_supported = IF (@rocksdb_has_p_s_session_variables, 'SELECT COUNT(*) INTO @rocksdb_is_supported FROM performance_schema.session_variables WHERE VARIABLE_NAME=\'rocksdb_bulk_load\'', 'SELECT 0') */;
+/*!50717 PREPARE s FROM @rocksdb_get_is_supported */;
+/*!50717 EXECUTE s */;
+/*!50717 DEALLOCATE PREPARE s */;
+/*!50717 SET @rocksdb_enable_bulk_load = IF (@rocksdb_is_supported, 'SET SESSION rocksdb_bulk_load = 1', 'SET @rocksdb_dummy_bulk_load = 0') */;
+/*!50717 PREPARE s FROM @rocksdb_enable_bulk_load */;
+/*!50717 EXECUTE s */;
+/*!50717 DEALLOCATE PREPARE s */;
 
 CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 
@@ -162,6 +185,10 @@ USE `test`;
 CREATE DATABASE /*!32312 IF NOT EXISTS*/ `villagesql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 
 USE `villagesql`;
+/*!50112 SET @disable_bulk_load = IF (@is_rocksdb_supported, 'SET SESSION rocksdb_bulk_load = @old_rocksdb_bulk_load', 'SET @dummy_rocksdb_bulk_load = 0') */;
+/*!50112 PREPARE s FROM @disable_bulk_load */;
+/*!50112 EXECUTE s */;
+/*!50112 DEALLOCATE PREPARE s */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 /*!50606 SET GLOBAL INNODB_STATS_AUTO_RECALC=@OLD_INNODB_STATS_AUTO_RECALC */;
 
@@ -251,7 +278,7 @@ DROP TABLE B35205310.t1;
 DROP DATABASE B35205310;
 # End of 8.0 tests
 #
-# Bug #38284832: mysqldump --order-by-primary is sorting by
+# Bug#38284832: mysqldump --order-by-primary is sorting by
 #   all table indices instead of just the primary key
 #
 CREATE DATABASE B38284832;
@@ -269,3 +296,27 @@ VALUES (111, 222, JSON_OBJECT('data', REPEAT('LotsOfData', 250000)));
 # Test: should not produce an execution error
 DROP DATABASE B38284832;
 # End of 8.4 tests
+#
+# Bug #37353658: Contribution: Remove whitespace between INSERT/REPLACE and IGNORE
+#
+CREATE DATABASE B37353658;
+CREATE TABLE B37353658.t1 (a INT);
+INSERT INTO B37353658.t1 VALUES (1),(2),(3),(4);
+# Test should not have double space between INSERT and IGNORE
+INSERT IGNORE INTO `t1` VALUES (1),(2),(3),(4);
+DROP DATABASE B37353658;
+#End of 9.3 tests
+#
+# Bug#22240504: MYSQLDUMP --ROUTINES MISQUOTES DATABASE NAMES
+#
+CREATE DATABASE `B\\22240504`;
+CREATE EVENT `B\\22240504`.inner_b22240404 ON SCHEDULE EVERY 1 DAY DO SELECT 1;
+CREATE EVENT outer_b22240404 ON SCHEDULE EVERY 1 DAY DO SELECT 1;
+# Test dump routines should not fail on USE
+# Test dump events should not fail on USE
+include/assert_grep.inc [check for inner_b22240404 present]
+include/assert_grep.inc [check for outer_b22240404 absent]
+DROP EVENT `B\\22240504`.inner_b22240404;
+DROP EVENT outer_b22240404;
+DROP DATABASE `B\\22240504`;
+include/rpl/set_gtid_mode_on.inc

@@ -72,6 +72,7 @@
 #include "prealloced_array.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_table_access
+#include "sql/auth/auth_plugin_shutdown.h"
 #include "sql/auto_thd.h"          // Auto_THD
 #include "sql/current_thd.h"
 #include "sql/dd/cache/dictionary_client.h"  // dd::cache::Dictionary_client
@@ -462,14 +463,12 @@ static bool reap_needed = false;
 static int plugin_array_version = 0;
 
 static bool initialized = false;
-
-static MEM_ROOT plugin_mem_root;
-static uint global_variables_dynamic_size = 0;
-static malloc_unordered_map<std::string, st_bookmark *> *bookmark_hash;
+MEM_ROOT plugin_mem_root;
+uint global_variables_dynamic_size = 0;
+malloc_unordered_map<std::string, st_bookmark *> *bookmark_hash;
 /** Hash for system variables of string type with MEMALLOC flag. */
-static malloc_unordered_map<std::string, st_bookmark *>
+malloc_unordered_map<std::string, st_bookmark *>
     *malloced_string_type_sysvars_bookmark_hash;
-
 /* prototypes */
 static void plugin_load(MEM_ROOT *tmp_root, int *argc, char **argv);
 static bool plugin_load_list(MEM_ROOT *tmp_root, int *argc, char **argv,
@@ -625,7 +624,12 @@ static inline void free_plugin_mem(st_plugin_dl *p) {
     PSI_SYSTEM_CALL(unload_plugin)
     (std::string(p->dl.str, p->dl.length).c_str());
 #endif
+#if !defined(HAVE_VALGRIND) && !defined(HAVE_ASAN)
+    /*
+     * Avoid closing components under ASAN / Valgrind in order to get
+     * meaningfull leak report */
     dlclose(p->handle);
+#endif
   }
   my_free(p->dl.str);
   if (p->version != MYSQL_PLUGIN_INTERFACE_VERSION) my_free(p->plugins);
@@ -1080,6 +1084,12 @@ static bool plugin_add(MEM_ROOT *tmp_root, LEX_CSTRING name,
         report_error(report, ER_CANT_OPEN_LIBRARY, dl_name, 0, buf);
         return true;
       }
+
+      if (plugin->type == MYSQL_KEYRING_PLUGIN) {
+        LogErr(WARNING_LEVEL, ER_WARN_KEYRING_PLUGIN_DEPRECTED,
+               plugin->name ? plugin->name : "<unknown name>");
+      }
+
       tmp.plugin = plugin;
       tmp.name.str = plugin->name;
       tmp.name.length = name_len;
@@ -2038,7 +2048,6 @@ void cleanup_global_system_variables() {
   cleanup_variables(nullptr, &global_system_variables);
   cleanup_variables(nullptr, &max_system_variables);
 }
-
 /*
   Deinitialize and unload all the loaded plugins.
   Note: During valgrind testing, the shared objects (.dll/.so)
@@ -2055,6 +2064,10 @@ void plugin_shutdown() {
 
   if (initialized) {
     size_t count = plugin_array->size();
+
+    // Stop new auth plugin operations and drain in-flight callbacks first.
+    start_auth_plugin_shutdown_and_wait();
+
     mysql_mutex_lock(&LOCK_plugin);
 
     reap_needed = true;
@@ -2766,125 +2779,6 @@ bool plugin_foreach_with_mask(THD *thd, plugin_foreach_func *func, int type,
   return plugin_foreach_with_mask(thd, funcs, type, state_mask, arg);
 }
 
-/****************************************************************************
-  System Variables support
-****************************************************************************/
-
-/*
-  returns a bookmark for thd-local variables, creating if necessary.
-  returns null for non thd-local variables.
-  Requires that a write lock is obtained on LOCK_system_variables_hash
-*/
-// TODO(villagesql-rebase): un-static'd (was `static`) so the component sysvar
-// service can allocate THD-local bookmarks; MySQL 9.0+ exports this from
-// sql_plugin_var.cc. Drop this backport on rebase onto a 9.x base.
-st_bookmark *register_var(const char *plugin, const char *name, int flags) {
-  const size_t length = strlen(plugin) + strlen(name) + 3;
-  size_t size = 0, offset, new_size;
-  st_bookmark *result;
-  char *varname, *p;
-
-  if (!(flags & PLUGIN_VAR_THDLOCAL)) return nullptr;
-
-  switch (flags & PLUGIN_VAR_TYPEMASK) {
-    case PLUGIN_VAR_BOOL:
-      size = sizeof(bool);
-      break;
-    case PLUGIN_VAR_INT:
-      size = sizeof(int);
-      break;
-    case PLUGIN_VAR_LONG:
-    case PLUGIN_VAR_ENUM:
-      size = sizeof(long);
-      break;
-    case PLUGIN_VAR_LONGLONG:
-    case PLUGIN_VAR_SET:
-      size = sizeof(ulonglong);
-      break;
-    case PLUGIN_VAR_STR:
-      size = sizeof(char *);
-      break;
-    case PLUGIN_VAR_DOUBLE:
-      size = sizeof(double);
-      break;
-    default:
-      assert(0);
-      return nullptr;
-  };
-
-  varname = ((char *)my_alloca(length));
-  strxmov(varname + 1, plugin, "_", name, NullS);
-  for (p = varname + 1; *p; p++)
-    if (*p == '-') *p = '_';
-
-  if (!(result = find_bookmark(nullptr, varname + 1, flags))) {
-    result =
-        (st_bookmark *)plugin_mem_root.Alloc(sizeof(st_bookmark) + length - 1);
-    varname[0] = flags & PLUGIN_VAR_TYPEMASK;
-    memcpy(result->key, varname, length);
-    result->name_len = length - 2;
-    result->offset = -1;
-
-    assert(size && !(size & (size - 1))); /* must be power of 2 */
-
-    offset = global_system_variables.dynamic_variables_size;
-    offset = (offset + size - 1) & ~(size - 1);
-    result->offset = (int)offset;
-
-    new_size = (offset + size + 63) & ~63;
-
-    if (new_size > global_variables_dynamic_size) {
-      global_system_variables.dynamic_variables_ptr = (char *)my_realloc(
-          key_memory_global_system_variables,
-          global_system_variables.dynamic_variables_ptr, new_size,
-          MYF(MY_WME | MY_FAE | MY_ALLOW_ZERO_PTR));
-      max_system_variables.dynamic_variables_ptr = (char *)my_realloc(
-          key_memory_global_system_variables,
-          max_system_variables.dynamic_variables_ptr, new_size,
-          MYF(MY_WME | MY_FAE | MY_ALLOW_ZERO_PTR));
-      /*
-        Clear the new variable value space. This is required for string
-        variables. If their value is non-NULL, it must point to a valid
-        string.
-      */
-      memset(global_system_variables.dynamic_variables_ptr +
-                 global_variables_dynamic_size,
-             0, new_size - global_variables_dynamic_size);
-      memset(max_system_variables.dynamic_variables_ptr +
-                 global_variables_dynamic_size,
-             0, new_size - global_variables_dynamic_size);
-      global_variables_dynamic_size = new_size;
-    }
-
-    global_system_variables.dynamic_variables_head = offset;
-    max_system_variables.dynamic_variables_head = offset;
-    global_system_variables.dynamic_variables_size = offset + size;
-    max_system_variables.dynamic_variables_size = offset + size;
-    global_system_variables.dynamic_variables_version++;
-    max_system_variables.dynamic_variables_version++;
-
-    result->version = global_system_variables.dynamic_variables_version;
-
-    /* this should succeed because we have already checked if a dup exists */
-    std::string key(result->key, result->name_len + 1);
-    bookmark_hash->emplace(key, result);
-
-    /*
-      Hashing vars of string type with MEMALLOC flag.
-    */
-    if (((flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) &&
-        (flags & PLUGIN_VAR_MEMALLOC) &&
-        !malloced_string_type_sysvars_bookmark_hash->emplace(key, result)
-             .second) {
-      fprintf(stderr,
-              "failed to add placeholder to"
-              " hash of malloced string type sysvars");
-      assert(0);
-    }
-  }
-  return result;
-}
-
 static void restore_pluginvar_names(sys_var *first) {
   for (sys_var *var = first; var; var = var->next) {
     sys_var_pluginvar *pv = var->cast_pluginvar();
@@ -2969,45 +2863,6 @@ void alloc_and_copy_thd_dynamic_variables(THD *thd, bool global_lock) {
       global_system_variables.dynamic_variables_size;
 
   mysql_rwlock_unlock(&LOCK_system_variables_hash);
-}
-
-/**
-  For correctness and simplicity's sake, a pointer to a function
-  must be compatible with pointed-to type, that is, the return and
-  parameters types must be the same. Thus, a callback function is
-  defined for each scalar type. The functions are assigned in
-  construct_options to their respective types.
-*/
-
-// TODO(villagesql-rebase): these resolvers were `static`; un-static'd so the
-// component sysvar service can wire THD-local variable resolution. MySQL 9.0+
-// exports them from sql_plugin_var.cc. Drop this backport on rebase to 9.x.
-bool *mysql_sys_var_bool(THD *thd, int offset) {
-  return (bool *)intern_sys_var_ptr(thd, offset, true);
-}
-
-int *mysql_sys_var_int(THD *thd, int offset) {
-  return (int *)intern_sys_var_ptr(thd, offset, true);
-}
-
-unsigned int *mysql_sys_var_uint(THD *thd, int offset) {
-  return (unsigned int *)intern_sys_var_ptr(thd, offset, true);
-}
-
-unsigned long *mysql_sys_var_ulong(THD *thd, int offset) {
-  return (unsigned long *)intern_sys_var_ptr(thd, offset, true);
-}
-
-unsigned long long *mysql_sys_var_ulonglong(THD *thd, int offset) {
-  return (unsigned long long *)intern_sys_var_ptr(thd, offset, true);
-}
-
-char **mysql_sys_var_str(THD *thd, int offset) {
-  return (char **)intern_sys_var_ptr(thd, offset, true);
-}
-
-double *mysql_sys_var_double(THD *thd, int offset) {
-  return (double *)intern_sys_var_ptr(thd, offset, true);
 }
 
 void plugin_thdvar_init(THD *thd, bool enable_plugins) {
@@ -3205,7 +3060,7 @@ static int construct_options(MEM_ROOT *mem_root, st_plugin_int *tmp,
   char *comment = (char *)mem_root->Alloc(max_comment_len + 1);
   char *optname;
 
-  int index = 0, offset = 0;
+  int offset = 0;
   SYS_VAR *opt, **plugin_option;
   st_bookmark *v;
 
@@ -3271,7 +3126,7 @@ static int construct_options(MEM_ROOT *mem_root, st_plugin_int *tmp,
   */
 
   for (plugin_option = tmp->plugin->system_vars;
-       plugin_option && *plugin_option; plugin_option++, index++) {
+       plugin_option && *plugin_option; plugin_option++) {
     opt = *plugin_option;
     if (!(opt->flags & PLUGIN_VAR_THDLOCAL)) continue;
     if (!(register_var(plugin_name_ptr, opt->name, opt->flags))) continue;
@@ -3319,7 +3174,7 @@ static int construct_options(MEM_ROOT *mem_root, st_plugin_int *tmp,
   }
 
   for (plugin_option = tmp->plugin->system_vars;
-       plugin_option && *plugin_option; plugin_option++, index++) {
+       plugin_option && *plugin_option; plugin_option++) {
     switch ((opt = *plugin_option)->flags & PLUGIN_VAR_TYPEMASK) {
       case PLUGIN_VAR_BOOL:
         if (!opt->check) opt->check = check_func_bool;

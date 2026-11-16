@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,7 +42,7 @@ static const char *tatype(Uint32 i) {
 
 bool printTRIG_ATTRINFO(FILE *output, const Uint32 *theData, Uint32 len,
                         Uint16 /*receiverBlockNo*/) {
-  const TrigAttrInfo *const sig = (const TrigAttrInfo *)theData;
+  const auto *const sig = (const TrigAttrInfo *)theData;
 
   fprintf(output, " TriggerId: %d Type: %s ConnectPtr: %x\n",
           sig->getTriggerId(), tatype(sig->getAttrInfoType()),

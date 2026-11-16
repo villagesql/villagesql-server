@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,10 +36,7 @@ bool create_instance(Ndb_cluster_connection *cc, Uint32 max_ndb_objects,
   }
   m_pool = NdbPool::create_instance(cc, max_ndb_objects, no_conn_obj,
                                     init_no_ndb_objects);
-  if (m_pool == nullptr) {
-    return false;
-  }
-  return true;
+  return m_pool != nullptr;
 }
 
 void drop_instance() {

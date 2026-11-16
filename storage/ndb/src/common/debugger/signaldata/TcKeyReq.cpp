@@ -27,7 +27,7 @@
 
 bool printTCKEYREQ(FILE *output, const Uint32 *theData, Uint32 len,
                    Uint16 /*receiverBlockNo*/) {
-  const TcKeyReq *const sig = (const TcKeyReq *)theData;
+  const auto *const sig = (const TcKeyReq *)theData;
 
   UintR requestInfo = sig->requestInfo;
 

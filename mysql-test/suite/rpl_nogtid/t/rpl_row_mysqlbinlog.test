@@ -144,7 +144,7 @@ connection master;
 --disable_query_log ONCE
 select "--- Test 1 Load from Dump binlog file --" as "";
 
---exec $MYSQL -e "source $MYSQLTEST_VARDIR/tmp/master.sql"
+--exec $MYSQL --commands -e "source $MYSQLTEST_VARDIR/tmp/master.sql"
 
 --disable_query_log ONCE
 select "--- Test 1 Check Load Results --" as "";
@@ -224,7 +224,7 @@ connection master;
 
 # We should be clean at this point, now we will run in the file from above.
 
---exec $MYSQL -e "source $MYSQLTEST_VARDIR/tmp/remote.sql"
+--exec $MYSQL --commands -e "source $MYSQLTEST_VARDIR/tmp/remote.sql"
 
 # Lets Check the tables on the Master
 
@@ -302,17 +302,17 @@ START REPLICA;
 --source include/rpl/wait_for_replica_to_start.inc
 connection master;
 
-create table t4 (f text character set utf8);
+create table t4 (f text character set utf8mb3);
 create table t5 (f text character set cp932); 
---character_set utf8
---execw $MYSQL --default-character-set=utf8 test -e "insert into t4 values(_utf8'ソ')"
+--character_set utf8mb3
+--execw $MYSQL --default-character-set=utf8mb3 test -e "insert into t4 values(_utf8mb3'ソ')"
 --character_set cp932
 --execw $MYSQL --default-character-set=cp932 test -e "insert into t5 values(_cp932'�\');"
 --character_set latin1
 let $MYSQLD_DATADIR= `select @@datadir;`;
 flush logs;
 rename table t4 to t04, t5 to t05;
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 | $MYSQL --default-character-set=utf8
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 | $MYSQL --default-character-set=utf8mb3
 # original and recovered data must be equal
 select HEX(f) from t04;
 select HEX(f) from t4;

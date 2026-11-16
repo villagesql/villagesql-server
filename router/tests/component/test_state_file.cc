@@ -77,6 +77,9 @@ constexpr auto kTTL = 100ms;
 }  // namespace
 
 class StateFileTest : public RouterComponentBootstrapTest {
+ public:
+  StateFileTest() : RouterComponentBootstrapTest(false) {}
+
  protected:
   void SetUp() override {
     RouterComponentTest::SetUp();
@@ -91,7 +94,7 @@ class StateFileTest : public RouterComponentBootstrapTest {
         {"cluster_type", (cluster_type == ClusterType::RS_V2) ? "rs" : "gr"},
         {"router_id", "1"},
         {"user", "mysql_router1_user"},
-        {"metadata_cluster", "mycluster"},
+        {"metadata_cluster", "my-cluster"},
         {"connect_timeout", "1"},
         {"ttl", std::to_string(std::chrono::duration<double>(ttl).count())},
     };
@@ -255,11 +258,13 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
 
   SCOPED_TRACE(
       "// Launch 3 server mocks that will act as our metadata servers");
-  const auto trace_file = get_data_dir().join(param.trace_file).str();
   for (unsigned i = 0; i < CLUSTER_NODES; ++i) {
-    cluster_nodes.push_back(&ProcessManager::launch_mysql_server_mock(
-        trace_file, cluster_nodes_ports[i], EXIT_SUCCESS, false,
-        cluster_http_ports[i], 0, "", bind_address));
+    cluster_nodes.push_back(
+        &mock_server_spawner().spawn(mock_server_cmdline(param.trace_file)
+                                         .port(cluster_nodes_ports[i])
+                                         .http_port(cluster_http_ports[i])
+                                         .bind_address(bind_address)
+                                         .args()));
     try {
       ASSERT_NO_FATAL_FAILURE(check_port_ready(
           *cluster_nodes[i], cluster_nodes_ports[i], kDefaultPortReadyTimeout,
@@ -423,9 +428,12 @@ TEST_P(StateFileMetadataServersInaccessibleTest, MetadataServersInaccessible) {
 
   SCOPED_TRACE(
       "// Launch single server mock that will act as our metadata server");
-  const auto trace_file = get_data_dir().join(param.trace_file).str();
-  auto &cluster_node(ProcessManager::launch_mysql_server_mock(
-      trace_file, cluster_node_port, EXIT_SUCCESS, false, cluster_http_port));
+  auto &cluster_node =
+      mock_server_spawner().spawn(mock_server_cmdline(param.trace_file)
+                                      .port(cluster_node_port)
+                                      .http_port(cluster_http_port)
+                                      .args());
+
   ASSERT_NO_FATAL_FAILURE(check_port_ready(cluster_node, cluster_node_port));
   ASSERT_TRUE(
       MockServerRestClient(cluster_http_port).wait_for_rest_endpoint_ready());
@@ -504,9 +512,12 @@ TEST_P(StateFileGroupReplicationIdDiffersTest, GroupReplicationIdDiffers) {
   auto cluster_http_port = port_pool_.get_next_available();
 
   SCOPED_TRACE("// Launch server mock that will act as our metadata server");
-  const auto trace_file = get_data_dir().join(param.trace_file).str();
-  /*auto &cluster_node =*/ProcessManager::launch_mysql_server_mock(
-      trace_file, cluster_node_port, EXIT_SUCCESS, false, cluster_http_port);
+
+  /*auto &cluster_node =*/mock_server_spawner().spawn(
+      mock_server_cmdline(param.trace_file)
+          .port(cluster_node_port)
+          .http_port(cluster_http_port)
+          .args());
 
   SCOPED_TRACE(
       "// Make our metadata server to return single node as a cluster "
@@ -595,12 +606,15 @@ TEST_P(StateFileSplitBrainScenarioTest, SplitBrainScenario) {
   }
 
   SCOPED_TRACE("// Launch  server mocks that play as our split brain cluster");
-  const auto trace_file = get_data_dir().join(param.trace_file).str();
   for (unsigned i = 0; i < kNodesNum; i++) {
-    const auto port_connect = cluster_node_ports[i].first;
-    const auto port_http = cluster_node_ports[i].second;
-    cluster_nodes.push_back(&ProcessManager::launch_mysql_server_mock(
-        trace_file, port_connect, EXIT_SUCCESS, false, port_http));
+    const auto [port_connect, port_http] = cluster_node_ports[i];
+
+    cluster_nodes.push_back(
+        &mock_server_spawner().spawn(mock_server_cmdline(param.trace_file)
+                                         .port(port_connect)
+                                         .http_port(port_http)
+                                         .args()));
+
     ASSERT_NO_FATAL_FAILURE(check_port_ready(*cluster_nodes[i], port_connect));
     ASSERT_TRUE(MockServerRestClient(port_http).wait_for_rest_endpoint_ready());
   }
@@ -1086,11 +1100,13 @@ TEST_F(StateFileDirectoryBootstrapTest, DirectoryBootstrapTest) {
 
   SCOPED_TRACE("// Launch our metadata server we bootstrap against");
 
-  const auto trace_file = get_data_dir().join("bootstrap_gr.js").str();
   const auto metadata_server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  ProcessManager::launch_mysql_server_mock(trace_file, metadata_server_port,
-                                           EXIT_SUCCESS, false, http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(metadata_server_port)
+                                  .http_port(http_port)
+                                  .args());
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({metadata_server_port}), 0,
                     {metadata_server_port});
@@ -1098,7 +1114,7 @@ TEST_F(StateFileDirectoryBootstrapTest, DirectoryBootstrapTest) {
   SCOPED_TRACE("// Bootstrap against our metadata server");
   std::vector<std::string> router_cmdline{
       "--bootstrap=localhost:" + std::to_string(metadata_server_port), "-d",
-      temp_test_dir.name()};
+      temp_test_dir.name(), "--logger.level=debug"};
   auto &router = launch_router_for_bootstrap(router_cmdline, EXIT_SUCCESS);
 
   ASSERT_NO_FATAL_FAILURE(check_exit_code(router, EXIT_SUCCESS));
@@ -1148,16 +1164,20 @@ class StateFileSystemBootstrapTest : public StateFileTest,
 TEST_F(StateFileSystemBootstrapTest, SystemBootstrapTest) {
   SCOPED_TRACE("// Launch our metadata server we bootstrap against");
 
-  const auto trace_file = get_data_dir().join("bootstrap_gr.js").str();
   const auto metadata_server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  ProcessManager::launch_mysql_server_mock(trace_file, metadata_server_port,
-                                           EXIT_SUCCESS, false, http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(metadata_server_port)
+                                  .http_port(http_port)
+                                  .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({metadata_server_port}), 0,
                     {metadata_server_port});
 
   SCOPED_TRACE("// Bootstrap against our metadata server");
+
   std::vector<std::string> router_cmdline{"--bootstrap=localhost:" +
                                           std::to_string(metadata_server_port)};
   auto &router = launch_router_for_bootstrap(router_cmdline, EXIT_SUCCESS);

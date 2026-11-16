@@ -202,6 +202,7 @@ if ($_privilege_checks_user_create == 1)
             Event_priv = 'N',
             Trigger_priv = 'N'
           WHERE db = 'test' and user = '';
+        --disable_warnings ER_WARN_DEPRECATED_SYNTAX_NO_REPLACEMENT ONCE
         FLUSH PRIVILEGES;
 
       if ($rpl_privilege_checks_user_grant_all == 1)

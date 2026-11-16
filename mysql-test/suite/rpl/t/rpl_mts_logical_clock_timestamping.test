@@ -8,17 +8,14 @@
 --source include/have_binlog_format_row.inc
 
 --connection slave
-call mtr.add_suppression("Transaction is tagged with inconsistent logical timestamps");
+call mtr.add_suppression("tagged with inconsistent logical timestamps");
 call mtr.add_suppression("Cannot execute the current event group in the parallel mode.");
-#call mtr.add_suppression("Replica I/O: Got fatal error 1236 from source when reading data from binary log");
 
 --source include/rpl/stop_replica.inc
 
-SET @save_replica_parallel_type = @@GLOBAL.replica_parallel_type;
 SET @save_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
 SET @save_replica_transaction_retries = @@GLOBAL.replica_transaction_retries;
 
-SET GLOBAL replica_parallel_type = LOGICAL_CLOCK;
 SET GLOBAL replica_parallel_workers = 3;
 SET GLOBAL replica_transaction_retries = 0;
 
@@ -120,7 +117,7 @@ COMMIT;
 
 #
 # Part II. Let's feign inconsistent timestamping
-# to see how Slave expectedly stops.
+# to see how the replica makes the transactions execute in isolation
 #
 
 --connection master
@@ -128,20 +125,12 @@ SET @@session.debug ='+d,feign_commit_parent';
 INSERT INTO t1 SET a=0;
 SET @@session.debug ='-d,feign_commit_parent';
 
---connection slave
---let $slave_sql_errno= convert_error(ER_MTA_CANT_PARALLEL)
---source include/rpl/wait_for_applier_to_stop.inc
---source include/rpl/stop_receiver.inc
-
-
-# "Manual" recovery to restart anew 'cos of the schrambled event
---connection master
-RESET BINARY LOGS AND GTIDS;
-
---connection slave
-RESET REPLICA;
-RESET BINARY LOGS AND GTIDS;
---source include/rpl/start_replica.inc
+--source include/rpl/sync_to_replica.inc
+--let $assert_text = Warning Found
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_select = tagged with inconsistent logical timestamps
+--let $assert_count = 1
+--source include/assert_grep.inc
 
 #
 # Cleanup
@@ -154,7 +143,6 @@ DROP TABLE t1;
 
 #--connection slave
 --source include/rpl/stop_replica.inc
-SET @@GLOBAL.replica_parallel_type= @save_replica_parallel_type;
 --disable_warnings
 SET @@GLOBAL.replica_parallel_workers= @save_replica_parallel_workers;
 --enable_warnings
@@ -162,4 +150,3 @@ SET @@GLOBAL.replica_transaction_retries= @save_replica_transaction_retries;
 --source include/rpl/start_replica.inc
 
 --source include/rpl/deinit.inc
-

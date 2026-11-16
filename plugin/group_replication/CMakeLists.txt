@@ -36,6 +36,7 @@ SET(GROUP_REPLICATION_SOURCES
   src/compatibility_module.cc
   src/consistency_manager.cc
   src/delayed_plugin_initialization.cc
+  src/mysql_gcs_timestamp_provider.cc
   src/gcs_event_handlers.cc
   src/gcs_logger.cc
   src/gcs_mysql_network_provider.cc
@@ -62,6 +63,7 @@ SET(GROUP_REPLICATION_SOURCES
   src/observer_server_channels.cc
   src/observer_server_state.cc
   src/observer_trans.cc
+  src/opt_tracker.cc
   src/perfschema/pfs.cc
   src/perfschema/table_replication_group_configuration_version.cc
   src/perfschema/table_replication_group_member_actions.cc
@@ -76,6 +78,7 @@ SET(GROUP_REPLICATION_SOURCES
   src/plugin_handlers/metrics_handler.cc
   src/plugin_handlers/offline_mode_handler.cc
   src/plugin_handlers/primary_election_invocation_handler.cc
+  src/plugin_handlers/primary_election_most_uptodate.cc
   src/plugin_handlers/primary_election_primary_process.cc
   src/plugin_handlers/primary_election_secondary_process.cc
   src/plugin_handlers/primary_election_utils.cc
@@ -110,11 +113,13 @@ SET(GROUP_REPLICATION_SOURCES
   src/recovery_channel_state_observer.cc
   src/recovery_state_transfer.cc
   src/replication_threads_api.cc
+  src/services/management/management.cc
   src/services/message_service/message_service.cc
   src/services/notification/notification.cc
   src/services/status_service/status_service.cc
   src/services/system_variable/get_system_variable.cc
   src/services/system_variable/set_system_variable.cc
+  src/services/flow_control/get_metrics.cc
   src/services/registry.cc
   src/services/server_services_references.cc
   src/sql_service/sql_command_test.cc
@@ -137,12 +142,6 @@ SET(GMS_LISTENER_SERVICE_TEST_SOURCES
   src/services/notification/impl/gms_listener_test.cc
 )
 
-MY_CHECK_CXX_COMPILER_WARNING("-Wextra-semi" HAS_WARN_FLAG)
-IF(HAS_WARN_FLAG)
-  ADD_COMPILE_FLAGS(${GMS_LISTENER_SERVICE_TEST_SOURCES}
-    COMPILE_FLAGS " ${HAS_WARN_FLAG}")
-ENDIF()
-
 # Allow both WITHOUT_GROUP_REPLICATION=1 and WITH_GROUP_REPLICATION=0 to be
 # specified.
 # Furthermore, the MYSQL_ADD_PLUGIN will replace them with
@@ -163,6 +162,14 @@ IF ((NOT (DEFINED WITHOUT_GROUP_REPLICATION AND WITHOUT_GROUP_REPLICATION)) AND
   ADD_DEFINITIONS(-DMYSQL_SERVER)
   ADD_DEFINITIONS(-DLOG_SUBSYSTEM_TAG="Repl")
   ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="group_replication")
+
+  IF(GROUP_REPLICATION_WITH_ROCKSDB)
+    ADD_COMPILE_DEFINITIONS(src/observer_trans.cc src/asynchronous_channels_state_observer.cc
+      COMPILE_DEFINITIONS "GROUP_REPLICATION_WITH_ROCKSDB")
+    MESSAGE(STATUS "GROUP_REPLICATION_WITH_ROCKSDB is turned on")
+  ELSE()
+    MESSAGE(STATUS "GROUP_REPLICATION_WITH_ROCKSDB is turned off")
+  ENDIF()
 
   IF(WITH_UNIT_TESTS)
     ADD_LIBRARY(gr_unit_test_resource STATIC
@@ -187,10 +194,6 @@ IF ((NOT (DEFINED WITHOUT_GROUP_REPLICATION AND WITHOUT_GROUP_REPLICATION)) AND
     TARGET_LINK_LIBRARIES(gr_unit_test_resource ${GR_PROTOBUF_LITE_LIB})
     ADD_DEPENDENCIES(gr_unit_test_resource GenError)
   ENDIF()
-
-  ADD_COMPILE_FLAGS(${GROUP_REPLICATION_SOURCES}
-    COMPILE_FLAGS "${GR_PROTOBUF_FLAGS}"
-  )
 
   ### Configuration ###
 
@@ -221,6 +224,8 @@ MYSQL_ADD_PLUGIN(group_replication
   ${GR_PROTOBUF_LITE_LIB}
   mysqlgcs
   extra::rapidjson
+  library_mysys
+  mysql_containers
   mysql_gtid
   MODULE_ONLY
   MODULE_OUTPUT_NAME "group_replication"

@@ -32,6 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 4/20/1996 Heikki Tuuri
  *******************************************************/
 
+#include <sql/sql_thd_internal_api.h>
 #include <sys/types.h>
 
 #include "btr0btr.h"
@@ -349,7 +350,7 @@ void ins_node_set_new_row(
 
   update = row_upd_build_difference_binary(cursor->index, entry, rec, nullptr,
                                            true, thr_get_trx(thr), heap,
-                                           mysql_table, &err);
+                                           mysql_table, thr->prebuilt, &err);
   if (err != DB_SUCCESS) {
     return err;
   }
@@ -891,9 +892,15 @@ static void assert_nonvirtual_cascade_fields_are_populated(
           dict_table_get_nth_col_pos(foreign->referenced_table, parent_col_no);
       const auto parent_field_update =
           upd_get_field_by_field_no(parent->update, parent_field_pos, false);
-      if (!parent_field_update ||
-          dfield_datas_are_binary_equal(&parent_field_update->old_val,
-                                        &parent_field_update->new_val)) {
+      /* An upd_field_t is created only for columns whose value actually
+      changed, so the mere presence of one already means this parent field
+      was updated. Do not inspect old_val here: calc_row_difference() marks
+      the whole upd_field_t as invalid (UNIV_MEM_INVALID) and then fills in
+      only new_val, and old_val is populated much later, and only by
+      row_upd_index_replace_new_col_vals_index_pos(). Reading it at this
+      point yields an uninitialised value that decides whether the checks
+      below run at all. */
+      if (!parent_field_update) {
         continue;
       }
       ut_a(child_field_update);
@@ -936,6 +943,8 @@ static void row_ins_foreign_fill_virtual(upd_node_t *cascade, const rec_t *rec,
   ulint n_diff;
   upd_field_t *upd_field;
   const dict_vcol_set *const v_cols = foreign->v_cols;
+  row_prebuilt_t *prebuilt =
+      static_cast<que_thr_t *>(node->common.parent)->prebuilt;
 
   update->old_vrow = row_build(ROW_COPY_POINTERS, index, rec, offsets, table,
                                nullptr, nullptr, &ext, update->heap);
@@ -958,8 +967,9 @@ static void row_ins_foreign_fill_virtual(upd_node_t *cascade, const rec_t *rec,
       continue;
     }
 
-    const dfield_t *const vfield = innobase_get_computed_value(
-        update->old_vrow, col, table, &v_heap, update->heap, thd, nullptr);
+    const dfield_t *const vfield =
+        innobase_get_computed_value(&prebuilt->blob_heap, update->old_vrow, col,
+                                    table, &v_heap, update->heap, thd, nullptr);
 
     if (vfield == nullptr) {
       *err = DB_COMPUTE_VALUE_FAILED;
@@ -981,8 +991,8 @@ static void row_ins_foreign_fill_virtual(upd_node_t *cascade, const rec_t *rec,
       dfield_copy(&(upd_field->new_val), vfield);
     } else {
       const dfield_t *const new_vfield = innobase_get_computed_value(
-          update->old_vrow, col, table, &v_heap, update->heap, thd, nullptr,
-          nullptr, nullptr, update);
+          &prebuilt->blob_heap, update->old_vrow, col, table, &v_heap,
+          update->heap, thd, nullptr, nullptr, nullptr, update);
 
       if (new_vfield == nullptr) {
         *err = DB_COMPUTE_VALUE_FAILED;
@@ -1603,6 +1613,11 @@ dberr_t row_ins_check_foreign_constraint(
     const rec_t *rec = pcur.get_rec();
     const buf_block_t *block = pcur.get_block();
 
+    SRV_CORRUPT_TABLE_CHECK(block, {
+      err = DB_CORRUPTION;
+      goto exit_loop;
+    });
+
     if (page_rec_is_infimum(rec)) {
       continue;
     }
@@ -1729,6 +1744,7 @@ dberr_t row_ins_check_foreign_constraint(
     }
   } while (pcur.move_to_next(&mtr));
 
+exit_loop:
   if (check_ref) {
     row_ins_foreign_report_add_err(trx, foreign, pcur.get_rec(), entry);
     err = DB_NO_REFERENCED_ROW;
@@ -2335,7 +2351,7 @@ of a clustered index entry.
 @retval DB_OUT_OF_FILE_SPACE out of file-space */
 static dberr_t row_ins_index_entry_big_rec_func(
     trx_t *trx, const dtuple_t *entry, const big_rec_t *big_rec, ulint *offsets,
-    mem_heap_t **heap, IF_DEBUG(const THD *thd, ) dict_index_t *index) {
+    mem_heap_t **heap, IF_DEBUG(THD *thd, ) dict_index_t *index) {
   mtr_t mtr;
   btr_pcur_t pcur;
   rec_t *rec;
@@ -2343,7 +2359,7 @@ static dberr_t row_ins_index_entry_big_rec_func(
 
   ut_ad(index->is_clustered());
 
-  DEBUG_SYNC_C_IF_THD(thd, "before_row_ins_extern_latch");
+  DEBUG_SYNC(thd, "before_row_ins_extern_latch");
   DEBUG_SYNC_C("before_insertion_of_blob");
 
   mtr_start(&mtr);
@@ -2356,10 +2372,10 @@ static dberr_t row_ins_index_entry_big_rec_func(
   offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
                             UT_LOCATION_HERE, heap);
 
-  DEBUG_SYNC_C_IF_THD(thd, "before_row_ins_extern");
+  DEBUG_SYNC(thd, "before_row_ins_extern");
   error = lob::btr_store_big_rec_extern_fields(
       trx, &pcur, nullptr, offsets, big_rec, &mtr, lob::OPCODE_INSERT);
-  DEBUG_SYNC_C_IF_THD(thd, "after_row_ins_extern");
+  DEBUG_SYNC(thd, "after_row_ins_extern");
 
   if (error == DB_SUCCESS && dict_index_is_online_ddl(index)) {
     row_log_table_insert(pcur.get_rec(), entry, index, offsets);
@@ -2372,9 +2388,11 @@ static dberr_t row_ins_index_entry_big_rec_func(
   return (error);
 }
 
-static inline dberr_t row_ins_index_entry_big_rec(
-    trx_t *trx, const dtuple_t *e, const big_rec_t *big, ulint *ofs,
-    mem_heap_t **heap, dict_index_t *index, const THD *thd [[maybe_unused]]) {
+static inline dberr_t row_ins_index_entry_big_rec(trx_t *trx, const dtuple_t *e,
+                                                  const big_rec_t *big,
+                                                  ulint *ofs, mem_heap_t **heap,
+                                                  dict_index_t *index,
+                                                  THD *thd [[maybe_unused]]) {
   return row_ins_index_entry_big_rec_func(trx, e, big, ofs, heap,
                                           IF_DEBUG(thd, ) index);
 }
@@ -2691,9 +2709,15 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
   mtr = &index->last_ins_cur->mtr;
 
   /* Search for position if tree needs to be split or if last position
-  is not cached. */
+  is not cached. Also commit mtr and do the search if we have inserted
+  more than MAX_INTRINSIC_MTR_RECORDS within this mtr. The latter is
+  done to unfix buffer pages used by the mtr. Otherwise statements
+  (even single statement in extreme case) using intrinsic tables can
+  consume the whole buffer pool by their buffer fixed pages causing
+  performance problems or even stalls. */
   if (mode == BTR_MODIFY_TREE || index->last_ins_cur->rec == nullptr ||
-      index->last_ins_cur->disable_caching) {
+      index->last_ins_cur->disable_caching ||
+      index->last_ins_cur->mtr_records > MAX_INTRINSIC_MTR_RECORDS) {
     /* Commit the previous mtr. */
     index->last_ins_cur->release();
 
@@ -2765,6 +2789,7 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
         index->last_ins_cur->rec = insert_rec;
 
         index->last_ins_cur->block = cursor.page_cur.block;
+        index->last_ins_cur->mtr_records++;
       } else {
         index->last_ins_cur->release();
       }
@@ -3142,7 +3167,8 @@ and return. don't execute actual insert. */
 
   DBUG_TRACE;
 
-  if (!index->table->foreign_set.empty()) {
+  if (!thd_is_sql_fk_checks_enabled() && !index->table->foreign_set.empty()) {
+    DBUG_PRINT("fk", ("InnoDB FK on table %s", index->table->name.m_name));
     err = row_ins_check_foreign_constraints(index->table, index, entry, thr);
     if (err != DB_SUCCESS) {
       return err;
@@ -3242,7 +3268,9 @@ and return. don't execute actual insert. */
     }
   });
 
-  if (!index->table->foreign_set.empty()) {
+  if (!thd_is_sql_fk_checks_enabled() && !index->table->foreign_set.empty()) {
+    DBUG_PRINT("fk", ("InnoDB FK on table %s", index->table->name.m_name));
+
     err = row_ins_check_foreign_constraints(index->table, index, entry, thr);
     if (err != DB_SUCCESS) {
       return (err);
@@ -3445,6 +3473,7 @@ dberr_t row_ins_index_entry_set_vals(const dict_index_t *index, dtuple_t *entry,
       ut_ad(dtuple_get_n_fields(row) == index->table->get_n_cols());
       row_field = dtuple_get_nth_v_field(row, v_col->v_pos);
     } else {
+      ut_ad(ind_field != nullptr);
       row_field = dtuple_get_nth_field(row, ind_field->col->ind);
     }
 

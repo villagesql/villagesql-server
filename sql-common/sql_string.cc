@@ -24,8 +24,8 @@
 #include "sql_string.h"
 #include "sql/sql_const.h"
 
-#include <assert.h>
 #include <algorithm>
+#include <cassert>
 #include <limits>
 
 #include "dig_vec.h"
@@ -371,6 +371,7 @@ bool String::copy(const char *str, size_t arg_length,
   if (alloc(new_length)) return true;
   m_length = copy_and_convert(m_ptr, new_length, to_cs, str, arg_length,
                               from_cs, errors);
+  m_ptr[m_length] = 0;
   m_charset = to_cs;
   return false;
 }
@@ -604,8 +605,8 @@ String String::substr(int offset, int count) const {
   }
   const size_t bytes_offset = this->charpos(offset);
 
-  return String(this->m_ptr + bytes_offset,
-                this->charpos(offset + count) - bytes_offset, this->m_charset);
+  return {this->m_ptr + bytes_offset,
+          this->charpos(offset + count) - bytes_offset, this->m_charset};
 }
 
 /*
@@ -1144,13 +1145,14 @@ bool validate_string(const CHARSET_INFO *cs, const char *str, size_t length,
   */
   *length_error = false;
 
-  const uchar *from = reinterpret_cast<const uchar *>(str);
+  const auto *from = reinterpret_cast<const uchar *>(str);
   const uchar *from_end = from + length;
   my_charset_conv_mb_wc mb_wc = cs->cset->mb_wc;
 
   while (from < from_end) {
     my_wc_t wc;
-    int cnvres = (*mb_wc)(cs, &wc, pointer_cast<const uchar *>(from), from_end);
+    int const cnvres =
+        (*mb_wc)(cs, &wc, pointer_cast<const uchar *>(from), from_end);
     if (cnvres <= 0) {
       *valid_length = from - reinterpret_cast<const uchar *>(str);
       return true;

@@ -506,23 +506,29 @@ SELECT * FROM federated.t1 WHERE id = 3;
 SELECT * FROM federated.t1 WHERE id = 3 AND col1 = 3; 
 SELECT * FROM federated.t1 WHERE id = 4 AND col1 = 4 AND col2 = 'Two two'; 
 SELECT * FROM federated.t1 WHERE id = 4 AND col1 = 4 AND col2 = 'fourfourfour'; 
+--skip_if_hypergraph  # Result difference, possibly due to bug#11755165.
 SELECT * FROM federated.t1 WHERE id = 5 AND col2 = 'five 5 five five 5' 
   AND col3 = 5; 
+--skip_if_hypergraph  # Result difference, possibly due to bug#11755165.
 SELECT * FROM federated.t1 WHERE id = 5 AND col2 = 'five 5 five five 5' 
   AND col3 = 5
   AND col4 = 55555;
 SELECT * FROM federated.t1 WHERE id = 5 
   AND col2 = 'Two two' AND col3 = 22
   AND col4 = 33;
+--skip_if_hypergraph  # Result difference, possibly due to bug#11755165.
 SELECT * FROM federated.t1 WHERE id = 5 
   AND col2 = 'five 5 five five 5' AND col3 = 5 
   AND col4 = 55555;
 --sorted_result
 SELECT * FROM federated.t1 WHERE (id = 5 AND col2 = 'five 5 five five 5')
   OR (col2 = 'three Three' AND col3 = 33);
-# Bug#35362984 Memory leak with index merge union plan
-SELECT /*+ INDEX_MERGE(t1 PRIMARY,col3) */* FROM federated.t1 WHERE (id = 5 AND col2 = 'Two two')
+# Different warnings with hypergraph because it evaluates the
+# predicates in a different order than the old optimizer.
+--disable_warnings
+SELECT * FROM federated.t1 WHERE (id = 5 AND col2 = 'Two two')
   OR (col2 = 444 AND col3 = 4444444);
+--enable_warnings
 --sorted_result
 SELECT * FROM federated.t1 WHERE id = 1 
   OR col1 = 10
@@ -1391,9 +1397,11 @@ KEY `fld_cid` (`fld_cid`)
 ) ENGINE=FEDERATED
 CONNECTION='mysql://root@127.0.0.1:$SLAVE_MYPORT/federated/bug_17377_table';
 
+--skip_if_hypergraph  # Result difference, possibly due to bug#11755165.
 select * from federated.t1 where fld_parentid=0 and fld_delt=0
 order by fld_name;
 
+--skip_if_hypergraph  # Result difference, possibly due to bug#11755165.
 select * from federated.t1 where fld_parentid=0 and fld_delt=0;
 
 DROP TABLE federated.t1;
@@ -1888,12 +1896,14 @@ connection master;
 --replace_result $SLAVE_MYPORT SLAVE_PORT
 eval CREATE TABLE t1 (a INT, b INT, KEY(a,b)) ENGINE=federated
 CONNECTION='mysql://root@127.0.0.1:$SLAVE_MYPORT/test/t1';
+--skip_if_hypergraph  # Chooses range scan and hits bug#11755165.
 --sorted_result
 SELECT * FROM t1 WHERE a IS NULL;
 --sorted_result
 SELECT * FROM t1 WHERE a IS NOT NULL;
 --sorted_result
 SELECT * FROM t1 WHERE a=1 AND b=1;
+--skip_if_hypergraph  # Chooses range scan and hits bug#11755165.
 --sorted_result
 SELECT * FROM t1 WHERE a IS NULL AND b=1;
 --sorted_result
@@ -1967,7 +1977,8 @@ connection master;
 eval CREATE TABLE t1(id VARCHAR(20) NOT NULL, PRIMARY KEY(id)) ENGINE=FEDERATED 
   CONNECTION='mysql://root@127.0.0.1:$SLAVE_MYPORT/test/t1';
 --echo # Dump table t1 using mysqldump tool
---replace_result $SLAVE_MYPORT SLAVE_PORT
+--let $executed_gtid_set = `SELECT @@GLOBAL.GTID_EXECUTED`
+--replace_result $SLAVE_MYPORT SLAVE_PORT $executed_gtid_set GTID_SET
 --exec $MYSQL_DUMP --compact test t1
 DROP TABLE t1;
 
@@ -2151,6 +2162,35 @@ DROP TABLE federated.t1;
 connection slave;
 DROP TABLE federated.t1;
 
+--echo #
+--echo # Bug#105878: PS-7999: FEDERATED engine not reconnecting on wait_timeout exceeded
+--echo #
+connection slave;
+SET @OLD_SLAVE_WAIT_TIMEOUT= @@GLOBAL.WAIT_TIMEOUT;
+SET @@GLOBAL.WAIT_TIMEOUT= 4;
+CREATE TABLE test.t1 (id int PRIMARY KEY);
+INSERT INTO test.t1 VALUES(1);
+
+connection master;
+--replace_result $SLAVE_MYPORT SLAVE_PORT
+eval CREATE SERVER test FOREIGN DATA WRAPPER test1 OPTIONS(
+  user 'root',
+  password '',
+  host '127.0.0.1',
+  port $SLAVE_MYPORT,
+  database 'test');
+CREATE TABLE test.t1 (id int PRIMARY KEY) ENGINE=FEDERATED CONNECTION='test';
+
+SELECT * FROM test.t1;
+SELECT sleep(5);
+SELECT * from test.t1;
+
+DROP TABLE test.t1;
+DROP SERVER test;
+connection slave;
+DROP TABLE test.t1;
+SET @@GLOBAL.WAIT_TIMEOUT= @OLD_SLAVE_WAIT_TIMEOUT;
+
 connection default;
 SET @@GLOBAL.CONCURRENT_INSERT= @OLD_MASTER_CONCURRENT_INSERT;
 connection slave;
@@ -2158,3 +2198,4 @@ SET @@GLOBAL.CONCURRENT_INSERT= @OLD_SLAVE_CONCURRENT_INSERT;
 
 connection default;
 source suite/federated/include/federated_cleanup.inc;
+

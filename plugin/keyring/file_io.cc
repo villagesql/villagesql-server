@@ -25,11 +25,11 @@
 
 #include "my_config.h"
 
-#include <assert.h>
-#include <errno.h>
 #include <mysql/psi/mysql_file.h>
-#include <stdarg.h>
 #include <sys/types.h>
+#include <cassert>
+#include <cerrno>
+#include <cstdarg>
 #include <sstream>
 #include <utility>
 

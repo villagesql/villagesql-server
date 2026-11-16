@@ -29,7 +29,7 @@
 #include <mysql/plugin.h>
 #include <mysql_version.h>
 #include <mysqld_error.h>
-#include <stddef.h>
+#include <cstddef>
 
 #include "my_dbug.h"
 

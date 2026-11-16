@@ -185,7 +185,7 @@ bool DB_restrictions::add(const Json_object &json_object) {
           const Json_string *priv = down_cast<const Json_string *>(priv_dom);
           const auto &itr = global_acls_map.find(priv->value());
           if (itr == global_acls_map.end()) return true;
-          priv_mask |= (1UL << itr->second);
+          priv_mask |= static_cast<Access_bitmask>(1UL << itr->second);
         }
         add(db_string->value(), priv_mask);
       }

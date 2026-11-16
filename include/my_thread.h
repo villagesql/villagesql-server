@@ -33,7 +33,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include <mysql/components/services/bits/my_thread_bits.h>
+#include <mysql/components/services/bits/my_thread_bits.h>  // IWYU pragma: export
 
 #include "my_compiler.h"
 #include "my_config.h"
@@ -54,7 +54,7 @@
 // clang with DEBUG and UBSAN -O0 -fno-inline
 #define DEFAULT_THREAD_STACK (1024UL * 1024UL)
 
-static inline int is_timeout(int e) {
+static inline bool is_timeout(int e) {
 #if ETIMEDOUT == ETIME
   return e == ETIMEDOUT;
 #else
@@ -161,6 +161,7 @@ inline bool operator!=(const my_thread_handle &a, const my_thread_handle &b) {
 
 int my_thread_create(my_thread_handle *thread, const my_thread_attr_t *attr,
                      my_start_routine func, void *arg);
+void my_thread_handle_self(my_thread_handle *thread);
 int my_thread_join(my_thread_handle *thread, void **value_ptr);
 int my_thread_cancel(my_thread_handle *thread);
 

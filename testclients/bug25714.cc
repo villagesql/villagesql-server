@@ -21,9 +21,9 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <assert.h>
 #include <mysql.h>
 #include <sys/types.h>
+#include <cassert>
 
 #include "m_string.h"
 #include "my_compiler.h"
@@ -69,5 +69,5 @@ int main(int argc, char **argv) {
   mysql_close(&conn);
   my_end(0);
 
-  return 0;
+  return OK;
 }

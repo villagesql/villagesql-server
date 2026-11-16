@@ -23,7 +23,7 @@
 
 #include "sql/dd/impl/tables/column_type_elements.h"
 
-#include <assert.h>
+#include <cassert>
 #include <new>
 
 #include "sql/dd/impl/raw/object_keys.h"       // Parent_id_range_key
@@ -31,11 +31,10 @@
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 #include "sql/sql_const.h"  // MAX_INTERVAL_VALUE_LENGTH
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Column_type_elements &Column_type_elements::instance() {
-  static Column_type_elements *s_instance = new Column_type_elements();
+  static auto *s_instance = new Column_type_elements();
   return *s_instance;
 }
 
@@ -88,5 +87,4 @@ Object_key *Column_type_elements::create_primary_key(Object_id column_id,
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

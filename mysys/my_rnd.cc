@@ -31,11 +31,16 @@
   @file mysys/my_rnd.cc
 */
 
-#include "my_rnd.h"
-#include <mysql_com.h>
+#include <limits.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
-#include "my_inttypes.h"  // uint
+#include <stddef.h>
+#include <sys/types.h>
+
+#include "my_rnd.h"
+
+#include "my_inttypes.h"  // IWYU pragma: keep
+#include "mysql_com.h"
 
 /*
   A wrapper to use OpenSSL PRNGs.
@@ -98,7 +103,7 @@ double my_rnd_ssl(bool *failed) {
   if (my_rand_buffer((unsigned char *)&res, sizeof(res))) {
     *failed = true;
     return 0;
-  } else
-    *failed = false;
+  }
+  *failed = false;
   return (double)res / (double)UINT_MAX;
 }

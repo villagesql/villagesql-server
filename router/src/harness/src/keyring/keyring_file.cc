@@ -34,7 +34,8 @@
 
 #include "mysql/harness/filesystem.h"
 
-const std::array<char, 4> kKeyringFileSignature = {'M', 'R', 'K', 'R'};
+static constexpr auto kKeyringFileSignature =
+    std::to_array<char>({'M', 'R', 'K', 'R'});
 
 namespace mysql_harness {
 
@@ -174,7 +175,7 @@ void KeyringFile::load(const std::string &file_name, const std::string &key) {
     file.read(reinterpret_cast<char *>(&header_size), sizeof(header_size));
     if (header_size > 0) {
       if (header_size >
-          file_size - sizeof(kKeyringFileSignature) - sizeof(header_size)) {
+          file_size - kKeyringFileSignature.size() - sizeof(header_size)) {
         throw std::runtime_error("Invalid data found in keyring file " +
                                  file_name);
       }

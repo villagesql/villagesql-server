@@ -30,9 +30,9 @@
   @file mysys/mulalloc.cc
 */
 
-#include <stdarg.h>
-#include <stddef.h>
 #include <sys/types.h>
+#include <cstdarg>
+#include <cstddef>
 
 #include "my_dbug.h"
 #include "my_inttypes.h"

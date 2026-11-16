@@ -46,7 +46,7 @@ set names 'ascii';
 # auto-convert to utf-8
 select JSON_VALID('123');
 
-set names 'utf8';
+set names 'utf8mb3';
 
 --echo
 --echo # Json expression
@@ -70,7 +70,7 @@ set names 'latin1';
 # auto-convert to utf-8
 select JSON_VALID( UPPER('"abc"') );
 
-set names 'utf8';
+set names 'utf8mb3';
 
 --echo
 --echo # Function result - date, not valid as JSON without CAST
@@ -78,7 +78,7 @@ select JSON_VALID( CAST('2015-01-15' AS DATE) );
 
 --echo
 --echo # The date string doesn't parse as JSON text, so wrong:
-select JSON_VALID( CAST(CAST('2015-01-15' AS DATE) as CHAR CHARACTER SET 'utf8') );
+select JSON_VALID( CAST(CAST('2015-01-15' AS DATE) as CHAR CHARACTER SET 'utf8mb3') );
 --echo # OK, though:
 select JSON_VALID( CAST(CURDATE() as JSON) );
 
@@ -611,7 +611,7 @@ select json_type(PI());
 select json_type('3.14');
 
 --error ER_INVALID_JSON_TEXT_IN_PARAM
-select json_type(CAST(CAST('2015-01-15' AS DATE) as CHAR CHARACTER SET 'utf8'));
+select json_type(CAST(CAST('2015-01-15' AS DATE) as CHAR CHARACTER SET 'utf8mb3'));
 
 --echo # ----------------------------------------------------------------------
 --echo # Test of CAST(literal AS JSON)
@@ -1849,7 +1849,7 @@ select json_unquote(NULL);
 select json_quote('abc');
 select json_quote(convert('abc' using ascii));
 select json_quote(convert('abc' using latin1));
-select json_quote(convert('abc' using utf8));
+select json_quote(convert('abc' using utf8mb3));
 select json_quote(convert('abc' using utf8mb4));
 
 select json_unquote('abc');                      # should do nothing
@@ -1857,7 +1857,7 @@ select json_unquote('abc');                      # should do nothing
 select json_unquote('"abc"');
 select json_unquote(convert('"abc"' using ascii));
 select json_unquote(convert('"abc"' using latin1));
-select json_unquote(convert('"abc"' using utf8));
+select json_unquote(convert('"abc"' using utf8mb3));
 select json_unquote(convert('"abc"' using utf8mb4));
 
 select json_quote('"');
@@ -1887,12 +1887,12 @@ select json_unquote(cast('["a", "b", "c"]' as json));
 
 select charset(json_unquote('"abc"'));
 
-select json_quote(convert(X'e68891' using utf8));    # chinese "I" (wo3)
+select json_quote(convert(X'e68891' using utf8mb3));    # chinese "I" (wo3)
 select json_quote(convert(X'e68891' using utf8mb4)); # chinese "I" (wo3)
 
-select cast(json_quote(convert(X'e68891' using utf8)) as json);
+select cast(json_quote(convert(X'e68891' using utf8mb3)) as json);
 
-select json_unquote(convert(X'e68891' using utf8));  # chinese "I" (wo3)
+select json_unquote(convert(X'e68891' using utf8mb3));  # chinese "I" (wo3)
 
 select  json_quote(json_quote(json_quote('abc')));     # deep quote
 select  json_unquote(json_unquote(json_unquote(        # long round trip of it
@@ -2982,3 +2982,34 @@ DO 1 IN (JSON_PRETTY(''), ANY_VALUE(JSON_ARRAYAGG('')));
 --error ER_CANNOT_CONVERT_STRING
 do cast(json_arrayagg(convert(utc_timestamp() using gb2312)) <=>
         instr(1 , 0xf722a67b) as char);
+
+--echo #
+--echo # Bug#38033684: Parse JSON numbers in RapidJSON full-precision mode
+--echo #
+
+SELECT CAST(5e36 AS JSON) AS v1, CAST('5e36' AS JSON) AS v2,
+       CAST(5.0000000000000004e36 AS JSON) AS v3,
+       CAST('5.0000000000000004e36' AS JSON) AS v4;
+
+--echo #
+--echo # Bug#38549573: coalesce or any_value: Assertion failed:
+--echo #               !current_thd->is_error() && has_value
+--echo #
+
+--error ER_INVALID_JSON_PATH
+DO COALESCE(JSON_SEARCH(JSON_ARRAY('{}', '$[0]', '{}'), 'all',
+                        JSON_REMOVE('{}','{"a":1}')
+                       )
+           );
+
+--echo #
+--echo # Bug#39649893: JSON_VALUE RETURNING DATETIME DEFAULT returns garbage
+--echo #
+
+SELECT CAST(JSON_VALUE('"x"', '$' RETURNING DATETIME
+            DEFAULT '2023-07-19 08:09:10' ON ERROR) AS DATE) AS d;
+
+SELECT CAST(JSON_VALUE('{}', '$.x' RETURNING DATETIME
+            DEFAULT '2023-07-19 08:09:10' ON EMPTY) AS DATE) AS d;
+
+SELECT CAST(TIMESTAMP'2023-07-19 08:09:10' AS DATE) AS d;

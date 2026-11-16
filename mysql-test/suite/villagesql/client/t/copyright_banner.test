@@ -1,5 +1,5 @@
-# Verify the VillageSQL copyright line appears above Oracle's in the startup
-# banner and --help output of the shipped binaries.
+# Verify the VillageSQL copyright line appears above Percona's and Oracle's in
+# the startup banner and --help output of the shipped binaries.
 #
 # All of them get the text from ORACLE_WELCOME_COPYRIGHT_NOTICE in
 # include/welcome_copyright_notice.h. That macro is Oracle's, so a future
@@ -35,15 +35,15 @@ foreach my $tool (@tools) {
   my @copyright = grep { /^Copyright \(c\) / } <$fh>;
   close($fh);
 
-  if (@copyright < 2) {
-    print "$label: expected 2 copyright lines, found " . scalar(@copyright) . "\n";
+  if (@copyright < 3) {
+    print "$label: expected 3 copyright lines, found " . scalar(@copyright) . "\n";
     next;
   }
 
-  # Print the first two copyright lines with years normalized, so this test
+  # Print the first three copyright lines with years normalized, so this test
   # survives the annual COPYRIGHT_NOTICE_CURRENT_YEAR bump. Order matters:
-  # VillageSQL is expected first, Oracle second.
-  foreach my $line (@copyright[0, 1]) {
+  # VillageSQL is expected first, Percona second, Oracle third.
+  foreach my $line (@copyright[0, 1, 2]) {
     $line =~ s/\d{4}/YEAR/g;
     $line =~ s/\s+$//;
     print "$label: $line\n";

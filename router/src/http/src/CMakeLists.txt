@@ -45,6 +45,9 @@ ROUTER_ADD_SHARED_LIBRARY(http_common
 
   OUTPUT_NAME "mysqlrouter_http"
 
+  COMPILE_DEFINITIONS
+  MYSQL_ROUTER_LOG_DOMAIN="http_common"
+
   LINK_LIBRARIES
   PUBLIC
   harness_tls
@@ -137,11 +140,15 @@ ROUTER_ADD_SHARED_LIBRARY(http_server_lib
 
   OUTPUT_NAME "mysqlrouter_http_server"
 
+  COMPILE_DEFINITIONS
+  MYSQL_ROUTER_LOG_DOMAIN="http_server"
+
   LINK_LIBRARIES
   PUBLIC
   io_component
   http_common
   http_auth_realm_lib
+  ext::icu
   )
 
 TARGET_INCLUDE_DIRECTORIES(http_server_lib
@@ -178,9 +185,7 @@ ROUTER_ADD_SHARED_LIBRARY(http_client
   http/client/error_code.cc
   http/client/request.cc
 
-  OUTPUT_NAME "http_client"
-
-  SKIP_INSTALL
+  OUTPUT_NAME "mysqlrouter_http_client"
 
   LINK_LIBRARIES
   ${LIBRT}

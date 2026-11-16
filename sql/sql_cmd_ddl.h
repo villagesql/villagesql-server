@@ -24,7 +24,13 @@
 #ifndef SQL_CMD_DDL_INCLUDED
 #define SQL_CMD_DDL_INCLUDED
 
+#include <cassert>
+
+#include "lex_string.h"
+#include "my_sqlcommand.h"
 #include "sql/sql_cmd.h"
+
+class THD;
 
 class Sql_cmd_ddl : public Sql_cmd {
  public:
@@ -63,6 +69,102 @@ class Sql_cmd_ddl_dummy final : public Sql_cmd_ddl {
     assert(false);
     return false;
   }
+};
+
+class sp_name;
+
+class Sql_cmd_create_library final : public Sql_cmd_ddl {
+ public:
+  Sql_cmd_create_library(THD *thd, bool if_not_exists, sp_name *name,
+                         LEX_CSTRING language, LEX_CSTRING comment,
+                         LEX_STRING source_code, bool is_binary);
+
+  enum_sql_command sql_command_code() const override {
+    return SQLCOM_CREATE_LIBRARY;
+  }
+
+  bool execute(THD *thd) override;
+
+ private:
+  bool m_if_not_exists;
+  sp_name *m_name;
+  LEX_CSTRING m_language;
+  // In order to support prepare of routines that contain CREATE LIBRARY
+  // statements, we need to keep a copy of the source code and the comment.
+  LEX_CSTRING m_source;
+  LEX_CSTRING m_comment;
+  bool m_is_binary;
+};
+
+class Sql_cmd_alter_library final : public Sql_cmd_ddl {
+ public:
+  Sql_cmd_alter_library(THD *thd, sp_name *name, LEX_STRING comment);
+
+  enum_sql_command sql_command_code() const override {
+    return SQLCOM_ALTER_LIBRARY;
+  }
+
+  bool execute(THD *thd) override;
+
+ private:
+  sp_name *m_name;
+  // In order to support prepare of routines that contain CREATE and ALTER
+  // LIBRARY statements, we need to keep a copy of the comment.
+  LEX_STRING m_comment;
+};
+
+class Sql_cmd_drop_library final : public Sql_cmd_ddl {
+ public:
+  Sql_cmd_drop_library(bool if_exists, sp_name *lib_name)
+      : m_if_exists(if_exists), m_name(lib_name) {}
+
+  enum_sql_command sql_command_code() const override {
+    return SQLCOM_DROP_LIBRARY;
+  }
+
+  bool execute(THD *thd) override;
+
+ private:
+  bool m_if_exists;
+  sp_name *m_name;
+};
+
+class Sql_cmd_create_masking_policy final : public Sql_cmd_ddl {
+ public:
+  Sql_cmd_create_masking_policy(bool if_not_exists, LEX_CSTRING policy_name,
+                                LEX_CSTRING arg_name, Item *expr)
+      : m_if_not_exists{if_not_exists},
+        m_policy_name{policy_name},
+        m_argument_name{arg_name},
+        m_masking_expr{expr} {}
+
+  enum_sql_command sql_command_code() const override {
+    return SQLCOM_CREATE_MASKING_POLICY;
+  }
+
+  bool execute(THD *thd) override;
+
+ private:
+  bool m_if_not_exists;
+  LEX_CSTRING m_policy_name;
+  LEX_CSTRING m_argument_name;
+  Item *m_masking_expr;
+};
+
+class Sql_cmd_drop_masking_policy final : public Sql_cmd_ddl {
+ public:
+  Sql_cmd_drop_masking_policy(bool if_exists, LEX_CSTRING policy_name)
+      : m_if_exists{if_exists}, m_policy_name{policy_name} {}
+
+  enum_sql_command sql_command_code() const override {
+    return SQLCOM_DROP_MASKING_POLICY;
+  }
+
+  bool execute(THD *thd) override;
+
+ private:
+  bool m_if_exists;
+  LEX_CSTRING m_policy_name;
 };
 
 #endif  // SQL_CMD_DDL_INCLUDED

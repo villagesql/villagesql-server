@@ -1337,7 +1337,7 @@ bool show_binary_log_status(THD *thd) {
   protocol->start_row();
 
   if (mysql_bin_log.is_open()) {
-    LOG_INFO li;
+    Log_info li;
     mysql_bin_log.get_current_log(&li);
     size_t dir_len = dirname_length(li.log_file_name);
     protocol->store(li.log_file_name + dir_len, &my_charset_bin);
@@ -1366,7 +1366,7 @@ bool show_binary_log_status(THD *thd) {
 */
 bool show_binlogs(THD *thd) {
   IO_CACHE *index_file;
-  LOG_INFO cur;
+  Log_info cur;
   File file;
   char fname[FN_REFLEN];
   size_t length;
@@ -1398,7 +1398,8 @@ bool show_binlogs(THD *thd) {
 
   cur_dir_len = dirname_length(cur.log_file_name);
 
-  reinit_io_cache(index_file, READ_CACHE, (my_off_t)0, false, false);
+  if (reinit_io_cache(index_file, READ_CACHE, (my_off_t)0, false, false))
+    goto err;
 
   /* The file ends with EOF or empty line */
   while ((length = my_b_gets(index_file, fname, sizeof(fname))) > 1) {

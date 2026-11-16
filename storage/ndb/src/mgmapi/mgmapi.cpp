@@ -103,7 +103,7 @@ struct ndb_mgm_handle {
   int mgmd_version_build;
   struct ssl_ctx_st *ssl_ctx;
 
-  int mgmd_version(void) const {
+  int mgmd_version() const {
     // Must be connected
     assert(connected);
     // Check that version has been read
@@ -215,7 +215,7 @@ static void setError(NdbMgmHandle h, int error, int error_line, const char *msg,
 
 extern "C" NdbMgmHandle ndb_mgm_create_handle() {
   DBUG_ENTER("ndb_mgm_create_handle");
-  NdbMgmHandle h = (NdbMgmHandle)malloc(sizeof(ndb_mgm_handle));
+  auto h = (NdbMgmHandle)malloc(sizeof(ndb_mgm_handle));
   if (!h) DBUG_RETURN(nullptr);
 
   h->connected = 0;
@@ -747,7 +747,7 @@ extern "C" int ndb_mgm_connect(NdbMgmHandle handle, int no_retries,
   }
 #endif
 
-  Uint32 i = Uint32(~0);
+  auto i = Uint32(~0);
   while (!sock.is_valid()) {
     Uint32 invalid_Address = 0;
     // do all the mgmt servers
@@ -1211,7 +1211,7 @@ extern "C" struct ndb_mgm_cluster_state *ndb_mgm_get_status2(
 
   const int noOfNodes = atoi(split[1].c_str());
 
-  ndb_mgm_cluster_state *state = (ndb_mgm_cluster_state *)malloc(
+  auto *state = (ndb_mgm_cluster_state *)malloc(
       sizeof(ndb_mgm_cluster_state) +
       noOfNodes * (sizeof(ndb_mgm_node_state) + sizeof("000.000.000.000#")));
 
@@ -1423,7 +1423,7 @@ extern "C" struct ndb_mgm_cluster_state2 *ndb_mgm_get_status3(
 
   const int noOfNodes = atoi(split[1].c_str());
 
-  ndb_mgm_cluster_state2 *state = (ndb_mgm_cluster_state2 *)malloc(
+  auto *state = (ndb_mgm_cluster_state2 *)malloc(
       sizeof(ndb_mgm_cluster_state2) +
       (noOfNodes - 1) * sizeof(ndb_mgm_node_state2));
 
@@ -2287,7 +2287,7 @@ extern "C" int ndb_mgm_dump_state(NdbMgmHandle handle, int nodeId,
   char buf[256];
   buf[0] = 0;
   for (int i = 0; i < _num_args; i++) {
-    unsigned n = (unsigned)strlen(buf);
+    auto n = (unsigned)strlen(buf);
     if (n + 20 > sizeof(buf)) {
       SET_ERROR(handle, NDB_MGM_USAGE_ERROR, "arguments too long");
       DBUG_RETURN(-1);
@@ -2920,7 +2920,7 @@ struct ndb_mgm_configuration *ndb_mgm_get_configuration2(
 
     delete prop;
     DBUG_RETURN((ndb_mgm_configuration *)cvf.getConfigValues());
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(nullptr);
@@ -2951,17 +2951,13 @@ extern "C" int ndb_mgm_get_configuration_nodeid(NdbMgmHandle handle) {
 }
 
 extern "C" int ndb_mgm_get_connected_port(NdbMgmHandle handle) {
-  if (handle->cfg_i >= 0)
-    return handle->cfg.ids[handle->cfg_i].port;
-  else
-    return 0;
+  if (handle->cfg_i >= 0) return handle->cfg.ids[handle->cfg_i].port;
+  return 0;
 }
 
 extern "C" const char *ndb_mgm_get_connected_host(NdbMgmHandle handle) {
-  if (handle->cfg_i >= 0)
-    return handle->cfg.ids[handle->cfg_i].name.c_str();
-  else
-    return nullptr;
+  if (handle->cfg_i >= 0) return handle->cfg.ids[handle->cfg_i].name.c_str();
+  return nullptr;
 }
 
 extern "C" const char *ndb_mgm_get_connectstring(NdbMgmHandle handle, char *buf,
@@ -3035,7 +3031,7 @@ extern "C" int ndb_mgm_alloc_nodeid(NdbMgmHandle handle, unsigned int version,
       break;
     }
     nodeid = _nodeid;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(nodeid);
@@ -3069,7 +3065,7 @@ extern "C" int ndb_mgm_set_int_parameter(NdbMgmHandle handle, int node,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(res);
@@ -3108,7 +3104,7 @@ extern "C" int ndb_mgm_set_int64_parameter(NdbMgmHandle handle, int node,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(res);
@@ -3147,7 +3143,7 @@ extern "C" int ndb_mgm_set_string_parameter(NdbMgmHandle handle, int node,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(res);
@@ -3189,7 +3185,7 @@ extern "C" int ndb_mgm_purge_stale_sessions(NdbMgmHandle handle,
         *purged = nullptr;
     }
     res = 0;
-  } while (0);
+  } while (false);
   delete prop;
   DBUG_RETURN(res);
 }
@@ -3207,14 +3203,14 @@ extern "C" int ndb_mgm_check_connection(NdbMgmHandle handle) {
   if (out.println("%s", "")) goto ndb_mgm_check_connection_error;
 
   in.gets(buf, sizeof(buf));
-  if (strcmp("check connection reply\n", buf))
+  if (strcmp("check connection reply\n", buf) != 0)
     goto ndb_mgm_check_connection_error;
 
   in.gets(buf, sizeof(buf));
-  if (strcmp("result: Ok\n", buf)) goto ndb_mgm_check_connection_error;
+  if (strcmp("result: Ok\n", buf) != 0) goto ndb_mgm_check_connection_error;
 
   in.gets(buf, sizeof(buf));
-  if (strcmp("\n", buf)) goto ndb_mgm_check_connection_error;
+  if (strcmp("\n", buf) != 0) goto ndb_mgm_check_connection_error;
 
   DBUG_RETURN(0);
 
@@ -3252,7 +3248,7 @@ int ndb_mgm_set_connection_int_parameter(NdbMgmHandle handle, int node1,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(res);
@@ -3286,7 +3282,7 @@ int ndb_mgm_get_connection_int_parameter(NdbMgmHandle handle, int node1,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   if (!prop->get("value", (Uint32 *)value)) {
     fprintf(handle->errstream, "Unable to get value\n");
@@ -3682,7 +3678,7 @@ const NdbSocket &_ndb_mgm_get_socket(NdbMgmHandle h) { return h->socket; }
 int ndb_mgm_has_tls(NdbMgmHandle h) { return h->socket.has_tls() ? 1 : 0; }
 
 static ndb_mgm_cert_table *new_cert_table() {
-  ndb_mgm_cert_table *table = new ndb_mgm_cert_table;
+  auto *table = new ndb_mgm_cert_table;
   table->session_id = 0;
   table->peer_address = nullptr;
   table->cert_serial = nullptr;
@@ -3708,7 +3704,7 @@ int ndb_mgm_list_certs(NdbMgmHandle handle, ndb_mgm_cert_table **data) {
   char buf[1024];
 
   in.gets(buf, sizeof(buf));
-  if (strcmp("list certs reply\n", buf)) DBUG_RETURN(-1);
+  if (strcmp("list certs reply\n", buf) != 0) DBUG_RETURN(-1);
 
   int ncerts = 0;
   struct ndb_mgm_cert_table *current = *data = nullptr;
@@ -3792,8 +3788,8 @@ int ndb_mgm_get_tls_stats(NdbMgmHandle handle, ndb_mgm_tls_stats *result) {
 */
 
 static int cmp_event(const void *_a, const void *_b) {
-  const ndb_logevent *a = (const ndb_logevent *)_a;
-  const ndb_logevent *b = (const ndb_logevent *)_b;
+  const auto *a = (const ndb_logevent *)_a;
+  const auto *b = (const ndb_logevent *)_b;
 
   // So far all events are of same type
   assert(a->type == b->type);
@@ -3867,8 +3863,8 @@ extern "C" struct ndb_mgm_events *ndb_mgm_dump_events(
   delete reply;
 
   // Read the streamed events
-  ndb_mgm_events *events = (ndb_mgm_events *)malloc(
-      sizeof(ndb_mgm_events) + num_events * sizeof(ndb_logevent));
+  auto *events = (ndb_mgm_events *)malloc(sizeof(ndb_mgm_events) +
+                                          num_events * sizeof(ndb_logevent));
   if (!events) {
     SET_ERROR(handle, NDB_MGM_OUT_OF_MEMORY,
               "Allocating ndb_mgm_events struct");

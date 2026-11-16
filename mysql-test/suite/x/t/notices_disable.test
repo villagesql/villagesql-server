@@ -95,7 +95,7 @@
 -->stmtsql SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 -->recvresult
 
--->stmtsql prepare stmt from 'create table test.t1 (a varchar(10) character set utf8)';
+-->stmtsql prepare stmt from 'create table test.t1 (a varchar(10) character set utf8mb3)';
 -->recvresult
 
 -->stmtsql execute stmt;
@@ -266,7 +266,7 @@ Mysqlx.Sql.StmtExecute {
 -->stmtsql use test;
 -->recvresult
 
--->stmtsql create table t1 as select 5.05 / 0.014;
+-->stmtsql create table t1 as select 5.05000000000000000000000123456789 + 1;
 -->recvresult
 
 -->stmtsql drop table t1;

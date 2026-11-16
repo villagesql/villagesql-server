@@ -25,7 +25,6 @@
 
 #include "sql/dd/dd_routine.h"  // Routine methods
 
-#include <stddef.h>
 #include <string.h>
 #include <sys/types.h>
 #include <memory>
@@ -33,13 +32,13 @@
 #include "lex_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
-#include "my_time.h"
 #include "sql/dd/cache/dictionary_client.h"  // dd::cache::Dictionary_client
 #include "sql/dd/dd_table.h"                 // dd::get_new_field_type
 #include "sql/dd/impl/utils.h"               // dd::my_time_t_to_ull_datetime
 #include "sql/dd/properties.h"               // dd::Properties
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/function.h"                // dd::Function
+#include "sql/dd/types/library.h"                 // dd::Library
 #include "sql/dd/types/parameter.h"               // dd::Parameter
 #include "sql/dd/types/parameter_type_element.h"  // dd::Parameter_type_element
 #include "sql/dd/types/procedure.h"               // dd::Procedure
@@ -47,7 +46,6 @@
 #include "sql/dd/types/schema.h"  // dd::Schema
 #include "sql/dd/types/view.h"
 #include "sql/field.h"
-#include "sql/histograms/value_map.h"
 #include "sql/item_create.h"
 #include "sql/key.h"
 #include "sql/sp.h"
@@ -62,6 +60,12 @@
 #include "sql/tztime.h"  // Time_zone
 #include "sql_string.h"
 #include "typelib.h"
+
+#include <my_rapidjson_size_t.h>  // NOLINT(misc-include-cleaner)
+#include <rapidjson/document.h>
+#include <rapidjson/rapidjson.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include "villagesql/schema/systable/helpers.h"
 
@@ -303,6 +307,72 @@ static bool fill_routine_parameters_info(THD *thd, sp_head *sp,
 ////////////////////////////////////////////////////////////////////////////////
 
 /**
+   Check if character set is utf8mb4, and return the default charset if not.
+
+   This is used to override non-utf8mb4 charset for non-SQL routines since
+   such routines will only use utf8mb4.
+
+   @param charset Character set to be checked.
+
+   @return my_charset_utf8mb4_0900_ai_ci if charset is not utf8mb4,
+           original charset, otherwise.
+
+*/
+static const CHARSET_INFO *convert_if_not_utf8mb4(const CHARSET_INFO *charset) {
+  if (strcmp(charset->csname, "utf8mb4") != 0) {
+    return &my_charset_utf8mb4_0900_ai_ci;
+  } else {
+    return charset;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+  Helper method for create_routine() to prepare dd::Routine options field
+  from the sp_head.
+
+  @param[in]  libraries  The list of the imported libraries.
+
+  @retval std::string    The resulting JSON representation of the list.
+*/
+
+static std::string create_options_string(
+    const mem_root_deque<sp_name_with_alias> *libraries) {
+  if (!libraries || libraries->empty()) return {};
+
+  rapidjson::Document document;
+  document.SetArray();
+  auto &allocator = document.GetAllocator();
+
+  for (const auto &library : *libraries) {
+    rapidjson::Value json_library{rapidjson::kObjectType};
+    rapidjson::Value library_name{rapidjson::kStringType};
+    library_name.SetString(library.m_name.str, library.m_name.length);
+    json_library.AddMember("name", library_name, allocator);
+    if (library.m_alias.length > 0) {
+      rapidjson::Value alias{rapidjson::kStringType};
+      alias.SetString(library.m_alias.str, library.m_alias.length);
+      json_library.AddMember("alias", alias, allocator);
+    }
+    if (library.m_db.length) {
+      rapidjson::Value alias{rapidjson::kStringType};
+      alias.SetString(library.m_db.str, library.m_db.length);
+      json_library.AddMember("schema", alias, allocator);
+    }
+    document.PushBack(json_library, allocator);
+  }
+
+  rapidjson::StringBuffer result;
+  result.Clear();
+  rapidjson::Writer<rapidjson::StringBuffer> string_writer{result};
+  document.Accept(string_writer);
+  return {result.GetString(), result.GetSize()};
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+/**
   Helper method for create_routine() to prepare dd::Routine object
   from the sp_head.
 
@@ -362,11 +432,13 @@ static bool fill_dd_routine_info(THD *thd, const dd::Schema &schema,
 
   // Set external language for show routine operations.
   const char *lang = "SQL";
-  char lang_buff[64];
+  char lang_buff[65];
   // Store language name in upper case
   if (sp->m_chistics->language.str) {
-    assert(strlen(sp->m_chistics->language.str) <= 64);
-    my_stpcpy(lang_buff, sp->m_chistics->language.str);
+    assert(sp->m_chistics->language.length <= 64);
+    size_t size = std::min(sp->m_chistics->language.length, size_t{64ULL});
+    my_stpncpy(lang_buff, sp->m_chistics->language.str, size);
+    lang_buff[size] = '\0';
     my_caseup_str(system_charset_info, lang_buff);
     lang = lang_buff;
   }
@@ -396,16 +468,18 @@ static bool fill_dd_routine_info(THD *thd, const dd::Schema &schema,
   // Set sql_mode.
   routine->set_sql_mode(thd->variables.sql_mode);
 
-  // Set client collation id.
+  // Set client collation id and connection collation id.
   if (sp->is_sql()) {
     routine->set_client_collation_id(thd->charset()->number);
+    routine->set_connection_collation_id(
+        thd->variables.collation_connection->number);
   } else {
-    routine->set_client_collation_id(my_charset_utf8mb4_0900_ai_ci.number);
+    // For non-SQL routines, we will always use utf8mb4
+    routine->set_client_collation_id(
+        convert_if_not_utf8mb4(thd->charset())->number);
+    routine->set_connection_collation_id(
+        convert_if_not_utf8mb4(thd->variables.collation_connection)->number);
   }
-
-  // Set connection collation id.
-  routine->set_connection_collation_id(
-      thd->variables.collation_connection->number);
 
   // Set schema collation id.
   const CHARSET_INFO *db_cs = nullptr;
@@ -421,8 +495,71 @@ static bool fill_dd_routine_info(THD *thd, const dd::Schema &schema,
   routine->set_comment(sp->m_chistics->comment.str ? sp->m_chistics->comment.str
                                                    : "");
 
+  const mem_root_deque<sp_name_with_alias> *imported_libraries =
+      sp->m_chistics->get_imported_libraries();
+  if (imported_libraries && !imported_libraries->empty()) {
+    std::string options = create_options_string(imported_libraries);
+
+    dd::Properties &routine_options = routine->options();
+    if (routine_options.set("libraries", {options.c_str(), options.length()}))
+      return false;
+  }
+
   // Fill routine parameters
   return fill_routine_parameters_info(thd, sp, routine);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/**
+  Helper method for create_routine() to prepare dd::Library object
+  from the sp_head.
+
+  @param[in]  sp         Stored routine object.
+  @param[in]  definer    Definer of the routine.
+  @param[in]  sql_mode   The SQL mode (ANSI/DEFAULT).
+  @param[out] library    dd::Library object to be prepared from the sp_head.
+
+  @retval false  ON SUCCESS
+  @retval true   ON FAILURE
+*/
+
+static bool fill_dd_library_info(sp_head *sp, const LEX_USER *definer,
+                                 ulonglong sql_mode, Library *library) {
+  DBUG_TRACE;
+  assert(!sp->is_sql());
+
+  library->set_name(sp->m_name.str);
+  library->set_definition(make_string_type(sp->m_body));
+  library->set_definition_utf8(sp->m_body_utf8.str);
+
+  // Set external language for show library operations.
+  const char *lang = "SQL";
+  char lang_buff[65];
+  // Store language name in upper case
+  if (sp->m_chistics->language.length) {
+    assert(sp->m_chistics->language.length <= 64);
+    size_t size = std::min(sp->m_chistics->language.length, size_t{64ULL});
+    my_stpncpy(lang_buff, sp->m_chistics->language.str, size);
+    lang_buff[size] = '\0';
+    my_caseup_str(system_charset_info, lang_buff);
+    lang = lang_buff;
+  }
+  library->set_external_language(lang);
+  library->set_definer(definer->user.str, definer->host.str);
+
+  // Set sql_mode.
+  library->set_sql_mode(sql_mode);
+
+  // Set comment.
+  library->set_comment(sp->m_chistics->comment.str ? sp->m_chistics->comment.str
+                                                   : "");
+  // Set the binary character set.
+  if (sp->m_chistics->is_binary)
+    library->set_client_collation_id(my_charset_bin.number);
+  else
+    library->set_client_collation_id(my_charset_utf8mb4_0900_ai_ci.number);
+
+  return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -448,7 +585,7 @@ bool create_routine(THD *thd, const Schema &schema, sp_head *sp,
     thd->check_for_truncated_fields = CHECK_FIELD_WARN;
     error = thd->dd_client()->store(func.get());
     thd->check_for_truncated_fields = saved_check_for_truncated_fields;
-  } else {
+  } else if (sp->m_type == enum_sp_type::PROCEDURE) {
     std::unique_ptr<Procedure> proc(schema.create_procedure(thd));
 
     // Fill routine object.
@@ -460,6 +597,23 @@ bool create_routine(THD *thd, const Schema &schema, sp_head *sp,
     thd->check_for_truncated_fields = CHECK_FIELD_WARN;
     error = thd->dd_client()->store(proc.get());
     thd->check_for_truncated_fields = saved_check_for_truncated_fields;
+  } else if (sp->m_type == enum_sp_type::LIBRARY) {
+    std::unique_ptr<Library> library(schema.create_library(thd));
+
+    // Fill library object.
+    if (fill_dd_library_info(sp, definer, thd->variables.sql_mode,
+                             library.get()))
+      return true;
+
+    // Store library metadata in DD table.
+    enum_check_fields saved_check_for_truncated_fields =
+        thd->check_for_truncated_fields;
+    thd->check_for_truncated_fields = CHECK_FIELD_WARN;
+    error = thd->dd_client()->store(library.get());
+    thd->check_for_truncated_fields = saved_check_for_truncated_fields;
+  } else {
+    assert(false);
+    return false;
   }
 
   return error;
@@ -527,6 +681,21 @@ bool alter_routine(THD *thd, Routine *routine, st_sp_chistics *chistics) {
   // Set comment.
   if (chistics->comment.str) routine->set_comment(chistics->comment.str);
 
+  // The list of the imported libraries.
+  const mem_root_deque<sp_name_with_alias> *imported_libraries =
+      chistics->get_imported_libraries();
+  if (imported_libraries) {
+    dd::Properties &routine_options = routine->options();
+    if (imported_libraries->empty()) {
+      // Remove the list of the imported libraries.
+      routine_options.remove("libraries");
+    } else {
+      // Replace the list of the imported libraries.
+      std::string options = create_options_string(imported_libraries);
+      if (routine_options.set("libraries", {options.c_str(), options.length()}))
+        return false;
+    }
+  }
   // Update routine.
   return thd->dd_client()->update(routine);
 }

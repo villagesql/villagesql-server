@@ -25,6 +25,7 @@ if (mysqld.global.server_version === undefined) {
 
 var options = {
   cluster_type: "gr",
+  bootstrap_target_type: "clusterset",
 
   metadata_schema_version: [2, 1, 0],
   clusterset_present: 1,
@@ -34,6 +35,7 @@ var options = {
   clusterset_simulate_cluster_not_found:
       mysqld.global.simulate_cluster_not_found,
   router_expected_target_cluster: mysqld.global.router_expected_target_cluster,
+  router_expected_local_cluster: mysqld.global.router_expected_local_cluster,
   group_replication_name:
       mysqld.global.clusterset_data
           .clusters[mysqld.global.clusterset_data.this_cluster_id]
@@ -60,6 +62,7 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_start_transaction",
       "router_commit",
       "router_rollback",
+      "get_routing_guidelines_version",
 
       // account verification
       //"router_select_metadata_v2_gr",
@@ -73,6 +76,7 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_clusterset_present",
       "router_clusterset_id_current",
       "router_clusterset_view_id",
+      "get_local_cluster_name",
     ],
     options);
 
@@ -84,9 +88,11 @@ var common_responses_regex = common_stmts.prepare_statement_responses_regex(
       "router_grant_on_pfs_db",
       "router_grant_on_routers",
       "router_grant_on_v2_routers",
+      "router_grant_on_router_stats",
       "router_update_router_options_in_metadata",
       "router_clusterset_cluster_info_by_name_unknown",
       "router_select_config_defaults_stored_clusterset",
+      "router_update_local_cluster_in_metadata",
     ],
     options);
 

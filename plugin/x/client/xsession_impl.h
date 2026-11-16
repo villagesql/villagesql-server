@@ -49,7 +49,7 @@ class Protocol_factory;
 
 class Session_impl : public XSession {
  public:
-  explicit Session_impl(std::unique_ptr<Protocol_factory> factory = {});
+  explicit Session_impl(std::unique_ptr<Protocol_factory> factory);
   ~Session_impl() override;
 
   XProtocol::Client_id client_id() const override {
@@ -143,8 +143,7 @@ class Session_impl : public XSession {
   XProtocol_ptr m_protocol;
   Context_ptr m_context;
   Protocol_factory_ptr m_factory;
-  std::set<Auth> m_server_supported_auth_methods{Auth::k_mysql41, Auth::k_plain,
-                                                 Auth::k_sha256_memory};
+  std::set<Auth> m_server_supported_auth_methods;
 
   class Session_connect_timeout_scope_guard {
    public:

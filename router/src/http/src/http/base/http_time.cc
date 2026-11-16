@@ -33,8 +33,7 @@
 
 #include "http/base/http_time.h"
 
-namespace http {
-namespace base {
+namespace http::base {
 
 int time_to_rfc5322_fixdate(time_t ts, char *date_buf, size_t date_buf_len) {
   struct tm t_m;
@@ -50,12 +49,11 @@ int time_to_rfc5322_fixdate(time_t ts, char *date_buf, size_t date_buf_len) {
   }
 #endif
 
-  constexpr std::array<const char *, 7> kDayNames{
-      {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}};
+  constexpr std::array kDayNames{"Sun", "Mon", "Tue", "Wed",
+                                 "Thu", "Fri", "Sat"};
 
-  constexpr std::array<const char *, 12> kMonthNames{
-      {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
-       "Nov", "Dec"}};
+  constexpr std::array kMonthNames{"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
   return snprintf(date_buf, date_buf_len, "%s, %02d %s %4d %02d:%02d:%02d GMT",
                   kDayNames.at(t_m.tm_wday), t_m.tm_mday,
@@ -124,5 +122,4 @@ time_t time_from_rfc5322_fixdate(const char *date_buf) {
   return time_from_struct_tm_utc(&t_m);
 }
 
-}  // namespace base
-}  // namespace http
+}  // namespace http::base

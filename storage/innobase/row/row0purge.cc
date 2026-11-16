@@ -292,6 +292,8 @@ bool row_purge_poss_sec(purge_node_t *node,    /*!< in/out: row purge node */
 {
   bool can_delete;
   mtr_t mtr;
+  row_prebuilt_t *prebuilt =
+      static_cast<que_thr_t *>(node->common.parent)->prebuilt;
 
   ut_ad(!index->is_clustered());
   mtr_start(&mtr);
@@ -299,7 +301,7 @@ bool row_purge_poss_sec(purge_node_t *node,    /*!< in/out: row purge node */
   can_delete =
       !row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, &mtr) ||
       !row_vers_old_has_index_entry(true, node->pcur.get_rec(), &mtr, index,
-                                    entry, node->roll_ptr, node->trx_id);
+                                    entry, node->roll_ptr, node->trx_id, prebuilt);
 
   /* Persistent cursor is closed if reposition fails. */
   if (node->found_clust) {
@@ -771,7 +773,7 @@ skip_secondaries:
       byte *data_field;
       dict_index_t *index;
       bool is_insert;
-      ulint rseg_id;
+      ulint undo_num;
       page_no_t page_no;
       space_id_t undo_space_id;
       ulint offset;
@@ -788,14 +790,14 @@ skip_secondaries:
 
       ut_a(internal_offset < UNIV_PAGE_SIZE);
 
-      trx_undo_decode_roll_ptr(node->roll_ptr, &is_insert, &rseg_id, &page_no,
+      trx_undo_decode_roll_ptr(node->roll_ptr, &is_insert, &undo_num, &page_no,
                                &offset);
 
       /* If table is temp then it can't have its undo log
       residing in rollback segment with REDO log enabled. */
       bool is_temp = node->table->is_temporary();
 
-      undo_space_id = trx_rseg_id_to_space_id(rseg_id, is_temp);
+      undo_space_id = trx_undo_num_to_space_id(undo_num, is_temp);
 
       mtr_start(&mtr);
 
@@ -888,22 +890,19 @@ try_again:
 #endif /* INNODB_DD_VC_SUPPORT */
 
   /* Cannot call dd_table_open_on_id() before server is fully up */
-  if (!srv_upgrade_old_undo_found && !dict_table_is_system(table_id)) {
-    while (!mysqld_server_started) {
-      if (srv_shutdown_state.load() >= SRV_SHUTDOWN_PURGE) {
-        return (false);
-      }
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+  while (!mysqld_server_started) {
+    if (srv_shutdown_state.load() >= SRV_SHUTDOWN_PURGE) {
+      return (false);
     }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
   }
 
   /* SDI tables are hidden tables and are not registered with global
   dictionary. Open the table internally. Also acquire shared MDL
   of SDI tables. Concurrent DROP TABLE/TABLESPACE would acquire
   exclusive MDL on SDI tables */
-  ut_ad(!dict_table_is_system(table_id));
 
-  if (dict_table_is_sdi(table_id) || srv_upgrade_old_undo_found) {
+  if (dict_table_is_sdi(table_id)) {
     if (dict_table_is_sdi(table_id)) {
       space_id_t space_id = dict_sdi_get_space_id(table_id);
 
@@ -1038,7 +1037,7 @@ try_again:
     we do not have an index to call it with. */
   close_exit:
     /* Purge requires no changes to indexes: we may return */
-    if (dict_table_is_sdi(node->table->id) || srv_upgrade_old_undo_found) {
+    if (dict_table_is_sdi(node->table->id)) {
       if (dict_table_is_sdi(node->table->id)) {
         dd_table_close(node->table, thd, &node->mdl, false);
       } else {
@@ -1284,6 +1283,14 @@ que_thr_t *row_purge_step(que_thr_t *thr) {
   } else {
     row_purge_end(thr);
   }
+
+  /* Most probably this is not needed at all, because purge for virtual columns
+   is disabled in 8.0 (see #ifdef INNODB_DD_VC_SUPPORT) */
+  if (thr->prebuilt != nullptr && thr->prebuilt->blob_heap != nullptr)
+    mem_heap_empty(thr->prebuilt->blob_heap);
+
+  /* compress_heap was not used */
+  ut_ad(thr->prebuilt == 0 || thr->prebuilt->compress_heap == 0);
 
   return (thr);
 }

@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <memory>
 
 #include "keyring_file.h"
+#include "option_usage.h"
 
 /* Keyring_encryption_service_impl */
 #include <components/keyrings/common/component_helpers/include/keyring_encryption_service_definition.h>
@@ -34,14 +35,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <components/keyrings/common/component_helpers/include/keyring_load_service_definition.h>
 /* Keyring_keys_metadata_iterator_service_impl */
 #include <components/keyrings/common/component_helpers/include/keyring_keys_metadata_iterator_service_definition.h>
-/* Log_builtins_keyring */
-#include <components/keyrings/common/component_helpers/include/keyring_log_builtins_definition.h>
 /* Keyring_metadata_query_service_impl */
 #include <components/keyrings/common/component_helpers/include/keyring_metadata_query_service_definition.h>
 /* Keyring_reader_service_impl */
 #include <components/keyrings/common/component_helpers/include/keyring_reader_service_definition.h>
 /* Keyring_writer_service_impl */
 #include <components/keyrings/common/component_helpers/include/keyring_writer_service_definition.h>
+#include <mysql/components/services/component_status_var_service.h>
+
+#include <mysql/components/services/psi_memory.h>
 
 /* clang-format off */
 /**
@@ -132,6 +134,8 @@ using keyring_file::config::g_instance_path;
 /** Dependencies */
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins);
 REQUIRES_SERVICE_PLACEHOLDER(log_builtins_string);
+REQUIRES_SERVICE_PLACEHOLDER(registry_registration);
+REQUIRES_SERVICE_PLACEHOLDER(status_variable_registration);
 
 SERVICE_TYPE(log_builtins) * log_bi;
 SERVICE_TYPE(log_builtins_string) * log_bs;
@@ -193,16 +197,15 @@ bool init_or_reinit_keyring(std::string &err) {
 
   /* Initialize backend handler */
   std::unique_ptr<Keyring_file_backend> new_backend =
-      std::make_unique<Keyring_file_backend>(
-          new_config_pod.get()->config_file_path_,
-          new_config_pod.get()->read_only_);
-  if (!new_backend || !new_backend.get()->valid()) {
+      std::make_unique<Keyring_file_backend>(new_config_pod->config_file_path_,
+                                             new_config_pod->read_only_);
+  if (!new_backend || !new_backend->valid()) {
     err = "Failed to initialize keyring backend";
     return true;
   }
 
   /* Create new operations class */
-  Keyring_operations<Keyring_file_backend> *new_operations = new (std::nothrow)
+  auto *new_operations = new (std::nothrow)
       Keyring_operations<Keyring_file_backend>(true, new_backend.release());
   if (new_operations == nullptr) {
     err = "Failed to allocate memory for keyring operations";
@@ -216,11 +219,29 @@ bool init_or_reinit_keyring(std::string &err) {
   }
 
   std::swap(g_keyring_operations, new_operations);
-  Config_pod *current = g_config_pod;
+  const Config_pod *current = g_config_pod;
   g_config_pod = new_config_pod.release();
-  if (current != nullptr) delete current;
-  if (new_operations != nullptr) delete new_operations;
+  delete current;
+  delete new_operations;
   return false;
+}
+
+SHOW_VAR static component_keyring_file_status_variables[] = {
+    {"option_tracker_usage:File keyring",
+     reinterpret_cast<char *>(&opt_option_tracker_usage_file_keyring),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_UNDEF}};
+
+static bool register_status_variables() {
+  return (SERVICE_PLACEHOLDER(status_variable_registration)
+              ->register_variable(reinterpret_cast<SHOW_VAR *>(
+                  &component_keyring_file_status_variables)) != 0);
+}
+
+static bool unregister_status_variables() {
+  return (SERVICE_PLACEHOLDER(status_variable_registration)
+              ->unregister_variable(reinterpret_cast<SHOW_VAR *>(
+                  &component_keyring_file_status_variables)) != 0);
 }
 
 /**
@@ -229,33 +250,45 @@ bool init_or_reinit_keyring(std::string &err) {
 static mysql_service_status_t keyring_file_init() {
   log_bi = mysql_service_log_builtins;
   log_bs = mysql_service_log_builtins_string;
-
+  if (keyring_file_component_option_usage_init()) {
+    return 1;
+  }
+  if (register_status_variables()) {
+    keyring_file_component_option_usage_deinit();
+    return 1;
+  }
   g_component_callbacks = new (std::nothrow)
       keyring_common::service_implementation::Component_callbacks();
 
-  return false;
+  return 0;
 }
 
 /**
   De-initialization function for component - Used when unloading the component
 */
 static mysql_service_status_t keyring_file_deinit() {
+  if (keyring_file_component_option_usage_deinit()) {
+    return 1;
+  }
+  if (unregister_status_variables()) {
+    return 1;
+  }
   g_keyring_file_inited = false;
   if (g_component_path) free(g_component_path);
   g_component_path = nullptr;
   if (g_instance_path) free(g_instance_path);
   g_instance_path = nullptr;
 
-  if (g_keyring_operations != nullptr) delete g_keyring_operations;
+  delete g_keyring_operations;
   g_keyring_operations = nullptr;
 
-  if (g_config_pod) delete g_config_pod;
+  delete g_config_pod;
   g_config_pod = nullptr;
 
-  if (g_component_callbacks) delete g_component_callbacks;
+  delete g_component_callbacks;
   g_component_callbacks = nullptr;
 
-  return false;
+  return 0;
 }
 
 }  // namespace keyring_file
@@ -273,9 +306,6 @@ KEYRING_COMPONENT_STATUS_IMPLEMENTOR(component_keyring_file);
 KEYRING_COMPONENT_METADATA_QUERY_IMPLEMENTOR(component_keyring_file);
 KEYRING_READER_IMPLEMENTOR(component_keyring_file);
 KEYRING_WRITER_IMPLEMENTOR(component_keyring_file);
-/* Used if log_builtins is not available */
-KEYRING_LOG_BUILTINS_IMPLEMENTOR(component_keyring_file);
-KEYRING_LOG_BUILTINS_STRING_IMPLEMENTOR(component_keyring_file);
 
 /** Component provides */
 BEGIN_COMPONENT_PROVIDES(component_keyring_file)
@@ -287,14 +317,17 @@ PROVIDES_SERVICE(component_keyring_file, keyring_aes),
     PROVIDES_SERVICE(component_keyring_file, keyring_component_metadata_query),
     PROVIDES_SERVICE(component_keyring_file, keyring_reader_with_status),
     PROVIDES_SERVICE(component_keyring_file, keyring_writer),
-    PROVIDES_SERVICE(component_keyring_file, log_builtins),
-    PROVIDES_SERVICE(component_keyring_file, log_builtins_string),
     END_COMPONENT_PROVIDES();
+
+REQUIRES_SERVICE_PLACEHOLDER(psi_memory_v2);
 
 /** List of dependencies */
 BEGIN_COMPONENT_REQUIRES(component_keyring_file)
-REQUIRES_SERVICE(registry), REQUIRES_SERVICE(log_builtins),
-    REQUIRES_SERVICE(log_builtins_string), END_COMPONENT_REQUIRES();
+REQUIRES_SERVICE(log_builtins), REQUIRES_SERVICE(log_builtins_string),
+    REQUIRES_SERVICE(registry_registration),
+    REQUIRES_SERVICE(status_variable_registration),
+    REQUIRES_PSI_MEMORY_SERVICE,
+    END_COMPONENT_REQUIRES();
 
 /** Component description */
 BEGIN_COMPONENT_METADATA(component_keyring_file)

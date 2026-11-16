@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +29,7 @@
 
 bool printSYSTEM_ERROR(FILE *output, const Uint32 *theData, Uint32 len,
                        Uint16 /*receiverBlockNo*/) {
-  const SystemError *const sig = (const SystemError *)theData;
+  const auto *const sig = (const SystemError *)theData;
 
   fprintf(output, "errorRef: H\'%.8x\n", sig->errorRef);
   fprintf(output, "errorCode: %d\n", sig->errorCode);

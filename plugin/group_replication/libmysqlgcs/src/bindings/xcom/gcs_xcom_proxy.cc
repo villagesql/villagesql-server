@@ -94,7 +94,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_get_event_horizon(
       xcom_input_try_push_and_get_reply(data);
   std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
   bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
+      (reply != nullptr && reply->get_payload() != nullptr);
   if (processable_reply) {
     bool const reply_ok = (reply->get_payload()->cli_err == REQUEST_OK);
     if (reply_ok) {
@@ -137,7 +137,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_set_leaders(
       xcom_input_try_push_and_get_reply(data);
   std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
   bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
+      (reply != nullptr && reply->get_payload() != nullptr);
 
   bool successful = false;
   if (processable_reply) {
@@ -161,7 +161,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_get_leaders(uint32_t gid,
       xcom_input_try_push_and_get_reply(data);
   std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
   bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
+      (reply != nullptr && reply->get_payload() != nullptr);
   if (processable_reply) {
     bool const reply_ok = (reply->get_payload()->cli_err == REQUEST_OK);
     if (reply_ok) {
@@ -426,8 +426,8 @@ node_address *Gcs_xcom_proxy_impl::new_node_address_uuid(unsigned int n,
 
 enum_gcs_error Gcs_xcom_proxy_impl::xcom_wait_for_condition(
     My_xp_cond_impl &condition, My_xp_mutex_impl &condition_lock,
-    std::function<bool(void)> need_to_wait,
-    std::function<const std::string(int res)> condition_event) {
+    const std::function<bool(void)> &need_to_wait,
+    const std::function<const std::string(int res)> &condition_event) {
   enum_gcs_error ret = GCS_OK;
   struct timespec ts;
   int res = 0;
@@ -444,7 +444,7 @@ enum_gcs_error Gcs_xcom_proxy_impl::xcom_wait_for_condition(
   if (res != 0) {
     // There was an error
     ret = GCS_NOK;
-    std::string error_string = condition_event(res);
+    std::string const error_string = condition_event(res);
     if (res == ETIMEDOUT) {
       MYSQL_GCS_LOG_ERROR("Timeout while waiting for " << error_string << "!")
     } else if (res == EINVAL) {
@@ -498,9 +498,8 @@ enum_gcs_error Gcs_xcom_proxy_impl::xcom_wait_exit() {
   auto event_string = [](int res) {
     if (res == ETIMEDOUT) {
       return "the group communication engine to exit";
-    } else {
-      return "group communication engine to exit";
     }
+    return "group communication engine to exit";
   };
   return xcom_wait_for_condition(
       m_cond_xcom_exit, m_lock_xcom_exit, [this]() { return !m_is_xcom_exit; },
@@ -538,9 +537,9 @@ void Gcs_xcom_proxy_impl::xcom_wait_for_xcom_comms_status_change(int &status) {
     return "the group communication engine's communications status to change";
   };
 
-  enum_gcs_error res = xcom_wait_for_condition(m_cond_xcom_comms_status,
-                                               m_lock_xcom_comms_status,
-                                               wait_cond, event_string);
+  enum_gcs_error const res = xcom_wait_for_condition(m_cond_xcom_comms_status,
+                                                     m_lock_xcom_comms_status,
+                                                     wait_cond, event_string);
 
   m_lock_xcom_comms_status.lock();
   if (res != GCS_OK) {
@@ -661,7 +660,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_force_config(node_list *nl,
       xcom_input_try_push_and_get_reply(data);
   std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
   bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
+      (reply != nullptr && reply->get_payload() != nullptr);
 
   bool successful = false;
   if (processable_reply) {
@@ -766,7 +765,7 @@ static bool convert_synode_set_to_synode_array(
   if (to.synode_no_array_val == nullptr) goto end;
   to.synode_no_array_len = nr_synodes;
 
-  for (auto &gcs_synod : synode_set) {
+  for (const auto &gcs_synod : synode_set) {
     to.synode_no_array_val[index] = gcs_synod.get_synod();
     index++;
   }
@@ -790,21 +789,28 @@ bool Gcs_xcom_proxy_base::xcom_get_synode_app_data(
       xcom_instance.get_member_id().get_member_id());
   connection_descriptor *con = xcom_client_open_connection(
       xcom_address.get_member_ip(), xcom_address.get_member_port());
-  bool const connected_to_xcom = (con != nullptr);
+  /*
+    xcom_client_open_connection() always hands back an allocated descriptor: a
+    failed connection is reported through fd == -1, in which case the socket and
+    the SSL object have already been released by the network provider. The
+    descriptor itself must be freed in every case.
+  */
+  bool const connected_to_xcom = (con != nullptr && con->fd != -1);
   if (!connected_to_xcom) goto end;
 
   successful = convert_synode_set_to_synode_array(synodes, synode_set);
-  if (!successful) goto end;
-
-  /* Request the data decided at synodes.
-   * synodes is passed with moved semantics, so no need to free afterwards. */
-  successful =
-      xcom_client_get_synode_app_data(con, group_id_hash, synodes, reply);
+  if (successful) {
+    /* Request the data decided at synodes.
+     * synodes is passed with moved semantics, so no need to free afterwards. */
+    successful =
+        xcom_client_get_synode_app_data(con, group_id_hash, synodes, reply);
+  }
 
   /* Close the connection to XCom. */
   xcom_client_close_connection(con);
 
 end:
+  free_connection(con);
   return successful;
 }
 

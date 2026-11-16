@@ -105,7 +105,7 @@ static int fts_query_add_word_for_parser(
     int word_len,                      /*!< in: token length */
     MYSQL_FTPARSER_BOOLEAN_INFO *info) /*!< in: token info */
 {
-  fts_ast_state_t *state = static_cast<fts_ast_state_t *>(param->mysql_ftparam);
+  auto *state = static_cast<fts_ast_state_t *>(param->mysql_ftparam);
   fts_ast_node_t *cur_node = state->cur_node;
   fts_ast_node_t *oper_node = nullptr;
   fts_ast_node_t *term_node = nullptr;
@@ -219,16 +219,17 @@ static int fts_parse_query_internal(
 {
   MYSQL_FTPARSER_BOOLEAN_INFO info;
   const CHARSET_INFO *cs = param->cs;
-  uchar **start = reinterpret_cast<uchar **>(&query);
-  uchar *end = reinterpret_cast<uchar *>(query + len);
+  auto **start = reinterpret_cast<uchar **>(&query);
+  auto *end = reinterpret_cast<uchar *>(query + len);
   FT_WORD w = {nullptr, 0, 0};
+  const bool extra_word_chars = thd_get_ft_query_extra_word_chars();
 
   info.prev = ' ';
   info.quot = nullptr;
   memset(&w, 0, sizeof(w));
   /* Note: We don't handle simple parser mode here,
   but user supplied plugin parser should handler it. */
-  while (fts_get_word(cs, start, end, &w, &info)) {
+  while (fts_get_word(cs, extra_word_chars, start, end, &w, &info)) {
     int ret = param->mysql_add_word(param, reinterpret_cast<char *>(w.pos),
                                     w.len, &info);
     if (ret) {

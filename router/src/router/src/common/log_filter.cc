@@ -25,6 +25,8 @@
 
 #include "mysqlrouter/log_filter.h"
 
+#include "mysql/harness/regex_matcher.h"
+
 #include <algorithm>
 #include <iterator>
 #include <sstream>
@@ -32,19 +34,39 @@
 
 namespace mysqlrouter {
 
+using mysql_harness::RegexMatcher;
+
 const char LogFilter::kFillCharacter = '*';
 
-std::string LogFilter::filter(std::string statement) const {
-  for (const auto &each : patterns_) {
-    statement = std::regex_replace(statement, each.first, each.second);
+struct LogFilter::Impl {
+  void add_pattern(const std::string &pattern, const std::string &replacement) {
+    patterns_.emplace_back(std::make_unique<RegexMatcher>(pattern),
+                           replacement);
   }
+
+  using regex_search_and_replace_patterns =
+      std::pair<std::unique_ptr<RegexMatcher>, std::string>;
+
+  std::vector<regex_search_and_replace_patterns> patterns_;
+};
+
+std::string LogFilter::filter(std::string statement) const {
+  if (impl_->patterns_.size() == 0) {
+    return statement;
+  }
+
+  for (const auto &p : impl_->patterns_) {
+    const auto &matcher = p.first;
+    const auto &pattern = p.second;
+    statement = matcher->replace_all(statement, pattern);
+  }
+
   return statement;
 }
 
 void LogFilter::add_pattern(const std::string &pattern,
                             const std::string &replacement) {
-  patterns_.push_back(std::make_pair(
-      std::regex(pattern, std::regex_constants::icase), replacement));
+  impl_->add_pattern(pattern, replacement);
 }
 
 void SQLLogFilter::add_default_sql_patterns() {
@@ -70,5 +92,9 @@ void SQLLogFilter::add_default_sql_patterns() {
   add_pattern("(IDENTIFIED\\s+(WITH\\s+[a-z0-9_`]+\\s+)?(BY|AS))\\s+'[^']*'",
               "$1 ***");
 }
+
+LogFilter::LogFilter() { impl_ = std::make_unique<Impl>(); }
+
+LogFilter::~LogFilter() = default;
 
 }  // namespace mysqlrouter

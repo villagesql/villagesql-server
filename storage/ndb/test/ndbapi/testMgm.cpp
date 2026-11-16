@@ -1531,7 +1531,7 @@ int runTestReloadConfig(NDBT_Context *ctx, NDBT_Step *step) {
 }
 
 static bool set_config(NdbMgmd &mgmd, const Properties &args,
-                       BaseString encoded_config, Properties &reply) {
+                       const BaseString &encoded_config, Properties &reply) {
   // Fill in default values of other args
   bool v2 = ndb_config_version_v2(mgmd.get_version());
   Properties call_args(args);

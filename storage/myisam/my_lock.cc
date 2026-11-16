@@ -23,10 +23,10 @@
 
 #include "my_config.h"
 
-#include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <sys/types.h>
+#include <cerrno>
+#include <cstdio>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -41,7 +41,7 @@
 #include "storage/myisam/myisam_sys.h"
 
 #ifndef _WIN32
-#include <signal.h>
+#include <csignal>
 
 extern "C" {
 typedef void (*sig_return)(int); /* Returns type from signal */

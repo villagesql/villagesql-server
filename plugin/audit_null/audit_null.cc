@@ -24,8 +24,8 @@
 #include <mysql/plugin.h>
 #include <mysql/plugin_audit.h>
 #include <mysqld_error.h>
-#include <stdio.h>
 #include <sys/types.h>
+#include <cstdio>
 
 #include "lex_string.h"
 #include "m_string.h"
@@ -163,8 +163,8 @@ static SHOW_VAR simple_status[] = {
     {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_GLOBAL}};
 
 static void increment_counter(volatile int *counter) {
-  int value = *counter;
-  int new_value = value + 1;
+  int const value = *counter;
+  int const new_value = value + 1;
   *counter = new_value;
 }
 
@@ -252,7 +252,7 @@ static int audit_null_plugin_init(void *arg [[maybe_unused]]) {
 
 static int audit_null_plugin_deinit(void *arg [[maybe_unused]]) {
   assert(arg);
-  if (g_plugin_installed == true) {
+  if (g_plugin_installed) {
     my_free((void *)(g_record_buffer));
 
     g_record_buffer = nullptr;
@@ -436,6 +436,24 @@ static int process_command(MYSQL_THD thd, LEX_CSTRING event_command,
 }
 
 /**
+   Helper function that returns the actual length of the string composed by
+   snprintf(). Normally snprintf() returns length of the result string, but on
+   error it returns negative value. When the buffer is too small, the return
+   value of snprintf() will be > buffer_size while the result string will be
+   turncated to buffer_size - 1.
+
+   @param snprintf_res  value returned by snprintf
+   @param buffer_size  size of buffer possed to snprintf
+   @return              the actual length of the string
+ */
+static inline size_t get_snprintf_len(int snprintf_res, size_t buffer_size) {
+  return snprintf_res < 0 ? 0
+                          : (static_cast<size_t>(snprintf_res) < buffer_size
+                                 ? static_cast<size_t>(snprintf_res)
+                                 : buffer_size - 1);
+}
+
+/**
   @brief Plugin function handler.
 
   @param [in] thd         Connection context.
@@ -450,8 +468,8 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
   char buffer[2000] = {
       0,
   };
-  int buffer_data = 0;
-  const unsigned long event_subclass =
+  size_t buffer_data = 0;
+  const auto event_subclass =
       static_cast<unsigned long>(*static_cast<const int *>(event));
   char *order_str = THDVAR(thd, event_order_check);
   const int event_order_started = (int)THDVAR(thd, event_order_started);
@@ -466,8 +484,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
   increment_counter(&number_of_calls);
 
   if (event_class == MYSQL_AUDIT_GENERAL_CLASS) {
-    const struct mysql_event_general *event_general =
-        (const struct mysql_event_general *)event;
+    const auto *event_general = (const struct mysql_event_general *)event;
 
     switch (event_general->event_subclass) {
       case MYSQL_AUDIT_GENERAL_LOG:
@@ -486,8 +503,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_CONNECTION_CLASS) {
-    const struct mysql_event_connection *event_connection =
-        (const struct mysql_event_connection *)event;
+    const auto *event_connection = (const struct mysql_event_connection *)event;
 
     switch (event_connection->event_subclass) {
       case MYSQL_AUDIT_CONNECTION_CONNECT:
@@ -506,8 +522,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_PARSE_CLASS) {
-    const struct mysql_event_parse *event_parse =
-        (const struct mysql_event_parse *)event;
+    const auto *event_parse = (const struct mysql_event_parse *)event;
 
     switch (event_parse->event_subclass) {
       case MYSQL_AUDIT_PARSE_PREPARSE:
@@ -572,11 +587,12 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
        (const struct mysql_event_server_shutdown *) event; */
     increment_counter(&number_of_calls_server_shutdown);
   } else if (event_class == MYSQL_AUDIT_COMMAND_CLASS) {
-    const struct mysql_event_command *local_event_command =
-        (const struct mysql_event_command *)event;
+    const auto *local_event_command = (const struct mysql_event_command *)event;
 
     buffer_data =
-        sprintf(buffer, "command_id=\"%d\"", local_event_command->command_id);
+        get_snprintf_len(snprintf(buffer, sizeof(buffer), "command_id=\"%d\"",
+                                  local_event_command->command_id),
+                         sizeof(buffer));
 
     switch (local_event_command->event_subclass) {
       case MYSQL_AUDIT_COMMAND_START:
@@ -589,11 +605,12 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_QUERY_CLASS) {
-    const struct mysql_event_query *event_query =
-        (const struct mysql_event_query *)event;
+    const auto *event_query = (const struct mysql_event_query *)event;
 
-    buffer_data = sprintf(buffer, "sql_command_id=\"%d\"",
-                          (int)event_query->sql_command_id);
+    buffer_data = get_snprintf_len(
+        snprintf(buffer, sizeof(buffer), "sql_command_id=\"%d\"",
+                 (int)event_query->sql_command_id),
+        sizeof(buffer));
 
     switch (event_query->event_subclass) {
       case MYSQL_AUDIT_QUERY_START:
@@ -612,12 +629,12 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_TABLE_ACCESS_CLASS) {
-    const struct mysql_event_table_access *event_table =
-        (const struct mysql_event_table_access *)event;
+    const auto *event_table = (const struct mysql_event_table_access *)event;
 
-    buffer_data =
-        sprintf(buffer, "db=\"%s\" table=\"%s\"",
-                event_table->table_database.str, event_table->table_name.str);
+    buffer_data = get_snprintf_len(
+        snprintf(buffer, sizeof(buffer), "db=\"%s\" table=\"%s\"",
+                 event_table->table_database.str, event_table->table_name.str),
+        sizeof(buffer));
 
     switch (event_table->event_subclass) {
       case MYSQL_AUDIT_TABLE_ACCESS_INSERT:
@@ -636,24 +653,23 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_GLOBAL_VARIABLE_CLASS) {
-    const struct mysql_event_global_variable *event_gvar =
-        (const struct mysql_event_global_variable *)event;
+    const auto *event_gvar = (const struct mysql_event_global_variable *)event;
 
     /* Copy the variable content into the buffer. We do not guarantee that the
        variable value will fit into buffer. The buffer should be large enough
        to be used for the test purposes. */
-    buffer_data =
-        sprintf(buffer, "name=\"%.*s\"",
-                static_cast<int>(std::min(event_gvar->variable_name.length,
-                                          (sizeof(buffer) - 8))),
-                event_gvar->variable_name.str);
+    buffer_data = get_snprintf_len(
+        snprintf(buffer, sizeof(buffer), "name=\"%.*s\"",
+                 static_cast<int>(event_gvar->variable_name.length),
+                 event_gvar->variable_name.str),
+        sizeof(buffer));
 
-    buffer_data +=
-        sprintf(buffer + buffer_data, " value=\"%.*s\"",
-                static_cast<int>(std::min(event_gvar->variable_value.length,
-                                          (sizeof(buffer) - 16))),
-                event_gvar->variable_value.str);
-    buffer[buffer_data] = '\0';
+    buffer_data += get_snprintf_len(
+        snprintf(buffer + buffer_data, sizeof(buffer) - buffer_data,
+                 " value=\"%.*s\"",
+                 static_cast<int>(event_gvar->variable_value.length),
+                 event_gvar->variable_value.str),
+        sizeof(buffer) - buffer_data);
 
     switch (event_gvar->event_subclass) {
       case MYSQL_AUDIT_GLOBAL_VARIABLE_GET:
@@ -666,44 +682,47 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_MESSAGE_CLASS) {
-    const struct mysql_event_message *evt =
+    const auto *evt =
         reinterpret_cast<const struct mysql_event_message *>(event);
 
-    buffer_data +=
-        snprintf(buffer, sizeof(buffer) - 1,
+    buffer_data = get_snprintf_len(
+        snprintf(buffer, sizeof(buffer),
                  "component=\"%.*s\" producer=\"%.*s\" message=\"%.*s\"",
                  static_cast<int>(evt->component.length), evt->component.str,
                  static_cast<int>(evt->producer.length), evt->producer.str,
-                 static_cast<int>(evt->message.length), evt->message.str);
+                 static_cast<int>(evt->message.length), evt->message.str),
+        sizeof(buffer));
 
     for (size_t i = 0; i < evt->key_value_map_length; ++i) {
       if (evt->key_value_map[i].value_type ==
               MYSQL_AUDIT_MESSAGE_VALUE_TYPE_STR &&
           evt->key_value_map[i].value.str.str == nullptr)
-        buffer_data +=
-            snprintf(buffer + buffer_data, sizeof(buffer) - buffer_data - 1,
+        buffer_data += get_snprintf_len(
+            snprintf(buffer + buffer_data, sizeof(buffer) - buffer_data,
                      " key[%zu]=\"%.*s\" value[%zu]=null", i,
                      static_cast<int>(evt->key_value_map[i].key.length),
-                     evt->key_value_map[i].key.str, i);
+                     evt->key_value_map[i].key.str, i),
+            sizeof(buffer) - buffer_data);
       else if (evt->key_value_map[i].value_type ==
                MYSQL_AUDIT_MESSAGE_VALUE_TYPE_STR)
-        buffer_data +=
-            snprintf(buffer + buffer_data, sizeof(buffer) - buffer_data - 1,
+        buffer_data += get_snprintf_len(
+            snprintf(buffer + buffer_data, sizeof(buffer) - buffer_data,
                      " key[%zu]=\"%.*s\" value[%zu]=\"%.*s\"", i,
                      static_cast<int>(evt->key_value_map[i].key.length),
                      evt->key_value_map[i].key.str, i,
                      static_cast<int>(evt->key_value_map[i].value.str.length),
-                     evt->key_value_map[i].value.str.str);
+                     evt->key_value_map[i].value.str.str),
+            sizeof(buffer) - buffer_data);
       else if (evt->key_value_map[i].value_type ==
                MYSQL_AUDIT_MESSAGE_VALUE_TYPE_NUM)
-        buffer_data += snprintf(
-            buffer + buffer_data, sizeof(buffer) - buffer_data - 1,
-            " key[%zu]=\"%.*s\" value[%zu]=%lld", i,
-            static_cast<int>(evt->key_value_map[i].key.length),
-            evt->key_value_map[i].key.str, i, evt->key_value_map[i].value.num);
+        buffer_data += get_snprintf_len(
+            snprintf(buffer + buffer_data, sizeof(buffer) - buffer_data,
+                     " key[%zu]=\"%.*s\" value[%zu]=%lld", i,
+                     static_cast<int>(evt->key_value_map[i].key.length),
+                     evt->key_value_map[i].key.str, i,
+                     evt->key_value_map[i].value.num),
+            sizeof(buffer) - buffer_data);
     }
-
-    buffer[buffer_data] = '\0';
 
     switch (evt->event_subclass) {
       case MYSQL_AUDIT_MESSAGE_INTERNAL:
@@ -727,8 +746,8 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
     event_command.length = 0;
 
     if (exact_check == 1 && event_order_started == 1) {
-      if (!(event_class == MYSQL_AUDIT_GENERAL_CLASS &&
-            event_subclass == MYSQL_AUDIT_GENERAL_ERROR)) {
+      if (event_class != MYSQL_AUDIT_GENERAL_CLASS ||
+          event_subclass != MYSQL_AUDIT_GENERAL_ERROR) {
         strxnmov(buffer, sizeof(buffer), event_name.str, " instead of ",
                  event_token.str, NullS);
         my_message(ER_AUDIT_API_ABORT, buffer, MYF(0));

@@ -88,8 +88,19 @@ using namespace std::string_literals;
 using mysqlrouter::ClusterType;
 
 // for the test with no param
+class CrossExeRouterBootstrapTest
+    : public RouterComponentBootstrapWithDefaultCertsTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  CrossExeRouterBootstrapTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(GetParam()) {}
+};
+
 class RouterBootstrapTest
-    : public RouterComponentBootstrapWithDefaultCertsTest {};
+    : public RouterComponentBootstrapWithDefaultCertsTest {
+ public:
+  RouterBootstrapTest() : RouterComponentBootstrapWithDefaultCertsTest(false) {}
+};
 
 // if we plan to run the Router after the bootstrap we want to overwrite the
 // bind adddresses to prevent MacOS firewall pop ups
@@ -103,7 +114,7 @@ static const std::vector<std::string> overwrite_routing_bind_addresses{
 
 #ifndef _WIN32
 // needs symlink()
-TEST_F(RouterBootstrapTest, bootstrap_and_run_from_symlinked_dir) {
+TEST_P(CrossExeRouterBootstrapTest, bootstrap_and_run_from_symlinked_dir) {
   RecordProperty("Description",
                  "Bootstrap into a symlinked directory and check that the "
                  "router can run from that directory.");
@@ -118,8 +129,12 @@ TEST_F(RouterBootstrapTest, bootstrap_and_run_from_symlinked_dir) {
   const auto bootstrap_x_ro_port = port_pool_.get_next_available();
 
   std::vector<Config> config{
-      {"127.0.0.1", server_port, http_port,
-       get_data_dir().join("bootstrap_gr.js").str()},
+      {
+          "127.0.0.1",
+          server_port,
+          http_port,
+          "bootstrap_gr.js",
+      },
   };
 
   SCOPED_TRACE("// prepare symlinked directory");
@@ -158,12 +173,12 @@ TEST_F(RouterBootstrapTest, bootstrap_and_run_from_symlinked_dir) {
                                              router_options));
 
   SCOPED_TRACE("// launch mock-server for router");
-  const std::string runtime_json_stmts =
-      get_data_dir().join("metadata_dynamic_nodes_v2_gr.js").str();
+  mock_server_spawner().spawn(
+      mock_server_cmdline("metadata_dynamic_nodes_v2_gr.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
 
-  // launch mock server that is our metadata server
-  launch_mysql_server_mock(runtime_json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
   set_mock_metadata(http_port, "cluster-specific-id",
                     {GRNode{server_port, "uuid-1", "ONLINE", "PRIMARY"}}, 0,
                     {ClusterNode{server_port, "uuid-1", server_x_port}});
@@ -173,7 +188,109 @@ TEST_F(RouterBootstrapTest, bootstrap_and_run_from_symlinked_dir) {
 }
 #endif
 
+TEST_P(CrossExeRouterBootstrapTest, NativePassword) {
+  RecordProperty("Description",
+                 "Check that bootstrapping with a user that uses "
+                 "mysql_native_password works after mysql_native_password has "
+                 "converted into a plugin in libmysqlclient.");
+  RecordProperty("Bug", "36915646");
+
+#ifdef SKIP_MYSQL_NATIVE_PASSWORD_TESTS
+  GTEST_SKIP() << "Test needs 'mysql_native_password' client plugin.";
+#endif
+
+  const auto server_port = port_pool_.get_next_available();
+  const auto http_port = port_pool_.get_next_available();
+
+  // launch mock server that is our metadata server for the bootstrap
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_native_password.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
+
+  auto globals_json = json_to_string(
+      MockGrMetadata().router_version(MYSQL_ROUTER_VERSION).as_json());
+
+  ASSERT_NO_THROW(MockServerRestClient(http_port).set_globals(globals_json))
+      << globals_json;
+
+  auto &router =
+      router_spawner()
+          .wait_for_sync_point(Spawner::SyncPoint::NONE)
+          .output_responder(
+              RouterComponentBootstrapTest::kBootstrapOutputResponder)
+          .spawn(
+              {
+                  "--bootstrap=127.0.0.1:" + std::to_string(server_port),
+                  "--directory=" + bootstrap_dir.name(),
+                  "--disable-rest",
+                  "--report-host=dont.query.dns",
+                  "--conf-set-option=DEFAULT.plugin_folder=" +
+                      ProcessManager::get_plugin_dir().str(),
+              },
+              {
+                  // env var to let libmysqlclient find its
+                  // mysql_native_password plugin in tests.
+                  {"LIBMYSQL_PLUGIN_DIR",
+                   ProcessManager::get_plugin_dir().str()},
+              });
+
+  EXPECT_NO_THROW(router.wait_for_exit());
+}
+
+TEST_P(CrossExeRouterBootstrapTest, NativePasswordNoPluginDir) {
+  RecordProperty("Description",
+                 "Check that bootstrapping with a user that uses "
+                 "mysql_native_password gives a useful error if the auth "
+                 "plugin is not found.");
+  RecordProperty("Bug", "36915646");
+
+  const auto server_port = port_pool_.get_next_available();
+
+  // launch mock server that is our metadata server for the bootstrap
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_native_password.js")
+          .port(server_port)
+          .args());
+
+  auto &router =
+      router_spawner()
+          .wait_for_sync_point(Spawner::SyncPoint::NONE)
+          .expected_exit_code(EXIT_FAILURE)
+          .output_responder(
+              RouterComponentBootstrapTest::kBootstrapOutputResponder)
+          .spawn(
+              {
+                  "--bootstrap=127.0.0.1:" + std::to_string(server_port),
+                  "--directory=" + bootstrap_dir.name(),
+                  "--disable-rest",
+                  "--report-host=dont.query.dns",
+                  "--conf-set-option=DEFAULT.plugin_folder=" +
+                      ProcessManager::get_plugin_dir().str(),
+              },
+              {
+                  // don't set LIBMYSQL_PLUGIN_DIR to trigger the auth-error.
+              });
+
+  EXPECT_NO_THROW(router.wait_for_exit());
+
+  EXPECT_THAT(
+      router.get_full_output(),
+      ::testing::HasSubstr(
+          "Authentication plugin 'mysql_native_password' cannot be loaded"));
+
+#ifndef ROUTER_CLIENT_PLUGINS_ARE_BUNDLED
+  EXPECT_THAT(router.get_full_output(),
+              ::testing::HasSubstr("mysql-client-plugins"));
+#else
+  EXPECT_THAT(router.get_full_output(),
+              ::testing::Not(::testing::HasSubstr("mysql-client-plugins")));
+#endif
+}
+
 struct BootstrapTestParam {
+  bool new_executable;
   ClusterType cluster_type;
   std::string description;
   std::string trace_file;
@@ -190,6 +307,10 @@ class RouterBootstrapOkTest
     : public RouterComponentBootstrapWithDefaultCertsTest,
       public ::testing::WithParamInterface<BootstrapTestParam> {
  public:
+  RouterBootstrapOkTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+
   void verify_password_not_logged(const std::string &console_output) {
     const auto lines = mysql_harness::split_string(console_output, '\n');
     size_t found_create_statements{0};
@@ -216,16 +337,17 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
 
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(param.trace_file).str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(mock_server_cmdline(param.trace_file)
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
 
   auto globals = mock_GR_metadata_as_json(
       "cluster-specific-id", classic_ports_to_gr_nodes({server_port}), 0,
       classic_ports_to_cluster_nodes({server_port}), 0, false, "127.0.0.1", "",
-      {2, 2, 0}, "mycluster");
+      {2, 2, 0}, "my-cluster");
   JsonAllocator allocator;
   // instrument the metadata in a way that the Router sees the configuration
   // defaults and configuration change schema as not present for its version, to
@@ -333,7 +455,7 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
                     Eq("cluster_type=rs"),               //
                     Eq("router_id=1"),                   //
                     StartsWith("user="),                 //
-                    Eq("metadata_cluster=mycluster"),    //
+                    Eq("metadata_cluster=my-cluster"),   //
                     Eq("ttl=0.5"),                       //
                     Eq("auth_cache_ttl=-1"),             //
                     Eq("auth_cache_refresh_interval=2")  //
@@ -344,7 +466,7 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
                     Eq("cluster_type=gr"),                //
                     Eq("router_id=1"),                    //
                     StartsWith("user="),                  //
-                    Eq("metadata_cluster=mycluster"),     //
+                    Eq("metadata_cluster=my-cluster"),    //
                     Eq("ttl=0.5"),                        //
                     Eq("auth_cache_ttl=-1"),              //
                     Eq("auth_cache_refresh_interval=2"),  //
@@ -356,7 +478,7 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
               ElementsAre(                     //
                   Eq("bind_address=0.0.0.0"),  //
                   Eq("bind_port=6446"),        //
-                  Eq("destinations=metadata-cache://mycluster/"
+                  Eq("destinations=metadata-cache://my-cluster/"
                      "?role=PRIMARY"),                     //
                   Eq("routing_strategy=first-available"),  //
                   Eq("protocol=classic")                   //
@@ -366,7 +488,7 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
               ElementsAre(                     //
                   Eq("bind_address=0.0.0.0"),  //
                   Eq("bind_port=6447"),        //
-                  Eq("destinations=metadata-cache://mycluster/"
+                  Eq("destinations=metadata-cache://my-cluster/"
                      "?role=SECONDARY"),                             //
                   Eq("routing_strategy=round-robin-with-fallback"),  //
                   Eq("protocol=classic")                             //
@@ -376,7 +498,7 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
               ElementsAre(                     //
                   Eq("bind_address=0.0.0.0"),  //
                   Eq("bind_port=6450"),        //
-                  Eq("destinations=metadata-cache://mycluster/"
+                  Eq("destinations=metadata-cache://my-cluster/"
                      "?role=PRIMARY_AND_SECONDARY"),   //
                   Eq("routing_strategy=round-robin"),  //
                   Eq("protocol=classic"),              //
@@ -388,30 +510,30 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
 
   EXPECT_THAT(
       sections["routing:bootstrap_x_rw"],
-      ElementsAre(                                                      //
-          Eq("bind_address=0.0.0.0"),                                   //
-          Eq("bind_port=6448"),                                         //
-          Eq("destinations=metadata-cache://mycluster/?role=PRIMARY"),  //
-          Eq("routing_strategy=first-available"),                       //
-          Eq("protocol=x"),                                             //
-          Eq("router_require_enforce=0"),                               //
-          Eq("client_ssl_ca="),                                         //
-          Eq("server_ssl_key="),                                        //
-          Eq("server_ssl_cert=")                                        //
+      ElementsAre(                                                       //
+          Eq("bind_address=0.0.0.0"),                                    //
+          Eq("bind_port=6448"),                                          //
+          Eq("destinations=metadata-cache://my-cluster/?role=PRIMARY"),  //
+          Eq("routing_strategy=first-available"),                        //
+          Eq("protocol=x"),                                              //
+          Eq("router_require_enforce=0"),                                //
+          Eq("client_ssl_ca="),                                          //
+          Eq("server_ssl_key="),                                         //
+          Eq("server_ssl_cert=")                                         //
           ));
 
   EXPECT_THAT(
       sections["routing:bootstrap_x_ro"],
-      ElementsAre(                                                        //
-          Eq("bind_address=0.0.0.0"),                                     //
-          Eq("bind_port=6449"),                                           //
-          Eq("destinations=metadata-cache://mycluster/?role=SECONDARY"),  //
-          Eq("routing_strategy=round-robin-with-fallback"),               //
-          Eq("protocol=x"),                                               //
-          Eq("router_require_enforce=0"),                                 //
-          Eq("client_ssl_ca="),                                           //
-          Eq("server_ssl_key="),                                          //
-          Eq("server_ssl_cert=")                                          //
+      ElementsAre(                                                         //
+          Eq("bind_address=0.0.0.0"),                                      //
+          Eq("bind_port=6449"),                                            //
+          Eq("destinations=metadata-cache://my-cluster/?role=SECONDARY"),  //
+          Eq("routing_strategy=round-robin-with-fallback"),                //
+          Eq("protocol=x"),                                                //
+          Eq("router_require_enforce=0"),                                  //
+          Eq("client_ssl_ca="),                                            //
+          Eq("server_ssl_key="),                                           //
+          Eq("server_ssl_cert=")                                           //
           ));
 
   RecordProperty("Worklog", "15649");
@@ -467,7 +589,7 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
 
   // Check if proper UpdateSchema was written on BS
   const std::string public_configuration_defaults_in_md =
-      get_config_defaults_stored_in_md(http_port);
+      get_config_defaults_stored_in_md(http_port) + "\n";
 
   const std::string public_configuration_defaults = get_file_output(
       get_data_dir().join("configuration_defaults_cluster.json").str());
@@ -478,9 +600,13 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
 
 INSTANTIATE_TEST_SUITE_P(
     BootstrapOkTest, RouterBootstrapOkTest,
-    ::testing::Values(BootstrapTestParam{ClusterType::GR_V2, "gr",
+    ::testing::Values(BootstrapTestParam{false, ClusterType::GR_V2, "gr",
                                          "bootstrap_gr.js", "", ""},
-                      BootstrapTestParam{ClusterType::RS_V2, "ar",
+                      BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                                         "bootstrap_ar.js", "", ""},
+                      BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                                         "bootstrap_gr.js", "", ""},
+                      BootstrapTestParam{true, ClusterType::RS_V2, "new_ar",
                                          "bootstrap_ar.js", "", ""}),
     get_test_description);
 
@@ -504,16 +630,17 @@ TEST_P(RouterBootstrapExposeDefaults, BootstrapExposeDefaults) {
 
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(param.trace_file).str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(mock_server_cmdline(param.trace_file)
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
 
   auto globals = mock_GR_metadata_as_json(
       "cluster-specific-id", classic_ports_to_gr_nodes({server_port}), 0,
       classic_ports_to_cluster_nodes({server_port}), 0, false, "127.0.0.1", "",
-      {2, 2, 0}, "mycluster");
+      {2, 2, 0}, "my-cluster");
   JsonAllocator allocator;
   // instrument the metadata in a way that the Router sees the configuration
   // defaults and configuration change schema as not present for its version, to
@@ -566,7 +693,7 @@ TEST_P(RouterBootstrapExposeDefaults, BootstrapExposeDefaults) {
 
   // Check if proper UpdateSchema was written on BS
   const std::string public_configuration_defaults_in_md =
-      get_config_defaults_stored_in_md(http_port);
+      get_config_defaults_stored_in_md(http_port) + "\n";
 
   const std::string public_configuration_defaults = get_file_output(
       get_data_dir().join("configuration_defaults_cluster.json").str());
@@ -577,10 +704,16 @@ TEST_P(RouterBootstrapExposeDefaults, BootstrapExposeDefaults) {
 
 INSTANTIATE_TEST_SUITE_P(
     BootstrapExposeDefaults, RouterBootstrapExposeDefaults,
-    ::testing::Values(BootstrapTestParam{ClusterType::GR_V2, "gr",
+    ::testing::Values(BootstrapTestParam{false, ClusterType::GR_V2, "gr",
                                          "bootstrap_gr.js", "", ""},
-                      BootstrapTestParam{ClusterType::RS_V2, "ar",
-                                         "bootstrap_ar.js", "", ""}),
+                      BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                                         "bootstrap_ar.js", "", ""},
+                      BootstrapTestParam{true, ClusterType::GR_V2,
+                                         "gr_new_bootstrap", "bootstrap_gr.js",
+                                         "", ""},
+                      BootstrapTestParam{true, ClusterType::RS_V2,
+                                         "ar_new_bootstrap", "bootstrap_ar.js",
+                                         "", ""}),
     get_test_description);
 
 struct BootstrapOkBasePortTestParam {
@@ -592,11 +725,17 @@ struct BootstrapOkBasePortTestParam {
   uint16_t expected_port_classic_ro;
   uint16_t expected_port_x_rw;
   uint16_t expected_port_x_ro;
+  bool new_executable;
 };
 
 class RouterBootstrapOkBasePortTest
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapOkBasePortTestParam> {};
+      public ::testing::WithParamInterface<BootstrapOkBasePortTestParam> {
+ public:
+  RouterBootstrapOkBasePortTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 namespace {
 
@@ -613,7 +752,7 @@ void check_bind_port(const std::string &conf_file_content,
       "[routing:"s + route_name + "]\n"
       "bind_address=0.0.0.0\n" +
       "bind_port=" + std::to_string(expected_bind_port) + "\n" +
-      "destinations=metadata-cache://mycluster/?role=" +  server_role + "\n" +
+      "destinations=metadata-cache://my-cluster/?role=" +  server_role + "\n" +
       "routing_strategy=" + routing_strategy + "\n" +
       "protocol=" + protocol_name + "\n";
   // clang-format on
@@ -641,8 +780,12 @@ TEST_P(RouterBootstrapOkBasePortTest, RouterBootstrapOkBasePort) {
   const std::string tracefile = "bootstrap_gr.js";
 
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), get_data_dir().join(tracefile).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          tracefile,
+      },
   };
 
   std::vector<std::string> cmdline = {
@@ -685,19 +828,37 @@ const BootstrapOkBasePortTestParam bootstrap_ok_base_port_test_param[] = {
      /* expected_port_classic_rw */ 6446,
      /* expected_port_classic_ro */ 6447,
      /* expected_port_x_rw */ 6448,
-     /* expected_port_x_ro */ 6449},
+     /* expected_port_x_ro */ 6449, false},
     {"legacy_default_ports",
      /* bs_params */ {"--conf-base-port=0"},
      /* expected_port_classic_rw */ 6446,
      /* expected_port_classic_ro */ 6447,
      /* expected_port_x_rw */ 64460,
-     /* expected_port_x_ro */ 64470},
+     /* expected_port_x_ro */ 64470, false},
     {"consecutive_ports",
      /* bs_params */ {"--conf-base-port=1234"},
      /* expected_port_classic_rw */ 1234,
      /* expected_port_classic_ro */ 1235,
      /* expected_port_x_rw */ 1236,
-     /* expected_port_x_ro */ 1237}};
+     /* expected_port_x_ro */ 1237, false},
+    {"new_default_ports",
+     /* bs_params */ {},
+     /* expected_port_classic_rw */ 6446,
+     /* expected_port_classic_ro */ 6447,
+     /* expected_port_x_rw */ 6448,
+     /* expected_port_x_ro */ 6449, true},
+    {"new_legacy_default_ports",
+     /* bs_params */ {"--conf-base-port=0"},
+     /* expected_port_classic_rw */ 6446,
+     /* expected_port_classic_ro */ 6447,
+     /* expected_port_x_rw */ 64460,
+     /* expected_port_x_ro */ 64470, true},
+    {"new_consecutive_ports",
+     /* bs_params */ {"--conf-base-port=1234"},
+     /* expected_port_classic_rw */ 1234,
+     /* expected_port_classic_ro */ 1235,
+     /* expected_port_x_rw */ 1236,
+     /* expected_port_x_ro */ 1237, true}};
 
 INSTANTIATE_TEST_SUITE_P(RouterBootstrapOkBasePort,
                          RouterBootstrapOkBasePortTest,
@@ -709,11 +870,17 @@ struct BootstrapErrorBasePortTestParam {
 
   std::vector<std::string> bs_params;
   std::string expected_error;
+  bool new_executable;
 };
 
 class RouterBootstrapErrorBasePortTest
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapErrorBasePortTestParam> {};
+      public ::testing::WithParamInterface<BootstrapErrorBasePortTestParam> {
+ public:
+  RouterBootstrapErrorBasePortTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -725,13 +892,18 @@ TEST_P(RouterBootstrapErrorBasePortTest, RouterBootstrapErrorBasePort) {
   const std::string tracefile = "bootstrap_gr.js";
 
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), get_data_dir().join(tracefile).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          tracefile,
+      },
   };
 
   const uint16_t server_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false);
+
+  mock_server_spawner().spawn(
+      mock_server_cmdline(tracefile).port(server_port).args());
 
   // launch the router in bootstrap mode
   std::vector<std::string> cmdline = {"--bootstrap=root:"s + kRootPassword +
@@ -752,16 +924,36 @@ TEST_P(RouterBootstrapErrorBasePortTest, RouterBootstrapErrorBasePort) {
 const BootstrapErrorBasePortTestParam bootstrap_error_base_port_test_param[] = {
     {"negative",
      {"--conf-base-port=-1"},
-     "--conf-base-port needs value between 0 and 65532 inclusive, was '-1'"},
+     "--conf-base-port needs value between 0 and 65532 inclusive, was '-1'",
+     false},
     {"too_big",
      {"--conf-base-port=65533"},
-     "--conf-base-port needs value between 0 and 65532 inclusive, was '65533'"},
+     "--conf-base-port needs value between 0 and 65532 inclusive, was '65533'",
+     false},
     {"nan",
      {"--conf-base-port=abc"},
-     "--conf-base-port needs value between 0 and 65532 inclusive, was 'abc'"},
+     "--conf-base-port needs value between 0 and 65532 inclusive, was 'abc'",
+     false},
     {"empty",
      {"--conf-base-port="},
-     "--conf-base-port needs value between 0 and 65532 inclusive, was ''"},
+     "--conf-base-port needs value between 0 and 65532 inclusive, was ''",
+     false},
+    {"new_negative",
+     {"--conf-base-port=-1"},
+     "--conf-base-port needs value between 0 and 65532 inclusive, was '-1'",
+     true},
+    {"new_too_big",
+     {"--conf-base-port=65533"},
+     "--conf-base-port needs value between 0 and 65532 inclusive, was '65533'",
+     true},
+    {"new_nan",
+     {"--conf-base-port=abc"},
+     "--conf-base-port needs value between 0 and 65532 inclusive, was 'abc'",
+     true},
+    {"new_empty",
+     {"--conf-base-port="},
+     "--conf-base-port needs value between 0 and 65532 inclusive, was ''",
+     true},
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -778,11 +970,17 @@ struct ReBootstrapOkBasePortTestParam {
   uint16_t expected_port_classic_ro;
   uint16_t expected_port_x_rw;
   uint16_t expected_port_x_ro;
+  bool new_executable;
 };
 
 class RouterReBootstrapOkBasePortTest
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<ReBootstrapOkBasePortTestParam> {};
+      public ::testing::WithParamInterface<ReBootstrapOkBasePortTestParam> {
+ public:
+  RouterReBootstrapOkBasePortTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -791,16 +989,18 @@ class RouterReBootstrapOkBasePortTest
  */
 TEST_P(RouterReBootstrapOkBasePortTest, RouterReBootstrapOkBasePort) {
   const auto param = GetParam();
-  const std::string tracefile = "bootstrap_gr.js";
 
   const uint16_t server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port},
-                    0, false, "127.0.0.1", "", {2, 2, 0}, "mycluster");
+                    0, false, "127.0.0.1", "", {2, 2, 0}, "my-cluster");
 
   // do the first bootstrap
   std::vector<std::string> cmdline_first_bs = {
@@ -861,7 +1061,7 @@ const ReBootstrapOkBasePortTestParam rebootstrap_ok_base_port_test_param[] = {
      /* expected_port_classic_rw */ 6446,
      /* expected_port_classic_ro */ 6447,
      /* expected_port_x_rw */ 64460,
-     /* expected_port_x_ro */ 64470},
+     /* expected_port_x_ro */ 64470, false},
 
     // create a config with custom ports [5000, 5001, 5002, 5003]
     // bootstrap again on top of that config with no conf-base-port parameter
@@ -872,7 +1072,7 @@ const ReBootstrapOkBasePortTestParam rebootstrap_ok_base_port_test_param[] = {
      /* expected_port_classic_rw */ 6446,
      /* expected_port_classic_ro */ 6447,
      /* expected_port_x_rw */ 6448,
-     /* expected_port_x_ro */ 6449},
+     /* expected_port_x_ro */ 6449, false},
 
     // create a config with legacy ports [6446, 6447, 64460, 64470]
     // bootstrap again on top of that config with --conf-base-port=1 parameter
@@ -883,7 +1083,7 @@ const ReBootstrapOkBasePortTestParam rebootstrap_ok_base_port_test_param[] = {
      /* expected_port_classic_rw */ 1,
      /* expected_port_classic_ro */ 2,
      /* expected_port_x_rw */ 3,
-     /* expected_port_x_ro */ 4},
+     /* expected_port_x_ro */ 4, false},
 
     // create a config with legacy defaults [6446, 6447, 64460, 64470]
     // bootstrap again on top of that config with specifying conf-base-port
@@ -896,7 +1096,7 @@ const ReBootstrapOkBasePortTestParam rebootstrap_ok_base_port_test_param[] = {
      /* expected_port_classic_rw */ 6446,
      /* expected_port_classic_ro */ 6447,
      /* expected_port_x_rw */ 6448,
-     /* expected_port_x_ro */ 6449},
+     /* expected_port_x_ro */ 6449, false},
 
     // create a config with custom ports [6666, 6667, 6668, 6669]
     // bootstrap again on top of that config with conf-base-port=0 parameter
@@ -908,7 +1108,62 @@ const ReBootstrapOkBasePortTestParam rebootstrap_ok_base_port_test_param[] = {
      /* expected_port_classic_rw */ 6446,
      /* expected_port_classic_ro */ 6447,
      /* expected_port_x_rw */ 64460,
-     /* expected_port_x_ro */ 64470},
+     /* expected_port_x_ro */ 64470, false},
+
+    {"new_overwrite_over_legacy_defaults_keep_them",
+     /* first_bs_params */ {"--conf-base-port=0"},
+     /* second_bs_params */ {},
+     /* expected_port_classic_rw */ 6446,
+     /* expected_port_classic_ro */ 6447,
+     /* expected_port_x_rw */ 64460,
+     /* expected_port_x_ro */ 64470, true},
+
+    // create a config with custom ports [5000, 5001, 5002, 5003]
+    // bootstrap again on top of that config with no conf-base-port parameter
+    // we expect new default ports to be used
+    {"new_overwrite_custom_ports",
+     /* first_bs_params */ {"--conf-base-port=5000"},
+     /* second_bs_params */ {},
+     /* expected_port_classic_rw */ 6446,
+     /* expected_port_classic_ro */ 6447,
+     /* expected_port_x_rw */ 6448,
+     /* expected_port_x_ro */ 6449, true},
+
+    // create a config with legacy ports [6446, 6447, 64460, 64470]
+    // bootstrap again on top of that config with --conf-base-port=1 parameter
+    // we expect 1, 2, 3, 4 ports to overwrite the legacy ports
+    {"new_overwrite_legacy_with_custom_ports",
+     /* first_bs_params */ {"--conf-base-port=0"},
+     /* second_bs_params */ {"--conf-base-port=1"},
+     /* expected_port_classic_rw */ 1,
+     /* expected_port_classic_ro */ 2,
+     /* expected_port_x_rw */ 3,
+     /* expected_port_x_ro */ 4, true},
+
+    // create a config with legacy defaults [6446, 6447, 64460, 64470]
+    // bootstrap again on top of that config with specifying conf-base-port
+    // parameter even though the existing conf uses legacy default we change
+    // them because the user used conf-base-port, so we should not be using
+    // defaults
+    {"new_overwrite_over_legacy_defaults_using_param_change_them",
+     /* first_bs_params */ {"--conf-base-port=0"},
+     /* second_bs_params */ {"--conf-base-port=6446"},
+     /* expected_port_classic_rw */ 6446,
+     /* expected_port_classic_ro */ 6447,
+     /* expected_port_x_rw */ 6448,
+     /* expected_port_x_ro */ 6449, true},
+
+    // create a config with custom ports [6666, 6667, 6668, 6669]
+    // bootstrap again on top of that config with conf-base-port=0 parameter
+    // since the user requested legacy defaults the ports in the config should
+    // be [6446, 6447, 64460, 64470]
+    {"new_overwrite_custom_ports_with_legacy",
+     /* first_bs_params */ {"--conf-base-port=6666"},
+     /* second_bs_params */ {"--conf-base-port=0"},
+     /* expected_port_classic_rw */ 6446,
+     /* expected_port_classic_ro */ 6447,
+     /* expected_port_x_rw */ 64460,
+     /* expected_port_x_ro */ 64470, true},
 
 #ifndef _WIN32
     // create a config with no tcp endpoints
@@ -920,7 +1175,7 @@ const ReBootstrapOkBasePortTestParam rebootstrap_ok_base_port_test_param[] = {
      /* expected_port_classic_rw */ 6446,
      /* expected_port_classic_ro */ 6447,
      /* expected_port_x_rw */ 6448,
-     /* expected_port_x_ro */ 6449},
+     /* expected_port_x_ro */ 6449, false},
 
     // create a config with no tcp endpoints
     // bootstrap again on top of that config with conf-base-port=0 parameter
@@ -932,7 +1187,29 @@ const ReBootstrapOkBasePortTestParam rebootstrap_ok_base_port_test_param[] = {
      /* expected_port_classic_rw */ 6446,
      /* expected_port_classic_ro */ 6447,
      /* expected_port_x_rw */ 64460,
-     /* expected_port_x_ro */ 64470}
+     /* expected_port_x_ro */ 64470, false},
+    // create a config with no tcp endpoints
+    // bootstrap again on top of that config with no conf-base-port parameter
+    // the new defaults should be used
+    {"new_overwrite_over_no_tcp_config_new_defaults",
+     /* first_bs_params */ {"--conf-skip-tcp"},
+     /* second_bs_params */ {},
+     /* expected_port_classic_rw */ 6446,
+     /* expected_port_classic_ro */ 6447,
+     /* expected_port_x_rw */ 6448,
+     /* expected_port_x_ro */ 6449, true},
+
+    // create a config with no tcp endpoints
+    // bootstrap again on top of that config with conf-base-port=0 parameter
+    // since the user requested legacy defaults the ports in the config should
+    // be [6446, 6447, 64460, 64470]
+    {"new_overwrite_over_no_tcp_config_legacy_defaults",
+     /* first_bs_params */ {"--conf-skip-tcp"},
+     /* second_bs_params */ {"--conf-base-port=0"},
+     /* expected_port_classic_rw */ 6446,
+     /* expected_port_classic_ro */ 6447,
+     /* expected_port_x_rw */ 64460,
+     /* expected_port_x_ro */ 64470, true}
 #endif
 };
 
@@ -957,7 +1234,12 @@ INSTANTIATE_TEST_SUITE_P(
  */
 class RouterBootstrapUserIsCurrentUser
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapUserIsCurrentUser()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 TEST_P(RouterBootstrapUserIsCurrentUser, BootstrapUserIsCurrentUser) {
   const auto param = GetParam();
@@ -968,9 +1250,12 @@ TEST_P(RouterBootstrapUserIsCurrentUser, BootstrapUserIsCurrentUser) {
     const char *current_username = current_userpw->pw_name;
 
     std::vector<Config> mock_servers{
-        {"127.0.0.1", port_pool_.get_next_available(),
-         port_pool_.get_next_available(),
-         get_data_dir().join(param.trace_file).str()},
+        {
+            "127.0.0.1",
+            port_pool_.get_next_available(),
+            port_pool_.get_next_available(),
+            param.trace_file,
+        },
     };
 
     std::vector<std::string> router_options = {
@@ -985,16 +1270,25 @@ TEST_P(RouterBootstrapUserIsCurrentUser, BootstrapUserIsCurrentUser) {
 
 INSTANTIATE_TEST_SUITE_P(
     BootstrapUserIsCurrentUser, RouterBootstrapUserIsCurrentUser,
-    ::testing::Values(BootstrapTestParam{ClusterType::GR_V2, "gr",
+    ::testing::Values(BootstrapTestParam{false, ClusterType::GR_V2, "gr",
                                          "bootstrap_gr.js", "", ""},
-                      BootstrapTestParam{ClusterType::RS_V2, "ar",
+                      BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                                         "bootstrap_ar.js", "", ""},
+                      BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                                         "bootstrap_gr.js", "", ""},
+                      BootstrapTestParam{true, ClusterType::RS_V2, "new_ar",
                                          "bootstrap_ar.js", "", ""}),
     get_test_description);
 #endif
 
 class RouterBootstrapailoverClusterIdDiffers
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapailoverClusterIdDiffers()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1004,13 +1298,22 @@ class RouterBootstrapailoverClusterIdDiffers
 TEST_P(RouterBootstrapailoverClusterIdDiffers,
        BootstrapFailoverClusterIdDiffers) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file).str(), false, "cluster-id-1"},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file2).str(), false,
-       "cluster-id-2"},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file,
+          false,
+          "cluster-id-1",
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file2,
+          false,
+          "cluster-id-2",
+      },
   };
 
   // check that it failed as expected
@@ -1023,10 +1326,16 @@ TEST_P(RouterBootstrapailoverClusterIdDiffers,
 INSTANTIATE_TEST_SUITE_P(
     BootstrapFailoverClusterIdDiffers, RouterBootstrapailoverClusterIdDiffers,
     ::testing::Values(
-        BootstrapTestParam{ClusterType::GR_V2, "gr",
+        BootstrapTestParam{false, ClusterType::GR_V2, "gr",
                            "bootstrap_failover_super_read_only_1_gr.js",
                            "bootstrap_failover_super_read_only_1_gr.js", ""},
-        BootstrapTestParam{ClusterType::RS_V2, "ar",
+        BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                           "bootstrap_failover_super_read_only_1_ar.js",
+                           "bootstrap_failover_super_read_only_1_ar.js", ""},
+        BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                           "bootstrap_failover_super_read_only_1_gr.js",
+                           "bootstrap_failover_super_read_only_1_gr.js", ""},
+        BootstrapTestParam{true, ClusterType::RS_V2, "new_ar",
                            "bootstrap_failover_super_read_only_1_ar.js",
                            "bootstrap_failover_super_read_only_1_ar.js", ""}),
     get_test_description);
@@ -1042,15 +1351,23 @@ INSTANTIATE_TEST_SUITE_P(
  */
 class RouterBootstrapOnlySockets
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapOnlySockets()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 TEST_P(RouterBootstrapOnlySockets, BootstrapOnlySockets) {
   const auto param = GetParam();
 
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -1076,15 +1393,41 @@ TEST_P(RouterBootstrapOnlySockets, BootstrapOnlySockets) {
 
 INSTANTIATE_TEST_SUITE_P(
     BootstrapOnlySockets, RouterBootstrapOnlySockets,
-    ::testing::Values(BootstrapTestParam{ClusterType::GR_V2, "gr",
+    ::testing::Values(BootstrapTestParam{false, ClusterType::GR_V2, "gr",
                                          "bootstrap_gr.js", "", ""},
-                      BootstrapTestParam{ClusterType::RS_V2, "ar",
+                      BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                                         "bootstrap_ar.js", "", ""},
+                      BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                                         "bootstrap_gr.js", "", ""},
+                      BootstrapTestParam{true, ClusterType::RS_V2, "new_ar",
                                          "bootstrap_ar.js", "", ""}),
     get_test_description);
 
+class TestMetadataSchemaVersion : public mysqlrouter::MetadataSchemaVersion {
+ public:
+  TestMetadataSchemaVersion(unsigned int pmajor, unsigned int pminor,
+                            unsigned int ppatch, bool new_exe = false)
+      : new_executable{new_exe} {
+    major = pmajor;
+    minor = pminor;
+    patch = ppatch;
+  }
+
+  bool new_executable;
+};
+
+static std::string to_string(const TestMetadataSchemaVersion &version) {
+  const mysqlrouter::MetadataSchemaVersion &v = version;
+  return to_string(v);
+}
+
 class BootstrapUnsupportedSchemaVersionTest
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<mysqlrouter::MetadataSchemaVersion> {
+      public ::testing::WithParamInterface<TestMetadataSchemaVersion> {
+ public:
+  BootstrapUnsupportedSchemaVersionTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
 };
 
 /**
@@ -1101,9 +1444,12 @@ TEST_P(BootstrapUnsupportedSchemaVersionTest,
                  "with metadata version 1.x, it MUST fail and log an error");
 
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_unsupported_schema_version.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_unsupported_schema_version.js",
+      },
   };
 
   const auto version = GetParam();
@@ -1121,21 +1467,36 @@ TEST_P(BootstrapUnsupportedSchemaVersionTest,
 
 INSTANTIATE_TEST_SUITE_P(
     BootstrapUnsupportedSchemaVersion, BootstrapUnsupportedSchemaVersionTest,
-    ::testing::Values(mysqlrouter::MetadataSchemaVersion{0, 0, 1},
-                      mysqlrouter::MetadataSchemaVersion{1, 0, 0},
-                      mysqlrouter::MetadataSchemaVersion{1, 0, 1},
-                      mysqlrouter::MetadataSchemaVersion{3, 1, 0}));
+    ::testing::Values(TestMetadataSchemaVersion{0, 0, 1},
+                      TestMetadataSchemaVersion{1, 0, 0},
+                      TestMetadataSchemaVersion{1, 0, 1},
+                      TestMetadataSchemaVersion{3, 1, 0},
+                      TestMetadataSchemaVersion{0, 0, 1, true},
+                      TestMetadataSchemaVersion{1, 0, 0, true},
+                      TestMetadataSchemaVersion{1, 0, 1, true},
+                      TestMetadataSchemaVersion{3, 1, 0, true}));
+
+class RouterComponentBootstrapTestOld
+    : public RouterComponentBootstrapTest,
+      public ::testing::WithParamInterface<bool> {
+ public:
+  RouterComponentBootstrapTestOld()
+      : RouterComponentBootstrapTest(GetParam()) {}
+};
 
 /**
  * @test
  *       verify that the router errors out cleanly when received some unexpected
  *       error from the metadata server
  */
-TEST_F(RouterBootstrapTest, BootstrapErrorOnFirstQuery) {
+TEST_P(RouterComponentBootstrapTestOld, BootstrapErrorOnFirstQuery) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_error_on_first_query.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_error_on_first_query.js",
+      },
   };
 
   // check that it failed as expected
@@ -1149,11 +1510,15 @@ TEST_F(RouterBootstrapTest, BootstrapErrorOnFirstQuery) {
  *       verify that the router's \c --bootstrap detects an upgrade
  *       metadata schema version and gives a proper message
  */
-TEST_F(RouterBootstrapTest, BootstrapWhileMetadataUpgradeInProgress) {
+TEST_P(RouterComponentBootstrapTestOld,
+       BootstrapWhileMetadataUpgradeInProgress) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_unsupported_schema_version.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_unsupported_schema_version.js",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -1169,14 +1534,17 @@ TEST_F(RouterBootstrapTest, BootstrapWhileMetadataUpgradeInProgress) {
  *       command line correctly
  *       TS_FR12_01
  */
-TEST_F(RouterBootstrapTest, BootstrapPidfileOpt) {
+TEST_P(RouterComponentBootstrapTestOld, BootstrapPidfileOpt) {
   std::string pidfile =
       mysql_harness::Path(get_test_temp_dir_name()).join("test.pid").str();
 
   std::vector<Config> config{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_gr.js",
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -1187,8 +1555,11 @@ TEST_F(RouterBootstrapTest, BootstrapPidfileOpt) {
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
       config, ClusterType::GR_V2, router_options, EXIT_FAILURE,
-      {"^Error: Option --pid-file cannot be used together "
-       "with -B/--bootstrap"},
+      {GetParam() ? "^Error: unknown option '--pid-file'"
+                  : "^Error: Option --pid-file cannot be used together with "
+                    "-B/--bootstrap"
+
+      },
       10s));
 }
 
@@ -1198,7 +1569,7 @@ TEST_F(RouterBootstrapTest, BootstrapPidfileOpt) {
  *       config file correctly
  *       TS_FR13_01
  */
-TEST_F(RouterBootstrapTest, BootstrapPidfileCfg) {
+TEST_P(RouterComponentBootstrapTestOld, BootstrapPidfileCfg) {
   std::string pidfile = mysql_harness::Path(get_test_temp_dir_name())
                             .real_path()
                             .join("test.pid")
@@ -1211,9 +1582,12 @@ TEST_F(RouterBootstrapTest, BootstrapPidfileCfg) {
 
   {
     std::vector<Config> config{
-        {"127.0.0.1", port_pool_.get_next_available(),
-         port_pool_.get_next_available(),
-         get_data_dir().join("bootstrap_gr.js").str()},
+        {
+            "127.0.0.1",
+            port_pool_.get_next_available(),
+            port_pool_.get_next_available(),
+            "bootstrap_gr.js",
+        },
     };
 
     std::vector<std::string> router_options = {
@@ -1242,7 +1616,7 @@ TEST_F(RouterBootstrapTest, BootstrapPidfileCfg) {
  *       ROUTER_PID is specified
  *       TS_FR13_02
  */
-TEST_F(RouterBootstrapTest, BootstrapPidfileEnv) {
+TEST_P(RouterComponentBootstrapTestOld, BootstrapPidfileEnv) {
   // Set ROUTER_PID
   std::string pidfile = mysql_harness::Path(get_test_temp_dir_name())
                             .real_path()
@@ -1257,9 +1631,12 @@ TEST_F(RouterBootstrapTest, BootstrapPidfileEnv) {
 
   {
     std::vector<Config> config{
-        {"127.0.0.1", port_pool_.get_next_available(),
-         port_pool_.get_next_available(),
-         get_data_dir().join("bootstrap_gr.js").str()},
+        {
+            "127.0.0.1",
+            port_pool_.get_next_available(),
+            port_pool_.get_next_available(),
+            "bootstrap_gr.js",
+        },
     };
 
     std::vector<std::string> router_options = {
@@ -1289,9 +1666,17 @@ TEST_F(RouterBootstrapTest, BootstrapPidfileEnv) {
       << config_file_str << std::endl;
 }
 
+INSTANTIATE_TEST_SUITE_P(NewAndOldBootstrap, RouterComponentBootstrapTestOld,
+                         ::testing::Values(false, true));
+
 class RouterBootstrapFailoverSuperReadonly
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapFailoverSuperReadonly()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1307,14 +1692,24 @@ TEST_P(RouterBootstrapFailoverSuperReadonly, BootstrapFailoverSuperReadonly) {
   const auto param = GetParam();
 
   std::vector<Config> config{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file2).str()},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file2,
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(config, param.cluster_type));
@@ -1323,17 +1718,28 @@ TEST_P(RouterBootstrapFailoverSuperReadonly, BootstrapFailoverSuperReadonly) {
 INSTANTIATE_TEST_SUITE_P(
     BootstrapFailoverSuperReadonly, RouterBootstrapFailoverSuperReadonly,
     ::testing::Values(
-        BootstrapTestParam{ClusterType::GR_V2, "gr",
+        BootstrapTestParam{false, ClusterType::GR_V2, "gr",
                            "bootstrap_failover_super_read_only_1_gr.js",
                            "bootstrap_gr.js", ""},
-        BootstrapTestParam{ClusterType::RS_V2, "ar",
+        BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                           "bootstrap_failover_super_read_only_1_ar.js",
+                           "bootstrap_ar.js", ""},
+        BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                           "bootstrap_failover_super_read_only_1_gr.js",
+                           "bootstrap_gr.js", ""},
+        BootstrapTestParam{true, ClusterType::RS_V2, "new_ar",
                            "bootstrap_failover_super_read_only_1_ar.js",
                            "bootstrap_ar.js", ""}),
     get_test_description);
 
 class RouterBootstrapFailoverSuperReadonly2ndNodeDead
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapFailoverSuperReadonly2ndNodeDead()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1364,16 +1770,27 @@ TEST_P(RouterBootstrapFailoverSuperReadonly2ndNodeDead,
   const auto dead_port = port_pool_.get_next_available();
   std::vector<Config> config{
       // member-1, PRIMARY, fails at first write
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
       // member-2, unreachable
-      {"127.0.0.1", dead_port, port_pool_.get_next_available(), "",
-       /*unaccessible=*/true},
+      {
+          "127.0.0.1",
+          dead_port,
+          port_pool_.get_next_available(),
+          "",
+          /*unaccessible=*/true,
+      },
       // member-3, succeeds
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file2).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file2,
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -1389,17 +1806,28 @@ INSTANTIATE_TEST_SUITE_P(
     BootstrapFailoverSuperReadonly2ndNodeDead,
     RouterBootstrapFailoverSuperReadonly2ndNodeDead,
     ::testing::Values(
-        BootstrapTestParam{ClusterType::GR_V2, "gr",
+        BootstrapTestParam{false, ClusterType::GR_V2, "gr",
                            "bootstrap_failover_super_read_only_1_gr.js",
                            "bootstrap_gr.js", ""},
-        BootstrapTestParam{ClusterType::RS_V2, "ar",
+        BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                           "bootstrap_failover_super_read_only_1_ar.js",
+                           "bootstrap_ar.js", ""},
+        BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                           "bootstrap_failover_super_read_only_1_gr.js",
+                           "bootstrap_gr.js", ""},
+        BootstrapTestParam{true, ClusterType::RS_V2, "new_ar",
                            "bootstrap_failover_super_read_only_1_ar.js",
                            "bootstrap_ar.js", ""}),
     get_test_description);
 
 class RouterBootstrapFailoverPrimaryUnreachable
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapFailoverPrimaryUnreachable()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1418,16 +1846,27 @@ TEST_P(RouterBootstrapFailoverPrimaryUnreachable,
   const auto dead_port = port_pool_.get_next_available();
   std::vector<Config> config{
       // member-1, fails at first write (SEONDARY)
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
       // member-2, fails at first write (SEONDARY)
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
       // member-3, unreachable (potential PRIMARY)
-      {"127.0.0.1", dead_port, port_pool_.get_next_available(), "",
-       /*unaccessible=*/true},
+      {
+          "127.0.0.1",
+          dead_port,
+          port_pool_.get_next_available(),
+          "",
+          /*unaccessible=*/true,
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -1442,17 +1881,28 @@ INSTANTIATE_TEST_SUITE_P(
     BootstrapFailoverPrimaryUnreachable,
     RouterBootstrapFailoverPrimaryUnreachable,
     ::testing::Values(
-        BootstrapTestParam{ClusterType::GR_V2, "gr",
+        BootstrapTestParam{false, ClusterType::GR_V2, "gr",
                            "bootstrap_failover_super_read_only_1_gr.js", "",
                            ""},
-        BootstrapTestParam{ClusterType::RS_V2, "ar",
+        BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                           "bootstrap_failover_super_read_only_1_ar.js", "",
+                           ""},
+        BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                           "bootstrap_failover_super_read_only_1_gr.js", "",
+                           ""},
+        BootstrapTestParam{true, ClusterType::RS_V2, "new_ar",
                            "bootstrap_failover_super_read_only_1_ar.js", "",
                            ""}),
     get_test_description);
 
 class RouterBootstrapFailoverSuperReadonlyCreateAccountFails
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapFailoverSuperReadonlyCreateAccountFails()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1471,18 +1921,28 @@ TEST_P(RouterBootstrapFailoverSuperReadonlyCreateAccountFails,
 
   std::vector<Config> config{
       // member-1: SECONDARY, fails at DROP USER due to RW request on RO node
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
 
       // member-2: PRIMARY, succeeds
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file2).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file2,
+      },
 
       // member-3: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(config, param.cluster_type));
@@ -1493,18 +1953,31 @@ INSTANTIATE_TEST_SUITE_P(
     RouterBootstrapFailoverSuperReadonlyCreateAccountFails,
     ::testing::Values(
         BootstrapTestParam{
-            ClusterType::GR_V2, "gr",
+            false, ClusterType::GR_V2, "gr",
             "bootstrap_failover_super_read_only_dead_2nd_1_gr.js",
             "bootstrap_failover_reconfigure_ok.js", ""},
         BootstrapTestParam{
-            ClusterType::RS_V2, "ar",
+            false, ClusterType::RS_V2, "ar",
+            "bootstrap_failover_super_read_only_dead_2nd_1_ar.js",
+            "bootstrap_failover_reconfigure_ok.js", ""},
+        BootstrapTestParam{
+            true, ClusterType::GR_V2, "new_gr",
+            "bootstrap_failover_super_read_only_dead_2nd_1_gr.js",
+            "bootstrap_failover_reconfigure_ok.js", ""},
+        BootstrapTestParam{
+            true, ClusterType::RS_V2, "new_ar",
             "bootstrap_failover_super_read_only_dead_2nd_1_ar.js",
             "bootstrap_failover_reconfigure_ok.js", ""}),
     get_test_description);
 
 class RouterBootstrapFailoverSuperReadonlyCreateAccountGrantFails
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapFailoverSuperReadonlyCreateAccountGrantFails()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1520,17 +1993,28 @@ TEST_P(RouterBootstrapFailoverSuperReadonlyCreateAccountGrantFails,
        BootstrapFailoverSuperReadonlyCreateAccountGrantFails) {
   std::vector<Config> config{
       // member-1: SECONDARY fails and exits after GRANT
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file,
+      },
 
       // member-2: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
 
       // member-3: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -1544,12 +2028,15 @@ TEST_P(RouterBootstrapFailoverSuperReadonlyCreateAccountGrantFails,
 INSTANTIATE_TEST_SUITE_P(
     BootstrapFailoverSuperReadonlyCreateAccountGrantFails,
     RouterBootstrapFailoverSuperReadonlyCreateAccountGrantFails,
-    ::testing::Values(BootstrapTestParam{ClusterType::GR_V2, "gr",
-                                         "bootstrap_failover_at_grant_gr.js",
-                                         "", ""},
-                      BootstrapTestParam{ClusterType::RS_V2, "ar",
-                                         "bootstrap_failover_at_grant_ar.js",
-                                         "", ""}),
+    ::testing::Values(
+        BootstrapTestParam{false, ClusterType::GR_V2, "gr",
+                           "bootstrap_failover_at_grant_gr.js", "", ""},
+        BootstrapTestParam{false, ClusterType::RS_V2, "ar",
+                           "bootstrap_failover_at_grant_ar.js", "", ""},
+        BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                           "bootstrap_failover_at_grant_gr.js", "", ""},
+        BootstrapTestParam{true, ClusterType::RS_V2, "new_ar",
+                           "bootstrap_failover_at_grant_ar.js", "", ""}),
     get_test_description);
 
 /**
@@ -1567,16 +2054,27 @@ INSTANTIATE_TEST_SUITE_P(
  *
  * @todo needs unix-socket support in the mock-server
  */
-TEST_F(RouterBootstrapTest, DISABLED_BootstrapFailoverSuperReadonlyFromSocket) {
+TEST_P(CrossExeRouterBootstrapTest,
+       DISABLED_BootstrapFailoverSuperReadonlyFromSocket) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_failover_super_read_only_1.js").str()},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_failover_super_read_only_1.js",
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_gr.js",
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -1591,7 +2089,12 @@ TEST_F(RouterBootstrapTest, DISABLED_BootstrapFailoverSuperReadonlyFromSocket) {
 
 class RouterBootstrapFailoverSuperReadonlyNewPrimaryCrash
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapFailoverSuperReadonlyNewPrimaryCrash()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1607,19 +2110,28 @@ TEST_P(RouterBootstrapFailoverSuperReadonlyNewPrimaryCrash,
        BootstrapFailoverSuperReadonlyNewPrimaryCrash) {
   std::vector<Config> mock_servers{
       // member-1: PRIMARY, fails at DROP USER
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file,
+      },
 
       // member-2: PRIMARY, but crashing
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file2).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file2,
+      },
 
       // member-3: newly elected PRIMARY, succeeds
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file3).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file3,
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(
@@ -1631,12 +2143,22 @@ INSTANTIATE_TEST_SUITE_P(
     RouterBootstrapFailoverSuperReadonlyNewPrimaryCrash,
     ::testing::Values(
         BootstrapTestParam{
-            ClusterType::GR_V2, "gr",
+            false, ClusterType::GR_V2, "gr",
             "bootstrap_failover_super_read_only_dead_2nd_1_gr.js",
             "bootstrap_failover_at_crash.js",
             "bootstrap_failover_reconfigure_ok.js"},
         BootstrapTestParam{
-            ClusterType::RS_V2, "ar",
+            false, ClusterType::RS_V2, "ar",
+            "bootstrap_failover_super_read_only_dead_2nd_1_ar.js",
+            "bootstrap_failover_at_crash.js",
+            "bootstrap_failover_reconfigure_ok.js"},
+        BootstrapTestParam{
+            true, ClusterType::GR_V2, "new_gr",
+            "bootstrap_failover_super_read_only_dead_2nd_1_gr.js",
+            "bootstrap_failover_at_crash.js",
+            "bootstrap_failover_reconfigure_ok.js"},
+        BootstrapTestParam{
+            true, ClusterType::RS_V2, "new_ar",
             "bootstrap_failover_super_read_only_dead_2nd_1_ar.js",
             "bootstrap_failover_at_crash.js",
             "bootstrap_failover_reconfigure_ok.js"}),
@@ -1645,14 +2167,14 @@ INSTANTIATE_TEST_SUITE_P(
 /**
  * @test
  * This test proves that bootstrap will not print out the success message
- * ("MySQL Router configured for the InnoDB cluster 'mycluster'" and many lines
+ * ("MySQL Router configured for the InnoDB cluster 'my-cluster'" and many lines
  *  that follow it) until entire bootstrap succeeds.
  *
  * At the time of writing, the last operation that bootstrap performs is
  * writing a config file and backing up the old one.  Therefore we use that
  * as the basis of assessing the above expectation is met.
  */
-TEST_F(RouterBootstrapTest,
+TEST_P(CrossExeRouterBootstrapTest,
        bootstrap_report_not_shown_until_bootstrap_succeeds) {
   TempDirectory bootstrap_directory;
 
@@ -1679,12 +2201,14 @@ TEST_F(RouterBootstrapTest,
   // launch mock server that is our metadata server for the bootstrap
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts =
-      get_data_dir()
-          .join("bootstrap_report_host.js")
-          .str();  // we piggy back on existing .js to avoid creating a new one
-  auto &server_mock = launch_mysql_server_mock(json_stmts, server_port,
-                                               EXIT_SUCCESS, false, http_port);
+
+  auto &server_mock = mock_server_spawner().spawn(
+      // we piggy back on existing .js to avoid creating a new one
+      mock_server_cmdline("bootstrap_report_host.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
 
@@ -1704,7 +2228,7 @@ TEST_F(RouterBootstrapTest,
   // displayed
   EXPECT_THAT(router.get_full_output(), ::testing::Not(::testing::HasSubstr(
                                             "MySQL Router configured for the "
-                                            "InnoDB cluster 'mycluster'")));
+                                            "InnoDB cluster 'my-cluster'")));
 
   server_mock.kill();
 }
@@ -1713,12 +2237,15 @@ TEST_F(RouterBootstrapTest,
  * @test
  *        verify connection times at bootstrap can be configured
  */
-TEST_F(RouterBootstrapTest,
+TEST_P(CrossExeRouterBootstrapTest,
        BootstrapSucceedWhenServerResponseLessThanReadTimeout) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_exec_time_2_seconds.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_exec_time_2_seconds.js",
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -1730,20 +2257,31 @@ TEST_F(RouterBootstrapTest,
                                              router_options, EXIT_SUCCESS, {}));
 }
 
-TEST_F(RouterBootstrapTest, BootstrapAccessErrorAtGrantStatement) {
+TEST_P(CrossExeRouterBootstrapTest, BootstrapAccessErrorAtGrantStatement) {
   std::vector<Config> config{
       // member-1: PRIMARY, fails after GRANT
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_access_error_at_grant.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_access_error_at_grant.js",
+      },
 
       // member-2: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
 
       // member-3: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(
@@ -1754,7 +2292,12 @@ TEST_F(RouterBootstrapTest, BootstrapAccessErrorAtGrantStatement) {
 
 class RouterBootstrapBootstrapNoGroupReplicationSetup
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapTestParam> {};
+      public ::testing::WithParamInterface<BootstrapTestParam> {
+ public:
+  RouterBootstrapBootstrapNoGroupReplicationSetup()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1771,7 +2314,7 @@ TEST_P(RouterBootstrapBootstrapNoGroupReplicationSetup,
           "127.0.0.1",
           port_pool_.get_next_available(),
           port_pool_.get_next_available(),
-          get_data_dir().join(param.trace_file).str(),
+          param.trace_file,
       },
   };
 
@@ -1780,25 +2323,27 @@ TEST_P(RouterBootstrapBootstrapNoGroupReplicationSetup,
                          {"to have Group Replication running"}));
 }
 
-INSTANTIATE_TEST_SUITE_P(BootstrapNoGroupReplicationSetup,
-                         RouterBootstrapBootstrapNoGroupReplicationSetup,
-                         ::testing::Values(BootstrapTestParam{
-                             ClusterType::GR_V2, "gr", "bootstrap_no_gr.js", "",
-                             ""}),
-                         get_test_description);
+INSTANTIATE_TEST_SUITE_P(
+    BootstrapNoGroupReplicationSetup,
+    RouterBootstrapBootstrapNoGroupReplicationSetup,
+    ::testing::Values(BootstrapTestParam{false, ClusterType::GR_V2, "gr",
+                                         "bootstrap_no_gr.js", "", ""},
+                      BootstrapTestParam{true, ClusterType::GR_V2, "new_gr",
+                                         "bootstrap_no_gr.js", "", ""}),
+    get_test_description);
 
 /**
  * @test
  *       ensure a reasonable error message if metadata schema does not exist.
  */
-TEST_F(RouterBootstrapTest, BootstrapNoMetadataSchema) {
+TEST_P(CrossExeRouterBootstrapTest, BootstrapNoMetadataSchema) {
   std::vector<Config> config{
       // member-1: no metadata schema
       {
           "127.0.0.1",
           port_pool_.get_next_available(),
           port_pool_.get_next_available(),
-          get_data_dir().join("bootstrap_no_schema.js").str(),
+          "bootstrap_no_schema.js",
       },
   };
 
@@ -1811,12 +2356,14 @@ TEST_F(RouterBootstrapTest, BootstrapNoMetadataSchema) {
  * @test
  *        verify connection times at bootstrap can be configured
  */
-TEST_F(RouterBootstrapTest, BootstrapFailWhenServerResponseExceedsReadTimeout) {
-  std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_exec_time_2_seconds.js").str()},
-  };
+TEST_P(CrossExeRouterBootstrapTest,
+       BootstrapFailWhenServerResponseExceedsReadTimeout) {
+  std::vector<Config> mock_servers{{
+      "127.0.0.1",
+      port_pool_.get_next_available(),
+      port_pool_.get_next_available(),
+      "bootstrap_exec_time_2_seconds.js",
+  }};
 
   std::vector<std::string> router_options = {
       "--bootstrap=" + mock_servers.at(0).ip + ":" +
@@ -1834,13 +2381,14 @@ TEST_F(RouterBootstrapTest, BootstrapFailWhenServerResponseExceedsReadTimeout) {
  *       verify that bootstrap succeeds when master key writer is used
  *
  */
-TEST_F(RouterBootstrapTest,
+TEST_P(CrossExeRouterBootstrapTest,
        NoMasterKeyFileWhenBootstrapPassWithMasterKeyReader) {
-  std::vector<Config> config{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
-  };
+  std::vector<Config> config{{
+      "127.0.0.1",
+      port_pool_.get_next_available(),
+      port_pool_.get_next_available(),
+      "bootstrap_gr.js",
+  }};
 
   ScriptGenerator script_generator(ProcessManager::get_origin(),
                                    get_test_temp_dir_name());
@@ -1871,7 +2419,8 @@ TEST_F(RouterBootstrapTest,
  * @test
  *       verify that master key file is not overridden by subsequent bootstrap.
  */
-TEST_F(RouterBootstrapTest, MasterKeyFileNotChangedAfterSecondBootstrap) {
+TEST_P(CrossExeRouterBootstrapTest,
+       MasterKeyFileNotChangedAfterSecondBootstrap) {
   mysql_harness::mkdir(Path(bootstrap_dir.name()).str(), 0777);
   mysql_harness::mkdir(Path(bootstrap_dir.name()).join("data").str(), 0777);
 
@@ -1894,11 +2443,12 @@ TEST_F(RouterBootstrapTest, MasterKeyFileNotChangedAfterSecondBootstrap) {
   const auto master_key = get_file_output(master_key_path);
 
   SCOPED_TRACE("// bootstrap.");
-  std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
-  };
+  std::vector<Config> mock_servers{{
+      "127.0.0.1",
+      port_pool_.get_next_available(),
+      port_pool_.get_next_available(),
+      "bootstrap_gr.js",
+  }};
 
   std::vector<std::string> router_options = {
       "--bootstrap=" + mock_servers.at(0).ip + ":" +
@@ -1913,14 +2463,19 @@ TEST_F(RouterBootstrapTest, MasterKeyFileNotChangedAfterSecondBootstrap) {
 }
 
 struct UseGrNotificationTestParams {
+  bool new_executable;
   std::vector<std::string> bootstrap_params;
   std::vector<std::string> expected_config_lines;
   mysqlrouter::MetadataSchemaVersion metadata_schema_version;
 };
 
 class ConfUseGrNotificationParamTest
-    : public RouterBootstrapTest,
-      public ::testing::WithParamInterface<UseGrNotificationTestParams> {};
+    : public RouterComponentBootstrapTest,
+      public ::testing::WithParamInterface<UseGrNotificationTestParams> {
+ public:
+  ConfUseGrNotificationParamTest()
+      : RouterComponentBootstrapTest(GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -1931,11 +2486,13 @@ TEST_P(ConfUseGrNotificationParamTest, ConfUseGrNotificationParam) {
   const auto server_port = port_pool_.get_next_available();
   const auto server_x_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  auto &server_mock = launch_mysql_server_mock(json_stmts, server_port,
-                                               EXIT_SUCCESS, false, http_port);
+  auto &server_mock =
+      mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                      .port(server_port)
+                                      .http_port(http_port)
+                                      .args());
 
   set_mock_metadata(http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port},
@@ -1984,12 +2541,14 @@ TEST_P(ConfUseGrNotificationParamTest, ConfUseGrNotificationParam) {
               ::testing::IsSupersetOf(GetParam().expected_config_lines));
   server_mock.send_clean_shutdown_event();
   EXPECT_NO_THROW(server_mock.wait_for_exit());
-  const std::string runtime_json_stmts =
-      get_data_dir().join("metadata_dynamic_nodes_v2_gr.js").str();
 
   // launch mock server that is our metadata server
-  launch_mysql_server_mock(runtime_json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("metadata_dynamic_nodes_v2_gr.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
+
   set_mock_metadata(http_port, "cluster-specific-id",
                     {GRNode{server_port, "uuid-1", "ONLINE", "PRIMARY"}}, 0,
                     {ClusterNode{server_port, "uuid-1", server_x_port}});
@@ -2003,52 +2562,113 @@ INSTANTIATE_TEST_SUITE_P(
     ConfUseGrNotificationParam, ConfUseGrNotificationParamTest,
     ::testing::Values(
         // 0, 1) --conf-use-gr-notifications with no param
-        UseGrNotificationTestParams{{"--conf-use-gr-notifications"},
+        UseGrNotificationTestParams{false,
+                                    {"--conf-use-gr-notifications"},
                                     {"use_gr_notifications=1", "ttl=60",
                                      "auth_cache_refresh_interval=60"},
                                     {2, 0, 3}},
-        UseGrNotificationTestParams{{"--conf-use-gr-notifications"},
+        UseGrNotificationTestParams{false,
+                                    {"--conf-use-gr-notifications"},
                                     {"use_gr_notifications=1", "ttl=60",
                                      "auth_cache_refresh_interval=60"},
                                     {2, 1, 0}},
         // 2, 3) --conf-use-gr-notifications=1
         // [@FR5.2.2]
-        UseGrNotificationTestParams{{"--conf-use-gr-notifications=1"},
+        UseGrNotificationTestParams{false,
+                                    {"--conf-use-gr-notifications=1"},
                                     {"use_gr_notifications=1", "ttl=60",
                                      "auth_cache_refresh_interval=60"},
                                     {2, 0, 3}},
-        UseGrNotificationTestParams{{"--conf-use-gr-notifications=1"},
+        UseGrNotificationTestParams{false,
+                                    {"--conf-use-gr-notifications=1"},
                                     {"use_gr_notifications=1", "ttl=60",
                                      "auth_cache_refresh_interval=60"},
                                     {2, 1, 0}},
         // 4, 5) no --conf-use-gr-notifications param
-        UseGrNotificationTestParams{{},
+        UseGrNotificationTestParams{false,
+                                    {},
                                     {"use_gr_notifications=0", "ttl=0.5",
                                      "auth_cache_refresh_interval=2"},
                                     {2, 0, 3}},
-        UseGrNotificationTestParams{{},
+        UseGrNotificationTestParams{false,
+                                    {},
                                     {"use_gr_notifications=0", "ttl=0.5",
                                      "auth_cache_refresh_interval=2"},
                                     {2, 1, 0}},
         // 6, 7) --conf-use-gr-notification=0
         // [@FR5.2.1]
-        UseGrNotificationTestParams{{"--conf-use-gr-notifications=0"},
+        UseGrNotificationTestParams{false,
+                                    {"--conf-use-gr-notifications=0"},
                                     {"use_gr_notifications=0", "ttl=0.5",
                                      "auth_cache_refresh_interval=2"},
                                     {2, 0, 3}},
-        UseGrNotificationTestParams{{"--conf-use-gr-notifications=0"},
+        UseGrNotificationTestParams{false,
+                                    {"--conf-use-gr-notifications=0"},
+                                    {"use_gr_notifications=0", "ttl=0.5",
+                                     "auth_cache_refresh_interval=2"},
+                                    {2, 1, 0}},
+
+        // 0, 1) --conf-use-gr-notifications with no param
+        UseGrNotificationTestParams{true,
+                                    {"--conf-use-gr-notifications"},
+                                    {"use_gr_notifications=1", "ttl=60",
+                                     "auth_cache_refresh_interval=60"},
+                                    {2, 0, 3}},
+        UseGrNotificationTestParams{true,
+                                    {"--conf-use-gr-notifications"},
+                                    {"use_gr_notifications=1", "ttl=60",
+                                     "auth_cache_refresh_interval=60"},
+                                    {2, 1, 0}},
+        // 2, 3) --conf-use-gr-notifications=1
+        // [@FR5.2.2]
+        UseGrNotificationTestParams{true,
+                                    {"--conf-use-gr-notifications=1"},
+                                    {"use_gr_notifications=1", "ttl=60",
+                                     "auth_cache_refresh_interval=60"},
+                                    {2, 0, 3}},
+        UseGrNotificationTestParams{true,
+                                    {"--conf-use-gr-notifications=1"},
+                                    {"use_gr_notifications=1", "ttl=60",
+                                     "auth_cache_refresh_interval=60"},
+                                    {2, 1, 0}},
+        // 4, 5) no --conf-use-gr-notifications param
+        UseGrNotificationTestParams{true,
+                                    {},
+                                    {"use_gr_notifications=0", "ttl=0.5",
+                                     "auth_cache_refresh_interval=2"},
+                                    {2, 0, 3}},
+        UseGrNotificationTestParams{true,
+                                    {},
+                                    {"use_gr_notifications=0", "ttl=0.5",
+                                     "auth_cache_refresh_interval=2"},
+                                    {2, 1, 0}},
+        // 6, 7) --conf-use-gr-notification=0
+        // [@FR5.2.1]
+        UseGrNotificationTestParams{true,
+                                    {"--conf-use-gr-notifications=0"},
+                                    {"use_gr_notifications=0", "ttl=0.5",
+                                     "auth_cache_refresh_interval=2"},
+                                    {2, 0, 3}},
+        UseGrNotificationTestParams{true,
+                                    {"--conf-use-gr-notifications=0"},
                                     {"use_gr_notifications=0", "ttl=0.5",
                                      "auth_cache_refresh_interval=2"},
                                     {2, 1, 0}}));
 
-class ErrorReportTest : public RouterComponentBootstrapWithDefaultCertsTest {};
+class CrossExeErrorReportTest
+    : public RouterComponentBootstrapWithDefaultCertsTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  CrossExeErrorReportTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(GetParam()) {}
+};
 
 /**
  * @test
  *        verify that --conf-use-gr-notifications used with no bootstrap
  *        causes proper error report
  */
-TEST_F(ErrorReportTest, ConfUseGrNotificationsNoBootstrap) {
+TEST_P(CrossExeErrorReportTest, ConfUseGrNotificationsNoBootstrap) {
   auto &router = launch_router_for_bootstrap({"--conf-use-gr-notifications"},
                                              EXIT_FAILURE);
 
@@ -2060,9 +2680,18 @@ TEST_F(ErrorReportTest, ConfUseGrNotificationsNoBootstrap) {
   check_exit_code(router, EXIT_FAILURE);
 }
 
+struct TestParameterGRValue {
+  bool new_executable;
+  std::string value;
+};
+
 class ConfUseGrNotificationWrongValueParamTest
-    : public RouterBootstrapTest,
-      public ::testing::WithParamInterface<std::string> {};
+    : public RouterComponentBootstrapTest,
+      public ::testing::WithParamInterface<TestParameterGRValue> {
+ public:
+  ConfUseGrNotificationWrongValueParamTest()
+      : RouterComponentBootstrapTest(GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -2073,7 +2702,8 @@ class ConfUseGrNotificationWrongValueParamTest
 TEST_P(ConfUseGrNotificationWrongValueParamTest,
        ConfUseGrNotificationWrongValueParam) {
   auto &router = launch_router_for_bootstrap(
-      {"-B", "somehost:12345", "--conf-use-gr-notifications=" + GetParam()},
+      {"-B", "somehost:12345",
+       "--conf-use-gr-notifications=" + GetParam().value},
       EXIT_FAILURE);
 
   EXPECT_NO_THROW(router.wait_for_exit());
@@ -2086,19 +2716,28 @@ TEST_P(ConfUseGrNotificationWrongValueParamTest,
 
 INSTANTIATE_TEST_SUITE_P(ConfUseGrNotificationWrongValueParam,
                          ConfUseGrNotificationWrongValueParamTest,
-                         ::testing::Values("2", "true", "false", "N/A", "yes",
-                                           "no"));
+                         ::testing::Values(TestParameterGRValue{false, "2"},
+                                           TestParameterGRValue{false, "true"},
+                                           TestParameterGRValue{false, "false"},
+                                           TestParameterGRValue{false, "N/A"},
+                                           TestParameterGRValue{false, "yes"},
+                                           TestParameterGRValue{false, "no"},
+                                           TestParameterGRValue{true, "2"},
+                                           TestParameterGRValue{true, "true"},
+                                           TestParameterGRValue{true, "false"},
+                                           TestParameterGRValue{true, "N/A"},
+                                           TestParameterGRValue{true, "yes"},
+                                           TestParameterGRValue{true, "no"}));
 
 /**
  * @test
- *       verify that running bootstrap with -d with dir that already exists and
- *       is not empty gives an appropriate error to the user; particularly it
+ *       verify that running bootstrap with -d with dir that already exists
+ * and is not empty gives an appropriate error to the user; particularly it
  *       should mention:
  *         - directory name
  *         - error type (it's not empty)
  */
-TEST_F(ErrorReportTest, bootstrap_dir_exists_and_is_not_empty) {
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
+TEST_P(CrossExeErrorReportTest, bootstrap_dir_exists_and_is_not_empty) {
   const uint16_t server_port = port_pool_.get_next_available();
 
   TempDirectory bootstrap_directory;
@@ -2130,8 +2769,7 @@ TEST_F(ErrorReportTest, bootstrap_dir_exists_and_is_not_empty) {
   check_exit_code(router, EXIT_FAILURE);
 }
 
-TEST_F(ErrorReportTest, bootstrap_conf_base_port_hex) {
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
+TEST_P(CrossExeErrorReportTest, bootstrap_conf_base_port_hex) {
   const uint16_t server_port = port_pool_.get_next_available();
 
   TempDirectory bootstrap_directory;
@@ -2151,7 +2789,6 @@ TEST_F(ErrorReportTest, bootstrap_conf_base_port_hex) {
               ::testing::HasSubstr("--conf-base-port needs value between 0 and "
                                    "65532 inclusive, was '0x0'"));
 }
-
 // unfortunately it's not (reasonably) possible to make folders read-only on
 // Windows, therefore we can run the following tests only on Unix
 //
@@ -2159,15 +2796,14 @@ TEST_F(ErrorReportTest, bootstrap_conf_base_port_hex) {
 #ifndef _WIN32
 /**
  * @test
- *       verify that running bootstrap with -d with dir that already exists but
- *       is inaccessible gives an appropriate error to the user; particularly it
+ *       verify that running bootstrap with -d with dir that already exists
+ * but is inaccessible gives an appropriate error to the user; particularly it
  *       should mention:
  *         - directory name
  *         - error type (permission denied)
  *         - suggests AppArmor config might be at fault
  */
-TEST_F(ErrorReportTest, bootstrap_dir_exists_but_is_inaccessible) {
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
+TEST_P(CrossExeErrorReportTest, bootstrap_dir_exists_but_is_inaccessible) {
   const uint16_t server_port = port_pool_.get_next_available();
 
   TempDirectory bootstrap_directory;
@@ -2190,8 +2826,8 @@ TEST_F(ErrorReportTest, bootstrap_dir_exists_but_is_inaccessible) {
       },
       EXIT_FAILURE);
 
-  // verify that appropriate message was logged (all but last) and error message
-  // printed (last line)
+  // verify that appropriate message was logged (all but last) and error
+  // message printed (last line)
   std::string err_msg =
       "Failed to open directory '.*" + bootstrap_directory.name() +
       "': Permission denied\n"
@@ -2203,16 +2839,15 @@ TEST_F(ErrorReportTest, bootstrap_dir_exists_but_is_inaccessible) {
 
 /**
  * @test
- *       verify that running bootstrap with -d with dir that doesn't exists and
- *       cannot be created gives an appropriate error to the user; particularly
+ *       verify that running bootstrap with -d with dir that doesn't exists
+ * and cannot be created gives an appropriate error to the user; particularly
  *       it should mention:
  *         - directory name
  *         - error type (permission denied)
  *         - suggests AppArmor config might be at fault
  */
-TEST_F(ErrorReportTest,
+TEST_P(CrossExeErrorReportTest,
        bootstrap_dir_does_not_exist_and_is_impossible_to_create) {
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
   const uint16_t server_port = port_pool_.get_next_available();
 
   TempDirectory bootstrap_superdir;
@@ -2237,8 +2872,8 @@ TEST_F(ErrorReportTest,
       },
       EXIT_FAILURE);
 
-  // verify that appropriate message was logged (all but last) and error message
-  // printed (last line)
+  // verify that appropriate message was logged (all but last) and error
+  // message printed (last line)
   std::string err_msg =
       "Cannot create directory '" + bootstrap_directory +
       "': Permission denied\n"
@@ -2251,16 +2886,16 @@ TEST_F(ErrorReportTest,
 
 /**
  * @test
- *       verify that using --conf-use-gr-notifications creates proper error when
- * the cluster type is ReplicaSet.
+ *       verify that using --conf-use-gr-notifications creates proper error
+ * when the cluster type is ReplicaSet.
  */
-TEST_F(ErrorReportTest, ConfUseGrNotificationsAsyncReplicaset) {
+TEST_P(CrossExeErrorReportTest, ConfUseGrNotificationsAsyncReplicaset) {
   TempDirectory bootstrap_directory;
   const auto server_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join("bootstrap_ar.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_ar.js").port(server_port).args());
 
   // launch the router in bootstrap mode
   auto &router = launch_router_for_bootstrap(
@@ -2276,24 +2911,28 @@ TEST_F(ErrorReportTest, ConfUseGrNotificationsAsyncReplicaset) {
   check_exit_code(router, EXIT_FAILURE);
 }
 
+INSTANTIATE_TEST_SUITE_P(NewAndOldBootstrap, CrossExeErrorReportTest,
+                         ::testing::Values(false, true));
+
 /**
  * @test
  *       verify that trying to register that is not unique in the metadata
  * gives expected results.
  */
-TEST_F(RouterBootstrapTest, BootstrapRouterDuplicateEntry) {
+TEST_P(CrossExeRouterBootstrapTest, BootstrapRouterDuplicateEntry) {
   TempDirectory bootstrap_directory;
   const auto server_port = port_pool_.get_next_available();
   const auto bootstrap_server_port = port_pool_.get_next_available();
   // const auto server_http_port = port_pool_.get_next_available();
   const auto bootstrap_server_http_port = port_pool_.get_next_available();
-  const std::string json_stmts =
-      get_data_dir().join("bootstrap_gr_dup_router.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
   // auto &server_mock =
-  launch_mysql_server_mock(json_stmts, bootstrap_server_port, EXIT_SUCCESS,
-                           false, bootstrap_server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr_dup_router.js")
+                                  .port(bootstrap_server_port)
+                                  .http_port(bootstrap_server_http_port)
+                                  .args());
+
   set_mock_metadata(bootstrap_server_http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
 
@@ -2324,17 +2963,18 @@ TEST_F(RouterBootstrapTest, BootstrapRouterDuplicateEntry) {
  *       verify that trying to register Router that is not unique in the
  * metadata with --force parameter gives expected results.
  */
-TEST_F(RouterBootstrapTest, BootstrapRouterDuplicateEntryOverwrite) {
+TEST_P(CrossExeRouterBootstrapTest, BootstrapRouterDuplicateEntryOverwrite) {
   TempDirectory bootstrap_directory;
   const auto bootstrap_server_port = port_pool_.get_next_available();
   // const auto server_http_port = port_pool_.get_next_available();
   const auto bootstrap_server_http_port = port_pool_.get_next_available();
-  const std::string json_stmts =
-      get_data_dir().join("bootstrap_gr_dup_router.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, bootstrap_server_port, EXIT_SUCCESS,
-                           false, bootstrap_server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr_dup_router.js")
+                                  .port(bootstrap_server_port)
+                                  .http_port(bootstrap_server_http_port)
+                                  .args());
+
   set_mock_metadata(bootstrap_server_http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({bootstrap_server_port}), 0,
                     {bootstrap_server_port});
@@ -2353,16 +2993,18 @@ TEST_F(RouterBootstrapTest, BootstrapRouterDuplicateEntryOverwrite) {
  *       verify that Router creates an account even if the router_id
  * AUTOINCREMENT value is high
  */
-TEST_F(RouterBootstrapTest, BootstrapRouterRouterIdMax) {
+TEST_P(CrossExeRouterBootstrapTest, BootstrapRouterRouterIdMax) {
   TempDirectory bootstrap_directory;
   const auto server_port = port_pool_.get_next_available();
   // const auto server_http_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
+
   set_mock_metadata(http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
 
@@ -2393,14 +3035,18 @@ TEST_F(RouterBootstrapTest, BootstrapRouterRouterIdMax) {
   check_exit_code(router, EXIT_SUCCESS);
 }
 
-class ConfSetOptionTest : public RouterBootstrapTest {};
+class ConfSetOptionTest : public RouterComponentBootstrapTest,
+                          public testing::WithParamInterface<bool> {
+ public:
+  ConfSetOptionTest() : RouterComponentBootstrapTest(GetParam()) {}
+};
 
 /**
  * @test
  *       verify that using --conf-set-option for not bootstrap gives a proper
  * error
  */
-TEST_F(ConfSetOptionTest, ErrorIfNotBootstrap) {
+TEST_P(ConfSetOptionTest, ErrorIfNotBootstrap) {
   const std::string tracefile = "bootstrap_gr.js";
 
   std::vector<std::string> cmdline = {
@@ -2423,13 +3069,15 @@ TEST_F(ConfSetOptionTest, ErrorIfNotBootstrap) {
  * properly when used to set bind port of each route along with other config
  * options
  */
-TEST_F(ConfSetOptionTest, MultipleConfOptionsSet) {
+TEST_P(ConfSetOptionTest, MultipleConfOptionsSet) {
   const std::string tracefile = "bootstrap_gr.js";
 
-  std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), get_data_dir().join(tracefile).str()},
-  };
+  std::vector<Config> mock_servers{{
+      "127.0.0.1",
+      port_pool_.get_next_available(),
+      port_pool_.get_next_available(),
+      tracefile,
+  }};
 
   // mysqlrouter -B ...
   // --conf-set-option=routing:bootstrap_rw.bind_port=A -
@@ -2509,20 +3157,28 @@ TEST_F(ConfSetOptionTest, MultipleConfOptionsSet) {
       << config_file_str;
 }
 
+INSTANTIATE_TEST_SUITE_P(NewAndOldExe, ConfSetOptionTest,
+                         ::testing::Values(false, true));
+
 struct ConfSetOptionErrorTestParam {
   std::vector<std::string> con_set_option_params;
   std::string expected_error;
+  bool new_executable{false};
 };
 
 class ConfSetOptionErrorTest
-    : public ConfSetOptionTest,
-      public ::testing::WithParamInterface<ConfSetOptionErrorTestParam> {};
+    : public RouterComponentBootstrapTest,
+      public ::testing::WithParamInterface<ConfSetOptionErrorTestParam> {
+ public:
+  ConfSetOptionErrorTest()
+      : RouterComponentBootstrapTest(GetParam().new_executable) {}
+};
 
 TEST_P(ConfSetOptionErrorTest, ErrorTest) {
-  const std::string tracefile = get_data_dir().join("bootstrap_gr.js").str();
   const auto mock_server_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_gr.js").port(mock_server_port).args());
 
   std::vector<std::string> cmdline = {
       "--bootstrap=127.0.0.1:" + std::to_string(mock_server_port), "-d",
@@ -2547,10 +3203,10 @@ INSTANTIATE_TEST_SUITE_P(
             {"--conf-set-option=:test_rw.bind_port=6666"},
             "Error: conf-set-option: invalid section name ':test_rw'"},
 
-        ConfSetOptionErrorTestParam{
-            {"--conf-set-option=routing:=6666"},
-            "Error: conf-set-option: invalid option 'routing:=6666', should be "
-            "section.option_name=value"},
+        ConfSetOptionErrorTestParam{{"--conf-set-option=routing:=6666"},
+                                    "Error: conf-set-option: invalid option "
+                                    "'routing:=6666', should be "
+                                    "section.option_name=value"},
 
         ConfSetOptionErrorTestParam{
             {"--conf-set-option=.para=value"},
@@ -2610,30 +3266,135 @@ INSTANTIATE_TEST_SUITE_P(
 
         ConfSetOptionErrorTestParam{
             {"--conf-set-option=DEFAULT:aa.option=xx"},
-            "Error: conf-set-option: DEFAULT section is not allowed to have a "
+            "Error: conf-set-option: DEFAULT section is not allowed to have "
+            "a "
             "key: 'DEFAULT:aa'"},
 
         ConfSetOptionErrorTestParam{
             {"--conf-set-option=abc"},
             "Error: conf-set-option: invalid option 'abc', should be "
-            "section.option_name=value"}));
+            "section.option_name=value"},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=:test_rw.bind_port=6666"},
+            "Error: conf-set-option: invalid section name ':test_rw'",
+            true},
+
+        ConfSetOptionErrorTestParam{{"--conf-set-option=routing:=6666"},
+                                    "Error: conf-set-option: invalid option "
+                                    "'routing:=6666', should be "
+                                    "section.option_name=value",
+                                    true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=.para=value"},
+            "Error: conf-set-option: invalid section name ''",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=.:="},
+            "Error: conf-set-option: invalid section name ''",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=:.="},
+            "Error: conf-set-option: invalid section name ':'",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT.read_timeout=1",
+             "--conf-set-option=DEFAULT.read_timeout=1"},
+            "Error: conf-set-option: duplicate value for option "
+            "'default.read_timeout'",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT.read_timeout=1",
+             "--conf-set-option=DEFAULT.read_timeout=2"},
+            "Error: conf-set-option: duplicate value for option "
+            "'default.read_timeout'",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT.connect_timeout=1",
+             "--connect-timeout=20",
+             "--conf-set-option=DEFAULT.connect_timeout=3"},
+            "Error: conf-set-option: duplicate value for option "
+            "'default.connect_timeout'",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=MySection:AB.read_timeout=1",
+             "--conf-set-option=mysection:ab.read_TimeOut=2"},
+            "Error: conf-set-option: duplicate value for option "
+            "'mysection:ab.read_timeout'",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT.read_timeout=1",
+             "--conf-set-option=DEFAULT.read_timeout=2",
+             "--conf-set-option=DEFAULT.read_timeout=3"},
+            "Error: conf-set-option: duplicate value for option "
+            "'default.read_timeout'",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT.=xx"},
+            "Error: conf-set-option: invalid option name ''",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT.:=xx"},
+            "Error: conf-set-option: invalid option name ':'"},
+
+        ConfSetOptionErrorTestParam{{"--conf-set-option=DEFAULT:.option=xx"},
+                                    "Error: conf-set-option: DEFAULT section "
+                                    "is not allowed to have a key: 'DEFAULT:",
+                                    true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT:aa.option=xx"},
+            "Error: conf-set-option: DEFAULT section is not allowed to have "
+            "a key: 'DEFAULT:aa'",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=abc"},
+            "Error: conf-set-option: invalid option 'abc', should be "
+            "section.option_name=value",
+            true},
+
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT.accept_external_connections=hello_"
+             "world"},
+            "Error: option accept_external_connections in \\[default\\] needs "
+            "a value of either 0, 1, false or true, was 'hello_world'",
+            true}));
 
 struct ConfSetOptionTestParam {
   std::vector<std::string> bootstrap_params;
   std::vector<std::string> expected_conf_entries;
   std::vector<std::string> unexpected_conf_entries;
+  bool new_executable{false};
 };
 
 class ConfSetOptionParamTest
-    : public ConfSetOptionTest,
-      public ::testing::WithParamInterface<ConfSetOptionTestParam> {};
+    : public RouterComponentBootstrapTest,
+      public ::testing::WithParamInterface<ConfSetOptionTestParam> {
+ public:
+  ConfSetOptionParamTest()
+      : RouterComponentBootstrapTest(GetParam().new_executable) {}
+};
 
 TEST_P(ConfSetOptionParamTest, Spec) {
-  const std::string tracefile = get_data_dir().join("bootstrap_gr.js").str();
   const auto mock_server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false,
-                           http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(mock_server_port)
+                                  .http_port(http_port)
+                                  .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({mock_server_port}), 0,
                     {mock_server_port});
@@ -2706,12 +3467,80 @@ INSTANTIATE_TEST_SUITE_P(
         ConfSetOptionTestParam{
             {"--name=Router01", "--conf-set-option=DEFAULT.name=Router02"},
             /*expected_conf_entries=*/{"name=Router02"},
-            /*unexpected_conf_entries=*/{"name=Router01"}}));
+            /*unexpected_conf_entries=*/{"name=Router01"}},
+        ConfSetOptionTestParam{
+            {"--https-port=10000", "--conf-set-option=http_server.ssl=0"},
+            /*expected_conf_entries=*/{"ssl=0"},
+            /*unexpected_conf_entries=*/{"ssl=1"}},
+
+        ConfSetOptionTestParam{
+            {"--connect-timeout=20",
+             "--conf-set-option=DEFAULT.connect_timeout=1"},
+            /*expected_conf_entries=*/{"connect_timeout=1"},
+            /*unexpected_conf_entries=*/{"connect_timeout=20"},
+            true},
+        ConfSetOptionTestParam{
+            {"--connect-timeout=1",
+             "--conf-set-option=DEFAULT.connect_timeout=20"},
+            /*expected_conf_entries=*/{"connect_timeout=20"},
+            /*unexpected_conf_entries=*/{"connect_timeout=1"},
+            true},
+        ConfSetOptionTestParam{
+            {"--read-timeout=20", "--conf-set-option=DEFAULT.read_timeout=1"},
+            /*expected_conf_entry=*/{"read_timeout=1"},
+            /*unexpected_conf_entry=*/{"read_timeout=20"},
+            true},
+        ConfSetOptionTestParam{
+            {"--conf-base-port=1000",
+             "--conf-set-option=routing:bootstrap_rw.bind_port=2000"},
+            /*expected_conf_entries=*/{"bind_port=2000"},
+            /*unexpected_conf_entries=*/{"bind_port=1000"},
+            true},
+        // ConfSetOptionTestParam{
+        //     {"--ssl-mode=REQUIRED",
+        //      "--conf-set-option=metadata_cache:bootstrap.ssl_mode=DISABLED"},
+        //     /*expected_conf_entries=*/{"ssl_mode=DISABLED"},
+        //     /*unexpected_conf_entries=*/{"ssl-mode=REQUIRED"}}
+        ConfSetOptionTestParam{
+            {"--https-port=101", "--conf-set-option=http_server.port=202"},
+            /*expected_conf_entries=*/{"port=202"},
+            /*unexpected_conf_entries=*/{"port=101"},
+            true},
+        ConfSetOptionTestParam{
+            {"--name=Router01", "--conf-set-option=DEFAULT.name=Router02"},
+            /*expected_conf_entries=*/{"name=Router02"},
+            /*unexpected_conf_entries=*/{"name=Router01"},
+            true},
+        ConfSetOptionTestParam{
+            {"--https-port=10000", "--conf-set-option=http_server.ssl=0"},
+            /*expected_conf_entries=*/{"ssl=0"},
+            /*unexpected_conf_entries=*/{"ssl=1"},
+            true}));
 
 /**
  * @test
- *       verify that the --conf-set-option section name and option name are case
- * insensitive
+ *       verify that the expected entries are in the config file after use of
+ * --conf-set-option parameter
+ */
+INSTANTIATE_TEST_SUITE_P(
+    OverwriteOptionTest, ConfSetOptionParamTest,
+    ::testing::Values(
+        ConfSetOptionTestParam{
+            {"--conf-set-option=routing:bootstrap_rw.accept_external_"
+             "connections=1"},
+            /*expected_conf_entries=*/{"accept_external_connections=1"},
+            /*unexpected_conf_entries=*/{},
+            true},
+        ConfSetOptionTestParam{
+            {"--conf-set-option=DEFAULT.accept_external_connections=0"},
+            /*expected_conf_entries=*/{"accept_external_connections=0"},
+            /*unexpected_conf_entries=*/{},
+            true}));
+
+/**
+ * @test
+ *       verify that the --conf-set-option section name and option name are
+ * case insensitive
  */
 INSTANTIATE_TEST_SUITE_P(
     CaseSensitivity, ConfSetOptionParamTest,
@@ -2769,7 +3598,71 @@ INSTANTIATE_TEST_SUITE_P(
                                /*expected_conf_entries=*/
                                {"name=\"MY router\""},
                                /*unexpected_conf_entries=*/
-                               {"name=\"My Router\""}}
+                               {"name=\"My Router\""}},
+
+        ConfSetOptionTestParam{
+            {"--conf-set-option=DEFAULt.read_timeout=1"},
+            /*expected_conf_entries=*/{"[DEFAULT]", "read_timeout=1"},
+            /*unexpected_conf_entries=*/{"[DEFAULt]", "[default]"},
+            true},
+
+        ConfSetOptionTestParam{
+            {"--conf-set-option=default.connect_timeout=15"},
+            /*expected_conf_entries=*/{"[DEFAULT]", "connect_timeout=15"},
+            /*unexpected_conf_entries=*/{"[default]"},
+            true},
+
+        ConfSetOptionTestParam{
+            {"--conf-set-option=LOGGER.level=DEBUG"},
+            /*expected_conf_entries=*/{"[logger]", "level=DEBUG"},
+            /*unexpected_conf_entries=*/{"[LOGGER]", "level=debug"},
+            true},
+
+        ConfSetOptionTestParam{
+            {"--conf-set-option=METADATA_cache:BOOTSTRAP.router_id=1"},
+            /*expected_conf_entries=*/
+            {"[metadata_cache:bootstrap]", "router_id=1"},
+            /*unexpected_conf_entries=*/
+            {"[METADATA_cache:BOOTSTRAP]", "[metadata_cache:BOOTSTRAP]"},
+            true},
+
+        ConfSetOptionTestParam{{"--conf-set-option=DEFAULT.READ_TIMEOUT=1"},
+                               /*expected_conf_entries=*/
+                               {"read_timeout=1"},
+                               /*unexpected_conf_entries=*/
+                               {"READ_TIMEOUT=1"},
+                               true},
+
+        ConfSetOptionTestParam{{"--conf-set-option=DEFAULT.READ_Timeout=1"},
+                               /*expected_conf_entries=*/
+                               {"read_timeout=1"},
+                               /*unexpected_conf_entries=*/
+                               {"READ_Timeout=1"},
+                               true},
+
+        ConfSetOptionTestParam{{"--conf-set-option=DEFAULT.name=\"My Router\""},
+                               /*expected_conf_entries=*/
+                               {"name=\"My Router\""},
+                               /*unexpected_conf_entries=*/
+                               {},
+                               true},
+
+        ConfSetOptionTestParam{
+            {"--name=\"My Router\"",
+             "--conf-set-option=DEFAULT.name=\"other router\""},
+            /*expected_conf_entries=*/
+            {"name=\"other router\""},
+            /*unexpected_conf_entries=*/
+            {"name=\"My Router\""},
+            true},
+
+        ConfSetOptionTestParam{{"--name=\"My Router\"",
+                                "--conf-set-option=DEFAULT.name=\"MY router\""},
+                               /*expected_conf_entries=*/
+                               {"name=\"MY router\""},
+                               /*unexpected_conf_entries=*/
+                               {"name=\"My Router\""},
+                               true}
 
         ));
 
@@ -2778,16 +3671,18 @@ INSTANTIATE_TEST_SUITE_P(
  *       verify that using ssl options during the bootstrap creates the
  * configuration file that is usable by the Router
  */
-TEST_F(RouterBootstrapTest, SSLOptions) {
+TEST_P(CrossExeRouterBootstrapTest, SSLOptions) {
   TempDirectory bootstrap_directory;
   const auto server_port = port_pool_.get_next_available();
   const auto server_port2 = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  auto &server_mock = launch_mysql_server_mock(json_stmts, server_port,
-                                               EXIT_SUCCESS, false, http_port);
+  auto &server_mock =
+      mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                      .port(server_port)
+                                      .http_port(http_port)
+                                      .args());
 
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port, server_port2}), 0,
@@ -2844,12 +3739,13 @@ TEST_F(RouterBootstrapTest, SSLOptions) {
   server_mock.send_clean_shutdown_event();
   EXPECT_NO_THROW(server_mock.wait_for_exit());
 
-  const std::string runtime_json_stmts =
-      get_data_dir().join("metadata_dynamic_nodes_v2_gr.js").str();
-
   // launch mock server that is our metadata server
-  launch_mysql_server_mock(runtime_json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("metadata_dynamic_nodes_v2_gr.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
 
@@ -2857,22 +3753,25 @@ TEST_F(RouterBootstrapTest, SSLOptions) {
   ASSERT_NO_FATAL_FAILURE(launch_router({"-c", conf_file}));
 }
 
+INSTANTIATE_TEST_SUITE_P(NewAndOldBootstrap, CrossExeRouterBootstrapTest,
+                         ::testing::Values(false, true));
+
 /**
  * @test
  *       verify that Router can be re-bootstrapped using the same directory if
  * the cluster name has changed in the meantime
  */
-TEST_F(RouterBootstrapTest, RouterReBootstrapClusterNameChange) {
-  const std::string tracefile = "bootstrap_gr.js";
-
+TEST_P(RouterComponentBootstrapTestOld, RouterReBootstrapClusterNameChange) {
   const std::string kInitialClusterName = "initial_cluster_name";
   const std::string kChangedClusterName = "changed_cluster_name";
 
   const auto classic_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, classic_port, EXIT_SUCCESS, false,
-                           http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(classic_port)
+                                  .http_port(http_port)
+                                  .args());
 
   set_mock_metadata(http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({classic_port}), 0,
@@ -2904,14 +3803,14 @@ TEST_F(RouterBootstrapTest, RouterReBootstrapClusterNameChange) {
  *       verify that using --force-password-validation is still supported for
  * backward compatibility
  */
-TEST_F(RouterBootstrapTest, ForcePasswordValidation) {
-  const std::string tracefile = "bootstrap_gr.js";
-
+TEST_P(RouterComponentBootstrapTestOld, ForcePasswordValidation) {
   const auto classic_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, classic_port, EXIT_SUCCESS, false,
-                           http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(classic_port)
+                                  .http_port(http_port)
+                                  .args());
 
   set_mock_metadata(http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({classic_port}), 0,
@@ -2927,16 +3826,15 @@ TEST_F(RouterBootstrapTest, ForcePasswordValidation) {
   check_exit_code(router_bs, EXIT_SUCCESS);
 }
 
-TEST_F(RouterBootstrapTest, ShowCipherInvalidResult) {
-  const std::string tracefile =
-      get_data_dir()
-          .join("bootstrap_show_cipher_status_invalid_result.js")
-          .str();
+TEST_P(RouterComponentBootstrapTestOld, ShowCipherInvalidResult) {
   const auto mock_server_port = port_pool_.get_next_available();
   const auto mock_http_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false,
-                           mock_http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_show_cipher_status_invalid_result.js")
+          .port(mock_server_port)
+          .http_port(mock_http_port)
+          .args());
 
   set_mock_metadata(mock_http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({mock_server_port}), 0,
@@ -2959,11 +3857,17 @@ TEST_F(RouterBootstrapTest, ShowCipherInvalidResult) {
 struct BootstrapErrorTestParam {
   std::vector<std::string> bs_params;
   std::string expected_error;
+  bool new_executable{false};
 };
 
 class BootstrapErrorTest
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapErrorTestParam> {};
+      public ::testing::WithParamInterface<BootstrapErrorTestParam> {
+ public:
+  BootstrapErrorTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 TEST_P(BootstrapErrorTest, Spec) {
   std::vector<std::string> cmdline = {"-d", bootstrap_dir.name()};
@@ -2983,10 +3887,10 @@ TEST_P(BootstrapErrorTest, Spec) {
 INSTANTIATE_TEST_SUITE_P(
     Spec, BootstrapErrorTest,
     ::testing::Values(
-        BootstrapErrorTestParam{
-            {"-B=["},
-            "Error: invalid URI: expected to find IPv6 address, but failed at "
-            "position 9 for: mysql://[\n"},
+        BootstrapErrorTestParam{{"-B=["},
+                                "Error: invalid URI: expected to find IPv6 "
+                                "address, but failed at "
+                                "position 9 for: mysql://[\n"},
 
         BootstrapErrorTestParam{
             {"-B=abc.nodomain.com#fragment"},
@@ -3002,18 +3906,51 @@ INSTANTIATE_TEST_SUITE_P(
 
         BootstrapErrorTestParam{
             {"--bootstrap-socket=/mysock", "-B=abc.nodomain.com"},
-            "Error: --bootstrap-socket given, but --bootstrap option contains "
-            "a non-'localhost' hostname: abc.nodomain.com"}));
+            "Error: --bootstrap-socket given, but --bootstrap option "
+            "contains "
+            "a non-'localhost' hostname: abc.nodomain.com"},
+
+        BootstrapErrorTestParam{{"-B=["},
+                                "Error: invalid URI: expected to find IPv6 "
+                                "address, but failed at "
+                                "position 9 for: mysql://[\n",
+                                true},
+
+        BootstrapErrorTestParam{
+            {"-B=abc.nodomain.com#fragment"},
+            "Error: the bootstrap URI contains a #fragement, but shouldn't",
+            true},
+
+        BootstrapErrorTestParam{
+            {"-B=abc.nodomain.com?query=q"},
+            "Error: the bootstrap URI contains a ?query, but shouldn't",
+            true},
+
+        BootstrapErrorTestParam{
+            {"-B=abc.nodomain.com/path"},
+            "Error: the bootstrap URI contains a /path, but shouldn't",
+            true},
+
+        BootstrapErrorTestParam{
+            {"--bootstrap-socket=/mysock", "-B=abc.nodomain.com"},
+            "Error: --bootstrap-socket given, but --bootstrap option "
+            "contains "
+            "a non-'localhost' hostname: abc.nodomain.com",
+            true}));
 
 class BootstrapErrorTestWithMock
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<BootstrapErrorTestParam> {};
+      public ::testing::WithParamInterface<BootstrapErrorTestParam> {
+ public:
+  BootstrapErrorTestWithMock()
+      : RouterComponentBootstrapWithDefaultCertsTest(false) {}
+};
 
 TEST_P(BootstrapErrorTestWithMock, Spec) {
-  const std::string tracefile = get_data_dir().join("bootstrap_gr.js").str();
   const auto mock_server_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_gr.js").port(mock_server_port).args());
 
   std::vector<std::string> cmdline = {"--bootstrap=root:"s + kRootPassword +
                                           "@localhost:"s +
@@ -3061,15 +3998,15 @@ INSTANTIATE_TEST_SUITE_P(
                 mysql_harness::truncate_string(std::string(256, 'a')) +
                 "' too long (max 255)."},
 
-        BootstrapErrorTestParam{
-            {"--password-retries=abc"},
-            "Configuration error: --password-retries needs value between 1 and "
-            "10000 inclusive, was 'abc'"},
+        BootstrapErrorTestParam{{"--password-retries=abc"},
+                                "Configuration error: --password-retries "
+                                "needs value between 1 and "
+                                "10000 inclusive, was 'abc'"},
 
-        BootstrapErrorTestParam{
-            {"--password-retries="},
-            "Configuration error: --password-retries needs value between 1 and "
-            "10000 inclusive, was ''"}));
+        BootstrapErrorTestParam{{"--password-retries="},
+                                "Configuration error: --password-retries "
+                                "needs value between 1 and "
+                                "10000 inclusive, was ''"}));
 
 struct AuthPluginTestParam {
   // what are the host/plugin pairs in the mysql.user table for the bootstrap
@@ -3090,11 +4027,19 @@ struct AuthPluginTestParam {
 
   // should the "alter user" query fail on the server
   bool fail_alter_user_query{false};
+
+  // Use either `mysqlrtouer --bootstrap` or `mysqlrouter_boostrap`
+  bool new_executable{false};
 };
 
 class BootstrapChangeAuthPluginTest
     : public RouterComponentBootstrapWithDefaultCertsTest,
-      public ::testing::WithParamInterface<AuthPluginTestParam> {};
+      public ::testing::WithParamInterface<AuthPluginTestParam> {
+ public:
+  BootstrapChangeAuthPluginTest()
+      : RouterComponentBootstrapWithDefaultCertsTest(
+            GetParam().new_executable) {}
+};
 
 /**
  * @test
@@ -3108,12 +4053,13 @@ TEST_P(BootstrapChangeAuthPluginTest, Spec) {
   TempDirectory bootstrap_directory;
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts =
-      get_data_dir().join("bootstrap_change_auth_plugin.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_change_auth_plugin.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
 
   set_mock_metadata(http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
@@ -3191,7 +4137,9 @@ INSTANTIATE_TEST_SUITE_P(
             /*test_description*/
             "There is single existing account for our router user but is uses "
             "caching_sha2_password. There is no need for any auth_plugin "
-            "change."},
+            "change.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false},
         AuthPluginTestParam{
             /* auth_host_plugins */
             {{"localhost", "caching_sha2_password"},
@@ -3203,7 +4151,9 @@ INSTANTIATE_TEST_SUITE_P(
             /*test_description*/
             "There are 2 existing accounts for our router user but both use "
             "caching_sha2_password. There is no need for any auth_plugin "
-            "change."},
+            "change.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false},
         AuthPluginTestParam{
             /* auth_host_plugins */
             {{"localhost", "mysql_native_password"}},
@@ -3219,7 +4169,9 @@ INSTANTIATE_TEST_SUITE_P(
             /*test_description*/
             "There is single existing account for our user that uses "
             "mysql_native_password. We expect successful change of the "
-            "auth_plugin for our account"},
+            "auth_plugin for our account",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false},
         AuthPluginTestParam{
             /* auth_host_plugins */
             {{"%", "mysql_native_password"},
@@ -3238,7 +4190,9 @@ INSTANTIATE_TEST_SUITE_P(
             "mysql_native_password. Since there is more than one we do not "
             "attempt to change the auth_plugin, only give a warning advising "
             "the user to do so manually. We expect that warning twice, once "
-            "per each user@host combination."},
+            "per each user@host combination.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false},
         AuthPluginTestParam{
             /* auth_host_plugins */
             {{"%", "mysql_native_password"},
@@ -3257,7 +4211,9 @@ INSTANTIATE_TEST_SUITE_P(
             "mysql_native_password. Since there is more than one we do not "
             "attempt to change the auth_plugin, only give a warning advising "
             "the user to do so manually. We expect that warning only once, for "
-            "the account that uses mysql_native_password."},
+            "the account that uses mysql_native_password.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false},
         AuthPluginTestParam{
             /* auth_host_plugins */
             {{"localhost", "mysql_native_password"}},
@@ -3270,7 +4226,8 @@ INSTANTIATE_TEST_SUITE_P(
             "Querying for the host, plugin accounts for our user fails. We "
             "expect no warning, the Router should just leave and quit trying "
             "to upgrade an account.",
-            /*fail_host_plugin_query*/ true},
+            /*fail_host_plugin_query*/ true,
+            /*fail_alter_user_query*/ false},
         AuthPluginTestParam{
             /* auth_host_plugins */
             {{"localhost", "mysql_native_password"}},
@@ -3287,14 +4244,139 @@ INSTANTIATE_TEST_SUITE_P(
             /*test_description*/
             "'alter user' statement fails. We expect a proper warning.",
             /*fail_host_plugin_query*/ false,
-            /*fail_alter_user_query*/ true}));
+            /*fail_alter_user_query*/ true},
+        AuthPluginTestParam{
+            /* auth_host_plugins */
+            {{"localhost", "caching_sha2_password"}},
+            /*expected_output_strings*/
+            {},
+            /*unexpected_output_strings*/
+            {"Successfully changed the authentication plugin for .*"},
+            /*test_description*/
+            "There is single existing account for our router user but is uses "
+            "caching_sha2_password. There is no need for any auth_plugin "
+            "change.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false,
+            /*new_executable*/ true},
+        AuthPluginTestParam{
+            /* auth_host_plugins */
+            {{"localhost", "caching_sha2_password"},
+             {"10.20.*.*", "caching_sha2_password"}},
+            /*expected_output_strings*/
+            {},
+            /*unexpected_output_strings*/
+            {"Successfully changed the authentication plugin for .*"},
+            /*test_description*/
+            "There are 2 existing accounts for our router user but both use "
+            "caching_sha2_password. There is no need for any auth_plugin "
+            "change.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false,
+            /*new_executable*/ true},
+        AuthPluginTestParam{
+            /* auth_host_plugins */
+            {{"localhost", "mysql_native_password"}},
+            /*expected_output_strings*/
+            {"Existing account '.*'@localhost is using authentication plugin "
+             "'mysql_native_password'. Changing the "
+             "authentication plugin to 'caching_sha2_password'",
+             "Successfully changed the authentication plugin for "
+             "'.*'@localhost from mysql_native_password to "
+             "caching_sha2_password"},
+            /*unexpected_output_strings*/
+            {},
+            /*test_description*/
+            "There is single existing account for our user that uses "
+            "mysql_native_password. We expect successful change of the "
+            "auth_plugin for our account",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false,
+            /*new_executable*/ true},
+        AuthPluginTestParam{
+            /* auth_host_plugins */
+            {{"%", "mysql_native_password"},
+             {"localhost", "mysql_native_password"}},
+            /*expected_output_strings*/
+            {"Account '.*'@% is using depracated 'mysql_native_password' "
+             "authentication plugin. Change the authentication plugin using "
+             "'alter user' SQL statement.",
+             "Account '.*'@localhost is using depracated "
+             "'mysql_native_password' authentication plugin. Change the "
+             "authentication plugin using 'alter user' SQL statement."},
+            /*unexpected_output_strings*/
+            {"Successfully changed the authentication plugin for .*"},
+            /*test_description*/
+            "There is more than one host account for our user. Both use "
+            "mysql_native_password. Since there is more than one we do not "
+            "attempt to change the auth_plugin, only give a warning advising "
+            "the user to do so manually. We expect that warning twice, once "
+            "per each user@host combination.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false,
+            /*new_executable*/ true},
+        AuthPluginTestParam{
+            /* auth_host_plugins */
+            {{"%", "mysql_native_password"},
+             {"localhost", "caching_sha2_password"}},
+            /*expected_output_strings*/
+            {"Account '.*'@% is using depracated 'mysql_native_password' "
+             "authentication plugin. Change the authentication plugin using "
+             "'alter user' SQL statement."},
+            /*unexpected_output_strings*/
+            {"Successfully changed the authentication plugin for .*",
+             "Account '.*'@localhost is using depracated "
+             "'mysql_native_password' authentication plugin. Change the "
+             "authentication plugin using 'alter user' SQL statement."},
+            /*test_description*/
+            "There are 2 host accounts for our user. Only one uses "
+            "mysql_native_password. Since there is more than one we do not "
+            "attempt to change the auth_plugin, only give a warning advising "
+            "the user to do so manually. We expect that warning only once, for "
+            "the account that uses mysql_native_password.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ false,
+            /*new_executable*/ true},
+        AuthPluginTestParam{
+            /* auth_host_plugins */
+            {{"localhost", "mysql_native_password"}},
+            /*expected_output_strings*/
+            {},
+            /*unexpected_output_strings*/
+            {"Successfully changed the authentication plugin for .*",
+             "Failed checking the Router account .*"},
+            /*test_description*/
+            "Querying for the host, plugin accounts for our user fails. We "
+            "expect no warning, the Router should just leave and quit trying "
+            "to upgrade an account.",
+            /*fail_host_plugin_query*/ true,
+            /*fail_alter_user_query*/ false,
+            /*new_executable*/ true},
+        AuthPluginTestParam{
+            /* auth_host_plugins */
+            {{"localhost", "mysql_native_password"}},
+            /*expected_output_strings*/
+            {"Existing account '.*'@localhost is using authentication plugin "
+             "'mysql_native_password'. Changing the authentication plugin to "
+             "'caching_sha2_password'",
+             "Failed changing the authentication plugin for account "
+             "'.*'@'localhost': Error executing MySQL query \"alter user "
+             "'.*'@'localhost' identified with `caching_sha2_password` by "
+             "\\*\\*\\*\": Unexpected error .*"},
+            /*unexpected_output_strings*/
+            {"Successfully changed the authentication plugin for .*"},
+            /*test_description*/
+            "'alter user' statement fails. We expect a proper warning.",
+            /*fail_host_plugin_query*/ false,
+            /*fail_alter_user_query*/ true,
+            /*new_executable*/ true}));
 
 /**
  * @test
- *       Verify that when the Router is bootstrapped over existing confuguration
+ *       Verify that when the Router is bootstrapped over existing configuration
  * it removes unsupported bootstrap_server_addresses from the configuration file
  */
-TEST_F(RouterBootstrapTest, BootstrapRemoveServerAddressesOption) {
+TEST_P(CrossExeRouterBootstrapTest, BootstrapRemoveServerAddressesOption) {
   RecordProperty("Worklog", "15867");
   RecordProperty("RequirementId", "FR2");
   RecordProperty(
@@ -3302,13 +4384,16 @@ TEST_F(RouterBootstrapTest, BootstrapRemoveServerAddressesOption) {
       "Verifies that when the Router is bootstrapped over existing "
       "configuration that contains bootstrap_server_addresses, the newly "
       "created configuration file does not contain it any more.");
+
   // launch our Cluster mock
-  const std::string tracefile = get_data_dir().join("bootstrap_gr.js").str();
   const auto mock_server_port = port_pool_.get_next_available();
   const auto mock_http_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false,
-                           mock_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(mock_server_port)
+                                  .http_port(mock_http_port)
+                                  .args());
+
   set_mock_metadata(mock_http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({mock_server_port}), 0,
                     {mock_server_port});
@@ -3345,20 +4430,19 @@ TEST_F(RouterBootstrapTest, BootstrapRemoveServerAddressesOption) {
       ::testing::Not(::testing::HasSubstr("bootstrap_server_addresses")));
 }
 
-static constexpr const unsigned long max_supported_version =
-    MYSQL_ROUTER_VERSION_MAJOR * 10000 + MYSQL_ROUTER_VERSION_MINOR * 100 + 99;
-
 struct ServerCompatTestParam {
   std::string description;
   std::string tracefile;
   std::string server_version;
-  bool expect_failure;
-  std::string expected_error_msg;
+  std::string expected_warning_msg;
 };
 
 class CheckServerCompatibilityTest
     : public RouterComponentBootstrapTest,
-      public ::testing::WithParamInterface<ServerCompatTestParam> {};
+      public ::testing::WithParamInterface<ServerCompatTestParam> {
+ public:
+  CheckServerCompatibilityTest() : RouterComponentBootstrapTest(false) {}
+};
 
 /**
  * @test
@@ -3371,9 +4455,10 @@ TEST_P(CheckServerCompatibilityTest, Spec) {
   const auto classic_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
 
-  const std::string tracefile = get_data_dir().join(GetParam().tracefile).str();
-  launch_mysql_server_mock(tracefile, classic_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(mock_server_cmdline(GetParam().tracefile)
+                                  .port(classic_port)
+                                  .http_port(http_port)
+                                  .args());
 
   set_mock_metadata(http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({classic_port}), 0,
@@ -3386,15 +4471,13 @@ TEST_P(CheckServerCompatibilityTest, Spec) {
                                              std::to_string(classic_port),
                                          "-d", bootstrap_dir.name()};
 
-  const auto expected_exit_code =
-      GetParam().expect_failure ? EXIT_FAILURE : EXIT_SUCCESS;
-  auto &router = launch_router_for_bootstrap(cmdline_bs, expected_exit_code);
-  check_exit_code(router, expected_exit_code);
+  auto &router = launch_router_for_bootstrap(cmdline_bs, EXIT_SUCCESS);
+  check_exit_code(router, EXIT_SUCCESS);
 
-  if (GetParam().expect_failure) {
+  if (!GetParam().expected_warning_msg.empty()) {
     const std::string router_console_output = router.get_full_output();
     EXPECT_TRUE(
-        pattern_found(router_console_output, GetParam().expected_error_msg))
+        pattern_found(router_console_output, GetParam().expected_warning_msg))
         << router_console_output;
   }
 }
@@ -3408,55 +4491,186 @@ INSTANTIATE_TEST_SUITE_P(
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            false, ""},
+            ""},
         ServerCompatTestParam{
             "Replica Set; Server is the same version as Router - bootstrap OK",
             "bootstrap_ar.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            false, ""},
+            ""},
         ServerCompatTestParam{
-            "GR Cluster; Server major version is highier than Router - "
-            "bootstrap should fail",
+            "GR Cluster; Server major version is higher than Router - "
+            "bootstrap should issue a warning",
             "bootstrap_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "Error: Unsupported MySQL Server version '.*'. Maximal supported "
-            "version is '" +
-                std::to_string(max_supported_version) + "'."},
+            "WARNING: MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."},
         ServerCompatTestParam{
-            "GR Cluster; Server minor version is highier than Router - "
-            "bootstrap should fail",
+            "GR Cluster; Server minor version is higher than Router - "
+            "bootstrap should issue a warning",
             "bootstrap_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "Error: Unsupported MySQL Server version '.*'. Maximal supported "
-            "version is '" +
-                std::to_string(max_supported_version) + "'."},
+            "WARNING: MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."},
         ServerCompatTestParam{
-            "GR Cluster; Server patch version is highier than Router - "
+            "GR Cluster; Server patch version is higher than Router - "
             "bootstrap OK",
             "bootstrap_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH + 1),
-            false, ""},
+            ""},
         ServerCompatTestParam{
-            "Replica Set; Server major version is highier than Router - "
-            "bootstrap should fail",
+            "Replica Set; Server major version is higher than Router - "
+            "bootstrap should issue a warning",
             "bootstrap_ar.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "Error: Unsupported MySQL Server version '.*'. Maximal supported "
-            "version is '" +
-                std::to_string(max_supported_version) + "'."}));
+            "WARNING: MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."}));
+
+TEST_P(CrossExeRouterBootstrapTest, LocalClusterFromClusterName) {
+  // launch our Cluster mock
+  const auto mock_server_port = port_pool_.get_next_available();
+  const auto mock_http_port = port_pool_.get_next_available();
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(mock_server_port)
+                                  .http_port(mock_http_port)
+                                  .args());
+
+  // Cluster name reported by LocalCluster should be the same as name of the
+  // cluster that was used for bootstrap
+  const std::string cluster_name = "test_local";
+  auto json_doc = mock_GR_metadata_as_json(
+      "gr-uuid", classic_ports_to_gr_nodes({mock_server_port}), 0,
+      {mock_server_port});
+  JsonAllocator allocator;
+  json_doc.AddMember(
+      JsonValue("router_expected_local_cluster", allocator),
+      JsonValue(cluster_name.data(), cluster_name.size(), allocator),
+      allocator);
+  json_doc.AddMember(
+      JsonValue("cluster_name", allocator),
+      JsonValue(cluster_name.data(), cluster_name.size(), allocator),
+      allocator);
+  const auto json_str = json_to_string(json_doc);
+  ASSERT_NO_THROW(MockServerRestClient(mock_http_port).set_globals(json_str));
+
+  std::vector<std::string> bootstrap_params = {
+      "--bootstrap=127.0.0.1:" + std::to_string(mock_server_port), "-d",
+      bootstrap_dir.name()};
+
+  auto &router = launch_router_for_bootstrap(bootstrap_params, EXIT_SUCCESS);
+  check_exit_code(router, EXIT_SUCCESS);
+}
+
+TEST_P(CrossExeRouterBootstrapTest, LocalClusterFromConf) {
+  // launch our Cluster mock
+  const auto mock_server_port = port_pool_.get_next_available();
+  const auto mock_http_port = port_pool_.get_next_available();
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(mock_server_port)
+                                  .http_port(mock_http_port)
+                                  .args());
+
+  // Cluster name reported by LocalCluster should be the same as specified by
+  // --conf-local-cluster setting
+  const std::string conf_cluster_name = "test_local";
+  auto json_doc = mock_GR_metadata_as_json(
+      "gr-uuid", classic_ports_to_gr_nodes({mock_server_port}), 0,
+      {mock_server_port});
+  JsonAllocator allocator;
+  json_doc.AddMember(
+      JsonValue("router_expected_local_cluster", allocator),
+      JsonValue(conf_cluster_name.data(), conf_cluster_name.size(), allocator),
+      allocator);
+  json_doc.AddMember(JsonValue("cluster_name", allocator),
+                     JsonValue("foobar", allocator), allocator);
+  const auto json_str = json_to_string(json_doc);
+  ASSERT_NO_THROW(MockServerRestClient(mock_http_port).set_globals(json_str));
+
+  std::vector<std::string> bootstrap_params = {
+      "--bootstrap=127.0.0.1:" + std::to_string(mock_server_port), "-d",
+      bootstrap_dir.name(), "--conf-local-cluster", conf_cluster_name};
+
+  auto &router = launch_router_for_bootstrap(bootstrap_params, EXIT_SUCCESS);
+  check_exit_code(router, EXIT_SUCCESS);
+}
+
+class MRSBootstrapTest : public RouterComponentBootstrapTest {
+ public:
+  MRSBootstrapTest() : RouterComponentBootstrapTest(true) {}
+};
+
+/**
+ * @test
+ *       Verifies that the server version is checked for compatibility when the
+ * Router is bootstrapped for MRS
+ */
+TEST_F(MRSBootstrapTest, UnsupportedVersion) {
+  const auto classic_port = port_pool_.get_next_available();
+  const auto http_port = port_pool_.get_next_available();
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_mrs_version.js")
+                                  .port(classic_port)
+                                  .http_port(http_port)
+                                  .args());
+
+  set_mock_server_version(http_port, "5.7");
+
+  std::vector<std::string> cmdline_bs = {"--bootstrap=root:"s + kRootPassword +
+                                             "@localhost:"s +
+                                             std::to_string(classic_port),
+                                         "-d", bootstrap_dir.name(), "--mrs"};
+
+  auto &router = launch_router_for_bootstrap(cmdline_bs, EXIT_FAILURE, false);
+  check_exit_code(router, EXIT_FAILURE);
+
+  const std::string router_console_output = router.get_full_output();
+  EXPECT_TRUE(pattern_found(router_console_output,
+                            "Unsupported MySQL server version: MySQL5.7"))
+      << router_console_output;
+}
+
+/**
+ * @test
+ *       Verifies that bootstrapping with --mrs and --disable-rest options leads
+ * to an error
+ */
+TEST_F(MRSBootstrapTest, DisableRest) {
+  const auto classic_port = port_pool_.get_next_available();
+  const auto http_port = port_pool_.get_next_available();
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_mrs_version.js")
+                                  .port(classic_port)
+                                  .http_port(http_port)
+                                  .args());
+
+  std::vector<std::string> cmdline_bs = {
+      "--bootstrap=root:"s + kRootPassword + "@localhost:"s +
+          std::to_string(classic_port),
+      "-d", bootstrap_dir.name(), "--mrs", "--disable-rest"};
+
+  auto &router = launch_router_for_bootstrap(cmdline_bs, EXIT_FAILURE, false);
+  check_exit_code(router, EXIT_FAILURE);
+
+  const std::string router_console_output = router.get_full_output();
+  EXPECT_TRUE(pattern_found(
+      router_console_output,
+      "Error: invalid configuration, --mrs cannot be used with --disable-rest"))
+      << router_console_output;
+}
 
 std::string get_x509_name(X509_NAME *name) {
   char buffer[256];
@@ -3464,16 +4678,19 @@ std::string get_x509_name(X509_NAME *name) {
   return std::string(buffer);
 }
 
-class BootstrapCertTest : public RouterComponentBootstrapTest {};
+class BootstrapCertTest : public RouterComponentBootstrapTest {
+ public:
+  BootstrapCertTest() : RouterComponentBootstrapTest(false) {}
+};
 
 TEST_F(BootstrapCertTest, CheckGeneratedCertDetails) {
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
 
-  const std::string tracefile = "bootstrap_gr.js";
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
 
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});

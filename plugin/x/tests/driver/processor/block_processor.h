@@ -26,6 +26,7 @@
 #ifndef PLUGIN_X_TESTS_DRIVER_PROCESSOR_BLOCK_PROCESSOR_H_
 #define PLUGIN_X_TESTS_DRIVER_PROCESSOR_BLOCK_PROCESSOR_H_
 
+#include <istream>
 #include <memory>
 
 class Block_processor {

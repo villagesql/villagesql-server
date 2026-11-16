@@ -15,7 +15,7 @@
 6
 6
 # FR1.1: check the default value of --commands
-# test: must not fail
+ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1
 include/assert_grep.inc [FR1.1: checking the default --commands value]
 include/assert_grep.inc [FR1.1: checking the updated --commands value]
 # FR1.2.1: help short disabled

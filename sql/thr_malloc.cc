@@ -26,9 +26,9 @@
 
 #include "sql/thr_malloc.h"
 
-#include <string.h>
 #include <sys/types.h>
 #include <algorithm>
+#include <cstring>
 
 #include "my_alloc.h"
 #include "my_macros.h"
@@ -40,8 +40,6 @@
 
 using std::max;
 using std::min;
-
-extern "C" void sql_alloc_error_handler(void);
 
 void init_sql_alloc(PSI_memory_key key, MEM_ROOT *mem_root, size_t block_size) {
   ::new ((void *)mem_root) MEM_ROOT(key, block_size);

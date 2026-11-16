@@ -27,9 +27,9 @@
 namespace table_list_test {
 
 TEST(TableListTest, Constructors) {
-  auto tablename = "abcdef";
+  const auto *tablename = "abcdef";
   // Setting up a trap here, the ctor should not follow this TABLE pointer.
-  Table_ref table_list(nullptr, tablename);
+  Table_ref const table_list(nullptr, tablename);
   EXPECT_STREQ(table_list.table_name, tablename);
   EXPECT_STREQ(table_list.alias, tablename);
   EXPECT_STREQ(table_list.db, "");

@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/parameters.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Parameters &Parameters::instance() {
-  static Parameters *s_instance = new Parameters();
+  static auto *s_instance = new Parameters();
   return *s_instance;
 }
 
@@ -78,6 +77,8 @@ Parameters::Parameters() {
                          "    (IF (cs.name='binary',NULL, cs.name))"
                          "  WHEN 'MYSQL_TYPE_BLOB' THEN "
                          "    (IF (cs.name='binary',NULL, cs.name))"
+                         "  WHEN 'MYSQL_TYPE_VECTOR' THEN "
+                         "    (IF (cs.name='binary',NULL, cs.name))"
                          "  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN "
                          "    (IF (cs.name='binary',NULL, cs.name))"
                          "  WHEN 'MYSQL_TYPE_ENUM' THEN "
@@ -98,6 +99,8 @@ Parameters::Parameters() {
                          "  WHEN 'MYSQL_TYPE_MEDIUM_BLOB' THEN "
                          "    (IF (cs.name='binary',NULL, col.name))"
                          "  WHEN 'MYSQL_TYPE_BLOB' THEN "
+                         "    (IF (cs.name='binary',NULL, col.name))"
+                         "  WHEN 'MYSQL_TYPE_VECTOR' THEN "
                          "    (IF (cs.name='binary',NULL, col.name))"
                          "  WHEN 'MYSQL_TYPE_LONG_BLOB' THEN "
                          "    (IF (cs.name='binary',NULL, col.name))"
@@ -125,5 +128,4 @@ Parameters::Parameters() {
       "rtn.definer, FALSE)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

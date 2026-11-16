@@ -27,16 +27,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 #include "my_config.h"
 
-#include <errno.h>
 #include <fcntl.h>
-#include <inttypes.h>
-#include <math.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
-#include <time.h>
+#include <cerrno>
+#include <cinttypes>
+#include <cmath>
+#include <csignal>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 
 #include "client/client_query_attributes.h"
 #include "client/include/client_priv.h"
@@ -54,6 +54,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include "my_inttypes.h"
 #include "my_io.h"
 #include "my_macros.h"
+#include "my_rdtsc.h"
 #include "mysql/my_loglevel.h"
 #include "mysql/plugin_client_telemetry.h"
 #include "mysql/strings/int2str.h"
@@ -65,6 +66,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include "strmake.h"
 #include "strxmov.h"
 #include "strxnmov.h"
+#include "template_utils.h"
 #include "typelib.h"
 #include "violite.h"
 
@@ -73,7 +75,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #endif
 
 #if defined(USE_LIBEDIT_INTERFACE)
-#include <locale.h>
+#include <clocale>
 #endif
 
 #ifdef HAVE_PWD_H
@@ -109,8 +111,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 using std::max;
 using std::min;
 
-extern CHARSET_INFO my_charset_utf16le_bin;
-
 const char *VER = "14.14";
 
 /* Don't try to make a nice table if the data is too big */
@@ -145,7 +145,8 @@ static char *server_version = nullptr;
 client_query_attributes *telemetry_client_attrs = nullptr;
 
 /** default set of patterns used for history exclusion filter */
-const static std::string HI_DEFAULTS("*IDENTIFIED*:*PASSWORD*");
+const static std::string HI_DEFAULTS(
+    "*IDENTIFIED*:*PASSWORD*:*https?*/p/?*/n/?*/b/?*/o/*:*ocid1.stream*");
 
 /** used for matching which history lines to ignore */
 static Pattern_matcher ignore_matcher;
@@ -192,7 +193,7 @@ static char *opt_mysql_unix_port = nullptr;
 static char *opt_bind_addr = nullptr;
 static int connect_flag = CLIENT_INTERACTIVE;
 static bool opt_binary_mode = false;
-static bool opt_commands = true;
+static bool opt_commands = false;
 static bool opt_connect_expired_password = false;
 static char *current_host;
 static char *dns_srv_name;
@@ -237,7 +238,6 @@ static MEM_ROOT hash_mem_root(PSI_NOT_INSTRUMENTED, 16384);
 static uint prompt_counter;
 static char delimiter[16] = DEFAULT_DELIMITER;
 static size_t delimiter_length = 1;
-unsigned short terminal_width = 80;
 static uint opt_zstd_compress_level = default_zstd_compression_level;
 static char *opt_compress_algorithm = nullptr;
 
@@ -249,10 +249,13 @@ static const CHARSET_INFO *charset_info = &my_charset_latin1;
 
 static char *opt_oci_config_file = nullptr;
 static char *opt_authentication_oci_client_config_profile = nullptr;
+static char *opt_authentication_openid_connect_client_id_token_file = nullptr;
 static char *opt_register_factor = nullptr;
 
 static bool opt_tel_plugin = false;
 static const char *opt_tel_plugin_name = "telemetry_client";
+
+static bool opt_system_command = false;
 
 static struct my_option my_empty_options[] = {
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
@@ -1082,7 +1085,6 @@ static COMMANDS commands[] = {
     {"MBROVERLAPS", 0, nullptr, false, ""},
     {"MBRTOUCHES", 0, nullptr, false, ""},
     {"MBRWITHIN", 0, nullptr, false, ""},
-    {"MD5", 0, nullptr, false, ""},
     {"MID", 0, nullptr, false, ""},
     {"MIN", 0, nullptr, false, ""},
     {"MLINEFROMTEXT", 0, nullptr, false, ""},
@@ -1135,8 +1137,6 @@ static COMMANDS commands[] = {
     {"SUBDATE", 0, nullptr, false, ""},
     {"SIGN", 0, nullptr, false, ""},
     {"SIN", 0, nullptr, false, ""},
-    {"SHA", 0, nullptr, false, ""},
-    {"SHA1", 0, nullptr, false, ""},
     {"SLEEP", 0, nullptr, false, ""},
     {"SOUNDEX", 0, nullptr, false, ""},
     {"SPACE", 0, nullptr, false, ""},
@@ -1163,6 +1163,11 @@ static COMMANDS commands[] = {
     {"TO_DAYS", 0, nullptr, false, ""},
     {"TOUCHES", 0, nullptr, false, ""},
     {"TRIM", 0, nullptr, false, ""},
+    {"TO_VECTOR", 0, nullptr, false, ""},
+    {"STRING_TO_VECTOR", 0, nullptr, false, ""},
+    {"FROM_VECTOR", 0, nullptr, false, ""},
+    {"VECTOR_TO_STRING", 0, nullptr, false, ""},
+    {"VECTOR_DIM", 0, nullptr, false, ""},
     {"UCASE", 0, nullptr, false, ""},
     {"UNCOMPRESS", 0, nullptr, false, ""},
     {"UNCOMPRESSED_LENGTH", 0, nullptr, false, ""},
@@ -1198,11 +1203,6 @@ typedef struct _hist_entry {
 } HIST_ENTRY;
 #endif
 
-extern "C" int add_history(const char *command); /* From readline directory */
-extern "C" int read_history(const char *command);
-extern "C" int write_history(const char *command);
-extern "C" HIST_ENTRY *history_get(int num);
-extern "C" int history_length;
 static int not_in_history(const char *line);
 static void initialize_readline(char *name);
 #endif /* HAVE_READLINE */
@@ -1218,17 +1218,14 @@ static void print_table_data_xml(MYSQL_RES *result);
 static void print_tab_data(MYSQL_RES *result);
 static void print_table_data_vertically(MYSQL_RES *result);
 static void print_warnings();
-static ulong start_timer();
-static void end_timer(ulong start_time, char *buff);
-static void mysql_end_timer(ulong start_time, char *buff);
+static void end_timer(ulonglong start_time, char *buff);
+static void mysql_end_timer(ulonglong start_time, char *buff);
 static void nice_time(double sec, char *buff, bool part_second);
 static void kill_query(const char *reason);
 extern "C" void mysql_end(int sig);
 extern "C" void handle_ctrlc_signal(int);
 extern "C" void handle_quit_signal(int sig);
-#if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-static void window_resize(int);
-#endif
+static unsigned short get_terminal_width();
 
 const char DELIMITER_NAME[] = "delimiter";
 const uint DELIMITER_NAME_LEN = sizeof(DELIMITER_NAME) - 1;
@@ -1453,13 +1450,6 @@ int main(int argc, char *argv[]) {
   signal(SIGHUP, handle_quit_signal);   // Catch SIGHUP to clean up
 #else
   SetConsoleCtrlHandler((PHANDLER_ROUTINE)windows_ctrl_handler, true);
-#endif
-
-#if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-  /* Readline will call this if it installs a handler */
-  signal(SIGWINCH, window_resize);
-  /* call the SIGWINCH handler to get the default term width */
-  window_resize(0);
 #endif
 
   put_info("Welcome to the MySQL monitor.  Commands end with ; or \\g.",
@@ -1744,16 +1734,15 @@ err:
   mysql_close(kill_mysql);
 }
 
+unsigned short get_terminal_width() {
 #if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-void window_resize(int) {
   struct winsize window_size;
 
   if (ioctl(fileno(stdin), TIOCGWINSZ, &window_size) == 0)
-    terminal_width = window_size.ws_col;
-}
+    return window_size.ws_col;
 #endif
-
-static bool opt_system_command = true;
+  return 80;
+}
 
 static struct my_option my_long_options[] = {
     {"help", '?', "Display this help and exit.", nullptr, nullptr, nullptr,
@@ -1799,7 +1788,7 @@ static struct my_option my_long_options[] = {
      nullptr, 0, nullptr},
     {"commands", OPT_MYSQL_COMMANDS,
      "Enable or disable processing of local mysql commands.", &opt_commands,
-     &opt_commands, nullptr, GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
+     &opt_commands, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"comments", 'c',
      "Preserve comments. Send comments to the server."
      " The default is --comments (keep comments), disable with "
@@ -2081,6 +2070,11 @@ static struct my_option my_long_options[] = {
      "is ~/.oci/config and %HOME/.oci/config on Windows.",
      &opt_oci_config_file, &opt_oci_config_file, nullptr, GET_STR, REQUIRED_ARG,
      0, 0, 0, nullptr, 0, nullptr},
+    {"authentication-openid-connect-client-id-token-file", 0,
+     "Specifies the location of the ID token file.",
+     &opt_authentication_openid_connect_client_id_token_file,
+     &opt_authentication_openid_connect_client_id_token_file, nullptr, GET_STR,
+     REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"telemetry-client", 0, "Load the telemetry_client plugin.",
      &opt_tel_plugin, &opt_tel_plugin, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
@@ -2091,8 +2085,8 @@ static struct my_option my_long_options[] = {
      &opt_register_factor, &opt_register_factor, nullptr, GET_STR, REQUIRED_ARG,
      0, 0, 0, nullptr, 0, nullptr},
     {"system-command", 0,
-     "Enable (by default) or disable the system mysql command.",
-     &opt_system_command, &opt_system_command, nullptr, GET_BOOL, NO_ARG, 1, 0,
+     "Enable or disable (by default) the 'system' mysql command.",
+     &opt_system_command, &opt_system_command, nullptr, GET_BOOL, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr},
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
@@ -2557,7 +2551,7 @@ static COMMANDS *find_command(char cmd_char) {
   int index = -1;
 
   /*
-    If specified, we disallow all mysql commands except '\C'
+    In binary-mode, we disallow all mysql commands except '\C'
     and DELIMITER.
   */
   if (disable_commands) {
@@ -2856,9 +2850,13 @@ static bool add_line(String &buffer, char *line, size_t line_length,
 
       pos--;
 
-      char *skip_comments_start =
-          skip_over_comments_and_space(buffer.ptr(), buffer.length());
-      com = find_command(skip_comments_start);
+      char *skip_comments_start = nullptr;
+      if (buffer.length()) {
+        skip_comments_start =
+            skip_over_comments_and_space(buffer.ptr(), buffer.length());
+        com = find_command(skip_comments_start);
+      } else
+        com = nullptr;
       if (nullptr != com) {
         trim_leading_comments_and_space(&buffer, skip_comments_start);
         if ((*com->func)(&buffer, buffer.c_ptr()) > 0) return true;  // Quit
@@ -3043,7 +3041,6 @@ static int fake_magic_space(const char *, int)
   rl_insert(1, ' ');
   return 0;
 }
-
 static void initialize_readline(char *name) {
   /* Allow conditional parsing of the ~/.inputrc file. */
   rl_readline_name = name;
@@ -3475,8 +3472,7 @@ static int com_server_help(String *buffer [[maybe_unused]],
   server_cmd = cmd_buf;
 
   if (!status.batch) {
-    old_buffer = *buffer;
-    old_buffer.copy();
+    old_buffer.copy(*buffer);
   }
 
   if (!connected && reconnect()) return 1;
@@ -3563,13 +3559,12 @@ static int com_help(String *buffer [[maybe_unused]],
   }
 
   put_info(
-      "\nFor information about MySQL products and services, visit:\n"
-      "   http://www.mysql.com/\n"
-      "For developer information, including the MySQL Reference Manual, "
-      "visit:\n"
-      "   http://dev.mysql.com/\n"
-      "To buy MySQL Enterprise support, training, or other products, visit:\n"
-      "   https://shop.mysql.com/\n",
+      "\nFor information about Percona products and services, visit:\n"
+      "   http://www.percona.com/\n"
+      "Percona Server manual: http://www.percona.com/doc/percona-server/8.0/\n"
+      "For the MySQL Reference Manual: http://dev.mysql.com/\n"
+      "To buy Percona support, training, or other products, visit:\n"
+      "   https://www.percona.com/\n",
       INFO_INFO);
   put_info("List of all MySQL commands:", INFO_INFO);
   if (!named_cmds)
@@ -3632,14 +3627,14 @@ static int com_go_impl(String *buffer, char *line [[maybe_unused]]) {
   char buff[200];             /* about 110 chars used so far */
   char time_buff[52 + 3 + 1]; /* time max + space&parens + NUL */
   MYSQL_RES *result;
-  ulong timer, warnings = 0;
+  ulong warnings = 0;
+  ulonglong timer;
   uint error = 0;
   int err = 0;
 
   interrupted_query = false;
   if (!status.batch) {
-    old_buffer = *buffer;  // Save for edit command
-    old_buffer.copy();
+    old_buffer.copy(*buffer);  // Save for edit command
   }
 
   /* Remove garbage for nicer messages */
@@ -3664,7 +3659,7 @@ static int com_go_impl(String *buffer, char *line [[maybe_unused]]) {
     return 0;
   }
 
-  timer = start_timer();
+  timer = my_timer_microseconds();
   executing_query = true;
   error = mysql_real_query_for_lazy(buffer->ptr(), buffer->length(), true);
 
@@ -3718,8 +3713,9 @@ static int com_go_impl(String *buffer, char *line [[maybe_unused]]) {
           print_table_data_html(result);
         else if (opt_xml)
           print_table_data_xml(result);
-        else if (vertical || (auto_vertical_output &&
-                              (terminal_width < get_result_width(result))))
+        else if (vertical ||
+                 (auto_vertical_output &&
+                  (get_terminal_width() < get_result_width(result))))
           print_table_data_vertically(result);
         else if (opt_silent && verbose <= 2 && !output_tables)
           print_tab_data(result);
@@ -3877,7 +3873,6 @@ static char *fieldflags2str(uint f) {
   ff2s_check_flag(NO_DEFAULT_VALUE);
   ff2s_check_flag(NUM);
   ff2s_check_flag(PART_KEY);
-  ff2s_check_flag(GROUP);
   ff2s_check_flag(UNIQUE);
   ff2s_check_flag(BINCMP);
   ff2s_check_flag(ON_UPDATE_NOW);
@@ -3915,29 +3910,43 @@ static void print_field_types(MYSQL_RES *result) {
 /* Used to determine if we should invoke print_as_hex for this field */
 
 static bool is_binary_field(MYSQL_FIELD *field) {
-  return ((field->charsetnr == 63) &&
-          (field->type == MYSQL_TYPE_BIT || field->type == MYSQL_TYPE_BLOB ||
-           field->type == MYSQL_TYPE_LONG_BLOB ||
-           field->type == MYSQL_TYPE_MEDIUM_BLOB ||
-           field->type == MYSQL_TYPE_TINY_BLOB ||
-           field->type == MYSQL_TYPE_VAR_STRING ||
-           field->type == MYSQL_TYPE_STRING ||
-           field->type == MYSQL_TYPE_VARCHAR ||
-           field->type == MYSQL_TYPE_GEOMETRY));
+  return (
+      (field->charsetnr == 63) &&
+      (field->type == MYSQL_TYPE_BIT || field->type == MYSQL_TYPE_BLOB ||
+       field->type == MYSQL_TYPE_LONG_BLOB ||
+       field->type == MYSQL_TYPE_MEDIUM_BLOB ||
+       field->type == MYSQL_TYPE_TINY_BLOB ||
+       field->type == MYSQL_TYPE_VAR_STRING ||
+       field->type == MYSQL_TYPE_STRING || field->type == MYSQL_TYPE_VARCHAR ||
+       field->type == MYSQL_TYPE_VECTOR || field->type == MYSQL_TYPE_GEOMETRY));
 }
 
 /* Print binary value as hex literal (0x ...) */
 
 static void print_as_hex(FILE *output_file, const char *str, ulong len,
                          ulong total_bytes_to_send) {
-  const char *ptr = str, *end = ptr + len;
+  const auto *ptr = pointer_cast<const unsigned char *>(str);
+  const unsigned char *end = ptr + len;
   ulong i;
 
   if (str != nullptr) {
     fprintf(output_file, "0x");
-    for (; ptr < end; ptr++)
-      fprintf(output_file, "%02X",
-              *(static_cast<const uchar *>(static_cast<const void *>(ptr))));
+    ulong remaining = len;
+    static const unsigned char hex_digits[] = "0123456789ABCDEF";
+    unsigned char chunk_buf[64];
+    while (ptr < end) {
+      // write up to 32 input bytes at a time for performance
+      // (up to 64 bytes of hex output)
+      const size_t chunk_input_size = std::min((uint)remaining, 32U);
+      for (size_t j = 0; j < chunk_input_size; j++) {
+        const size_t offset = 2 * j;
+        chunk_buf[offset] = hex_digits[(*ptr >> 4) & 0x0F];
+        chunk_buf[offset + 1] = hex_digits[(*ptr) & 0x0F];
+        ptr++;
+      }
+      fwrite(chunk_buf, 1, 2 * chunk_input_size, output_file);
+      remaining -= chunk_input_size;
+    }
     /* Printed string length: two chars "0x" + two chars for each byte. */
     i = 2 + len * 2;
   } else {
@@ -3994,11 +4003,13 @@ static void print_table_data(MYSQL_RES *result) {
     tee_puts(separator.ptr(), PAGER);
   }
 
+  const uint num_fields = mysql_num_fields(result);
+
   while ((cur = mysql_fetch_row(result))) {
     ulong *lengths = mysql_fetch_lengths(result);
     (void)tee_fputs("| ", PAGER);
     mysql_field_seek(result, 0);
-    for (uint off = 0; off < mysql_num_fields(result); off++) {
+    for (uint off = 0; off < num_fields; off++) {
       const char *buffer;
       uint data_length;
       uint field_max_length;
@@ -4018,31 +4029,33 @@ static void print_table_data(MYSQL_RES *result) {
       field = mysql_fetch_field(result);
       field_max_length = field->max_length;
 
-      /*
-       How many text cells on the screen will this string span?  If it
-       contains multibyte characters, then the number of characters we occupy
-       on screen will be fewer than the number of bytes we occupy in memory.
-
-       We need to find how much screen real-estate we will occupy to know how
-       many extra padding-characters we should send with the printing
-       function.
-      */
-      visible_length = charset_info->cset->numcells(charset_info, buffer,
-                                                    buffer + data_length);
-      extra_padding = (uint)(data_length - visible_length);
-
       if (opt_binhex && is_binary_field(field))
         print_as_hex(PAGER, cur[off], lengths[off], field_max_length);
-      else if (field_max_length > MAX_COLUMN_LENGTH)
-        tee_print_sized_data(buffer, data_length,
-                             MAX_COLUMN_LENGTH + extra_padding, false);
       else {
-        if (num_flag[off] != 0) /* if it is numeric, we right-justify it */
+        /*
+          How many text cells on the screen will this string span?  If it
+          contains multibyte characters, then the number of characters we occupy
+          on screen will be fewer than the number of bytes we occupy in memory.
+
+          We need to find how much screen real-estate we will occupy to know how
+          many extra padding-characters we should send with the printing
+          function.
+        */
+        visible_length = charset_info->cset->numcells(charset_info, buffer,
+                                                      buffer + data_length);
+        extra_padding = (uint)(data_length - visible_length);
+
+        if (field_max_length > MAX_COLUMN_LENGTH)
           tee_print_sized_data(buffer, data_length,
-                               field_max_length + extra_padding, true);
-        else
-          tee_print_sized_data(buffer, data_length,
-                               field_max_length + extra_padding, false);
+                               MAX_COLUMN_LENGTH + extra_padding, false);
+        else {
+          if (num_flag[off] != 0) /* if it is numeric, we right-justify it */
+            tee_print_sized_data(buffer, data_length,
+                                 field_max_length + extra_padding, true);
+          else
+            tee_print_sized_data(buffer, data_length,
+                                 field_max_length + extra_padding, false);
+        }
       }
       tee_fputs(" |", PAGER);
     }
@@ -5192,6 +5205,29 @@ static bool init_connection_options(MYSQL *mysql) {
     }
   }
 
+  /* set authentication_openid_connect_client ID token file option if required
+   */
+  if (opt_authentication_openid_connect_client_id_token_file != nullptr) {
+    struct st_mysql_client_plugin *openid_connect_plugin =
+        mysql_client_find_plugin(mysql, "authentication_openid_connect_client",
+                                 MYSQL_CLIENT_AUTHENTICATION_PLUGIN);
+    if (!openid_connect_plugin) {
+      put_info("Cannot load the authentication_openid_connect_client plugin.",
+               INFO_ERROR);
+      return true;
+    }
+    if (mysql_plugin_options(
+            openid_connect_plugin, "id-token-file",
+            opt_authentication_openid_connect_client_id_token_file)) {
+      put_info(
+          "Failed to set id token file for "
+          "authentication_openid_connect_client "
+          "plugin.",
+          INFO_ERROR);
+      return true;
+    }
+  }
+
   char error[256]{0};
 #if defined(_WIN32)
   if (set_authentication_kerberos_client_mode(mysql, error, 255)) {
@@ -5485,13 +5521,14 @@ void tee_write(FILE *file, const char *s, size_t slen, int flags) {
 #ifdef _WIN32
   const bool is_console = my_win_is_console_cached(file);
 #endif
+  const bool is_mb = use_mb(charset_info);
   const char *se;
   for (se = s + slen; s < se; s++) {
     const char *t;
 
     if (flags & MY_PRINT_MB) {
       int mblen;
-      if (use_mb(charset_info) && (mblen = my_ismbchar(charset_info, s, se))) {
+      if (is_mb && (mblen = my_ismbchar(charset_info, s, se))) {
 #ifdef _WIN32
         if (is_console)
           my_win_console_write(charset_info, s, mblen);
@@ -5595,15 +5632,6 @@ void tee_putc(int c, FILE *file) {
 #endif
 #endif
 
-static ulong start_timer() {
-#if defined(_WIN32)
-  return clock();
-#else
-  struct tms tms_tmp;
-  return times(&tms_tmp);
-#endif
-}
-
 /**
   Write as many as 52+1 bytes to buff, in the form of a legible duration of
   time.
@@ -5631,16 +5659,19 @@ static void nice_time(double sec, char *buff, bool part_second) {
     buff = my_stpcpy(buff, " min ");
   }
   if (part_second)
-    sprintf(buff, "%.2f sec", sec);
+    sprintf(buff, "%.3f sec", sec);
   else
     sprintf(buff, "%d sec", (int)sec);
 }
 
-static void end_timer(ulong start_time, char *buff) {
-  nice_time((double)(start_timer() - start_time) / CLOCKS_PER_SEC, buff, true);
+static void end_timer(ulonglong start_time, char *buff) {
+  ulonglong end_time = my_timer_microseconds();
+  nice_time((double)(end_time > start_time ? end_time - start_time : 0) /
+                (double)(1000000),
+            buff, true);
 }
 
-static void mysql_end_timer(ulong start_time, char *buff) {
+static void mysql_end_timer(ulonglong start_time, char *buff) {
   buff[0] = ' ';
   buff[1] = '(';
   end_timer(start_time, buff + 2);
@@ -5831,8 +5862,8 @@ static void get_current_os_user() {
 
   if (GetUserNameW(wbuf, &wbuf_len)) {
     len = my_convert(buf, sizeof(buf) - 1, charset_info, (char *)wbuf,
-                     wbuf_len * sizeof(WCHAR), &my_charset_utf16le_bin,
-                     &dummy_errors);
+                     wbuf_len * sizeof(WCHAR),
+                     get_charset_by_name("utf16le_bin", MYF(0)), &dummy_errors);
     buf[len] = 0;
     user = buf;
   } else {

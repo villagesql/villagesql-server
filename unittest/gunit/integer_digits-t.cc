@@ -26,9 +26,9 @@
 #include "integer_digits.h"
 
 #include <gtest/gtest.h>
-#include <inttypes.h>
-#include <stdint.h>
-#include <stdio.h>
+#include <cinttypes>
+#include <cstdint>
+#include <cstdio>
 #include <iterator>
 #include <limits>
 #include <tuple>
@@ -79,7 +79,7 @@ TEST_P(IntegerDigits, WriteDigits) {
   *end = '\0';  // write_digits does not zero-terminate
 
   char expected[100];
-  int expected_length =
+  int const expected_length =
       snprintf(expected, sizeof(expected), "%0*" PRIu64, digits, value);
 
   EXPECT_EQ(buffer + expected_length, end);

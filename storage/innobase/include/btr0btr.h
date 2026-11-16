@@ -187,9 +187,11 @@ page_t *btr_root_get(const dict_index_t *index, /*!< in: index tree */
                                 buffer tree
 @param[in,out]  mtr             Mini-transaction
 @return block */
-static inline buf_block_t *btr_block_get_func(
-    const page_id_t &page_id, const page_size_t &page_size, ulint mode,
-    ut::Location location, IF_DEBUG(const dict_index_t *index, ) mtr_t *mtr);
+static inline buf_block_t *btr_block_get_func(const page_id_t &page_id,
+                                              const page_size_t &page_size,
+                                              ulint mode, ut::Location location,
+                                              const dict_index_t *index,
+                                              mtr_t *mtr);
 
 /** Gets a buffer page and declares its latching order level.
 @param page_id Tablespace/page identifier
@@ -204,8 +206,7 @@ static inline buf_block_t *btr_block_get(const page_id_t &page_id,
                                          ulint mode, ut::Location location,
                                          const dict_index_t *index,
                                          mtr_t *mtr) {
-  return btr_block_get_func(page_id, page_size, mode, location,
-                            IF_DEBUG(index, ) mtr);
+  return btr_block_get_func(page_id, page_size, mode, location, index, mtr);
 }
 
 #endif /* !UNIV_HOTBACKUP */
@@ -283,8 +284,10 @@ void btr_free_if_exists(const page_id_t &page_id, const page_size_t &page_size,
 
 /** Free an index tree in a temporary tablespace.
 @param[in]      page_id         root page id
-@param[in]      page_size       page size */
-void btr_free(const page_id_t &page_id, const page_size_t &page_size);
+@param[in]      page_size       page size
+@param[in]      is_intrinsic    true for intrinsic tables else false */
+void btr_free(const page_id_t &page_id, const page_size_t &page_size,
+              bool is_intrinsic);
 
 /** Truncate an index tree. We just free all except the root.
 Currently, this function is only specific for clustered indexes and the only

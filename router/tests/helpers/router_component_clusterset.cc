@@ -31,9 +31,6 @@
 
 void RouterComponentClusterSetTest::create_clusterset(
     ClusterSetOptions &cs_options) {
-  const std::string tracefile_path =
-      get_data_dir().str() + "/" + cs_options.tracefile;
-
   auto &cs_topology = cs_options.topology;
 
   cs_topology.primary_cluster_id = cs_options.primary_cluster_id;
@@ -97,9 +94,12 @@ void RouterComponentClusterSetTest::create_clusterset(
     auto &cluster = cs_topology.clusters[cluster_id];
     for (unsigned node_id = 0; node_id < cluster.nodes.size(); ++node_id) {
       auto &node = cluster.nodes[node_id];
-      node.process = &launch_mysql_server_mock(
-          tracefile_path, node.classic_port, EXIT_SUCCESS, false,
-          node.http_port, node.x_port);
+      node.process =
+          &mock_server_spawner().spawn(mock_server_cmdline(cs_options.tracefile)
+                                           .port(node.classic_port)
+                                           .http_port(node.http_port)
+                                           .x_port(node.x_port)
+                                           .args());
 
       set_mock_clusterset_metadata(node.http_port, cluster_id, node_id,
                                    cs_options);
@@ -165,9 +165,7 @@ void RouterComponentClusterSetTest::add_clusterset_data_field(
       if (node_data.x_port > 0) {
         add_json_int_field(node_obj, "x_port", node_data.x_port);
       }
-      const std::string attributes =
-          node_data.is_read_replica ? R"({"instance_type" : "read-replica" })"
-                                    : "{}";
+      const std::string attributes = get_node_attributes_as_string(node_data);
       add_json_str_field(node_obj, "attributes", attributes);
 
       cluster_nodes_array.PushBack(node_obj, json_allocator);
@@ -197,19 +195,22 @@ void RouterComponentClusterSetTest::add_clusterset_data_field(
 }
 
 void RouterComponentClusterSetTest::set_mock_metadata_on_all_cs_nodes(
-    const ClusterSetOptions &cs_options) {
+    const ClusterSetOptions &cs_options,
+    const std::optional<std::string> &routing_guidelines) {
   for (const auto &cluster : cs_options.topology.clusters) {
     for (size_t node_id = 0; node_id < cluster.nodes.size(); ++node_id) {
       set_mock_clusterset_metadata(cluster.nodes[node_id].http_port,
                                    /*this_cluster_id*/ cluster.id,
-                                   /*this_node_id*/ node_id, cs_options);
+                                   /*this_node_id*/ node_id, cs_options,
+                                   routing_guidelines);
     }
   }
 }
 
 void RouterComponentClusterSetTest::set_mock_clusterset_metadata(
     uint16_t http_port, unsigned this_cluster_id, unsigned this_node_id,
-    const ClusterSetOptions &cs_options) {
+    const ClusterSetOptions &cs_options,
+    const std::optional<std::string> &routing_guidelines) {
   JsonValue json_doc(rapidjson::kObjectType);
 
   add_clusterset_data_field(json_doc, "clusterset_data", cs_options.topology,
@@ -229,6 +230,14 @@ void RouterComponentClusterSetTest::set_mock_clusterset_metadata(
   add_json_str_field(json_doc, "router_options", cs_options.router_options);
   add_json_str_field(json_doc, "router_expected_target_cluster",
                      cs_options.expected_target_cluster);
+  add_json_str_field(json_doc, "router_expected_local_cluster",
+                     cs_options.expected_local_cluster);
+
+  if (routing_guidelines) {
+    add_json_str_field(json_doc, "routing_guidelines",
+                       routing_guidelines.value());
+  }
+
   add_json_int_field(json_doc, "simulate_cluster_not_found",
                      cs_options.simulate_cluster_not_found);
   add_json_int_field(json_doc, "simulate_router_options_no_rows",
@@ -240,4 +249,30 @@ void RouterComponentClusterSetTest::set_mock_clusterset_metadata(
   const auto json_str = json_to_string(json_doc);
 
   EXPECT_NO_THROW(MockServerRestClient(http_port).set_globals(json_str));
+}
+
+std::string RouterComponentClusterSetTest::get_node_attributes_as_string(
+    const RouterComponentClusterSetTest::ClusterNode &node_data) const {
+  JsonValue json_val(rapidjson::kObjectType);
+  JsonAllocator allocator;
+  if (node_data.is_read_replica) {
+    json_val.AddMember("instance_type", "read-replica", allocator);
+  }
+
+  if (node_data.is_hidden || node_data.disconnect_when_hidden) {
+    JsonValue tags(rapidjson::kObjectType);
+
+    if (node_data.is_hidden) {
+      tags.AddMember("_hidden", node_data.is_hidden.value(), allocator);
+    }
+
+    if (node_data.disconnect_when_hidden) {
+      tags.AddMember("_disconnect_existing_sessions_when_hidden",
+                     node_data.disconnect_when_hidden.value(), allocator);
+    }
+
+    json_val.AddMember("tags", tags, allocator);
+  }
+
+  return json_to_string(json_val);
 }

@@ -336,14 +336,22 @@ ulonglong get_field_set(Field *f) {
 /* DATE TYPE */
 void set_field_date(Field *f, const char *value, uint len) {
   assert(f->real_type() == MYSQL_TYPE_NEWDATE);
-  auto *f2 = (Field_newdate *)f;
+  auto *f2 = down_cast<Field_date *>(f);
   f2->store(value, len, system_charset_info);
+}
+
+void set_field_date_by_daynr(Field *f, ulong daynr) {
+  assert(f->real_type() == MYSQL_TYPE_NEWDATE);
+  auto *f2 = down_cast<Field_date *>(f);
+
+  Date_val date{static_cast<uint32_t>(daynr)};
+  f2->store_date(date);
 }
 
 char *get_field_date(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_NEWDATE);
   String temp;
-  const auto *f2 = (Field_newdate *)f;
+  const auto *f2 = down_cast<Field_date *>(f);
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -353,14 +361,14 @@ char *get_field_date(Field *f, char *val, uint *len) {
 /* TIME TYPE */
 void set_field_time(Field *f, const char *value, uint len) {
   assert(f->real_type() == MYSQL_TYPE_TIME2);
-  auto *f2 = (Field_timef *)f;
+  auto *f2 = down_cast<Field_time *>(f);
   f2->store(value, len, system_charset_info);
 }
 
 char *get_field_time(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_TIME2);
   String temp;
-  const auto *f2 = (Field_timef *)f;
+  const auto *f2 = down_cast<Field_time *>(f);
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -370,14 +378,14 @@ char *get_field_time(Field *f, char *val, uint *len) {
 /* DATETIME TYPE */
 void set_field_datetime(Field *f, const char *value, uint len) {
   assert(f->real_type() == MYSQL_TYPE_DATETIME2);
-  auto *f2 = (Field_datetimef *)f;
+  auto *f2 = (Field_datetime *)f;
   f2->store(value, len, system_charset_info);
 }
 
 char *get_field_datetime(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_DATETIME2);
   String temp;
-  const auto *f2 = (Field_datetimef *)f;
+  const auto *f2 = (Field_datetime *)f;
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -387,14 +395,14 @@ char *get_field_datetime(Field *f, char *val, uint *len) {
 /* TIMESTAMP TYPE */
 void set_field_timestamp(Field *f, const char *value, uint len) {
   assert(f->real_type() == MYSQL_TYPE_TIMESTAMP2);
-  auto *f2 = (Field_timestampf *)f;
+  auto *f2 = (Field_timestamp *)f;
   f2->store(value, len, system_charset_info);
 }
 
 char *get_field_timestamp(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_TIMESTAMP2);
   String temp;
-  const auto *f2 = (Field_timestampf *)f;
+  const auto *f2 = (Field_timestamp *)f;
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
@@ -405,7 +413,7 @@ void set_field_timestamp(Field *f, ulonglong value) {
   const my_timeval tm = {static_cast<int64_t>(value / 1000000),
                          static_cast<int64_t>(value % 1000000)};
   assert(f->real_type() == MYSQL_TYPE_TIMESTAMP2);
-  auto *f2 = (Field_timestampf *)f;
+  auto *f2 = (Field_timestamp *)f;
   f2->store_timestamp(&tm);
 }
 
@@ -737,13 +745,14 @@ int PFS_object_row::make_row(PFS_program *pfs) {
 }
 
 int PFS_column_row::make_row(const MDL_key *mdl) {
-  static_assert(MDL_key::NAMESPACE_END == 19,
+  static_assert(MDL_key::NAMESPACE_END == 21,
                 "Adjust performance schema when changing enum_mdl_namespace");
 
   bool with_schema = false;
   bool with_object = false;
   bool with_column = false;
 
+  m_object_type = NO_OBJECT_TYPE;
   m_schema_name_length = 0;
   m_object_name_length = 0;
   m_column_name_length = 0;
@@ -759,6 +768,9 @@ int PFS_column_row::make_row(const MDL_key *mdl) {
     case MDL_key::EXTENSION:
       m_object_type = OBJECT_TYPE_EXTENSION;
       with_object = true;
+      break;
+    case MDL_key::BACKUP_TABLES:
+      m_object_type = OBJECT_TYPE_BACKUP_TABLES;
       break;
     case MDL_key::SCHEMA:
       m_object_type = OBJECT_TYPE_SCHEMA;
@@ -776,6 +788,11 @@ int PFS_column_row::make_row(const MDL_key *mdl) {
       break;
     case MDL_key::PROCEDURE:
       m_object_type = OBJECT_TYPE_PROCEDURE;
+      with_schema = true;
+      with_object = true;
+      break;
+    case MDL_key::LIBRARY:
+      m_object_type = OBJECT_TYPE_LIBRARY;
       with_schema = true;
       with_object = true;
       break;
@@ -2115,6 +2132,11 @@ bool PFS_key_user::match(const PFS_setup_actor *pfs) {
                   pfs->m_key.m_user_name.length());
 }
 
+bool PFS_key_user::match(const PFS_user_name *pfs) {
+  const bool record_null = (pfs->length() == 0);
+  return do_match(record_null, pfs->ptr(), pfs->length());
+}
+
 bool PFS_key_host::match(const PFS_thread *pfs) {
   const bool record_null = (pfs->m_host_name.length() == 0);
   return do_match(record_null, pfs->m_host_name.ptr(),
@@ -2137,6 +2159,11 @@ bool PFS_key_host::match(const PFS_setup_actor *pfs) {
   const bool record_null = (pfs->m_key.m_host_name.length() == 0);
   return do_match(record_null, pfs->m_key.m_host_name.ptr(),
                   pfs->m_key.m_host_name.length());
+}
+
+bool PFS_key_host::match(const PFS_host_name *pfs) {
+  const bool record_null = (pfs->length() == 0);
+  return do_match(record_null, pfs->ptr(), pfs->length());
 }
 
 bool PFS_key_host::match(const char *hostname, size_t hostname_length) {

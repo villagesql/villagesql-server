@@ -26,8 +26,9 @@
 #ifndef MYSQL_HARNESS_STDX_BIT_H_
 #define MYSQL_HARNESS_STDX_BIT_H_
 
-#include <concepts>  // integral
-#include <cstdint>   // UINT64_C
+#include <concepts>     // integral
+#include <cstdint>      // UINT64_C
+#include <type_traits>  // std::has_unique_object_representations_v
 
 namespace stdx {
 

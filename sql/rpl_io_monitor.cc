@@ -213,7 +213,9 @@ bool Source_IO_monitor::launch_monitoring_process(PSI_thread_key thread_key) {
 
   while (m_monitor_thd_state.is_alive_not_running()) {
     DBUG_PRINT("sleep", ("Waiting for the Monitoring process thread to start"));
-    mysql_cond_wait(&m_run_cond, &m_run_lock);
+    struct timespec abstime;
+    set_timespec(&abstime, 1);
+    mysql_cond_timedwait(&m_run_cond, &m_run_lock, &abstime);
   }
   mysql_mutex_unlock(&m_run_lock);
 
@@ -600,6 +602,17 @@ bool Source_IO_monitor::check_connection_and_run_query(
         ER_RPL_ASYNC_CHECK_CONNECTION_ERROR, conn_single_server->get_mysql(),
         mi);
   }
+
+  /*
+    After successfully establishing a connection to the source and executing
+    a test query, verify version compatibility between the replica and the
+    source. Fail if higher-version sources are not allowed and the source
+    version is higher than the replica’s.
+  */
+  if (!opt_replica_allow_higher_version_source && !query_failed &&
+      !conn_single_server->version_compatible())
+    query_failed = 1;
+
   delete conn_single_server;
   conn_single_server = nullptr;
   return !query_failed;

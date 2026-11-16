@@ -88,9 +88,8 @@ inline bool is_persistent_statistics_expired(
     return true;
 
   // Convert longlong time to MYSQL_TIME format
-  MYSQL_TIME cached_mysql_time;
-  my_longlong_to_datetime_with_warn(cached_timestamp, &cached_mysql_time,
-                                    MYF(0));
+  Datetime_val cached_mysql_time;
+  int_to_datetime_with_warn(cached_timestamp, &cached_mysql_time, MYF(0));
 
   /*
     Convert MYSQL_TIME to epoc second according to local time_zone as
@@ -495,7 +494,9 @@ ulonglong Table_statistics::read_stat(
   handlerton *hton = nullptr;
   const bool hton_implements_get_statistics =
       (tmp_plugin && (hton = plugin_data<handlerton *>(tmp_plugin)) &&
-       hton->get_index_column_cardinality && hton->get_table_statistics);
+       (hton->get_index_column_cardinality ||
+        stype != enum_table_stats_type::INDEX_COLUMN_CARDINALITY) &&
+       hton->get_table_statistics);
 
   // Try to get statistics without opening the table.
   if (!partition_name && hton_implements_get_statistics)

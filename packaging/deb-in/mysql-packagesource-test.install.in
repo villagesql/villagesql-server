@@ -54,6 +54,9 @@ usr/lib/mysql/plugin/component_test_host_application_signal.so
 usr/lib/mysql/plugin/component_test_mysql_current_thread_reader.so
 usr/lib/mysql/plugin/component_test_mysql_runtime_error.so
 usr/lib/mysql/plugin/component_test_component_deinit.so
+usr/lib/mysql/plugin/component_test_component_deinit_no_deadlock.so
+usr/lib/mysql/plugin/component_test_component_init_fail.so
+usr/lib/mysql/plugin/component_test_component_init_then_register.so
 usr/lib/mysql/plugin/component_test_mysql_command_services.so
 usr/lib/mysql/plugin/test_services_command_services.so
 usr/lib/mysql/plugin/component_udf_reg_3_func.so
@@ -69,6 +72,7 @@ usr/lib/mysql/plugin/component_test_sys_var_service_int.so
 usr/lib/mysql/plugin/component_test_sys_var_service.so
 usr/lib/mysql/plugin/component_test_sys_var_service_same.so
 usr/lib/mysql/plugin/component_test_sys_var_service_str.so
+usr/lib/mysql/plugin/component_test_session_var_service.so
 usr/lib/mysql/plugin/component_test_status_var_service.so
 usr/lib/mysql/plugin/component_test_status_var_service_int.so
 usr/lib/mysql/plugin/component_test_status_var_service_reg_only.so
@@ -118,6 +122,7 @@ usr/lib/mysql/plugin/test_services_plugin_registry.so
 usr/lib/mysql/plugin/test_services_host_application_signal.so
 usr/lib/mysql/plugin/component_mysqlx_global_reset.so
 usr/lib/mysql/plugin/component_test_audit_api_message.so
+usr/lib/mysql/plugin/component_test_udf_aggregate.so
 usr/lib/mysql/plugin/component_test_udf_services.so
 usr/lib/mysql/plugin/component_test_mysql_system_variable_set.so
 usr/lib/mysql/plugin/component_test_table_access.so
@@ -127,6 +132,8 @@ usr/lib/mysql/plugin/component_test_server_telemetry_logs_client.so
 usr/lib/mysql/plugin/component_test_server_telemetry_logs_export.so
 usr/lib/mysql/plugin/component_test_server_telemetry_metrics.so
 usr/lib/mysql/plugin/component_test_server_telemetry_traces.so
+usr/lib/mysql/plugin/component_test_telemetry_resource_provider.so
+usr/lib/mysql/plugin/component_test_telemetry_secret_provider.so
 usr/lib/mysql/plugin/component_test_mysql_thd_store_service.so
 usr/lib/mysql/plugin/component_test_event_tracking_consumer.so
 usr/lib/mysql/plugin/component_test_event_tracking_producer_a.so
@@ -134,6 +141,7 @@ usr/lib/mysql/plugin/component_test_event_tracking_producer_b.so
 usr/lib/mysql/plugin/component_test_event_tracking_consumer_a.so
 usr/lib/mysql/plugin/component_test_event_tracking_consumer_b.so
 usr/lib/mysql/plugin/component_test_event_tracking_consumer_c.so
+usr/lib/mysql/plugin/component_test_mysql_file_service.so
 # test suite
 usr/lib/mysql-test/*
 # legal

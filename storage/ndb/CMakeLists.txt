@@ -117,6 +117,7 @@ IF(NOT WITHOUT_SERVER)
     plugin/ndb_replica.cc
     plugin/ndb_binlog_index_rows.cc
     plugin/ndb_rpl_filter.cc
+    plugin/ndb_replica_status_table.cc
     plugin/ndb_binlog_purger.cc
   )
 
@@ -151,6 +152,7 @@ IF(NOT WITHOUT_SERVER)
   NDB_ADD_TEST("ndb_bitmap-t" "plugin/ndb_bitmap.cc" LIBS ndbgeneral)
   NDB_ADD_TEST("ndb_blobs_buffer-t" "plugin/ndb_blobs_buffer.cc" LIBS ndbgeneral)
   NDB_ADD_TEST("ndb_binlog_index_rows-t" "plugin/ndb_binlog_index_rows.cc" LIBS ndbgeneral)
+  NDB_ADD_TEST("ndb_string_utils-t" "plugin/ndb_string_utils.cc" LIBS ndbgeneral)
 ELSEIF(NOT WITH_NDB)
   IF(WITH_NDBCLUSTER_STORAGE_ENGINE)
     MESSAGE(WARNING "Skips building ndbcluster plugin, WITHOUT_SERVER=ON "
@@ -175,6 +177,16 @@ FOREACH(warning
     STRING_APPEND(CMAKE_C_FLAGS " ${HAS_WARN_FLAG}")
   ENDIF()
 ENDFOREACH()
+
+# GCC 16's -O2 analysis emits many false-positive -Wuninitialized /
+# -Wmaybe-uninitialized warnings in NDB, where signal data filled by
+# transporter/network code (e.g. NdbApiSignal::theRealData) is read through
+# CAST_CONSTPTR-style reinterpret casts the optimizer cannot follow. Suppress
+# both warnings for the NDB tree on GCC 16+ to keep -Werror builds working.
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+  STRING_APPEND(CMAKE_C_FLAGS   " -Wno-uninitialized -Wno-maybe-uninitialized")
+  STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-uninitialized -Wno-maybe-uninitialized")
+ENDIF()
 
 INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/ndb_configure.cmake)
 
@@ -326,22 +338,6 @@ ENDIF()
 IF(WITH_NDB_JAVA)
   ADD_SUBDIRECTORY(clusterj)
 ENDIF()
-
-SET(WITH_NDB_NODEJS_DEFAULT ON)
-
-# Check if the default for WITH_NDB_NODEJS should be overriden
-# by environment variable
-IF(DEFINED ENV{WITH_NDB_NODEJS_DEFAULT})
-  SET(WITH_NDB_NODEJS_DEFAULT $ENV{WITH_NDB_NODEJS_DEFAULT})
-  MESSAGE(STATUS
-    "Default value for WITH_NDB_NODEJS set to ${WITH_NDB_NODEJS_DEFAULT}")
-ENDIF(DEFINED ENV{WITH_NDB_NODEJS_DEFAULT})
-
-OPTION(WITH_NDB_NODEJS
-  "Include NDB Cluster node.js components" ${WITH_NDB_NODEJS_DEFAULT})
-IF(WITH_NDB_NODEJS)
-  ADD_SUBDIRECTORY(nodejs)
-ENDIF(WITH_NDB_NODEJS)
 
 OPTION(WITH_NDBAPI_EXAMPLES
   "Build the NdbApi example programs" ${WITH_NDBAPI_EXAMPLES_DEFAULT})

@@ -148,6 +148,9 @@ PSI_digest_locker *pfs_digest_start_vc(PSI_statement_locker *locker);
 void pfs_digest_end_vc(PSI_digest_locker *locker,
                        const sql_digest_storage *digest);
 
+void pfs_digest_set_vc(PSI_statement_locker *locker,
+                       const sql_digest_storage *digest);
+
 #endif /* WITH_LOCK_ORDER */
 #endif /* MYSQL_DYNAMIC_PLUGIN */
 #endif /* MYSQL_SERVER || PFS_DIRECT_CALL */

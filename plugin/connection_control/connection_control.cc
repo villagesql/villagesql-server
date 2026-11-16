@@ -24,7 +24,7 @@
 #include "plugin/connection_control/connection_control.h"
 
 #include <mysql/plugin_audit.h> /* mysql_event_connection */
-#include <stddef.h>
+#include <cstddef>
 
 #include <mysql/components/services/log_builtins.h>
 #include "my_compiler.h"
@@ -34,11 +34,14 @@
 #include "mysqld_error.h"
 #include "plugin/connection_control/connection_control_coordinator.h" /* g_connection_event_coordinator */
 #include "plugin/connection_control/connection_delay_api.h" /* connection_delay apis */
+#include "plugin/connection_control/option_usage.h"
 #include "template_utils.h"
 
-static SERVICE_TYPE(registry) *reg_srv = nullptr;
+SERVICE_TYPE(registry) *reg_srv = nullptr;
 SERVICE_TYPE(log_builtins) *log_bi = nullptr;
 SERVICE_TYPE(log_builtins_string) *log_bs = nullptr;
+SERVICE_TYPE(registry_registration) *reg_reg = nullptr;
+my_h_service h_reg_svc = nullptr;
 
 namespace connection_control {
 class Connection_control_error_handler : public Error_handler {
@@ -47,6 +50,13 @@ class Connection_control_error_handler : public Error_handler {
     va_list vl;
     va_start(vl, errcode);
     LogPluginErrV(ERROR_LEVEL, errcode, vl);
+    va_end(vl);
+  }
+
+  void handle_info(longlong errcode, ...) override {
+    va_list vl;
+    va_start(vl, errcode);
+    LogPluginErrV(INFORMATION_LEVEL, errcode, vl);
     va_end(vl);
   }
 };
@@ -94,17 +104,17 @@ static PSI_stage_info *all_connection_delay_stage_info[] = {
 static void init_performance_schema() {
   const char *category = "conn_delay";
 
-  int count_mutex = array_elements(all_connection_delay_mutex_info);
+  int const count_mutex = array_elements(all_connection_delay_mutex_info);
   mysql_mutex_register(category, all_connection_delay_mutex_info, count_mutex);
 
-  int count_rwlock = array_elements(all_connection_delay_rwlock_info);
+  int const count_rwlock = array_elements(all_connection_delay_rwlock_info);
   mysql_rwlock_register(category, all_connection_delay_rwlock_info,
                         count_rwlock);
 
-  int count_cond = array_elements(all_connection_delay_cond_info);
+  int const count_cond = array_elements(all_connection_delay_cond_info);
   mysql_cond_register(category, all_connection_delay_cond_info, count_cond);
 
-  int count_stage = array_elements(all_connection_delay_stage_info);
+  int const count_stage = array_elements(all_connection_delay_stage_info);
   mysql_stage_register(category, all_connection_delay_stage_info, count_stage);
 }
 
@@ -126,7 +136,7 @@ static int connection_control_notify(MYSQL_THD thd,
   DBUG_TRACE;
   try {
     if (event_class == MYSQL_AUDIT_CONNECTION_CLASS) {
-      const struct mysql_event_connection *connection_event =
+      const auto *connection_event =
           (const struct mysql_event_connection *)event;
       Connection_control_error_handler error_handler;
       /** Notify event coordinator */
@@ -159,6 +169,12 @@ static int connection_control_init(MYSQL_PLUGIN plugin_info) {
 
   // Initialize error logging service.
   if (init_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs)) return 1;
+  reg_srv->acquire("registry_registration", &h_reg_svc);
+  reg_reg = reinterpret_cast<SERVICE_TYPE(registry_registration) *>(h_reg_svc);
+  if (connection_control_plugin_option_usage_init()) return 1;
+
+  LogPluginErr(WARNING_LEVEL, ER_SERVER_WARN_DEPRECATED,
+               "connection_control plugin", "component_connection_control");
 
   connection_control_plugin_info = plugin_info;
   Connection_control_error_handler error_handler;
@@ -189,11 +205,13 @@ static int connection_control_init(MYSQL_PLUGIN plugin_info) {
 */
 
 static int connection_control_deinit(void *arg [[maybe_unused]]) {
+  if (connection_control_plugin_option_usage_deinit()) return 1;
   delete g_connection_event_coordinator;
   g_connection_event_coordinator = nullptr;
   connection_control::deinit_connection_delay_event();
   connection_control_plugin_info = nullptr;
 
+  if (h_reg_svc) reg_srv->release(h_reg_svc);
   deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
   return 0;
 }
@@ -277,7 +295,6 @@ static void update_failed_connections_threshold(MYSQL_THD thd [[maybe_unused]],
   Connection_control_error_handler error_handler;
   g_connection_event_coordinator->notify_sys_var(
       &error_handler, OPT_FAILED_CONNECTIONS_THRESHOLD, &new_value);
-  return;
 }
 
 /** Declaration of connection_control_failed_connections_threshold */
@@ -342,7 +359,6 @@ static void update_min_connection_delay(MYSQL_THD thd [[maybe_unused]],
   Connection_control_error_handler error_handler;
   g_connection_event_coordinator->notify_sys_var(
       &error_handler, OPT_MIN_CONNECTION_DELAY, &new_value);
-  return;
 }
 
 /** Declaration of connection_control_max_connection_delay */
@@ -406,7 +422,6 @@ static void update_max_connection_delay(MYSQL_THD thd [[maybe_unused]],
   Connection_control_error_handler error_handler;
   g_connection_event_coordinator->notify_sys_var(
       &error_handler, OPT_MAX_CONNECTION_DELAY, &new_value);
-  return;
 }
 
 /** Declaration of connection_control_max_connection_delay */
@@ -502,6 +517,10 @@ static int show_exempted_users(MYSQL_THD thd [[maybe_unused]], SHOW_VAR *var,
 /** Array of status variables. Used in plugin declaration. */
 SHOW_VAR
 connection_control_status_variables[STAT_LAST + 1] = {
+    {"option_tracker_usage:Connection DoS control",
+     reinterpret_cast<char *>(
+         &opt_option_tracker_usage_connection_control_plugin),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {"Connection_control_delay_generated", (char *)&show_delay_generated,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {"Connection_control_exempted_unknown_users", (char *)&show_exempted_users,

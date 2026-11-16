@@ -70,7 +70,7 @@ int main() {
 
   std::stringstream file_content;
   file_content << std::cin.rdbuf();
-  std::string master_key = file_content.str();
+  std::string const master_key = file_content.str();
   {
     std::ofstream output_file(get_master_key_file_path());
     output_file << master_key;

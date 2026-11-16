@@ -217,13 +217,13 @@ TEST(MysysMyTime, StrToDatetimeNullDash) {
 
 // Invalid - strings
 TEST(MysysMyTime, StrToDatetimeNullDashInvalid) {
-  DatetimeResult tr = make_datetime_from_string("-00-00", TIME_FUZZY_DATE);
+  DatetimeResult tr = make_datetime_from_string("-00-00", 0);
   EXPECT_EQ(true, tr.stdt);
 
-  tr = make_datetime_from_string("0000-00-", TIME_FUZZY_DATE);
+  tr = make_datetime_from_string("0000-00-", 0);
   EXPECT_EQ(true, tr.stdt);
 
-  tr = make_datetime_from_string("0000--00", TIME_FUZZY_DATE);
+  tr = make_datetime_from_string("0000--00", 0);
   EXPECT_EQ(true, tr.stdt);
 
   tr = make_datetime_from_string("0000-00-00 .00.00", 0);
@@ -248,38 +248,34 @@ TEST(MysysMyTime, StrToDatetimeNullIso8601) {
   EXPECT_VALID_DATETIME(tr);
 
   tr = make_datetime_from_string("00000000T000000.999999", 0);
-  EXPECT_EQ(true, tr.stdt);
+  EXPECT_VALID_DATETIME(tr);
 
   tr = make_datetime_from_string("00000000T123030.999999", 0);
-  EXPECT_EQ(true, tr.stdt);
+  EXPECT_VALID_DATETIME(tr);
 
   tr = make_datetime_from_string("20000228T123030.999999", 0);
   EXPECT_VALID_DATETIME(tr);
   EXPECT_EQ(999999UL, tr.t.second_part);
 }
 
-// Check TIME_FUZZY_DATE and TIME_FUZZY_DATE|TIME_NO_ZERO_IN_DATE
+// Check TIME_NO_ZERO_IN_DATE
 TEST(MysysMyTime, StrToDatetimeFuzzyDate) {
-  DatetimeResult tr =
-      make_datetime_from_string("19800031T000000", TIME_FUZZY_DATE);
+  DatetimeResult tr = make_datetime_from_string("19800031T000000", 0);
   EXPECT_VALID_DATETIME(tr);
 
-  tr = make_datetime_from_string("19901100T000000", TIME_FUZZY_DATE);
+  tr = make_datetime_from_string("19901100T000000", 0);
   EXPECT_VALID_DATETIME(tr);
 
-  tr = make_datetime_from_string("00001130T000000", TIME_FUZZY_DATE);
+  tr = make_datetime_from_string("00001130T000000", 0);
   EXPECT_VALID_DATETIME(tr);
 
-  tr = make_datetime_from_string("19800031T000000",
-                                 TIME_FUZZY_DATE | TIME_NO_ZERO_IN_DATE);
+  tr = make_datetime_from_string("19800031T000000", TIME_NO_ZERO_IN_DATE);
   EXPECT_EQ(true, tr.stdt);
 
-  tr = make_datetime_from_string("19901100T000000",
-                                 TIME_FUZZY_DATE | TIME_NO_ZERO_IN_DATE);
+  tr = make_datetime_from_string("19901100T000000", TIME_NO_ZERO_IN_DATE);
   EXPECT_EQ(true, tr.stdt);
 
-  tr = make_datetime_from_string("00001130T000000",
-                                 TIME_FUZZY_DATE | TIME_NO_ZERO_IN_DATE);
+  tr = make_datetime_from_string("00001130T000000", TIME_NO_ZERO_IN_DATE);
   EXPECT_VALID_DATETIME(tr);
 
   tr = make_datetime_from_string("19991130T000000", TIME_NO_ZERO_IN_DATE);
@@ -288,20 +284,21 @@ TEST(MysysMyTime, StrToDatetimeFuzzyDate) {
 
 // Check MYSQL_TIME -> ulonglong -> longlong -> MYSQL_TIME conversion
 TEST(MysysMyTime, NumberToDatetime) {
-  DatetimeResult tr = make_datetime_from_string("19991130T120000", 0);
+  DatetimeResult const tr = make_datetime_from_string("19991130T120000", 0);
   EXPECT_VALID_DATETIME(tr);
 
-  ulonglong ullt = TIME_to_ulonglong_datetime(tr.t);
+  ulonglong const ullt = TIME_to_ulonglong_datetime(tr.t);
   MYSQL_TIME t;
   int was_cut = 0;
-  EXPECT_EQ(19991130120000ULL, number_to_datetime(ullt, &t, 0, &was_cut));
+  EXPECT_EQ(19991130120000ULL, int_to_datetime(ullt, &t, 0, &was_cut));
   EXPECT_EQ(0, was_cut);
   EXPECT_EQ(true, (tr.t == t));
 }
 
 // Check fast-path rounding to ulonglong
 TEST(MysysMyTime, TimeToUlonglongDatetimeRoundFast) {
-  DatetimeResult tr = make_datetime_from_string("19991130T120000.670000", 0);
+  DatetimeResult const tr =
+      make_datetime_from_string("19991130T120000.670000", 0);
   EXPECT_VALID_DATETIME(tr);
 
   int warnings = 0;
@@ -311,7 +308,8 @@ TEST(MysysMyTime, TimeToUlonglongDatetimeRoundFast) {
 
 // Check slow-path rounding to ulonglong
 TEST(MysysMyTime, TimeToUlonglongDatetimeRoundSlow) {
-  DatetimeResult tr = make_datetime_from_string("19991130T120059.670000", 0);
+  DatetimeResult const tr =
+      make_datetime_from_string("19991130T120059.670000", 0);
   EXPECT_VALID_DATETIME(tr);
 
   int warnings = 0;
@@ -332,10 +330,11 @@ TEST(MysysMyTime, MyPackedTimeGetFracPart) {
 
 // Conversion MYSQL_TIME -> longlong packed -> MYSQL_TIME
 TEST(MysysMyTime, LonglongDatetimePacked) {
-  DatetimeResult tr = make_datetime_from_string("19991130T120059.670000", 0);
+  DatetimeResult const tr =
+      make_datetime_from_string("19991130T120059.670000", 0);
   EXPECT_VALID_DATETIME(tr);
 
-  longlong ll = TIME_to_longlong_datetime_packed(tr.t);
+  longlong const ll = TIME_to_longlong_datetime_packed(tr.t);
   EXPECT_EQ(1829513407452821808LL, ll);
 
   MYSQL_TIME t;
@@ -346,16 +345,17 @@ TEST(MysysMyTime, LonglongDatetimePacked) {
 // Conversion MYSQL_TIME -> longlong packed -> binary -> longlong
 // packed -> MYSQL_TIME
 TEST(MysysMyTime, DatetimePackedBinary) {
-  DatetimeResult tr = make_datetime_from_string("20000228T120059.670000", 0);
+  DatetimeResult const tr =
+      make_datetime_from_string("20000228T120059.670000", 0);
   EXPECT_VALID_DATETIME(tr);
 
-  longlong ll = TIME_to_longlong_datetime_packed(tr.t);
+  longlong const ll = TIME_to_longlong_datetime_packed(tr.t);
   EXPECT_EQ(1829790484383021360LL, ll);
 
   uchar buf[256];
   my_datetime_packed_to_binary(ll, buf, 6);
 
-  longlong llb = my_datetime_packed_from_binary(buf, 6);
+  longlong const llb = my_datetime_packed_from_binary(buf, 6);
   EXPECT_EQ(ll, llb);
 }
 
@@ -365,24 +365,24 @@ TEST(MysysMyTime, DatetimeAddInterval) {
   DatetimeResult tr = make_datetime_from_string("20200229T235959.670000", 0);
   EXPECT_VALID_DATETIME(tr);
   EXPECT_EQ(670000LL, tr.t.second_part);
-  Interval i = {0, 0, 0, 0, 0, 0, 330000ull, false};
+  Interval const i = {0, 0, 0, 0, 0, 0, 330000ULL, false};
   int warnings = 0;
   EXPECT_EQ(false,
             date_add_interval(&tr.t, INTERVAL_MICROSECOND, i, &warnings));
-  MysqlTime ex(2020, 3, 1, 0, 0, 0, 0, false, MYSQL_TIMESTAMP_DATETIME);
+  MysqlTime const ex(2020, 3, 1, 0, 0, 0, 0);
   EXPECT_EQ(true, (tr.t == ex));
 }
 
 // Test packed access functions on positive time values
 TEST(MysysMyTime, MyPackedTimeGetFracPart2) {
   const MysqlTime mt(2020U, 2U, 29U, 23U, 59U, 59U, 670000);
-  longlong pt = TIME_to_longlong_datetime_packed(mt);
+  longlong const pt = TIME_to_longlong_datetime_packed(mt);
   EXPECT_EQ(670000LL, my_packed_time_get_frac_part(pt));
 }
 
 TEST(MysysMyTime, MyPackedTimeGetIntPart) {
   const MysqlTime mt(2020U, 2U, 29U, 23U, 59U, 59U, 670000UL);
-  longlong pt = TIME_to_longlong_datetime_packed(mt);
+  longlong const pt = TIME_to_longlong_datetime_packed(mt);
 
   EXPECT_EQ(110154710779LL, DRV_my_packed_time_get_int_part(pt));
 }
@@ -393,37 +393,13 @@ TEST(MysysMyTime, MyPackedTimeMake) {
 
 TEST(MysysMyTime, MyPackedTimeMakeInt) {
   const MysqlTime mt(2020U, 2U, 29U, 23U, 59U, 59U, 670000);
-  longlong pt = TIME_to_longlong_datetime_packed(mt);
+  longlong const pt = TIME_to_longlong_datetime_packed(mt);
 
   EXPECT_EQ(9149918308668014592LL, DRV_my_packed_time_make_int(pt));
 }
 
-// Test packed access functions on negative time values
-TEST(MysysMyTime, MyPackedTimeGetFracPartNeg) {
-  const MysqlTime mt(2020U, 2U, 29U, 23U, 59U, 59U, 670000, true,
-                     MYSQL_TIMESTAMP_DATETIME);
-  longlong pt = TIME_to_longlong_datetime_packed(mt);
-  EXPECT_EQ(-670000LL, my_packed_time_get_frac_part(pt));
-}
-
-TEST(MysysMyTime, MyPackedTimeGetIntPartNeg) {
-  const MysqlTime mt(2020U, 2U, 29U, 23U, 59U, 59U, 670000, true,
-                     MYSQL_TIMESTAMP_DATETIME);
-  longlong pt = TIME_to_longlong_datetime_packed(mt);
-
-  EXPECT_EQ(-110154710780LL, DRV_my_packed_time_get_int_part(pt));
-}
-
 TEST(MysysMyTime, MyPackedTimeMakeNeg) {
   EXPECT_EQ(-16107216LL, DRV_my_packed_time_make(-1LL, 670000LL));
-}
-
-TEST(MysysMyTime, MyPackedTimeMakeIntNeg) {
-  const MysqlTime mt(2020U, 2U, 29U, 23U, 59U, 59U, 670000, true,
-                     MYSQL_TIMESTAMP_DATETIME);
-  longlong pt = TIME_to_longlong_datetime_packed(mt);
-
-  EXPECT_EQ(-9149918308668014592LL, DRV_my_packed_time_make_int(pt));
 }
 
 /**
@@ -442,7 +418,7 @@ int TzDisplacementToSeconds(const char *s) {
   Convenience function checking the return value of
   time_zone_displacement_to_seconds().
 */
-bool CheckTimeZoneDisplacement(std::string s) {
+bool CheckTimeZoneDisplacement(const std::string &s) {
   int secs;
   return time_zone_displacement_to_seconds(s.c_str(), s.length(), &secs);
 }
@@ -455,7 +431,7 @@ TEST(MysysMyTime, TimeZoneDisplacementToSeconds) {
   EXPECT_EQ(50400, TzDisplacementToSeconds("+14:00"));
   EXPECT_EQ(-50400, TzDisplacementToSeconds("-14:00"));
 
-  int int_max = std::numeric_limits<int>::max();
+  int const int_max = std::numeric_limits<int>::max();
   std::cout << "int max " << int_max << std::endl;
 
   // Various syntactical errors.
@@ -547,8 +523,8 @@ BENCHMARK(BM_my_micro_time)
 static void BM_my_time_to_str(size_t num_iterations) {
   StopBenchmarkTiming();
 
-  const MysqlTime date(0, 0, 0, 123, 59, 59, 670000, false,
-                       MYSQL_TIMESTAMP_TIME);
+  const Time_val time(false, 123, 59, 59, 670000);
+  const MYSQL_TIME date = MYSQL_TIME(time);
   char buffer[MAX_DATE_STRING_REP_LENGTH];
 
   StartBenchmarkTiming();
@@ -564,7 +540,7 @@ BENCHMARK(BM_my_time_to_str)
 static void BM_my_date_to_str(size_t num_iterations) {
   StopBenchmarkTiming();
 
-  const MysqlTime date(2020, 2, 29, 0, 0, 0, 0, false, MYSQL_TIMESTAMP_DATE);
+  const MysqlTime date(2020, 2, 29, 0, 0, 0, 0);
   char buffer[MAX_DATE_STRING_REP_LENGTH];
 
   StartBenchmarkTiming();
@@ -580,14 +556,13 @@ BENCHMARK(BM_my_date_to_str)
 static void BM_my_datetime_to_str(size_t num_iterations) {
   StopBenchmarkTiming();
 
-  const MysqlTime date(2020, 2, 29, 23, 59, 59, 670000, false,
-                       MYSQL_TIMESTAMP_DATETIME);
+  const MysqlTime dt(2020, 2, 29, 23, 59, 59, 670000);
   char buffer[MAX_DATE_STRING_REP_LENGTH];
 
   StartBenchmarkTiming();
 
   for (size_t i = 0; i < num_iterations; ++i) {
-    my_datetime_to_str(date, buffer, 6);
+    my_datetime_to_str(dt, buffer, 6);
   }
 
   StopBenchmarkTiming();

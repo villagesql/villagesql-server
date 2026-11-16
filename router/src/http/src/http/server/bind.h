@@ -32,8 +32,8 @@
 
 #include "mysqlrouter/http_server_lib_export.h"
 
-#include "helper/wait_variable.h"
 #include "mysql/harness/net_ts/internet.h"
+#include "mysql/harness/utility/wait_variable.h"
 
 namespace http {
 namespace server {
@@ -107,7 +107,8 @@ class HTTP_SERVER_LIB_EXPORT Bind {
   io_context *context_;
   resolver resolver_{*context_};
   acceptor socket_{*context_};
-  WaitableVariable<State> sync_state_{State::kInitializing};
+  mysql_harness::utility::WaitableVariable<State> sync_state_{
+      State::kInitializing};
 };
 
 }  // namespace server

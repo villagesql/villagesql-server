@@ -21,8 +21,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <assert.h>
-#include <stddef.h>
+#include <cassert>
+#include <cstddef>
 
 #include "my_inttypes.h"
 #include "mysql/plugin.h"
@@ -69,11 +69,10 @@ static int ngram_parse(MYSQL_FTPARSER_PARAM *param, const char *doc, int len,
     if (next + char_len > end || char_len == 0) {
       break;
     } else {
-      /* Skip SPACE or ","/"." etc as they are not words*/
-      int ctype;
+      /* Skip SPACE and control characters */
+      int ctype = 0;
       cs->cset->ctype(cs, &ctype, (uchar *)next, (uchar *)end);
-
-      if (char_len == 1 && (*next == ' ' || !true_word_char(ctype, *next))) {
+      if (char_len == 1 && (*next == ' ' || ctype & MY_CHAR_CTR)) {
         start = next + 1;
         next = start;
         n_chars = 0;
@@ -201,10 +200,11 @@ static int ngram_parser_parse(MYSQL_FTPARSER_PARAM *param) {
   MYSQL_FTPARSER_BOOLEAN_INFO bool_info = {FT_TOKEN_WORD, 0,      0, 0, 0, 0,
                                            ' ',           nullptr};
   const CHARSET_INFO *cs = param->cs;
-  uchar **start = reinterpret_cast<uchar **>(&param->doc);
+  auto **start = reinterpret_cast<uchar **>(&param->doc);
   uchar *end = *start + param->length;
   FT_WORD word = {nullptr, 0, 0};
   int ret = 0;
+  const bool extra_word_chars = thd_get_ft_query_extra_word_chars();
 
   switch (param->mode) {
     case MYSQL_FTPARSER_SIMPLE_MODE:
@@ -217,7 +217,8 @@ static int ngram_parser_parse(MYSQL_FTPARSER_PARAM *param) {
       /* Ngram parser cannot handle query in boolean mode, so we
       first parse query into words with boolean info, then we parse
       the words into ngram. */
-      while (fts_get_word(cs, start, end, &word, &bool_info)) {
+      while (
+          fts_get_word(cs, extra_word_chars, start, end, &word, &bool_info)) {
         if (bool_info.type == FT_TOKEN_WORD) {
           if (bool_info.quot != nullptr) {
             /* Phrase search */

@@ -50,10 +50,10 @@ struct decimal {
  * @brief A type to store the value of a Column which can be one of all the
  * types that are supported by the Protocol_local_v2. Variant of pointers is
  * used instead of variant of values as the values are stored and managed by
- * mem_root. The pointers point to these values on mem_root
+ * mem_root. The pointers point to these values on mem_root.
  */
 using value_t = std::variant<std::monostate, int64_t *, uint64_t *, double *,
-                             MYSQL_TIME *, char *, decimal *>;
+                             MYSQL_TIME *, LEX_CSTRING, decimal *>;
 
 /**
  * @brief The metadata of a Column
@@ -74,12 +74,12 @@ struct Column_metadata {
  *
  */
 struct Warning {
-  Warning(const uint32 level, const uint32_t code, const char *message)
+  Warning(const uint32 level, const uint32_t code, LEX_CSTRING message)
       : m_level(level), m_code(code), m_message(message) {}
 
   uint32_t m_level;
   uint32_t m_code;
-  const char *m_message;
+  LEX_CSTRING m_message;
 };
 
 /**
@@ -365,8 +365,8 @@ class Protocol_local_v2 final : public Protocol {
   bool store_string(const char *from, size_t length,
                     const CHARSET_INFO *cs) override;
   bool store_datetime(const MYSQL_TIME &time, uint precision) override;
-  bool store_date(const MYSQL_TIME &time) override;
-  bool store_time(const MYSQL_TIME &time, uint precision) override;
+  bool store_date(const Date_val date) override;
+  bool store_time(const Time_val time, uint precision) override;
   bool store_float(float value, uint32 decimals, uint32 zerofill) override;
   bool store_double(double value, uint32 decimals, uint32 zerofill) override;
   bool store_field(const Field *field) override;

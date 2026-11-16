@@ -33,9 +33,9 @@
 */
 
 #include <mysql/plugin_auth.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "my_compiler.h"
 

@@ -22,14 +22,14 @@ let $null_value_file = $MYSQLTEST_VARDIR/tmp/null_value.dat;
 # --- nullable ---
 let $col_def = DOUBLE;
 let $type_default = 0;
-let $bad_value_strict_error = 1265; # WARN_DATA_TRUNCATED
+let $bad_value_strict_error = 1366; # ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 let $null_notnull_strict_error = 0;
 --source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
 
 # --- NOT NULL ---
 let $col_def = DOUBLE NOT NULL;
 let $type_default = 0;
-let $bad_value_strict_error = 1265; # WARN_DATA_TRUNCATED
+let $bad_value_strict_error = 1366; # ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 let $null_notnull_strict_error = 1263; # ER_WARN_NULL_TO_NOTNULL
 --source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
 
@@ -38,7 +38,7 @@ let $null_notnull_strict_error = 1263; # ER_WARN_NULL_TO_NOTNULL
 # type's intrinsic default (0) instead. The count for val = 100 will be 0.
 let $col_def = DOUBLE DEFAULT 100;
 let $type_default = 100;
-let $bad_value_strict_error = 1265; # WARN_DATA_TRUNCATED
+let $bad_value_strict_error = 1366; # ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 let $null_notnull_strict_error = 0;
 --source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
 

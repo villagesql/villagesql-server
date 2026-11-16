@@ -283,6 +283,7 @@ DROP TABLE t1;
 #
 CREATE TABLE t(a INT);
 INSERT INTO t values (1),(2),(3),(6),(0);
+SET explain_json_format_version = 1;
 Discard w
 SELECT 1 FROM t WINDOW w AS(PARTITION BY NULL,NULL ORDER BY NULL ASC);
 1
@@ -677,6 +678,7 @@ EXPLAIN
 Warnings:
 Note	3599	Window function 'rank' ignores the frame clause of window 'w1' and aggregates over the whole partition
 Note	1003	/* select#1 */ select rank() OVER `w1` AS `RANK() OVER w1` from `test`.`t` window `w1` AS (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+SET explain_json_format_version = DEFAULT;
 DROP TABLE t;
 # End of test for Bug#27062031
 #
@@ -820,10 +822,10 @@ NULL
 NULL
 NULL
 Warnings:
-Warning	1292	Incorrect datetime value: '1'
-Warning	1292	Incorrect datetime value: '1'
-Warning	1292	Incorrect datetime value: '1'
-Warning	1292	Incorrect datetime value: '1'
+Warning	1292	Truncated incorrect date value: '1'
+Warning	1292	Truncated incorrect date value: '1'
+Warning	1292	Truncated incorrect date value: '1'
+Warning	1292	Truncated incorrect date value: '1'
 DROP TABLE t;
 #
 # Bug#27453155 W->FRAME_BUFFER()->S->DB_TYPE()->DB_TYPE ==
@@ -845,7 +847,6 @@ DROP TABLE t;
 # Bug#28105241: WINDOWS FUNC + AGGREGATES: ASSERTION FAILED:
 #               HYBRID_TYPE == DECIMAL_RESULT
 #
-DO ST_CROSSES(@g,SUM(SHA(@g))OVER());
 DO UNHEX(SUM(@g)OVER());
 DO BIT_LENGTH(AVG(@f)OVER());
 DO COMPRESS(SUM(' >')OVER());
@@ -1122,13 +1123,13 @@ SELECT 0.2 * AVG(f1) OVER w AS avg, f1
 FROM t1 JOIN t2 ON t1_partkey = t2_partkey
 WINDOW w AS (PARTITION BY t1_partkey);
 avg	f1
-2.70000	34
 2.70000	10
+2.70000	34
 2.70000	4
 2.70000	6
-6.93334	9
-6.93334	64
 6.93334	31
+6.93334	64
+6.93334	9
 DROP TABLE t1, t2;
 #
 # Bug#32328576: BOOL PROCESS_BUFFERED_WINDOWING_RECORD: ASSERTION `!ROW_ADDED
@@ -1203,6 +1204,7 @@ NATURAL JOIN t1 AS t4
 GROUP BY t1.a
 WITH ROLLUP;
 CUME_DIST() OVER (ORDER BY t1.a)
+1
 DROP TABLE t1;
 #
 # Bug #33028408: WL#14419: ASSERTION `M_COUNT >= M_FRAME_NULL_COUNT && M_FRAME_NULL_COUNT > 0' FA
@@ -1258,6 +1260,7 @@ FROM t1
 GROUP BY a, field1 WITH ROLLUP
 ORDER BY field1, field2, field3;
 field1	field2	field3
+NULL	1	NULL
 DROP TABLE t1;
 #
 # Bug #33181670: Recent regression: Memory leak with window functions and user variables
@@ -1841,6 +1844,7 @@ DROP TABLE t1;
 CREATE TABLE t1(f1 INTEGER);
 SELECT @A := (CUME_DIST() OVER () + f1 + RANK() OVER ()) FROM t1 GROUP BY f1 WITH ROLLUP;
 @A := (CUME_DIST() OVER () + f1 + RANK() OVER ())
+NULL
 Warnings:
 Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
 DROP TABLE t1;
@@ -1909,3 +1913,581 @@ WHERE cmp > 0 WINDOW w AS (ORDER BY cmp);
 i	COUNT(*) OVER w
 2	1
 DROP TABLE t;
+#
+# Bug#35855294 Inconsistent results of SELECT statement with EXISTS clause
+#
+CREATE TABLE t1 (vkey INT, pkey INT, c5 INT, c7 VARCHAR(200));
+INSERT INTO t1 VALUES (20, 30000, 59, NULL);
+INSERT INTO t1 VALUES (59, 69000, NULL, NULL);
+SELECT ref_0.c5 >=
+( CASE
+WHEN (EXISTS
+( SELECT ref_2.pkey as c_3
+FROM t1 AS ref_2
+WHERE ref_2.vkey BETWEEN ref_0.c5 AND
+ref_0.c5))
+THEN NULL
+ELSE ( CASE
+WHEN (FIRST_VALUE(1) OVER ( PARTITION BY ref_0.c7
+ORDER BY ref_0.vkey ASC,
+ref_0.pkey DESC) >= NULL)
+THEN NULL
+ELSE ref_0.pkey
+END )
+END
+) as c_6
+FROM
+t1 AS ref_0;
+c_6
+NULL
+NULL
+SELECT ref_0.c5 >=
+( CASE
+WHEN (1 IN
+( SELECT 1 as c_3
+FROM t1 AS ref_2
+WHERE ref_2.vkey
+BETWEEN ref_0.c5 AND ref_0.c5))
+THEN NULL
+ELSE ( CASE
+WHEN (FIRST_VALUE(1) OVER ( PARTITION BY ref_0.c7
+ORDER BY ref_0.vkey ASC,
+ref_0.pkey DESC) >= NULL)
+THEN NULL
+ELSE ref_0.pkey
+END )
+END
+) as c_6
+FROM
+t1 AS ref_0;
+c_6
+NULL
+NULL
+SELECT ref_0.c5 >=
+( CASE
+WHEN ( ref_0.vkey > ANY
+( SELECT ref_2.vkey as c_3
+FROM t1 AS ref_2
+WHERE ref_2.vkey
+BETWEEN ref_0.c5 AND ref_0.c5))
+THEN NULL
+ELSE ( CASE
+WHEN (FIRST_VALUE(1) OVER ( PARTITION BY ref_0.c7
+ORDER BY ref_0.vkey ASC,
+ref_0.pkey DESC) >= NULL)
+THEN NULL
+ELSE ref_0.pkey
+END )
+END
+) as c_6
+FROM
+t1 AS ref_0;
+c_6
+0
+NULL
+SELECT ref_0.c5 >=
+( CASE
+WHEN ( ref_0.vkey > ALL
+( SELECT ref_2.vkey as c_3
+FROM t1 AS ref_2
+WHERE ref_2.vkey
+BETWEEN ref_0.c5 AND ref_0.c5))
+THEN NULL
+ELSE ( CASE
+WHEN (FIRST_VALUE(1) OVER ( PARTITION BY ref_0.c7
+ORDER BY ref_0.vkey ASC,
+ref_0.pkey DESC) >= NULL)
+THEN NULL
+ELSE ref_0.pkey
+END )
+END
+) as c_6
+FROM
+t1 AS ref_0;
+c_6
+0
+NULL
+# Bug#35855294 Inconsistent results of SELECT statement with
+#              EXISTS clause - part II: IN/ALL/ANY
+#
+# Outer reference in subquery involving window function. The
+# subquery cannot be evaluated before the window function
+SELECT AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT outer_t.vkey FROM t1) FROM t1 AS outer_t;
+AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT outer_t.vkey FROM t1)
+1
+1
+EXPLAIN format=tree SELECT AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT outer_t.vkey FROM t1) FROM t1 AS outer_t;
+EXPLAIN
+-> Window aggregate with buffering: avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey )   (rows=2)
+    -> Sort: outer_t.vkey  (rows=2)
+        -> Table scan on outer_t  (rows=2)
+    -> Select #2 (subquery in projection; dependent)
+        -> Limit: 1 row(s)  (rows=1)
+            -> Filter: <if>(outer_field_is_not_null, <is_not_null_test>(outer_t.vkey), true)  (rows=2)
+                -> Filter: <if>(outer_field_is_not_null, ((<cache>(avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey ) ) = outer_t.vkey) or (outer_t.vkey is null)), true)  (rows=2)
+                    -> Table scan on t1  (rows=2)
+
+Warnings:
+Note	1276	Field or reference 'test.outer_t.vkey' of SELECT #2 was resolved in SELECT #1
+# Outer field reference in subquery's join condition:
+# outer_t.vkey
+SELECT AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.vkey)) AS window_in_result
+FROM t1 AS outer_t;
+window_in_result
+1
+1
+EXPLAIN format=tree SELECT AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.vkey)) AS window_in_result
+FROM t1 AS outer_t;
+EXPLAIN
+-> Window aggregate with buffering: avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey )   (rows=2)
+    -> Sort: outer_t.vkey  (rows=2)
+        -> Table scan on outer_t  (rows=2)
+    -> Select #2 (subquery in projection; dependent)
+        -> Limit: 1 row(s)  (rows=1)
+            -> Filter: <if>(outer_field_is_not_null, <is_not_null_test>(ta.vkey), true)  (rows=2)
+                -> Inner hash join (no condition)  (rows=2)
+                    -> Table scan on tb  (rows=2)
+                    -> Hash
+                        -> Filter: (<if>(outer_field_is_not_null, ((<cache>(avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey ) ) = ta.vkey) or (ta.vkey is null)), true) and (ta.vkey = outer_t.vkey))  (rows=1)
+                            -> Table scan on ta  (rows=2)
+
+Warnings:
+Note	1276	Field or reference 'test.outer_t.vkey' of SELECT #2 was resolved in SELECT #1
+# Outer alias reference in subquery: ov
+#
+SELECT outer_t.vkey AS ov,
+AVG(vkey) OVER (PARTITION BY vkey) IN
+(SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=ov)) AS window_in_result
+FROM t1 AS outer_t;
+ov	window_in_result
+20	1
+59	1
+EXPLAIN format=tree SELECT outer_t.vkey AS ov,
+AVG(vkey) OVER (PARTITION BY vkey) IN
+(SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=ov)) AS window_in_result
+FROM t1 AS outer_t;
+EXPLAIN
+-> Window aggregate with buffering: avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey )   (rows=2)
+    -> Sort: outer_t.vkey  (rows=2)
+        -> Table scan on outer_t  (rows=2)
+    -> Select #2 (subquery in projection; dependent)
+        -> Limit: 1 row(s)  (rows=1)
+            -> Filter: <if>(outer_field_is_not_null, <is_not_null_test>(ta.vkey), true)  (rows=2)
+                -> Inner hash join (no condition)  (rows=2)
+                    -> Table scan on tb  (rows=2)
+                    -> Hash
+                        -> Filter: (<if>(outer_field_is_not_null, ((<cache>(avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey ) ) = ta.vkey) or (ta.vkey is null)), true) and (ta.vkey = outer_t.vkey))  (rows=1)
+                            -> Table scan on ta  (rows=2)
+
+Warnings:
+Note	1276	Field or reference 'ov' of SELECT #2 was resolved in SELECT #1
+# Only reference to c5 is an outer reference: verify it is
+# added to windowing output table: it wasn't before
+SELECT AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+window_in_result
+0
+0
+EXPLAIN format=tree SELECT AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+EXPLAIN
+-> Window aggregate with buffering: avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey )   (rows=2)
+    -> Sort: outer_t.vkey  (rows=2)
+        -> Table scan on outer_t  (rows=2)
+    -> Select #2 (subquery in projection; dependent)
+        -> Limit: 1 row(s)  (rows=1)
+            -> Filter: <if>(outer_field_is_not_null, <is_not_null_test>(ta.vkey), true)  (rows=2)
+                -> Inner hash join (no condition)  (rows=2)
+                    -> Table scan on tb  (rows=2)
+                    -> Hash
+                        -> Filter: (<if>(outer_field_is_not_null, ((<cache>(avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey ) ) = ta.vkey) or (ta.vkey is null)), true) and (ta.vkey = outer_t.c5))  (rows=1)
+                            -> Table scan on ta  (rows=2)
+
+Warnings:
+Note	1276	Field or reference 'test.outer_t.c5' of SELECT #2 was resolved in SELECT #1
+# Add value that should yield true for one row
+#
+INSERT INTO t1 VALUES (20, 30000, 20, NULL);
+SELECT AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+window_in_result
+0
+1
+0
+EXPLAIN format=tree SELECT AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+EXPLAIN
+-> Window aggregate with buffering: avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey )   (rows=3)
+    -> Sort: outer_t.vkey  (rows=3)
+        -> Table scan on outer_t  (rows=3)
+    -> Select #2 (subquery in projection; dependent)
+        -> Limit: 1 row(s)  (rows=1)
+            -> Filter: <if>(outer_field_is_not_null, <is_not_null_test>(ta.vkey), true)  (rows=3)
+                -> Inner hash join (no condition)  (rows=3)
+                    -> Table scan on tb  (rows=3)
+                    -> Hash
+                        -> Filter: (<if>(outer_field_is_not_null, ((<cache>(avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey ) ) = ta.vkey) or (ta.vkey is null)), true) and (ta.vkey = outer_t.c5))  (rows=1)
+                            -> Table scan on ta  (rows=3)
+
+Warnings:
+Note	1276	Field or reference 'test.outer_t.c5' of SELECT #2 was resolved in SELECT #1
+SELECT pkey, c5, AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+pkey	c5	window_in_result
+30000	59	0
+30000	20	1
+69000	NULL	0
+EXPLAIN format=tree SELECT pkey, c5, AVG(vkey) OVER (PARTITION BY vkey)
+IN (SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+EXPLAIN
+-> Window aggregate with buffering: avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey )   (rows=3)
+    -> Sort: outer_t.vkey  (rows=3)
+        -> Table scan on outer_t  (rows=3)
+    -> Select #2 (subquery in projection; dependent)
+        -> Limit: 1 row(s)  (rows=1)
+            -> Filter: <if>(outer_field_is_not_null, <is_not_null_test>(ta.vkey), true)  (rows=3)
+                -> Inner hash join (no condition)  (rows=3)
+                    -> Table scan on tb  (rows=3)
+                    -> Hash
+                        -> Filter: (<if>(outer_field_is_not_null, ((<cache>(avg(outer_t.vkey) OVER (PARTITION BY outer_t.vkey ) ) = ta.vkey) or (ta.vkey is null)), true) and (ta.vkey = outer_t.c5))  (rows=1)
+                            -> Table scan on ta  (rows=3)
+
+Warnings:
+Note	1276	Field or reference 'test.outer_t.c5' of SELECT #2 was resolved in SELECT #1
+# Check that outer reference is correct also *without* framebuffer
+# used by AVG window function above: ROW_NUMBER doesn't need framing
+SELECT ROW_NUMBER() OVER (PARTITION BY vkey) + 18 IN
+(SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+window_in_result
+0
+1
+0
+EXPLAIN format=tree SELECT ROW_NUMBER() OVER (PARTITION BY vkey) + 18 IN
+(SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+EXPLAIN
+-> Window aggregate: row_number() OVER (PARTITION BY outer_t.vkey )   (rows=3)
+    -> Sort: outer_t.vkey  (rows=3)
+        -> Table scan on outer_t  (rows=3)
+    -> Select #2 (subquery in projection; dependent)
+        -> Limit: 1 row(s)  (rows=1)
+            -> Filter: <is_not_null_test>(ta.vkey)  (rows=3)
+                -> Inner hash join (no condition)  (rows=3)
+                    -> Table scan on tb  (rows=3)
+                    -> Hash
+                        -> Filter: (((<cache>((row_number() OVER (PARTITION BY outer_t.vkey )  + 18)) = ta.vkey) or (ta.vkey is null)) and (ta.vkey = outer_t.c5))  (rows=1)
+                            -> Table scan on ta  (rows=3)
+
+Warnings:
+Note	1276	Field or reference 'test.outer_t.c5' of SELECT #2 was resolved in SELECT #1
+# Illegal forward reference of alias: a2
+SELECT AVG(vkey) OVER (PARTITION BY vkey) IN
+(SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=a2))  AS a1,
+AVG(vkey) OVER (PARTITION BY vkey) IN
+(SELECT ta.vkey
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=a1))  AS a2
+FROM t1 AS outer_t;
+ERROR 42S22: Reference 'a2' not supported (forward reference in item list)
+# Bug#35855294 Inconsistent results of SELECT statement with
+#              EXISTS clause - part III: row subquery with outer
+#              reference
+#
+# row subqueries cannot be evaluated before window functions
+SELECT ROW(AVG(vkey) OVER (PARTITION BY vkey), 59) =
+(SELECT ta.vkey, 59
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5) LIMIT 1)
+FROM t1 AS outer_t;
+ROW(AVG(vkey) OVER (PARTITION BY vkey), 59) =
+(SELECT ta.vkey, 59
+FROM t1 ta
+JOIN
+t1 tb
+ON (ta.vkey=outer_t.c5) LIMIT 1)
+0
+1
+NULL
+DROP TABLE t1;
+#
+# Bug#37031285 regression: crash in get_full_func_mm_tree()
+#
+CREATE TABLE t (
+c0 INT,
+KEY i1 (c0) # needed for repro
+);
+CREATE TABLE tt (
+c0 INT,
+c1 INT
+);
+INSERT INTO t VALUES (1), (1), (1), (2), (2), (3);
+INSERT INTO tt VALUES (1,2),   # MIN(tt.c1) for group 1 is 2
+(1,3),
+(1,4),
+(2,1),   # MIN(tt.c1) for group 2 is 1
+(3,5),   # MIN(tt.c1) for group 3 is 5
+(3,6);
+SELECT MIN(tt.c1) FROM tt GROUP BY c0;
+MIN(tt.c1)
+2
+1
+5
+SELECT SUM((SELECT c0
+FROM t
+WHERE MIN(tt.c1) > 1
+GROUP BY c0)) OVER() sum_wf
+FROM tt
+GROUP BY c0;
+ERROR 21000: Subquery returns more than 1 row
+SELECT SUM((SELECT c0
+FROM t
+WHERE MIN(tt.c1) > 1
+GROUP BY c0
+ORDER BY c0 LIMIT 1)) OVER() sum_wf
+FROM tt
+GROUP BY c0;
+sum_wf
+2
+2
+2
+SELECT c0 FROM t WHERE 2 > 1 GROUP BY c0 ORDER BY c0 LIMIT 1;
+c0
+1
+SELECT c0 FROM t WHERE 1 > 1 GROUP BY c0 ORDER BY c0 LIMIT 1;
+c0
+SELECT c0 FROM t WHERE 5 > 1 GROUP BY c0 ORDER BY c0 LIMIT 1;
+c0
+1
+SELECT SUM((SELECT c0
+FROM t
+WHERE MIN(tt.c1) > 1
+GROUP BY c0
+ORDER BY c0 DESC LIMIT 1)) OVER() sum_wf
+FROM tt
+GROUP BY c0;
+sum_wf
+6
+6
+6
+SELECT c0 FROM t WHERE 2 > 1 GROUP BY c0 ORDER BY c0 DESC LIMIT 1;
+c0
+3
+SELECT c0 FROM t WHERE 1 > 1 GROUP BY c0 ORDER BY c0 DESC LIMIT 1;
+c0
+SELECT c0 FROM t WHERE 5 > 1 GROUP BY c0 ORDER BY c0 DESC LIMIT 1;
+c0
+3
+DROP TABLE t, tt;
+# Bug#36846564 Window function applied to BIT column produces non-BIT type
+#              Same issue with materialized derived table
+CREATE TABLE t0 (c0 BIT(8));
+# insert ASCII codes of 'A', 'B'
+INSERT INTO t0 VALUES (65), (66);
+SELECT HEX(c0) FROM t0;
+HEX(c0)
+41
+42
+SELECT c0 FROM t0;
+c0
+A
+B
+# Window functions used to return INT instead of BIT
+SELECT c0, ':', LEAD(c0) OVER() FROM t0;
+c0	:	LEAD(c0) OVER()
+A	:	B
+B	:	NULL
+SELECT c0, ':', FIRST_VALUE(c0) OVER() FROM t0;
+c0	:	FIRST_VALUE(c0) OVER()
+A	:	A
+B	:	A
+# MAX as window function ditto
+SELECT c0, ':', MAX(c0) OVER() FROM t0;
+c0	:	MAX(c0) OVER()
+A	:	B
+B	:	B
+# MAX as non-window aggregate function was ok, returned BIT
+SELECT MAX(c0) FROM t0;
+MAX(c0)
+B
+#
+# Same issue for a (materialized) derived table:
+#
+# materialized: used to return INT instead of BIT
+SET optimizer_switch="derived_merge=off";
+SELECT c0 FROM (SELECT NULLIF(c0,1) FROM t0) t0 (c0) ORDER BY c0;
+c0
+A
+B
+# not materialized: was ok, returned BIT
+SET optimizer_switch="derived_merge=on";
+SELECT c0 FROM (SELECT NULLIF(c0,1) FROM t0) t0 (c0) ORDER BY c0;
+c0
+A
+B
+# CREATE SELECT: used to return INT instead of BIT
+CREATE TABLE t1 SELECT LEAD(c0) OVER(), MAX(c0) OVER() FROM t0;
+SET optimizer_switch="derived_merge=off";
+CREATE TABLE t2 SELECT c0 FROM (SELECT NULLIF(c0,1) FROM t0) t0 (c0) ORDER BY c0;
+SET optimizer_switch="derived_merge=default";
+DESC t1;
+Field	Type	Null	Key	Default	Extra
+LEAD(c0) OVER()	bit(8)	YES		NULL	
+MAX(c0) OVER()	bit(8)	YES		NULL	
+DESC t2;
+Field	Type	Null	Key	Default	Extra
+c0	bit(8)	YES		NULL	
+DROP TABLE t0,t1,t2;
+#
+# Bug#36921175 Complex Join Predicate with Subquery Not
+#              Possible To Offload to HeatWave
+CREATE TABLE t1(col INT);
+CREATE TABLE t2(col INT);
+INSERT INTO t1 VALUES (0), (1), (2), (NULL);
+INSERT INTO t1 VALUES (0), (1), (2), (NULL);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SELECT COUNT(s1.col)
+FROM t1 AS s1 JOIN t1 AS s2
+ON s2.col IN (WITH RECURSIVE cte1 AS
+(SELECT DENSE_RANK() OVER (PARTITION BY s1.col)
+FROM t2
+WHERE col >= 7
+)
+SELECT * FROM cte1
+);
+ERROR HY000: Outer reference test.s1.col in window's ORDER BY or PARTITION BY clause not allowed.
+DROP TABLE t1, t2;
+#
+# Bug#37466984 MAX() as a Window Function Blindly Returns NULL for the First Row under Specific Conditions
+#
+CREATE TABLE t0(c0 INT);
+INSERT INTO t0 VALUES (1), (2);
+SELECT c0, MAX(c0) OVER (ORDER BY c0 DESC ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING)
+FROM t0;
+c0	MAX(c0) OVER (ORDER BY c0 DESC ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING)
+2	1
+1	NULL
+DROP TABLE t0;
+#
+# Bug#35521787 nth_value window function call assertion error
+#
+CREATE TABLE t0(c0 INT, c1 INT);
+INSERT INTO t0 VALUES (1, 1), (2, 1), (3, 1), (4, 1);
+SELECT NTH_VALUE(c0, 1) OVER (PARTITION BY (SELECT 1)
+ORDER BY RAND()
+RANGE CURRENT ROW)
+FROM t0;
+ERROR HY000: Window '<unnamed window>' with RANGE N PRECEDING/FOLLOWING frame requires exactly one deterministic ORDER BY expression, of numeric or temporal type
+SELECT NTH_VALUE(c0, 1) OVER (PARTITION BY (SELECT 1)
+ORDER BY RAND()
+ROWS CURRENT ROW)
+FROM t0;
+NTH_VALUE(c0, 1) OVER (PARTITION BY (SELECT 1)
+1
+2
+3
+4
+ORDER BY RAND()
+ROWS CURRENT ROW)
+SELECT NTH_VALUE(c0, 1) OVER (PARTITION BY RAND()
+ORDER BY c0
+RANGE CURRENT ROW)
+FROM t0;
+NTH_VALUE(c0, 1) OVER (PARTITION BY RAND()
+1
+2
+3
+4
+ORDER BY c0
+RANGE CURRENT ROW)
+DROP TABLE t0;
+#
+# Second case of Bug#35521787
+#
+CREATE TABLE t1(t0_c1 INT UNSIGNED);
+INSERT INTO t1 VALUES (2), (371);
+SELECT COUNT(*) OVER (ORDER BY t0_c1 DESC
+RANGE BETWEEN CURRENT ROW AND 10 FOLLOWING)
+FROM t1;
+ERROR 22003: BIGINT UNSIGNED value is out of range in '(<cache>(`test`.`t1`.`t0_c1`) - 10)'
+DROP TABLE t1;
+CREATE TABLE t0 (c0 INT, c1 INT UNSIGNED);
+INSERT INTO t0 VALUES (1, 2), (3, 371);
+SELECT CUME_DIST() OVER (PARTITION BY tx.c1
+ORDER BY t0.c1 DESC
+RANGE BETWEEN CURRENT ROW AND 10 FOLLOWING)
+FROM (SELECT 1) x(x)
+RIGHT JOIN t0 tx
+ON tx.c0 = x.x
+JOIN t0;
+ERROR 22003: BIGINT UNSIGNED value is out of range in '(<cache>(`test`.`t0`.`c1`) - 10)'
+DROP TABLE t0;

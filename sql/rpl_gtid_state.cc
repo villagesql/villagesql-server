@@ -51,6 +51,8 @@
 
 class Table_ref;
 
+#include <vector>
+
 PSI_memory_key key_memory_Gtid_state_group_commit_sidno;
 
 using Tsid = mysql::gtid::Tsid;
@@ -153,6 +155,16 @@ void Gtid_state::broadcast_owned_sidnos(const THD *thd) {
   } else if (thd->owned_gtid.sidno > 0) {
     broadcast_sidno(thd->owned_gtid.sidno);
   }
+}
+
+void Gtid_state::get_snapshot_gtid_executed(
+    std::string &snapshot_gtid_executed) {
+  global_tsid_lock->wrlock();
+  size_t size = executed_gtids.get_string_length() + 1;
+  std::vector<char> buf(size);
+  executed_gtids.to_string(buf.data());
+  snapshot_gtid_executed = buf.data();
+  global_tsid_lock->unlock();
 }
 
 void Gtid_state::update_commit_group(THD *first_thd) {
@@ -853,7 +865,7 @@ void Gtid_state::update_gtids_impl_own_gtid(THD *thd, bool is_commit) {
     In Group Replication the GTID may additionally be owned by another
     thread, and we won't remove that ownership (it will be rolled back later)
   */
-  assert(owned_gtids.is_owned_by(thd->owned_gtid, thd->thread_id()));
+  assert(owned_gtids.has_owner(thd->owned_gtid, thd->thread_id()));
   owned_gtids.remove_gtid(thd->owned_gtid, thd->thread_id());
 
   if (is_commit) {

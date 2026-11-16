@@ -69,7 +69,7 @@ ReverseIndexRangeScanIterator::~ReverseIndexRangeScanIterator() {
   }
 }
 
-bool ReverseIndexRangeScanIterator::Init() {
+bool ReverseIndexRangeScanIterator::DoInit() {
   current_range_idx = ranges.size();
   empty_record(table());
 
@@ -121,7 +121,7 @@ bool ReverseIndexRangeScanIterator::Init() {
   return false;
 }
 
-int ReverseIndexRangeScanIterator::Read() {
+int ReverseIndexRangeScanIterator::DoRead() {
   DBUG_TRACE;
 
   /* The max key is handled as follows:
@@ -189,6 +189,19 @@ int ReverseIndexRangeScanIterator::Read() {
         */
         table()->file->set_end_range(nullptr, handler::RANGE_SCAN_ASC);
       }
+    }
+
+    {
+      key_range prepare_range_start;
+      key_range prepare_range_end;
+
+      last_range->make_min_endpoint(&prepare_range_start);
+      last_range->make_max_endpoint(&prepare_range_end);
+      int result = table()->file->prepare_range_scan(
+          (last_range->flag & NO_MIN_RANGE) ? nullptr : &prepare_range_start,
+          (last_range->flag & NO_MAX_RANGE) ? nullptr : &prepare_range_end);
+
+      if (result) return result;
     }
 
     if (last_range->flag & NO_MAX_RANGE)  // Read last record

@@ -28,11 +28,11 @@
 namespace gcs_xcom_networkprovidertest {
 class XComNetworkProviderTest : public GcsBaseTest {
  protected:
-  XComNetworkProviderTest() {}
+  XComNetworkProviderTest() = default;
 
-  virtual void SetUp() {}
+  void SetUp() override {}
 
-  virtual void TearDown() {}
+  void TearDown() override {}
 };
 
 TEST_F(XComNetworkProviderTest, StartAndStopTestMissingPort) {
@@ -109,7 +109,8 @@ TEST_F(XComNetworkProviderTest, CreateConnectionToSelfTest) {
 
   ASSERT_TRUE(new_connection.get() != nullptr);
 
-  int close_connection_retval = net_provider.close_connection(*new_connection);
+  int const close_connection_retval =
+      net_provider.close_connection(*new_connection);
 
   ASSERT_EQ(0, close_connection_retval);
 

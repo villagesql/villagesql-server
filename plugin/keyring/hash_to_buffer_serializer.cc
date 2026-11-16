@@ -23,8 +23,8 @@
 
 #include "plugin/keyring/hash_to_buffer_serializer.h"
 
-#include <stddef.h>
 #include <sys/types.h>
+#include <cstddef>
 
 namespace keyring {
 bool Hash_to_buffer_serializer::store_key_in_buffer(const IKey *key,
@@ -62,7 +62,7 @@ ISerialized_object *Hash_to_buffer_serializer::serialize(
       break;
   }
 
-  Buffer *buffer = new Buffer(memory_needed_for_buffer_after_operation);
+  auto *buffer = new Buffer(memory_needed_for_buffer_after_operation);
   buffer->set_key_operation(operation);
   if (store_keys_in_buffer(keys_hash, buffer)) {
     delete buffer;

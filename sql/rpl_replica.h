@@ -48,12 +48,7 @@ struct mysql_cond_t;
 struct mysql_mutex_t;
 class Rpl_channel_filters;
 
-/*
-  Statistics go to the error log every # of seconds when
-  --log_error_verbosity > 2
-*/
 const long mts_online_stat_period = 60 * 2;
-const long mts_online_stat_count = 1024;
 
 typedef struct struct_replica_connection LEX_REPLICA_CONNECTION;
 
@@ -364,6 +359,7 @@ extern bool opt_skip_replica_start;
 extern bool opt_log_replica_updates;
 extern char *opt_replica_skip_errors;
 extern ulonglong relay_log_space_limit;
+extern bool opt_collect_replica_applier_metrics;
 
 extern const char *relay_log_index;
 extern const char *relay_log_basename;
@@ -536,6 +532,19 @@ int flush_master_info(Master_info *mi, bool force, bool need_lock = true,
 void add_replica_skip_errors(const char *arg);
 void set_replica_skip_errors(char **replica_skip_errors_ptr);
 int add_new_channel(Master_info **mi, const char *channel);
+
+/*
+  Function to check whether replication from a given source MySQL version
+  is allowed for a replica running the specified local version.
+
+    @param source_ver_str  Version string reported by the source server
+    @param replica_ver_str   Version string of the local replica server
+    @return true  If the source version is compatible
+    @return false Otherwise
+*/
+[[nodiscard]] bool is_version_compatible(const char *source_ver_str,
+                                         const char *replica_ver_str);
+
 /**
   Terminates the slave threads according to the given mask.
 
@@ -681,6 +690,14 @@ bool sql_slave_killed(THD *thd, Relay_log_info *rli);
 bool is_network_error(uint errorno);
 
 int init_replica_thread(THD *thd, SLAVE_THD_TYPE thd_type);
+
+/// @brief Enables metric collection for replication structures
+/// It affects new and already created and running channels
+void enable_applier_metric_collection();
+
+/// @brief Disables metric collection for replication structures
+/// It affects new and already created and running channels
+void disable_applier_metric_collection();
 
 /**
   @} (end of group Replication)

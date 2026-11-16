@@ -21,9 +21,9 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <errno.h>
 #include <gtest/gtest.h>
-#include <string.h>
+#include <cerrno>
+#include <cstring>
 
 #include "m_string.h"  // native_strcasecmp
 #include "my_base.h"   // HA_ERR_KEY_NOT_FOUND

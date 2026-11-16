@@ -31,6 +31,17 @@ if (mysqld.global.transaction_count === undefined) {
   mysqld.global.transaction_count = 0;
 }
 
+// at start, .connects is undefined
+// at first connect, set it to 0
+// at each following connect, increment it.
+//
+// .globals is shared between mock-server threads
+if (mysqld.global.connects === undefined) {
+  mysqld.global.connects = 0;
+} else {
+  mysqld.global.connects = mysqld.global.connects + 1;
+}
+
 if (mysqld.global.view_id === undefined) {
   mysqld.global.view_id = 0;
 }
@@ -100,8 +111,8 @@ var router_set_gr_consistency_level =
 var router_update_attributes =
     common_stmts.get("router_update_attributes_v2", options);
 
-var router_update_last_check_in_v2 =
-    common_stmts.get("router_update_last_check_in_v2", options);
+var router_update_last_check_in_v2_4 =
+    common_stmts.get("router_update_last_check_in_v2_4", options);
 
 // prepare the responses for common statements
 var common_responses = common_stmts.prepare_statement_responses(
@@ -112,6 +123,8 @@ var common_responses = common_stmts.prepare_statement_responses(
       "router_select_schema_version",
       "router_select_view_id_v2_ar",
       "router_select_router_options_view",
+      "get_guidelines_router_info",
+      "get_routing_guidelines",
     ],
     options);
 
@@ -153,9 +166,9 @@ var router_select_cluster_type =
           message: "Syntax Error at: " + stmt
         }
       }
-    } else if (stmt === router_update_last_check_in_v2.stmt) {
+    } else if (stmt === router_update_last_check_in_v2_4.stmt) {
       mysqld.global.update_last_check_in_count++;
-      return router_update_last_check_in_v2;
+      return router_update_last_check_in_v2_4;
     } else if (res = stmt.match(router_update_attributes.stmt_regex)) {
       mysqld.global.upd_attr_config_json = res[7];
 

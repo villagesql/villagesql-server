@@ -23,6 +23,7 @@
 
 SET(MYISAM_SOURCES
   # Originally part of mysys.
+  array.cc
   my_lock.cc
   my_redel.cc
   queues.cc
@@ -94,15 +95,6 @@ IF(MY_COMPILER_IS_GNU)
     COMPILE_FLAGS "-Wno-class-memaccess")
 ENDIF()
 
-# Same thing as above, but for clang, disable warnings for memset().
-MY_CHECK_CXX_COMPILER_WARNING("-Wnontrivial-memcall" HAS_WARN_FLAG)
-IF(HAS_WARN_FLAG)
-  ADD_COMPILE_FLAGS(
-    ${MYISAM_SOURCES}
-    myisamchk.cc
-    COMPILE_FLAGS "${HAS_WARN_FLAG}")
-ENDIF()
-
 MY_CHECK_CXX_COMPILER_WARNING("-Wcast-function-type" HAS_WARN_FLAG)
 IF(HAS_WARN_FLAG)
   ADD_COMPILE_FLAGS(
@@ -146,6 +138,6 @@ MYSQL_ADD_EXECUTABLE(myisampack myisampack.cc
   LINK_LIBRARIES myisam_library)
 
 IF (WIN32)
-  MY_TARGET_LINK_OPTIONS(myisamchk  "setargv.obj")
-  MY_TARGET_LINK_OPTIONS(myisampack "setargv.obj")
+  TARGET_LINK_OPTIONS(myisamchk PRIVATE setargv.obj)
+  TARGET_LINK_OPTIONS(myisampack PRIVATE setargv.obj)
 ENDIF()

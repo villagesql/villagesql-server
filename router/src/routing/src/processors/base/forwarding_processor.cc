@@ -29,12 +29,12 @@
 
 #include <openssl/ssl.h>  // SSL_set_msg_callback_arg
 
-#include "await_client_or_server.h"
 #include "classic_connection_base.h"
 #include "classic_frame.h"
 #include "mysql/harness/tls_error.h"
 #include "mysqld_error.h"  // ER_...
 #include "mysqlrouter/connection_pool_component.h"
+#include "processors/base/await_client_or_server.h"
 #include "processors/base/classic_forwarder.h"
 #include "processors/session/classic_connect.h"
 #include "processors/session/classic_lazy_connect.h"

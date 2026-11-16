@@ -25,13 +25,14 @@
   This is a simple example of how to use the google unit test framework.
 
   For an introduction to the constructs used below, see:
-  http://code.google.com/p/googletest/wiki/GoogleTestPrimer
+  https://google.github.io/googletest/primer.html
 */
 
 #include <gtest/gtest.h>
-#include <stddef.h>
+#include <cstddef>
 
 #include <memory>
+#include <utility>
 
 #include "my_inttypes.h"
 #include "my_thread.h"
@@ -66,7 +67,7 @@ class SqlListTest : public ::testing::Test {
 
   void SetUp() override { THR_MALLOC = &m_mem_root_p; }
 
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     current_thd = nullptr;
     THR_MALLOC = nullptr;
   }
@@ -84,7 +85,7 @@ class SqlListTest : public ::testing::Test {
 // Tests that we can construct and destruct lists.
 TEST_F(SqlListTest, ConstructAndDestruct) {
   EXPECT_TRUE(m_int_list.is_empty());
-  List<int> *p_int_list = new (*THR_MALLOC) List<int>;
+  auto *p_int_list = new (*THR_MALLOC) List<int>;
   EXPECT_TRUE(p_int_list->is_empty());
   ::destroy_at(p_int_list);
 }
@@ -123,8 +124,8 @@ TEST_F(SqlListTest, DeepCopy) {
 TEST_F(SqlListTest, Iterate) {
   int values[] = {3, 2, 1};
   insert_values(values, &m_int_list);
-  for (size_t ix = 0; ix < array_elements(values); ++ix) {
-    EXPECT_EQ(values[ix], *m_int_list_iter++);
+  for (int &value : values) {
+    EXPECT_EQ(value, *m_int_list_iter++);
   }
   m_int_list_iter.init(m_int_list);
   int *value;
@@ -159,8 +160,8 @@ TEST(SqlIlistTest, PushBackAndIterate) {
   I_List_iterator<Linked_node> i_list_iter(i_list);
   int values[] = {11, 22, 33, 42, 5};
   EXPECT_EQ(null_node, i_list.head());
-  for (size_t ix = 0; ix < array_elements(values); ++ix) {
-    i_list.push_back(new Linked_node(values[ix]));
+  for (int value : values) {
+    i_list.push_back(new Linked_node(value));
   }
 
   Linked_node *node;
@@ -180,8 +181,8 @@ TEST(SqlIlistTest, PushFrontAndIterate) {
   I_List<Linked_node> i_list;
   I_List_iterator<Linked_node> i_list_iter(i_list);
   int values[] = {11, 22, 33, 42, 5};
-  for (size_t ix = 0; ix < array_elements(values); ++ix) {
-    i_list.push_front(new Linked_node(values[ix]));
+  for (int value : values) {
+    i_list.push_front(new Linked_node(value));
   }
 
   Linked_node *node;
@@ -279,6 +280,61 @@ TEST_F(SqlListTest, Swap) {
   for (int i = 0; i < 10; i++) {
     EXPECT_EQ(*m_int_list.pop(), (i == 0 ? 9 : (i == 9 ? 0 : i)));
   }
+}
+
+struct Element {
+  int value;
+  Element *next;
+};
+
+TEST(Sql_I_ListTest, Assignment) {
+  Element el1{0, nullptr};
+  Element el2{42, nullptr};
+  SQL_I_List<Element> x;
+  SQL_I_List<Element> y;
+  y = x;
+  EXPECT_EQ(&y.first, y.next);
+  y.link_in_list(&el1, &el1.next);
+  y.link_in_list(&el2, &el2.next);
+  EXPECT_EQ(2, y.elements);
+  x = y;
+  EXPECT_EQ(2, x.elements);
+  EXPECT_EQ(2, y.elements);
+  EXPECT_EQ(0, x.first->value);
+  EXPECT_EQ(42, x.first->next->value);
+
+  SQL_I_List<Element> z;
+  z = std::move(y);
+  EXPECT_EQ(2, z.elements);
+  EXPECT_EQ(0, y.elements);
+  EXPECT_EQ(&y.first, y.next);
+}
+
+TEST(Sql_I_ListTest, Construction) {
+  Element el1{0, nullptr};
+  Element el2{42, nullptr};
+  SQL_I_List<Element> x;
+  x.link_in_list(&el1, &el1.next);
+  x.link_in_list(&el2, &el2.next);
+  SQL_I_List<Element> y(x);
+  EXPECT_EQ(2, x.elements);
+  EXPECT_EQ(2, y.elements);
+  SQL_I_List<Element> const z(std::move(y));
+  EXPECT_EQ(2, z.elements);
+  EXPECT_EQ(0, y.elements);
+  EXPECT_EQ(&y.first, y.next);
+}
+
+TEST(Sql_I_ListTest, SaveAndClear) {
+  Element el1{0, nullptr};
+  Element el2{42, nullptr};
+  SQL_I_List<Element> x;
+  x.link_in_list(&el1, &el1.next);
+  x.link_in_list(&el2, &el2.next);
+  SQL_I_List<Element> y;
+  x.save_and_clear(&y);
+  EXPECT_EQ(2, y.elements);
+  EXPECT_EQ(0, x.elements);
 }
 
 }  // namespace sql_list_unittest

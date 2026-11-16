@@ -26,7 +26,7 @@
 #ifndef COUNTING_SEMAPHORE_HPP
 #define COUNTING_SEMAPHORE_HPP
 
-#include <assert.h>
+#include <cassert>
 #include "ndb_types.h"
 
 #define JAM_FILE_ID 245
@@ -87,11 +87,10 @@ class CountingSemaphore {
     if (inUse == totalResources) {
       queuedRequests++;
       return true;
-    } else {
-      assert(queuedRequests == 0);
-      inUse++;
-      return false;
     }
+    assert(queuedRequests == 0);
+    inUse++;
+    return false;
   }
 
   /**

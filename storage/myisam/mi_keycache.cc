@@ -149,7 +149,7 @@ void mi_change_key_cache(KEY_CACHE *old_key_cache, KEY_CACHE *new_key_cache) {
   */
   mysql_mutex_lock(&THR_LOCK_myisam);
   for (pos = myisam_open_list; pos; pos = pos->next) {
-    MI_INFO *info = (MI_INFO *)pos->data;
+    auto *info = (MI_INFO *)pos->data;
     MYISAM_SHARE *share = info->s;
     if (share->key_cache == old_key_cache)
       mi_assign_to_key_cache(info, (ulonglong)~0, new_key_cache);

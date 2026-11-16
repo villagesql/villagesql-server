@@ -52,6 +52,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0zip.h"
 #include "srv0mon.h"
 #include "srv0srv.h"
+#include "srv0start.h"
 #include "sync0rw.h"
 #include "trx0trx.h"
 #include "ut0byte.h"
@@ -153,13 +154,20 @@ If a compressed page is freed other compressed pages may be relocated.
                                 compressed page of an uncompressed page
 @param[in]      ignore_content  true if should ignore page content, since it
                                 could be not initialized
+@param[in]      keep_hash_lock  true if the hash cell X-latch should be kept
+                                by this function instead of being released;
+                                only allowed when the caller will re-insert
+                                a compressed-only descriptor for this page
+                                id into the page hash (the keep-zip path of
+                                buf_LRU_free_page()), so that the page id is
+                                never observably absent from the page hash
 @retval true if BUF_BLOCK_FILE_PAGE was removed from page_hash. The
 caller needs to free the page to the free list
 @retval false if BUF_BLOCK_ZIP_PAGE was removed from page_hash. In
 this case the block is already returned to the buddy allocator. */
-[[nodiscard]] static bool buf_LRU_block_remove_hashed(buf_page_t *bpage,
-                                                      bool zip,
-                                                      bool ignore_content);
+[[nodiscard]] static bool buf_LRU_block_remove_hashed(
+    buf_page_t *bpage, bool zip, bool ignore_content,
+    bool keep_hash_lock = false);
 
 /** Puts a file page whose has no hash index to the free list.
 @param[in,out] block            Must contain a file page and be in a state
@@ -1055,7 +1063,7 @@ static bool buf_LRU_free_from_unzip_LRU_list(buf_pool_t *buf_pool,
   bool freed = false;
 
   for (buf_block_t *block = UT_LIST_GET_LAST(buf_pool->unzip_LRU);
-       block != nullptr && !freed && (scan_all || scanned < srv_LRU_scan_depth);
+       block != nullptr && (scan_all || scanned < srv_LRU_scan_depth);
        ++scanned) {
     buf_block_t *prev_block;
 
@@ -1069,10 +1077,12 @@ static bool buf_LRU_free_from_unzip_LRU_list(buf_pool_t *buf_pool,
 
     freed = buf_LRU_free_page(&block->page, false);
 
-    if (!freed) {
-      mutex_exit(&block->mutex);
+    if (freed) {
+      ++scanned;
+      break;
     }
 
+    mutex_exit(&block->mutex);
     block = prev_block;
   }
 
@@ -1099,7 +1109,7 @@ static bool buf_LRU_free_from_common_LRU_list(buf_pool_t *buf_pool,
   ulint scanned{};
 
   for (buf_page_t *bpage = buf_pool->lru_scan_itr.start();
-       bpage != nullptr && !freed &&
+       bpage != nullptr &&
        (scan_all || scanned < BUF_LRU_SEARCH_SCAN_THRESHOLD);
        ++scanned, bpage = buf_pool->lru_scan_itr.get()) {
     ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
@@ -1137,6 +1147,7 @@ static bool buf_LRU_free_from_common_LRU_list(buf_pool_t *buf_pool,
     ut_ad(!mutex_own(block_mutex));
 
     if (freed) {
+      ++scanned;
       break;
     }
   }
@@ -1231,6 +1242,18 @@ buf_block_t *buf_LRU_get_free_only(buf_pool_t *buf_pool) {
 
       ut_ad(buf_pool_from_block(block) == buf_pool);
 
+      /* Initialize latches on first use. The block has just been removed from
+      the free list and is owned exclusively by this thread, so this access is
+      race-free; the prior thread's initialization (if any) is visible through
+      the free_list_mutex handoff. No mutex protects this access - exclusive
+      ownership does, hence a relaxed load. (The flag is std::atomic only for
+      the lock-free I_S buffer-page scanner; see buf0buf.h.) */
+      ut_ad(buf_block_get_state(block) == BUF_BLOCK_READY_FOR_USE);
+      ut_ad(!block->page.in_free_list);
+      if (!block->latches_initialized.load(std::memory_order_relaxed)) {
+        buf_block_lazy_init_latches(block);
+      }
+
       return (block);
     }
 
@@ -1284,6 +1307,66 @@ static void buf_LRU_check_size_of_non_data_objects(
   }
 }
 
+/** Diagnose failure to get a free page and request InnoDB monitor output in
+the error log if more than two seconds have been spent already.
+@param[in]	n_iterations	how many buf_LRU_get_free_page iterations
+already completed
+@param[in]	started_time	timestamp of when the attempt to get the
+free page started
+@param[in]	flush_failures	how many times single-page flush, if allowed,
+has failed
+@param[in,out]	started_monitor	whether InnoDB monitor print has been requested
+*/
+static void buf_LRU_handle_lack_of_free_blocks(
+    ulint n_iterations, std::chrono::steady_clock::time_point started_time,
+    ulint flush_failures, bool *started_monitor) {
+  static std::chrono::steady_clock::time_point last_printout_time;
+
+  /* Legacy algorithm started warning after at least 2 seconds, we
+  emulate this. */
+  const auto current_time = std::chrono::steady_clock::now();
+  const std::chrono::milliseconds limit{2000};
+
+  if ((current_time - started_time > limit) &&
+      (current_time - last_printout_time > limit) &&
+      srv_buf_pool_old_size == srv_buf_pool_size) {
+    ib::warn(ER_IB_MSG_134)
+        << "Difficult to find free blocks in the buffer pool"
+           " ("
+        << n_iterations << " search iterations)! " << flush_failures
+        << " failed attempts to"
+           " flush a page! Consider increasing the buffer pool"
+           " size. It is also possible that in your Unix version"
+           " fsync is very slow, or completely frozen inside"
+           " the OS kernel. Then upgrading to a newer version"
+           " of your operating system may help. Look at the"
+           " number of fsyncs in diagnostic info below."
+           " Pending flushes (fsync) log: "
+        << log_pending_flushes()
+        << "; buffer pool: " << fil_n_pending_tablespace_flushes << ". "
+        << os_n_file_reads << " OS file reads, " << os_n_file_writes
+        << " OS file writes, " << os_n_fsyncs
+        << " OS fsyncs. Starting InnoDB Monitor to print"
+           " further diagnostics to the standard output.";
+
+    last_printout_time = current_time;
+
+    if (!*started_monitor) {
+      *started_monitor = true;
+      srv_innodb_needs_monitoring++;
+    }
+  }
+}
+
+/** The maximum allowed backoff sleep time duration, microseconds */
+static constexpr auto MAX_FREE_LIST_BACKOFF_SLEEP = 10000;
+
+/** The sleep reduction factor for high-priority waiter backoff sleeps */
+static constexpr auto FREE_LIST_BACKOFF_HIGH_PRIO_DIVIDER = 100;
+
+/** The sleep reduction factor for low-priority waiter backoff sleeps */
+static constexpr auto FREE_LIST_BACKOFF_LOW_PRIO_DIVIDER = 1;
+
 /** Returns a free block from the buf_pool. The block is taken off the
 free list. If free list is empty, blocks are moved from the end of the
 LRU list to the free list.
@@ -1310,10 +1393,11 @@ we put it to free list to be used.
 @return the free control block, in state BUF_BLOCK_READY_FOR_USE */
 buf_block_t *buf_LRU_get_free_block(buf_pool_t *buf_pool) {
   buf_block_t *block = nullptr;
-  bool freed = false;
+  bool freed = false, no_flush_waited = false;
   ulint n_iterations = 0;
   ulint flush_failures = 0;
   bool started_monitor = false;
+  std::chrono::steady_clock::time_point started_time;
 
   ut_ad(!mutex_own(&buf_pool->LRU_list_mutex));
 
@@ -1322,7 +1406,22 @@ loop:
   buf_LRU_check_size_of_non_data_objects(buf_pool);
 
   /* If there is a block in the free list, take it */
-  block = buf_LRU_get_free_only(buf_pool);
+  if (DBUG_EVALUATE_IF("simulate_lack_of_pages", true, false)) {
+    block = NULL;
+
+    if (srv_debug_monitor_printed) DBUG_SET("-d,simulate_lack_of_pages");
+
+  } else if (DBUG_EVALUATE_IF("simulate_recovery_lack_of_pages",
+                              recv_recovery_on, false)) {
+    block = NULL;
+
+    if (srv_debug_monitor_printed) {
+      flush_error_log_messages();
+      DBUG_SUICIDE();
+    }
+  } else {
+    block = buf_LRU_get_free_only(buf_pool);
+  }
 
   if (block != nullptr) {
     ut_ad(!block->page.someone_has_io_responsibility());
@@ -1337,10 +1436,81 @@ loop:
     return block;
   }
 
+  /* No free blocks found on the free list, we need to run a LRU scan to find a
+  block. In meantime, we wake up simulated AIO threads that may have requests
+  queued with IOREquest::DO_NOT_WAKE waiting for them to wake up. If one of
+  threads that are requesting the new IOs waits for a new block to place the
+  read IO for that block, this would deadlock. Waking up the simulated AIO
+  threads may cause some blocks to be IO_FIX unfixed and become available to
+  evict. */
+  os_aio_simulated_wake_handler_threads();
+
+  if (started_time == std::chrono::steady_clock::time_point{})
+    started_time = std::chrono::steady_clock::now();
+
   MONITOR_INC(MONITOR_LRU_GET_FREE_LOOPS);
 
   freed = false;
+
+  if (srv_empty_free_list_algorithm == SRV_EMPTY_FREE_LIST_BACKOFF &&
+      buf_flush_page_cleaner_is_active() &&
+      (srv_shutdown_state.load() == SRV_SHUTDOWN_NONE ||
+       srv_shutdown_state.load() == SRV_SHUTDOWN_CLEANUP)) {
+    /* Backoff to minimize the free list mutex contention while the free list
+    is empty */
+    const auto priority = srv_current_thread_priority;
+
+    if (n_iterations < 3) {
+      std::this_thread::yield();
+      if (!priority) {
+        std::this_thread::yield();
+      }
+    } else {
+      ulint i, b;
+
+      if (n_iterations < 6) {
+        i = n_iterations - 3;
+      } else if (n_iterations < 8) {
+        i = 4;
+      } else if (n_iterations < 11) {
+        i = 5;
+      } else {
+        i = n_iterations - 5;
+      }
+      b = 1 << i;
+      if (b > MAX_FREE_LIST_BACKOFF_SLEEP) {
+        b = MAX_FREE_LIST_BACKOFF_SLEEP;
+      }
+      std::this_thread::sleep_for(std::chrono::microseconds(
+          b / (priority ? FREE_LIST_BACKOFF_HIGH_PRIO_DIVIDER
+                        : FREE_LIST_BACKOFF_LOW_PRIO_DIVIDER)));
+    }
+
+    buf_LRU_handle_lack_of_free_blocks(n_iterations, started_time,
+                                       flush_failures, &started_monitor);
+
+    n_iterations++;
+
+    srv_stats.buf_pool_wait_free.add(n_iterations, 1);
+
+    /* In case of backoff, do not ever attempt single page flushes and
+    wait for the cleaner to free some pages instead.  */
+    goto loop;
+  } else {
+    /* The LRU manager is not running or Oracle MySQL 5.6 algorithm
+    was requested, will perform a single page flush  */
+    ut_ad((srv_empty_free_list_algorithm == SRV_EMPTY_FREE_LIST_LEGACY) ||
+          !buf_flush_page_cleaner_is_active() ||
+          (srv_shutdown_state.load() != SRV_SHUTDOWN_NONE &&
+           srv_shutdown_state.load() != SRV_SHUTDOWN_CLEANUP));
+  }
+
   os_rmb;
+
+  if (DBUG_EVALUATE_IF("simulate_recovery_lack_of_pages", true, false) ||
+      DBUG_EVALUATE_IF("simulate_lack_of_pages", true, false))
+    buf_pool->try_LRU_scan = false;
+
   if (buf_pool->try_LRU_scan || n_iterations > 0) {
     /* If no block was in the free list, search from the
     end of the LRU list and try to free a block there.
@@ -1412,9 +1582,21 @@ loop:
   involved (particularly in case of compressed pages). We
   can do that in a separate patch sometime in future. */
 
-  if (!buf_flush_single_page_from_LRU(buf_pool)) {
-    MONITOR_INC(MONITOR_LRU_SINGLE_FLUSH_FAILURE_COUNT);
-    ++flush_failures;
+  if (srv_lru_threads_enabled && buf_pool->init_flush[BUF_FLUSH_LRU] &&
+      dblwr::is_enabled() && buf_pool->n_flush[BUF_FLUSH_SINGLE_PAGE] >= 1 &&
+      !no_flush_waited) {
+    /* Cap reached: wait for an in-progress LRU flush instead of issuing
+    our own single-page flush. */
+    MONITOR_INC(MONITOR_LRU_FLUSH_AWAIT_COUNT);
+    buf_flush_await_no_flushing(buf_pool, BUF_FLUSH_LRU);
+    no_flush_waited = true;
+  } else {
+    /* Below the cap: issue our own single-page flush. */
+    MONITOR_INC(MONITOR_LRU_SINGLE_PAGE_FLUSH_COUNT);
+    if (!buf_flush_single_page_from_LRU(buf_pool)) {
+      MONITOR_INC(MONITOR_LRU_SINGLE_FLUSH_FAILURE_COUNT);
+      ++flush_failures;
+    }
   }
 
   srv_stats.buf_pool_wait_free.add(n_iterations, 1);
@@ -1743,15 +1925,21 @@ bool buf_LRU_free_page(buf_page_t *bpage, bool zip) {
   auto block_mutex = buf_page_get_mutex(bpage);
   auto hash_lock = buf_page_hash_lock_get(buf_pool, bpage->id);
 
-  ut_ad(bpage->in_LRU_list);
   ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
   ut_ad(mutex_own(block_mutex));
-  ut_ad(buf_page_in_file(bpage));
 
   if (!buf_page_can_relocate(bpage)) {
     /* Do not free buffer fixed and I/O-fixed blocks. */
     return (false);
   }
+
+  /* These assertions can only be checked after the io-fix check
+  above, because pages become visible in the page hash table before
+  they are linked into the LRU list (they are io-fixed for read
+  until after they are linked into the LRU list, so
+  buf_page_can_relocate() has returned false for them). */
+  ut_ad(bpage->in_LRU_list);
+  ut_ad(buf_page_in_file(bpage));
 
 #ifdef UNIV_IBUF_COUNT_DEBUG
   ut_a(ibuf_count_get(bpage->id) == 0);
@@ -1773,9 +1961,16 @@ bool buf_LRU_free_page(buf_page_t *bpage, bool zip) {
     return (false);
 
   } else if (buf_page_get_state(bpage) == BUF_BLOCK_FILE_PAGE) {
+    /* This holds because of the "else" keyword above,
+    but we assert it for clarity. */
+    ut_ad(!zip && bpage->zip.data != nullptr);
     b = buf_page_alloc_descriptor();
     ut_a(b);
   }
+
+  /* Protect: buf_buddy_free must not be invoked in buf_LRU_block_remove_hashed,
+  when passing keep_hash_lock = true (b != nullptr). */
+  ut_ad(b == nullptr || (!zip && bpage->zip.data != nullptr));
 
   ut_ad(buf_page_in_file(bpage));
   ut_ad(bpage->in_LRU_list);
@@ -1822,7 +2017,20 @@ bool buf_LRU_free_page(buf_page_t *bpage, bool zip) {
   ut_ad(rw_lock_own(hash_lock, RW_LOCK_X));
   ut_ad(buf_page_can_relocate(bpage));
 
-  if (!buf_LRU_block_remove_hashed(bpage, zip, false)) {
+  /* When the compressed page is to be kept (b != nullptr), ask
+  buf_LRU_block_remove_hashed() to keep the hash cell X-latch, so that it
+  is held continuously from before the HASH_DELETE until after the
+  compressed-only descriptor is re-inserted below: the page id is never
+  observably absent from the page hash. Otherwise a concurrent
+  buf_page_init_for_read() (which inserts into the page hash without
+  holding the LRU list mutex) could insert a second descriptor for this
+  page id in the meantime.
+
+  Protect: buf_buddy_free must not be invoked in buf_LRU_block_remove_hashed,
+  when passing keep_hash_lock = true (b != nullptr). */
+  ut_ad(b == nullptr || (!zip && bpage->zip.data != nullptr));
+
+  if (!buf_LRU_block_remove_hashed(bpage, zip, false, b != nullptr)) {
     mutex_exit(&buf_pool->LRU_list_mutex);
 
     if (b != nullptr) {
@@ -1832,9 +2040,11 @@ bool buf_LRU_free_page(buf_page_t *bpage, bool zip) {
   }
   ut_ad(!mutex_own(block_mutex));
 
-  /* buf_LRU_block_remove_hashed() releases the hash_lock */
-  ut_ad(!rw_lock_own(hash_lock, RW_LOCK_X) &&
-        !rw_lock_own(hash_lock, RW_LOCK_S));
+  /* buf_LRU_block_remove_hashed() releases the hash_lock, unless it was
+  asked to keep it for the re-insert of the compressed-only descriptor. */
+  ut_ad(b != nullptr ? rw_lock_own(hash_lock, RW_LOCK_X)
+                     : (!rw_lock_own(hash_lock, RW_LOCK_X) &&
+                        !rw_lock_own(hash_lock, RW_LOCK_S)));
 
   /* We have just freed a BUF_BLOCK_FILE_PAGE. If b != nullptr
   then it was a compressed page with an uncompressed frame and
@@ -1843,10 +2053,24 @@ bool buf_LRU_free_page(buf_page_t *bpage, bool zip) {
   into the LRU and page_hash (and possibly flush_list).
   if b == nullptr then it was a regular page that has been freed */
 
+  /* Widen the window between the page hash delete and the re-insert of
+  the compressed-only descriptor. The hash cell X-latch is held here
+  (keep_hash_lock), so a concurrent buf_page_init_for_read() of this page
+  must block on the cell latch instead of inserting a second descriptor
+  for the same page id into the gap. */
+  DBUG_EXECUTE_IF(
+      "buf_lru_free_page_delay_zip_reinsert", if (b != nullptr) {
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+      });
+
   if (b != nullptr) {
     auto prev_b = UT_LIST_GET_PREV(LRU, b);
 
-    rw_lock_x_lock(hash_lock, UT_LOCATION_HERE);
+    /* The hash cell X-latch has been held continuously since before the
+    HASH_DELETE in buf_LRU_block_remove_hashed() (see keep_hash_lock),
+    which is what makes the assertion below provable: no other thread can
+    have inserted a descriptor for this page id in the meantime. */
+    ut_ad(rw_lock_own(hash_lock, RW_LOCK_X));
 
     mutex_enter(block_mutex);
 
@@ -2059,7 +2283,8 @@ the object will be freed.
 
 The caller must hold buf_pool->LRU_list_mutex, the buf_page_get_mutex() mutex
 and the appropriate hash_lock. This function will release the
-buf_page_get_mutex() and the hash_lock.
+buf_page_get_mutex() and the hash_lock (the latter is kept if keep_hash_lock
+is passed).
 
 If a compressed page is freed other compressed pages may be relocated.
 
@@ -2070,18 +2295,36 @@ If a compressed page is freed other compressed pages may be relocated.
                                 compressed page of an uncompressed page
 @param[in]      ignore_content  true if should ignore page content, since it
                                 could be not initialized
+@param[in]      keep_hash_lock  true if the hash cell X-latch should be kept
+                                by this function instead of being released;
+                                only allowed when the caller will re-insert
+                                a compressed-only descriptor for this page
+                                id into the page hash (the keep-zip path of
+                                buf_LRU_free_page()), so that the page id is
+                                never observably absent from the page hash
 @retval true if BUF_BLOCK_FILE_PAGE was removed from page_hash. The
 caller needs to free the page to the free list
 @retval false if BUF_BLOCK_ZIP_PAGE was removed from page_hash. In
 this case the block is already returned to the buddy allocator. */
 static bool buf_LRU_block_remove_hashed(buf_page_t *bpage, bool zip,
-                                        bool ignore_content) {
+                                        bool ignore_content,
+                                        bool keep_hash_lock) {
   const buf_page_t *hashed_bpage;
   buf_pool_t *buf_pool = buf_pool_from_bpage(bpage);
   rw_lock_t *hash_lock;
 
   ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
+
+  /* keep_hash_lock is only supported for the keep-zip path of
+  buf_LRU_free_page(): an uncompressed frame being freed while its
+  compressed page is kept and will be re-inserted into the page hash.
+  In particular the buddy allocator must not be invoked while the hash
+  cell X-latch is kept (buf_buddy_free() may take page hash latches via
+  buf_buddy_relocate()), which is guaranteed by zip == false. */
+  ut_ad(!keep_hash_lock ||
+        (!zip && buf_page_get_state(bpage) == BUF_BLOCK_FILE_PAGE &&
+         bpage->zip.data != nullptr));
 
   hash_lock = buf_page_hash_lock_get(buf_pool, bpage->id);
 
@@ -2260,14 +2503,24 @@ static bool buf_LRU_block_remove_hashed(buf_page_t *bpage, bool zip,
       avoid relocation during the scan. But that is not
       possible because we are holding LRU list mutex.
 
-      2) Not possible because in buf_page_init_for_read()
-      we do a look up of page_hash while holding LRU list
-      mutex and since we are holding LRU list mutex here
-      and by the time we'll release it in the caller we'd
-      have inserted the compressed only descriptor in the
-      page_hash. */
+      2) When a compressed-only descriptor will be re-inserted
+      for this page id (the keep-zip path of buf_LRU_free_page(),
+      keep_hash_lock == true), the hash cell X-latch is kept from
+      before the HASH_DELETE above until after the re-insert in the
+      caller, so the page id is never observably absent from the
+      page hash: a concurrent buf_page_init_for_read() blocks on
+      the hash cell latch and then finds the compressed-only
+      descriptor. (It cannot be the LRU list mutex which protects
+      this transition: buf_page_init_for_read() inserts into the
+      page hash without holding the LRU list mutex.)
+      When nothing will be re-inserted (keep_hash_lock == false),
+      the page is leaving the buffer pool for good and a concurrent
+      thread reading it from the disk afresh is the normal cache
+      miss path. */
       ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
-      rw_lock_x_unlock(hash_lock);
+      if (!keep_hash_lock) {
+        rw_lock_x_unlock(hash_lock);
+      }
       mutex_exit(&((buf_block_t *)bpage)->mutex);
 
       if (zip && bpage->zip.data) {

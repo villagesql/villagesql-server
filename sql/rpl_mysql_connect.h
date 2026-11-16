@@ -108,6 +108,16 @@ class Mysql_connection {
   */
   MYSQL_RES_TUPLE execute_query(std::string query) const;
 
+  /**
+    Checks whether the connected source server's version is
+    compatible with the replica's version.
+
+    @retval true   The source and replica versions are compatible.
+            false  The versions are incompatible or the connection
+                   is not initialized.
+  */
+  [[nodiscard]] bool version_compatible() const;
+
  private:
   /* MySQL client connection object */
   MYSQL *m_conn{nullptr};

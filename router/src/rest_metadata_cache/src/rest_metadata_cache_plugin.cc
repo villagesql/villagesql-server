@@ -61,9 +61,9 @@ std::string require_realm_metadata_cache;
 
 using StringOption = mysql_harness::StringOption;
 
-#define GET_OPTION_CHECKED(option, section, name, value)                      \
-  static_assert(                                                              \
-      mysql_harness::str_in_collection(rest_plugin_supported_options, name)); \
+#define GET_OPTION_CHECKED(option, section, name, value)                 \
+  static_assert(                                                         \
+      mysql_harness::str_in_collection(plugin_supported_options, name)); \
   option = get_option(section, name, value);
 
 class RestMetadataCachePluginConfig : public mysql_harness::BasePluginConfig {
@@ -151,57 +151,86 @@ static void init(mysql_harness::PluginFuncEnv *env) {
 using JsonPointer = RestApiComponent::JsonPointer;
 using JsonValue = RestApiComponent::JsonValue;
 
-#define STR(s) \
-  { s, strlen(s), rapidjson::kPointerInvalidIndex }
-static const std::array<JsonPointer::Token, 2> metadata_name_param_tokens{
-    {STR("parameters"), STR("metadataNameParam")}};
+static JsonPointer::Token make_json_pointer_token(std::string_view token) {
+  return {token.data(), token.size(), rapidjson::kPointerInvalidIndex};
+}
 
-static const std::array<JsonPointer::Token, 2> cluster_name_param_tokens{
-    {STR("parameters"), STR("clusterNameParam")}};
+static const std::array metadata_name_param_tokens{
+    make_json_pointer_token("parameters"),
+    make_json_pointer_token("metadataNameParam"),
+};
 
-static const std::array<JsonPointer::Token, 2> metadata_status_def_tokens{
-    {STR("definitions"), STR("MetadataStatus")}};
+static const std::array cluster_name_param_tokens{
+    make_json_pointer_token("parameters"),
+    make_json_pointer_token("clusterNameParam"),
+};
 
-static const std::array<JsonPointer::Token, 2> metadata_list_def_tokens{
-    {STR("definitions"), STR("MetadataList")}};
+static const std::array metadata_status_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("MetadataStatus"),
+};
 
-static const std::array<JsonPointer::Token, 2> metadata_summary_def_tokens{
-    {STR("definitions"), STR("MetadataSummary")}};
+static const std::array metadata_list_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("MetadataList"),
+};
 
-static const std::array<JsonPointer::Token, 2> metadata_config_def_tokens{
-    {STR("definitions"), STR("MetadataConfig")}};
+static const std::array metadata_summary_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("MetadataSummary"),
+};
 
-static const std::array<JsonPointer::Token, 2> cluster_node_summary_def_tokens{
-    {STR("definitions"), STR("ClusterNodeSummary")}};
+static const std::array metadata_config_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("MetadataConfig"),
+};
 
-static const std::array<JsonPointer::Token, 2> cluster_node_list_def_tokens{
-    {STR("definitions"), STR("ClusterNodeList")}};
+static const std::array cluster_node_summary_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("ClusterNodeSummary"),
+};
 
-static const std::array<JsonPointer::Token, 2> cluster_summary_def_tokens{
-    {STR("definitions"), STR("ClusterSummary")}};
+static const std::array cluster_node_list_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("ClusterNodeList"),
+};
 
-static const std::array<JsonPointer::Token, 2> cluster_list_def_tokens{
-    {STR("definitions"), STR("ClusterList")}};
+static const std::array cluster_summary_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("ClusterSummary"),
+};
 
-static const std::array<JsonPointer::Token, 2> metadata_status_path_tokens{
-    {STR("paths"), STR("/metadata/{metadataName}/status")}};
+static const std::array cluster_list_def_tokens{
+    make_json_pointer_token("definitions"),
+    make_json_pointer_token("ClusterList"),
+};
 
-static const std::array<JsonPointer::Token, 2> metadata_config_path_tokens{
-    {STR("paths"), STR("/metadata/{metadataName}/config")}};
+static const std::array metadata_status_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/metadata/{metadataName}/status"),
+};
 
-// static const std::array<JsonPointer::Token, 2> cluster_list_path_tokens{
-//    {STR("paths"), STR("/clusters")}};
+static const std::array metadata_config_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/metadata/{metadataName}/config"),
+};
 
-// static const std::array<JsonPointer::Token, 2> cluster_node_list_path_tokens{
-//    {STR("paths"), STR("/clusters/{clusterName}/nodes")}};
+// static const std::array cluster_list_path_tokens{
+//    {make_json_pointer_token("paths"), make_json_pointer_token("/clusters")}};
 
-static const std::array<JsonPointer::Token, 2> metadata_list_path_tokens{
-    {STR("paths"), STR("/metadata")}};
+// static const std::array cluster_node_list_path_tokens{
+//    {make_json_pointer_token("paths"),
+//    make_json_pointer_token("/clusters/{clusterName}/nodes")}};
 
-static const std::array<JsonPointer::Token, 2> tags_append_tokens{
-    {STR("tags"), STR("-")}};
+static const std::array metadata_list_path_tokens{
+    make_json_pointer_token("paths"),
+    make_json_pointer_token("/metadata"),
+};
 
-#undef STR
+static const std::array tags_append_tokens{
+    make_json_pointer_token("tags"),
+    make_json_pointer_token("-"),
+};
 
 std::string json_pointer_stringfy(const JsonPointer &ptr) {
   rapidjson::StringBuffer sb;
@@ -343,6 +372,54 @@ static void spec_adder(RestApiComponent::JsonDocument &spec_doc) {
                                               "port",
                                               JsonValue(rapidjson::kObjectType)
                                                   .AddMember("type", "integer",
+                                                             allocator),
+                                              allocator)
+                                          .AddMember(
+                                              "X_port",
+                                              JsonValue(rapidjson::kObjectType)
+                                                  .AddMember("type", "integer",
+                                                             allocator),
+                                              allocator)
+                                          .AddMember(
+                                              "UUID",
+                                              JsonValue(rapidjson::kObjectType)
+                                                  .AddMember("type", "string",
+                                                             allocator),
+                                              allocator)
+                                          .AddMember(
+                                              "Cluster_name",
+                                              JsonValue(rapidjson::kObjectType)
+                                                  .AddMember("type", "string",
+                                                             allocator),
+                                              allocator)
+                                          .AddMember(
+                                              "member_role",
+                                              JsonValue(rapidjson::kObjectType)
+                                                  .AddMember("type", "string",
+                                                             allocator),
+                                              allocator)
+                                          .AddMember(
+                                              "ClusterSet_name",
+                                              JsonValue(rapidjson::kObjectType)
+                                                  .AddMember("type", "string",
+                                                             allocator),
+                                              allocator)
+                                          .AddMember(
+                                              "Cluster_role",
+                                              JsonValue(rapidjson::kObjectType)
+                                                  .AddMember("type", "string",
+                                                             allocator),
+                                              allocator)
+                                          .AddMember(
+                                              "label",
+                                              JsonValue(rapidjson::kObjectType)
+                                                  .AddMember("type", "string",
+                                                             allocator),
+                                              allocator)
+                                          .AddMember(
+                                              "tags",
+                                              JsonValue(rapidjson::kObjectType)
+                                                  .AddMember("type", "string",
                                                              allocator),
                                               allocator),
                                       allocator),
@@ -828,20 +905,18 @@ static void start(mysql_harness::PluginFuncEnv *env) {
 
   const bool spec_adder_executed = rest_api_srv.try_process_spec(spec_adder);
 
-  std::array<RestApiComponentPath, 3> paths{{
-      {rest_api_srv, RestMetadataCacheStatus::path_regex,
-       std::make_unique<RestMetadataCacheStatus>(require_realm_metadata_cache)},
-      {rest_api_srv, RestMetadataCacheConfig::path_regex,
-       std::make_unique<RestMetadataCacheConfig>(require_realm_metadata_cache)},
-      {rest_api_srv, RestMetadataCacheList::path_regex,
-       std::make_unique<RestMetadataCacheList>(require_realm_metadata_cache)},
+  std::array paths{
+      RestApiComponentPath{rest_api_srv, RestMetadataCacheStatus::path_regex,
+                           std::make_unique<RestMetadataCacheStatus>(
+                               require_realm_metadata_cache)},
+      RestApiComponentPath{rest_api_srv, RestMetadataCacheConfig::path_regex,
+                           std::make_unique<RestMetadataCacheConfig>(
+                               require_realm_metadata_cache)},
+      RestApiComponentPath{rest_api_srv, RestMetadataCacheList::path_regex,
+                           std::make_unique<RestMetadataCacheList>(
+                               require_realm_metadata_cache)},
 
-      // The socpe of WL#12441 was limited and does not include those:
-      //  {rest_api_srv, RestClustersList::path_regex,
-      //                        std::make_unique<RestClustersList>(require_realm_metadata_cache)},
-      //  {rest_api_srv, RestClustersNodes::path_regex,
-      //                        std::make_unique<RestClustersNodes>(require_realm_metadata_cache)},
-  }};
+  };
 
   mysql_harness::on_service_ready(env);
 
@@ -859,11 +934,11 @@ static void start(mysql_harness::PluginFuncEnv *env) {
 #define DLLEXPORT
 #endif
 
-static const std::array<const char *, 2> required = {{
+static constexpr std::array required{
     "logger",
     // "metadata_cache",
     "rest_api",
-}};
+};
 
 namespace {
 
@@ -923,8 +998,8 @@ mysql_harness::Plugin DLLEXPORT harness_plugin_rest_metadata_cache = {
     start,    // start
     nullptr,  // stop
     true,     // declares_readiness
-    rest_plugin_supported_options.size(),
-    rest_plugin_supported_options.data(),
+    plugin_supported_options.size(),
+    plugin_supported_options.data(),
     expose_configuration,
 };
 }

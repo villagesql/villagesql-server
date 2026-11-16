@@ -40,9 +40,9 @@ ADD_DEFINITIONS(-DPFS_DIRECT_CALL)
 IF(MSVC AND NOT WIN32_CLANG)
   # Treat warnings as errors on MSVC for InnoDB
   ADD_COMPILE_OPTIONS("/WX")
-  # Remove /W3 from the flags to avoid the redefined option warning
-  STRING(REPLACE "/W3" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-  STRING(REPLACE "/W3" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+  # Remove /Wn from the flags to avoid the redefined option warning
+  REMOVE_CMAKE_COMPILER_FLAGS(CMAKE_CXX_FLAGS "/W[01234]")
+  REMOVE_CMAKE_COMPILER_FLAGS(CMAKE_C_FLAGS "/W[01234]")
   # Add warnings from level 4
   ADD_COMPILE_OPTIONS("/W4")
   # Disable C4324: structure was padded due to __declspec(align())
@@ -158,9 +158,12 @@ SET(INNOBASE_SOURCES
   handler/ha_innodb.cc
   handler/ha_innopart.cc
   handler/handler0alter.cc
+  handler/ha0check.cc
   handler/i_s.cc
   handler/p_s.cc
+  handler/xtradb_i_s.cc
   ibuf/ibuf0ibuf.cc
+  lob/lob0bulk.cc
   lob/lob0first.cc
   lob/lob0index.cc
   lob/lob0ins.cc
@@ -206,6 +209,7 @@ SET(INNOBASE_SOURCES
   os/os0file.cc
   os/os0enc.cc
   os/os0proc.cc
+  os/os0populate.cc
   os/os0event.cc
   page/page0cur.cc
   page/page0page.cc
@@ -272,7 +276,7 @@ SET(INNOBASE_SOURCES
   villagesql/storage_abi.cc)
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
-IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 11)
+IF(MY_COMPILER_IS_GNU)
   ADD_COMPILE_FLAGS(
     pars/pars0grm.cc
     COMPILE_FLAGS "-Wno-free-nonheap-object")
@@ -356,7 +360,7 @@ MYSQL_ADD_PLUGIN(innobase
   MANDATORY
   MODULE_OUTPUT_NAME ha_innodb
   LINK_LIBRARIES sql_dd sql_gis ext::zlib ext::lz4 ${NUMA_LIBRARY}
-                 extra::rapidjson)
+                 extra::rapidjson library_mysys)
 
 # On linux: /usr/include/stdio.h:#define BUFSIZ 8192
 # On Solaris: /usr/include/iso/stdio_iso.h:#define    BUFSIZ  1024
@@ -411,7 +415,7 @@ IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
     rem/rem0wrec.cc
     COMPILE_FLAGS "-Wno-stringop-overflow"
     )
-  IF(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
+  IF(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
     STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-error=alloc-size-larger-than=")
   ENDIF()
 ENDIF()

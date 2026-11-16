@@ -1,3 +1,7 @@
+--source include/elide_costs.inc
+# difference in '$.steps[*].join_preparation.steps[*].'
+--source include/no_ps_protocol.inc
+
 --echo #
 --echo # Bug#26475312 VALGRIND MEMORY LEAK ( CMP_FIELD_VALUE(FIELD*, LONG) (SQL_EXECUTOR.CC:3598)
 --echo #
@@ -222,6 +226,7 @@ DROP TABLE t1;
 
 CREATE TABLE t(a INT);
 INSERT INTO t values (1),(2),(3),(6),(0);
+SET explain_json_format_version = 1;
 
 #Costs vary in some of the platforms. So not printing these values.
 --echo Discard w
@@ -290,6 +295,7 @@ eval $query;
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=JSON $query;
 
+SET explain_json_format_version = DEFAULT;
 DROP TABLE t;
 
 --echo # End of test for Bug#27062031
@@ -428,7 +434,6 @@ DROP TABLE t;
 --echo #               HYBRID_TYPE == DECIMAL_RESULT
 --echo #
 
-DO ST_CROSSES(@g,SUM(SHA(@g))OVER());
 DO UNHEX(SUM(@g)OVER());
 DO BIT_LENGTH(AVG(@f)OVER());
 DO COMPRESS(SUM(' >')OVER());
@@ -656,6 +661,7 @@ INSERT INTO t2 VALUES (1), (2), (3), (4), (5), (6), (7);
 
 ANALYZE TABLE t1, t2;
 
+--sorted_result
 SELECT 0.2 * AVG(f1) OVER w AS avg, f1
  FROM t1 JOIN t2 ON t1_partkey = t2_partkey
  WINDOW w AS (PARTITION BY t1_partkey);
@@ -1323,3 +1329,418 @@ SELECT i, COUNT(*) OVER w FROM (SELECT i, i = 2 AS cmp FROM t) AS dt
 WHERE cmp > 0 WINDOW w AS (ORDER BY cmp);
 
 DROP TABLE t;
+
+--echo #
+--echo # Bug#35855294 Inconsistent results of SELECT statement with EXISTS clause
+--echo #
+CREATE TABLE t1 (vkey INT, pkey INT, c5 INT, c7 VARCHAR(200));
+INSERT INTO t1 VALUES (20, 30000, 59, NULL);
+INSERT INTO t1 VALUES (59, 69000, NULL, NULL);
+
+SELECT ref_0.c5 >=
+       ( CASE
+         WHEN (EXISTS
+                ( SELECT ref_2.pkey as c_3
+                  FROM t1 AS ref_2
+                  WHERE ref_2.vkey BETWEEN ref_0.c5 AND
+                        ref_0.c5))
+         THEN NULL
+         ELSE ( CASE
+                WHEN (FIRST_VALUE(1) OVER ( PARTITION BY ref_0.c7
+                                             ORDER BY ref_0.vkey ASC,
+                                                      ref_0.pkey DESC) >= NULL)
+                THEN NULL
+                ELSE ref_0.pkey
+                END )
+         END
+       ) as c_6
+FROM
+t1 AS ref_0;
+
+SELECT ref_0.c5 >=
+       ( CASE
+         WHEN (1 IN
+                ( SELECT 1 as c_3
+                  FROM t1 AS ref_2
+                  WHERE ref_2.vkey
+                  BETWEEN ref_0.c5 AND ref_0.c5))
+         THEN NULL
+         ELSE ( CASE
+                WHEN (FIRST_VALUE(1) OVER ( PARTITION BY ref_0.c7
+                                             ORDER BY ref_0.vkey ASC,
+                                                      ref_0.pkey DESC) >= NULL)
+                THEN NULL
+                ELSE ref_0.pkey
+                END )
+         END
+       ) as c_6
+FROM
+t1 AS ref_0;
+
+SELECT ref_0.c5 >=
+       ( CASE
+         WHEN ( ref_0.vkey > ANY
+                ( SELECT ref_2.vkey as c_3
+                  FROM t1 AS ref_2
+                  WHERE ref_2.vkey
+                  BETWEEN ref_0.c5 AND ref_0.c5))
+         THEN NULL
+         ELSE ( CASE
+                WHEN (FIRST_VALUE(1) OVER ( PARTITION BY ref_0.c7
+                                             ORDER BY ref_0.vkey ASC,
+                                                      ref_0.pkey DESC) >= NULL)
+                THEN NULL
+                ELSE ref_0.pkey
+                END )
+         END
+       ) as c_6
+FROM
+t1 AS ref_0;
+
+SELECT ref_0.c5 >=
+       ( CASE
+         WHEN ( ref_0.vkey > ALL
+                ( SELECT ref_2.vkey as c_3
+                  FROM t1 AS ref_2
+                  WHERE ref_2.vkey
+                  BETWEEN ref_0.c5 AND ref_0.c5))
+         THEN NULL
+         ELSE ( CASE
+                WHEN (FIRST_VALUE(1) OVER ( PARTITION BY ref_0.c7
+                                             ORDER BY ref_0.vkey ASC,
+                                                      ref_0.pkey DESC) >= NULL)
+                THEN NULL
+                ELSE ref_0.pkey
+                END )
+         END
+       ) as c_6
+FROM
+t1 AS ref_0;
+
+--echo # Bug#35855294 Inconsistent results of SELECT statement with
+--echo #              EXISTS clause - part II: IN/ALL/ANY
+--echo #
+--echo # Outer reference in subquery involving window function. The
+--echo # subquery cannot be evaluated before the window function
+let $query=
+SELECT AVG(vkey) OVER (PARTITION BY vkey)
+  IN (SELECT outer_t.vkey FROM t1) FROM t1 AS outer_t;
+
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph  # Different the query plan.
+eval EXPLAIN format=tree $query;
+
+--echo # Outer field reference in subquery's join condition:
+--echo # outer_t.vkey
+let $query=
+SELECT AVG(vkey) OVER (PARTITION BY vkey)
+  IN (SELECT ta.vkey
+      FROM t1 ta
+           JOIN
+           t1 tb
+           ON (ta.vkey=outer_t.vkey)) AS window_in_result
+FROM t1 AS outer_t;
+
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph  # Different the query plan.
+eval EXPLAIN format=tree $query;
+
+--echo # Outer alias reference in subquery: ov
+--echo #
+let $query=
+SELECT outer_t.vkey AS ov,
+       AVG(vkey) OVER (PARTITION BY vkey) IN
+          (SELECT ta.vkey
+           FROM t1 ta
+                JOIN
+                t1 tb
+                ON (ta.vkey=ov)) AS window_in_result
+FROM t1 AS outer_t;
+
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph  # Different the query plan.
+eval EXPLAIN format=tree $query;
+
+--echo # Only reference to c5 is an outer reference: verify it is
+--echo # added to windowing output table: it wasn't before
+let $query=
+SELECT AVG(vkey) OVER (PARTITION BY vkey)
+  IN (SELECT ta.vkey
+      FROM t1 ta
+           JOIN
+           t1 tb
+           ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph  # Different the query plan.
+eval EXPLAIN format=tree $query;
+
+--echo # Add value that should yield true for one row
+--echo #
+INSERT INTO t1 VALUES (20, 30000, 20, NULL);
+
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph  # Different the query plan.
+eval EXPLAIN format=tree $query;
+
+let $query=
+SELECT pkey, c5, AVG(vkey) OVER (PARTITION BY vkey)
+  IN (SELECT ta.vkey
+      FROM t1 ta
+           JOIN
+           t1 tb
+           ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph  # Different the query plan.
+eval EXPLAIN format=tree $query;
+
+--echo # Check that outer reference is correct also *without* framebuffer
+--echo # used by AVG window function above: ROW_NUMBER doesn't need framing
+let $query =
+SELECT ROW_NUMBER() OVER (PARTITION BY vkey) + 18 IN
+   (SELECT ta.vkey
+    FROM t1 ta
+         JOIN
+         t1 tb
+         ON (ta.vkey=outer_t.c5)) AS window_in_result
+FROM t1 AS outer_t;
+
+eval $query;
+--replace_regex $elide_costs
+--skip_if_hypergraph  # Different the query plan.
+eval EXPLAIN format=tree $query;
+
+--echo # Illegal forward reference of alias: a2
+--error ER_ILLEGAL_REFERENCE
+SELECT AVG(vkey) OVER (PARTITION BY vkey) IN
+          (SELECT ta.vkey
+           FROM t1 ta
+                JOIN
+                t1 tb
+                ON (ta.vkey=a2))  AS a1,
+       AVG(vkey) OVER (PARTITION BY vkey) IN
+          (SELECT ta.vkey
+           FROM t1 ta
+                JOIN
+                t1 tb
+                ON (ta.vkey=a1))  AS a2
+FROM t1 AS outer_t;
+
+--echo # Bug#35855294 Inconsistent results of SELECT statement with
+--echo #              EXISTS clause - part III: row subquery with outer
+--echo #              reference
+--echo #
+--echo # row subqueries cannot be evaluated before window functions
+SELECT ROW(AVG(vkey) OVER (PARTITION BY vkey), 59) =
+    (SELECT ta.vkey, 59
+     FROM t1 ta
+          JOIN
+          t1 tb
+          ON (ta.vkey=outer_t.c5) LIMIT 1)
+FROM t1 AS outer_t;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#37031285 regression: crash in get_full_func_mm_tree()
+--echo #
+CREATE TABLE t (
+  c0 INT,
+  KEY i1 (c0) # needed for repro
+);
+
+CREATE TABLE tt (
+  c0 INT,
+  c1 INT
+);
+
+INSERT INTO t VALUES (1), (1), (1), (2), (2), (3);
+INSERT INTO tt VALUES (1,2),   # MIN(tt.c1) for group 1 is 2
+                      (1,3),
+                      (1,4),
+                      (2,1),   # MIN(tt.c1) for group 2 is 1
+                      (3,5),   # MIN(tt.c1) for group 3 is 5
+                      (3,6);
+
+SELECT MIN(tt.c1) FROM tt GROUP BY c0;
+
+# MIN(tt.c1) aggregates in the outer block, and has an outer argument
+--error ER_SUBQUERY_NO_1_ROW
+SELECT SUM((SELECT c0
+            FROM t
+            WHERE MIN(tt.c1) > 1
+            GROUP BY c0)) OVER() sum_wf
+FROM tt
+GROUP BY c0;
+
+--skip_if_hypergraph  # Bug#37126568: enable for HG when fixed
+SELECT SUM((SELECT c0
+            FROM t
+            WHERE MIN(tt.c1) > 1
+            GROUP BY c0
+            ORDER BY c0 LIMIT 1)) OVER() sum_wf
+FROM tt
+GROUP BY c0;
+
+# values to convince ourselves the above result is correct
+SELECT c0 FROM t WHERE 2 > 1 GROUP BY c0 ORDER BY c0 LIMIT 1;
+SELECT c0 FROM t WHERE 1 > 1 GROUP BY c0 ORDER BY c0 LIMIT 1;
+SELECT c0 FROM t WHERE 5 > 1 GROUP BY c0 ORDER BY c0 LIMIT 1;
+
+--skip_if_hypergraph  # Bug#37126568: enable for HG when fixed
+SELECT SUM((SELECT c0
+            FROM t
+            WHERE MIN(tt.c1) > 1
+            GROUP BY c0
+            ORDER BY c0 DESC LIMIT 1)) OVER() sum_wf
+FROM tt
+GROUP BY c0;
+
+# values to convince ourselves the above result is correct
+SELECT c0 FROM t WHERE 2 > 1 GROUP BY c0 ORDER BY c0 DESC LIMIT 1;
+SELECT c0 FROM t WHERE 1 > 1 GROUP BY c0 ORDER BY c0 DESC LIMIT 1;
+SELECT c0 FROM t WHERE 5 > 1 GROUP BY c0 ORDER BY c0 DESC LIMIT 1;
+
+DROP TABLE t, tt;
+--echo # Bug#36846564 Window function applied to BIT column produces non-BIT type
+--echo #              Same issue with materialized derived table
+
+CREATE TABLE t0 (c0 BIT(8));
+--echo # insert ASCII codes of 'A', 'B'
+INSERT INTO t0 VALUES (65), (66);
+SELECT HEX(c0) FROM t0;
+SELECT c0 FROM t0;
+
+--echo # Window functions used to return INT instead of BIT
+SELECT c0, ':', LEAD(c0) OVER() FROM t0;
+SELECT c0, ':', FIRST_VALUE(c0) OVER() FROM t0;
+--echo # MAX as window function ditto
+SELECT c0, ':', MAX(c0) OVER() FROM t0;
+
+--echo # MAX as non-window aggregate function was ok, returned BIT
+SELECT MAX(c0) FROM t0;
+
+--echo #
+--echo # Same issue for a (materialized) derived table:
+--echo #
+
+--echo # materialized: used to return INT instead of BIT
+SET optimizer_switch="derived_merge=off";
+SELECT c0 FROM (SELECT NULLIF(c0,1) FROM t0) t0 (c0) ORDER BY c0;
+--echo # not materialized: was ok, returned BIT
+SET optimizer_switch="derived_merge=on";
+SELECT c0 FROM (SELECT NULLIF(c0,1) FROM t0) t0 (c0) ORDER BY c0;
+
+--echo # CREATE SELECT: used to return INT instead of BIT
+CREATE TABLE t1 SELECT LEAD(c0) OVER(), MAX(c0) OVER() FROM t0;
+SET optimizer_switch="derived_merge=off";
+CREATE TABLE t2 SELECT c0 FROM (SELECT NULLIF(c0,1) FROM t0) t0 (c0) ORDER BY c0;
+SET optimizer_switch="derived_merge=default";
+DESC t1;
+DESC t2;
+DROP TABLE t0,t1,t2;
+
+--echo #
+--echo # Bug#36921175 Complex Join Predicate with Subquery Not
+--echo #              Possible To Offload to HeatWave
+CREATE TABLE t1(col INT);
+CREATE TABLE t2(col INT);
+INSERT INTO t1 VALUES (0), (1), (2), (NULL);
+INSERT INTO t1 VALUES (0), (1), (2), (NULL);
+ANALYZE TABLE t1;
+
+--error ER_INVALID_OUTER_REFERENCE
+SELECT COUNT(s1.col)
+FROM t1 AS s1 JOIN t1 AS s2
+     ON s2.col IN (WITH RECURSIVE cte1 AS
+                    (SELECT DENSE_RANK() OVER (PARTITION BY s1.col)
+                     FROM t2
+                     WHERE col >= 7
+                    )
+                   SELECT * FROM cte1
+                  );
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#37466984 MAX() as a Window Function Blindly Returns NULL for the First Row under Specific Conditions
+--echo #
+CREATE TABLE t0(c0 INT);
+INSERT INTO t0 VALUES (1), (2);
+SELECT c0, MAX(c0) OVER (ORDER BY c0 DESC ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING)
+FROM t0;
+DROP TABLE t0;
+
+--echo #
+--echo # Bug#35521787 nth_value window function call assertion error
+--echo #
+
+# Frame ORDER BY expression is non-deterministic in a RANGE unit
+# frame. This is not allowed, we need monotonically ascending or
+# descending values.
+CREATE TABLE t0(c0 INT, c1 INT);
+INSERT INTO t0 VALUES (1, 1), (2, 1), (3, 1), (4, 1);
+
+--error ER_WINDOW_RANGE_FRAME_ORDER_TYPE
+SELECT NTH_VALUE(c0, 1) OVER (PARTITION BY (SELECT 1)
+                              ORDER BY RAND()
+                              RANGE CURRENT ROW)
+FROM t0;
+
+# In contrast, if the unit is ROWS, a non-deterministic expression is
+# allowed.
+--sorted_result
+SELECT NTH_VALUE(c0, 1) OVER (PARTITION BY (SELECT 1)
+                              ORDER BY RAND()
+                              ROWS CURRENT ROW)
+FROM t0;
+
+# Also, in partition expression it is allowed.
+--sorted_result
+SELECT NTH_VALUE(c0, 1) OVER (PARTITION BY RAND()
+                              ORDER BY c0
+                              RANGE CURRENT ROW)
+FROM t0;
+
+DROP TABLE t0;
+--echo #
+--echo # Second case of Bug#35521787
+--echo #
+
+# simplified repro
+CREATE TABLE t1(t0_c1 INT UNSIGNED);
+INSERT INTO t1 VALUES (2), (371);
+
+# We error out because the range computation with integers wraps
+# around: the range end for value 2 is 2 - 10 = -8 (we have DESC)
+# which can't be represented as unsigned without wrapping around.
+# This is currently an implementation restriction in our RANGE
+# comparisons.
+
+--error ER_DATA_OUT_OF_RANGE
+SELECT COUNT(*) OVER (ORDER BY t0_c1 DESC
+                      RANGE BETWEEN CURRENT ROW AND 10 FOLLOWING)
+FROM t1;
+DROP TABLE t1;
+
+# original repro
+CREATE TABLE t0 (c0 INT, c1 INT UNSIGNED);
+INSERT INTO t0 VALUES (1, 2), (3, 371);
+--error ER_DATA_OUT_OF_RANGE
+SELECT CUME_DIST() OVER (PARTITION BY tx.c1
+                         ORDER BY t0.c1 DESC
+                         RANGE BETWEEN CURRENT ROW AND 10 FOLLOWING)
+FROM (SELECT 1) x(x)
+     RIGHT JOIN t0 tx
+     ON tx.c0 = x.x
+     JOIN t0;
+
+DROP TABLE t0;

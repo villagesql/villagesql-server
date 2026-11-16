@@ -18,7 +18,7 @@ DROP TABLE t_implicit_default;
 
 # Test that both DOUBLE and COMPLEX reject empty strings consistently
 CREATE TABLE t_empty (id INT, val_double DOUBLE, val_complex COMPLEX);
---error 1265
+--error 1366
 INSERT INTO t_empty VALUES (1, '', '(1,2)');
 --error 1366
 INSERT INTO t_empty VALUES (2, 3.14, '');

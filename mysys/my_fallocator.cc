@@ -32,16 +32,11 @@
 
 #include "my_config.h"
 
-#include <errno.h>
+#include <cerrno>
 #ifdef HAVE_POSIX_FALLOCATE
 #include <fcntl.h>
 #endif
-#include <string.h>
-#include <sys/types.h>
-#include <limits>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
+#include <cstring>
 
 #include "my_dbug.h"
 #include "my_inttypes.h"

@@ -109,10 +109,7 @@ int Pfs_table_replication_group_configuration_version::read_column_value(
       "value",
       {
         const char act[] =
-            "now signal "
-            "signal.after_group_configuration_version_read_column_value_"
-            "waiting "
-            "wait_for "
+            "now wait_for "
             "signal.after_group_configuration_version_read_column_value_"
             "continue";
         assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
@@ -169,7 +166,7 @@ PSI_table_handle *Pfs_table_replication_group_configuration_version::open_table(
       struct Replication_group_configuration_version row;
 
       table->field[0]->val_str(&string);
-      row.name.assign(string.c_ptr_safe(), string.length());
+      row.name.assign(to_string_view(string));
 
       row.version = table->field[1]->val_int();
 

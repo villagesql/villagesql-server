@@ -31,9 +31,10 @@
   Code for handling strings with can grow dynamically.
 */
 
-#include <stdarg.h>
-#include <string.h>
 #include <sys/types.h>
+#include <algorithm>
+#include <cstdarg>
+#include <cstring>
 
 #include "m_string.h"
 #include "my_dbug.h"
@@ -99,7 +100,7 @@ bool dynstr_append(DYNAMIC_STRING *str, const char *append) {
 bool dynstr_append_mem(DYNAMIC_STRING *str, const char *append, size_t length) {
   char *new_ptr;
   if (str->length + length >= str->max_length) {
-    size_t new_length =
+    size_t const new_length =
         std::max(str->max_length * 3 / 2, str->length + length + 1);
     if (!(new_ptr = (char *)my_realloc(key_memory_DYNAMIC_STRING, str->str,
                                        new_length, MYF(MY_WME))))

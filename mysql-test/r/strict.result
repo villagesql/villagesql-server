@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 set @org_mode=@@sql_mode;
 set @@sql_mode='ansi,traditional';
 select @@sql_mode;
@@ -282,11 +283,11 @@ INSERT INTO t1 (col2) VALUES (CAST('2004-10-15 10:15' AS DATETIME));
 INSERT INTO t1 (col3) VALUES (CAST('2004-10-15 10:15' AS DATETIME));
 INSERT INTO t1 (col1) VALUES(CAST('0000-10-31' AS DATE));
 INSERT INTO t1 (col1) VALUES(CAST('2004-10-0' AS DATE));
-ERROR 22007: Incorrect datetime value: '2004-10-0'
+ERROR 22007: Truncated incorrect date value: '2004-10-0'
 INSERT INTO t1 (col1) VALUES(CAST('2004-0-10' AS DATE));
-ERROR 22007: Incorrect datetime value: '2004-0-10'
+ERROR 22007: Truncated incorrect date value: '2004-0-10'
 INSERT INTO t1 (col1) VALUES(CAST('0000-00-00' AS DATE));
-ERROR 22007: Incorrect datetime value: '0000-00-00'
+ERROR 22007: Truncated incorrect date value: '0000-00-00'
 INSERT INTO t1 (col2) VALUES(CAST('0000-10-31 15:30' AS DATETIME));
 INSERT INTO t1 (col2) VALUES(CAST('2004-10-0 15:30' AS DATETIME));
 ERROR 22007: Incorrect datetime value: '2004-10-0 15:30'
@@ -309,11 +310,11 @@ INSERT INTO t1 (col2) VALUES (CONVERT('2004-10-15 10:15',DATETIME));
 INSERT INTO t1 (col3) VALUES (CONVERT('2004-10-15 10:15',DATETIME));
 INSERT INTO t1 (col1) VALUES(CONVERT('0000-10-31' , DATE));
 INSERT INTO t1 (col1) VALUES(CONVERT('2004-10-0' , DATE));
-ERROR 22007: Incorrect datetime value: '2004-10-0'
+ERROR 22007: Truncated incorrect date value: '2004-10-0'
 INSERT INTO t1 (col1) VALUES(CONVERT('2004-0-10' , DATE));
-ERROR 22007: Incorrect datetime value: '2004-0-10'
+ERROR 22007: Truncated incorrect date value: '2004-0-10'
 INSERT INTO t1 (col1) VALUES(CONVERT('0000-00-00',DATE));
-ERROR 22007: Incorrect datetime value: '0000-00-00'
+ERROR 22007: Truncated incorrect date value: '0000-00-00'
 INSERT INTO t1 (col2) VALUES(CONVERT('0000-10-31 15:30',DATETIME));
 INSERT INTO t1 (col2) VALUES(CONVERT('2004-10-0 15:30',DATETIME));
 ERROR 22007: Incorrect datetime value: '2004-10-0 15:30'
@@ -877,14 +878,14 @@ ERROR 22012: Division by 0
 UPDATE t1 SET col2= MOD(col2,0) WHERE col2 > 0;
 ERROR 22012: Division by 0
 INSERT INTO t1 (col1) VALUES ('');
-ERROR 01000: Data truncated for column 'col1' at row 1
+ERROR HY000: Incorrect FLOAT value: '' for column 'col1' at row 1
 INSERT INTO t1 (col1) VALUES ('a59b');
-ERROR 01000: Data truncated for column 'col1' at row 1
+ERROR HY000: Incorrect FLOAT value: 'a59b' for column 'col1' at row 1
 INSERT INTO t1 (col1) VALUES ('1a');
-ERROR 01000: Data truncated for column 'col1' at row 1
+ERROR HY000: Incorrect FLOAT value: '1a' for column 'col1' at row 1
 INSERT IGNORE INTO t1 (col1) VALUES ('2a');
 Warnings:
-Warning	1265	Data truncated for column 'col1' at row 1
+Warning	1366	Incorrect FLOAT value: '2a' for column 'col1' at row 1
 INSERT IGNORE INTO t1 (col1) VALUES (1/0);
 Warnings:
 Warning	1365	Division by 0
@@ -929,14 +930,14 @@ ERROR 22012: Division by 0
 UPDATE t1 SET col2= MOD(col2,0) WHERE col2 > 0;
 ERROR 22012: Division by 0
 INSERT INTO t1 (col1) VALUES ('');
-ERROR 01000: Data truncated for column 'col1' at row 1
+ERROR HY000: Incorrect DOUBLE value: '' for column 'col1' at row 1
 INSERT INTO t1 (col1) VALUES ('a59b');
-ERROR 01000: Data truncated for column 'col1' at row 1
+ERROR HY000: Incorrect DOUBLE value: 'a59b' for column 'col1' at row 1
 INSERT INTO t1 (col1) VALUES ('1a');
-ERROR 01000: Data truncated for column 'col1' at row 1
+ERROR HY000: Incorrect DOUBLE value: '1a' for column 'col1' at row 1
 INSERT IGNORE INTO t1 (col1) VALUES ('2a');
 Warnings:
-Warning	1265	Data truncated for column 'col1' at row 1
+Warning	1366	Incorrect DOUBLE value: '2a' for column 'col1' at row 1
 INSERT IGNORE INTO t1 (col1) values (1/0);
 Warnings:
 Warning	1365	Division by 0
@@ -1163,9 +1164,9 @@ ERROR 22007: Incorrect date value: '0' for column 'col1' at row 1
 insert into t1 values (0.0,0.0,0.0);
 ERROR 22007: Incorrect date value: '0.0' for column 'col1' at row 1
 insert into t1 (col1) values (convert('0000-00-00',date));
-ERROR 22007: Incorrect datetime value: '0000-00-00'
+ERROR 22007: Truncated incorrect date value: '0000-00-00'
 insert into t1 (col1) values (cast('0000-00-00' as date));
-ERROR 22007: Incorrect datetime value: '0000-00-00'
+ERROR 22007: Truncated incorrect date value: '0000-00-00'
 set sql_mode='NO_ZERO_DATE';
 Warnings:
 Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
@@ -1192,7 +1193,7 @@ Warnings:
 Warning	1264	Out of range value for column 'col1' at row 1
 insert ignore into t1 (col1) values (cast('0000-00-00' as date));
 Warnings:
-Warning	1292	Incorrect datetime value: '0000-00-00'
+Warning	1292	Truncated incorrect date value: '0000-00-00'
 insert into t1 select * from t1;
 ERROR 22007: Incorrect date value: '0000-00-00' for column 'col1' at row 1
 alter table t1 modify col1 datetime;
@@ -1407,7 +1408,7 @@ i int comment
  123456789*123456789*123456789*123456789*
  123456789*123456789*123456789*123456789*
  123456789*123456789*123456789*123456789*');
-ERROR HY000: Comment for field 'i' is too long (max = 1024)
+ERROR HY000: The maximum supported character limit for the field, 'i', has been exceeded (max = 1024)
 set @@sql_mode= @org_mode;
 SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1
@@ -1440,7 +1441,7 @@ create table t1
   123456789*123456789*123456789*123456789*
   123456789*123456789*123456789*123456789*');
 Warnings:
-Warning	1629	Comment for field 'i' is too long (max = 1024)
+Warning	1629	The maximum supported character limit for the field, 'i', has been exceeded (max = 1024)
 SET sql_mode = default;
 select column_name, column_comment from information_schema.columns where
 table_schema = 'test' and table_name = 't1';
@@ -1965,3 +1966,4 @@ select str_to_date('2023-02-31', '%Y-%m-%d');
 str_to_date('2023-02-31', '%Y-%m-%d')
 2023-02-31
 SET sql_mode=@org_mode;
+include/rpl/set_gtid_mode_on.inc

@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <functional>
 
 #include "mysql/my_loglevel.h"
 #include "mysql/strings/collations.h"
@@ -92,7 +93,7 @@ void *Loader::read_file(const char *path, size_t *size) {
     return nullptr;
   }
 
-  unsigned len = fread(buf, 1, sizeof(buf), fd);
+  unsigned const len = fread(buf, 1, sizeof(buf), fd);
   fclose(fd);
 
   *size = len;
@@ -191,7 +192,7 @@ static void dispcset(FILE *f, const CHARSET_INFO *cs) {
 }
 
 int main(int argc, char **argv) {
-  CHARSET_INFO ncs{};
+  CHARSET_INFO const ncs{};
   FILE *f = stdout;
 
   if (argc < 2) {

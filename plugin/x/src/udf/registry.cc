@@ -23,8 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/x/src/udf/registry.h"
 
-namespace xpl {
-namespace udf {
+namespace xpl::udf {
 
 void Registry::insert(const Record_list &list) {
   Registrator r;
@@ -36,5 +35,4 @@ void Registry::drop() {
   r.unregistration(&m_function_names);
 }
 
-}  // namespace udf
-}  // namespace xpl
+}  // namespace xpl::udf

@@ -23,11 +23,10 @@
 
 #include "sql/dd/impl/system_views/partitions.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Partitions &Partitions::instance() {
-  static Partitions *s_instance = new Partitions();
+  static auto *s_instance = new Partitions();
   return *s_instance;
 }
 
@@ -46,6 +45,15 @@ Partitions::Partitions() {
                          "PARTITION_ORDINAL_POSITION", "part.number+1");
   m_target_def.add_field(FIELD_SUBPARTITION_ORDINAL_POSITION,
                          "SUBPARTITION_ORDINAL_POSITION", "sub_part.number+1");
+  m_target_def.add_field(
+      FIELD_SECONDARY_LOAD, "SECONDARY_LOAD",
+      "CASE WHEN tbl.subpartition_expression IS NULL THEN CASE WHEN "
+      "locate('secondary_load',part.options) > 0 THEN "
+      "substring(part.options, locate('secondary_load',part.options)+15, 1) "
+      "ELSE NULL END "
+      "ELSE CASE WHEN locate('secondary_load',sub_part.options) > 0 THEN "
+      "substring(sub_part.options, "
+      "locate('secondary_load',sub_part.options)+15, 1) ELSE NULL END END");
   m_target_def.add_field(FIELD_PARTITION_METHOD, "PARTITION_METHOD",
                          "CASE tbl.partition_type"
                          "  WHEN 'HASH' THEN 'HASH' "
@@ -198,5 +206,4 @@ Partitions::Partitions() {
   m_target_def.add_where("AND part.parent_partition_id IS NULL");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

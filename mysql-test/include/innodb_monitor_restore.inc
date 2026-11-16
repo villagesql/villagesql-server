@@ -25,6 +25,8 @@ SET GLOBAL innodb_monitor_enable="buffer_pool_bytes_dirty";
 SET GLOBAL innodb_monitor_enable="buffer_pool_pages_data";
 SET GLOBAL innodb_monitor_enable="buffer_pool_pages_dirty";
 SET GLOBAL innodb_monitor_enable="buffer_pool_pages_free";
+SET GLOBAL innodb_monitor_enable="buffer_pool_pages_flushed";
+SET GLOBAL innodb_monitor_enable="buffer_pool_pages_lru_flushed";
 SET GLOBAL innodb_monitor_enable="buffer_pool_pages_misc";
 SET GLOBAL innodb_monitor_enable="buffer_pool_pages_total";
 SET GLOBAL innodb_monitor_enable="buffer_pool_reads";
@@ -87,6 +89,9 @@ SET GLOBAL innodb_monitor_enable="os_log_fsyncs";
 SET GLOBAL innodb_monitor_enable="os_log_pending_fsyncs";
 SET GLOBAL innodb_monitor_enable="os_log_pending_writes";
 SET GLOBAL innodb_monitor_enable="trx_rseg_history_len";
+
+# Percona-specific monitors
+SET GLOBAL innodb_monitor_enable="buffer_pages0_read";
 
 # NOTE:
 # The default value for below variables is an empty string

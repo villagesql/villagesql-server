@@ -25,11 +25,9 @@
 
 #include "unittest/gunit/xplugin/xpl/mock/srv_session_services.h"
 
-namespace xpl {
-namespace test {
+namespace xpl::test {
 
 mock::Srv_session *mock::Srv_session::m_srv_session = nullptr;
 mock::Srv_session_info *mock::Srv_session_info::m_srv_session_info = nullptr;
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

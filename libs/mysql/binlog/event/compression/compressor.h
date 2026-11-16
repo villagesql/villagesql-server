@@ -26,16 +26,15 @@
 
 #include <cstddef>
 #include <tuple>
-#include "mysql/binlog/event/compression/base.h"                    // type
-#include "mysql/binlog/event/compression/buffer/grow_constraint.h"  // Grow_constraint
-#include "mysql/binlog/event/compression/buffer/managed_buffer_sequence.h"  // Managed_buffer_sequence
-#include "mysql/binlog/event/nodiscard.h"  // NODISCARD
+#include "mysql/binlog/event/compression/base.h"       // type
+#include "mysql/containers/buffers/grow_constraint.h"  // Grow_constraint
+#include "mysql/containers/buffers/managed_buffer_sequence.h"  // Managed_buffer_sequence
 
 #include <limits>  // std::numeric_limits
 
 namespace mysql::binlog::event::compression {
 
-using Compress_status = mysql::binlog::event::compression::buffer::Grow_status;
+using Compress_status = mysql::containers::buffers::Grow_status;
 
 /// Abstract base class for compressors.
 ///
@@ -75,16 +74,15 @@ using Compress_status = mysql::binlog::event::compression::buffer::Grow_status;
 /// above procedure as many times as needed.
 ///
 /// This class requires that the user provides a @c
-/// mysql::binlog::event::compression::buffer::Managed_buffer_sequence to
+/// mysql::containers::buffers::Managed_buffer_sequence to
 /// store output.
 class Compressor {
  public:
   using Managed_buffer_sequence_t =
-      mysql::binlog::event::compression::buffer::Managed_buffer_sequence<>;
+      mysql::containers::buffers::Managed_buffer_sequence<>;
   using Char_t = Managed_buffer_sequence_t::Char_t;
   using Size_t = Managed_buffer_sequence_t::Size_t;
-  using Grow_constraint_t =
-      mysql::binlog::event::compression::buffer::Grow_constraint;
+  using Grow_constraint_t = mysql::containers::buffers::Grow_constraint;
   static constexpr Size_t pledged_input_size_unset =
       std::numeric_limits<Size_t>::max();
 
@@ -151,7 +149,7 @@ class Compressor {
   /// compression e.g.  after increasing the capacity, or resetting
   /// the output buffer (perhaps after moving existing data
   /// elsewhere), or using a different output buffer, or similar.
-  [[NODISCARD]] Compress_status compress(Managed_buffer_sequence_t &out);
+  [[nodiscard]] Compress_status compress(Managed_buffer_sequence_t &out);
 
   /// Consume all input, produce all output, and end the frame.
   ///
@@ -179,7 +177,7 @@ class Compressor {
   /// compression e.g.  after increasing the capacity, or resetting
   /// the output buffer (perhaps after moving existing data
   /// elsewhere), or using a different output buffer, or similar.
-  [[NODISCARD]] Compress_status finish(Managed_buffer_sequence_t &out);
+  [[nodiscard]] Compress_status finish(Managed_buffer_sequence_t &out);
 
   /// Return a `Grow_constraint` that may be used with the
   /// Managed_buffer_sequence storing the output, in order to
@@ -231,7 +229,7 @@ class Compressor {
   ///
   /// This differs from @c compress in that it does not have to reset
   /// the frame when returning out_of_memory; the caller does that.
-  [[NODISCARD]] virtual Compress_status do_compress(
+  [[nodiscard]] virtual Compress_status do_compress(
       Managed_buffer_sequence_t &out) = 0;
 
   /// Implement @c finish.
@@ -241,7 +239,7 @@ class Compressor {
   ///
   /// Implementations may assume that @c compress has been called,
   /// since @c finish does that.
-  [[NODISCARD]] virtual Compress_status do_finish(
+  [[nodiscard]] virtual Compress_status do_finish(
       Managed_buffer_sequence_t &out) = 0;
 
   /// Implement @c get_grow_constraint_hint.

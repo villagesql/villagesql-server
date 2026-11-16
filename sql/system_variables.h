@@ -34,8 +34,12 @@
 #include "sql/sqlcom_compact_index.h"
 #include "my_thread_local.h"  // my_thread_id
 #include "mysql/strings/m_ctype.h"
+#include "mysqld_error.h"
+#include "sql/mysqld_cs.h"
 #include "sql/rpl_gtid.h"        // Gitd_specification
 #include "sql/sql_plugin_ref.h"  // plugin_ref
+#include "sql_string.h"
+#include "str2int.h"
 
 class MY_LOCALE;
 class Time_zone;
@@ -120,6 +124,12 @@ enum class Explain_format_type : ulong {
   JSON = 3
 };
 
+// Values for default_table_encryption
+enum enum_default_table_encryption {
+  DEFAULT_TABLE_ENC_OFF = 0,
+  DEFAULT_TABLE_ENC_ON = 1,
+};
+
 /* Bits for different SQL modes modes (including ANSI mode) */
 inline constexpr sql_mode_t MODE_REAL_AS_FLOAT = 1;
 inline constexpr sql_mode_t MODE_PIPES_AS_CONCAT = 2;
@@ -161,7 +171,9 @@ inline constexpr sql_mode_t MODE_PAD_CHAR_TO_FULL_LENGTH = 1ULL << 31;
 */
 inline constexpr sql_mode_t MODE_TIME_TRUNCATE_FRACTIONAL = 1ULL << 32;
 
-inline constexpr sql_mode_t MODE_LAST = 1ULL << 33;
+inline constexpr sql_mode_t MODE_INTERPRET_UTF8_AS_UTF8MB4 = 1ULL << 33;
+
+inline constexpr sql_mode_t MODE_LAST = 1ULL << 34;
 
 inline constexpr sql_mode_t MODE_ALLOWED_MASK =
     (MODE_REAL_AS_FLOAT | MODE_PIPES_AS_CONCAT | MODE_ANSI_QUOTES |
@@ -171,7 +183,8 @@ inline constexpr sql_mode_t MODE_ALLOWED_MASK =
      MODE_STRICT_TRANS_TABLES | MODE_STRICT_ALL_TABLES | MODE_NO_ZERO_IN_DATE |
      MODE_NO_ZERO_DATE | MODE_INVALID_DATES | MODE_ERROR_FOR_DIVISION_BY_ZERO |
      MODE_TRADITIONAL | MODE_HIGH_NOT_PRECEDENCE | MODE_NO_ENGINE_SUBSTITUTION |
-     MODE_PAD_CHAR_TO_FULL_LENGTH | MODE_TIME_TRUNCATE_FRACTIONAL);
+     MODE_PAD_CHAR_TO_FULL_LENGTH | MODE_TIME_TRUNCATE_FRACTIONAL |
+     MODE_INTERPRET_UTF8_AS_UTF8MB4);
 
 /*
   We can safely ignore and reset these obsolete mode bits while replicating:
@@ -197,9 +210,178 @@ inline constexpr sql_mode_t MODE_ALLOWED_MASK =
   updated (to store more bytes on disk).
 
   NOTE: When adding new SQL_MODE types, make sure to also add them to
-  the scripts used for creating the MySQL system tables
-  in scripts/mysql_system_tables.sql and scripts/mysql_system_tables_fix.sql
+  sql_mode_names[] in sys_vars.cc
 */
+
+/** Page fragmentation statistics */
+struct fragmentation_stats_t {
+  ulonglong scan_pages_contiguous;          /*!< number of contiguous InnoDB
+                                              page reads inside a query */
+  ulonglong scan_pages_disjointed;          /*!< number of disjointed InnoDB
+                                              page reads inside a query */
+  ulonglong scan_pages_total_seek_distance; /*!< total seek distance between
+                                              InnoDB pages */
+  ulonglong scan_data_size;                 /*!< size of data in all InnoDB
+                                              pages read inside a query
+                                              (in bytes) */
+  ulonglong scan_deleted_recs_size;         /*!< size of deleded records in
+                                              all InnoDB pages read inside a
+                                              query (in bytes) */
+};
+
+class Query_errors_set {
+ public:
+  static constexpr uint8_t MAX_CODES_NUM = 64;
+  static constexpr uint32_t MAX_TEXT_LENGTH =
+      std::numeric_limits<uint32_t>::digits10 * MAX_CODES_NUM + MAX_CODES_NUM;
+  static const String LOG_ALL;
+
+ private:
+  bool is_all_set;
+  uint32_t codes[MAX_CODES_NUM];
+
+  void set_all() {
+    if (!is_all_set) {
+      clear_all();
+      is_all_set = true;
+    }
+  }
+
+ public:
+  void clear_all() {
+    is_all_set = false;
+    for (uint32_t &code : codes) {
+      code = 0;
+    }
+  }
+
+  static bool check(const String *str) {
+    if (str == nullptr || str->is_empty()) {
+      return true;
+    }
+    if (stringcmp(str, &LOG_ALL) == 0) {
+      return true;
+    }
+
+    const char *val = str->ptr();
+
+    for (; my_isspace(system_charset_info, *val); ++val) /* empty */
+      ;
+
+    uint8_t codes_count = 0;
+    uint8_t digits_count = 0;
+
+    for (const char *p = val; *p; ++p) {
+      if (!my_isdigit(system_charset_info, *p) && *p != ',') {
+        return false;
+      }
+
+      if (*p == ',' && ++codes_count == MAX_CODES_NUM) {
+        my_error(ER_TOO_MANY_ERROR_CODES, MYF(0), MAX_CODES_NUM);
+        return false;
+      }
+
+      if (my_isdigit(system_charset_info, *p)) {
+        ++digits_count;
+      }
+      if ((*p == ',' || static_cast<size_t>(p - val) + 1 == str->length()) &&
+          digits_count > 0) {
+        long err_code = 0;
+        const char *code_start =
+            (*p == ',') ? p - digits_count : p - digits_count + 1;
+        if (!str2int(code_start, 10, 0, LONG_MAX, &err_code)) {
+          my_error(ER_TOO_BIG_ERROR_CODE, MYF(0), LONG_MAX);
+          return false;
+        }
+        digits_count = 0;
+      }
+    }
+
+    return true;
+  }
+
+  bool set_codes(const String *str) {
+    if (str == nullptr || str->is_empty()) {
+      clear_all();
+      return true;
+    }
+    if (stringcmp(str, &LOG_ALL) == 0) {
+      set_all();
+      return true;
+    }
+
+    const char *val = str->ptr();
+
+    for (; my_isspace(system_charset_info, *val); ++val) /* empty */
+      ;
+
+    clear_all();
+    uint8_t error_index = 0;
+
+    for (const char *p = val; *p;) {
+      long err_code;
+      if (!(p = str2int(p, 10, 0, LONG_MAX, &err_code))) {
+        break;
+      }
+
+      if (error_index == MAX_CODES_NUM) {
+        // Too many codes, should have been detected in check()
+        return true;
+      }
+
+      codes[error_index] = err_code;
+      ++error_index;
+
+      while (!my_isdigit(system_charset_info, *p) && *p) {
+        p++;
+      }
+    }
+
+    return true;
+  }
+
+  size_t to_string(char *buf) const {
+    char *p = buf;
+
+    if (is_all_set) {
+      p += sprintf(p, "%s", LOG_ALL.ptr());
+    } else {
+      for (int i = 0; i < MAX_CODES_NUM; ++i) {
+        if (codes[i] != 0) {
+          if (i > 0) {
+            p += sprintf(p, ",%d", codes[i]);
+          } else {
+            p += sprintf(p, "%d", codes[i]);
+          }
+        }
+      }
+    }
+
+    *p = '\0';
+
+    return p - buf;
+  }
+
+  bool check_error_set(const uint32_t code) const {
+    if (is_all_set) {
+      return true;
+    }
+
+    for (const uint32_t &c : codes) {
+      if (c == 0) {
+        // unused slots reached
+        break;
+      }
+      if (code == c) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool check_variable_set() const { return is_all_set || codes[0] != 0; }
+};
 
 struct System_variables {
   /*
@@ -311,6 +493,8 @@ struct System_variables {
 
   plugin_ref table_plugin;
   plugin_ref temp_table_plugin;
+  char *external_table_storage_engine;
+  char *external_table_secondary_storage_engine;
 
   /* Only charset part of these variables is sensible */
   const CHARSET_INFO *character_set_filesystem;
@@ -339,6 +523,23 @@ struct System_variables {
 
   bool sysdate_is_now;
   bool binlog_rows_query_log_events;
+  bool binlog_ddl_skip_rewrite;
+
+#ifndef NDEBUG
+  ulonglong query_exec_time;
+  double query_exec_time_double;
+#endif
+  ulong log_slow_rate_limit;
+  ulonglong log_slow_filter;
+  ulonglong log_slow_verbosity;
+  Query_errors_set log_query_errors;
+
+  ulong innodb_io_reads;
+  ulonglong innodb_io_read;
+  uint64_t innodb_io_reads_wait_timer;
+  uint64_t innodb_lock_que_wait_timer;
+  uint64_t innodb_innodb_que_wait_timer;
+  ulong innodb_page_access;
 
   double long_query_time_double;
 
@@ -353,6 +554,12 @@ struct System_variables {
   char *track_sysvars_ptr;
   bool session_track_schema;
   bool session_track_state_change;
+
+  bool expand_fast_index_creation;
+
+  uint threadpool_high_prio_tickets;
+  ulong threadpool_high_prio_mode;
+
   ulong session_track_transaction_info;
 
   /*
@@ -367,6 +574,8 @@ struct System_variables {
   */
   bool show_create_table_verbosity;
 
+  bool ft_query_extra_word_chars;
+
   // Used for replication delay and lag monitoring
   ulonglong original_commit_timestamp;
 
@@ -377,6 +586,10 @@ struct System_variables {
 
   /** Used for controlling preparation of queries against secondary engine. */
   ulong use_secondary_engine;
+
+  /** Used to determine if statistics from secondary engine can be used
+      by the hypergraph optimizer. */
+  bool enable_secondary_engine_statistics;
 
   /**
     Used for controlling which statements to execute in a secondary
@@ -417,7 +630,7 @@ struct System_variables {
     Used to determine if the database or tablespace should be encrypted by
     default.
   */
-  bool default_table_encryption;
+  ulong default_table_encryption;
 
   /**
     @sa Sys_var_print_identified_with_as_hex
@@ -511,6 +724,12 @@ struct System_variables {
     @sa Sys_restrict_fk_on_non_standard_key
   */
   bool restrict_fk_on_non_standard_key;
+
+  /**
+    Activate child table trigger execution during SQL foreign key cascade.
+    @sa Sys_enable_cascade_triggers
+  */
+  bool enable_cascade_triggers;
 };
 
 static_assert(std::is_trivially_copyable<System_variables>::value);
@@ -527,6 +746,7 @@ struct System_status_var {
   /* IMPORTANT! See first_system_status_var definition below. */
   ulonglong created_tmp_disk_tables;
   ulonglong created_tmp_tables;
+  ulonglong count_hit_tmp_table_size;
   ulonglong ha_commit_count;
   ulonglong ha_delete_count;
   ulonglong ha_read_first_count;
@@ -555,6 +775,9 @@ struct System_status_var {
   ulonglong table_open_cache_hits;
   ulonglong table_open_cache_misses;
   ulonglong table_open_cache_overflows;
+  ulonglong table_open_cache_triggers_hits;
+  ulonglong table_open_cache_triggers_misses;
+  ulonglong table_open_cache_triggers_overflows;
   ulonglong select_full_join_count;
   ulonglong select_full_range_join_count;
   ulonglong select_range_count;
@@ -577,6 +800,8 @@ struct System_status_var {
   ulonglong bytes_received;
   ulonglong bytes_sent;
 
+  ulonglong net_buffer_length;
+
   ulonglong max_execution_time_exceeded;
   ulonglong max_execution_time_set;
   ulonglong max_execution_time_set_failed;
@@ -597,6 +822,9 @@ struct System_status_var {
   */
   double last_query_cost;
   ulonglong last_query_partial_plans;
+
+  /** fragmentation statistics */
+  fragmentation_stats_t fragmentation_stats;
 };
 
 /*

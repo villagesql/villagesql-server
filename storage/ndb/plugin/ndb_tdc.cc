@@ -33,7 +33,7 @@
   which aren't in use by any thread
 */
 
-bool ndb_tdc_close_cached_tables(void) {
+bool ndb_tdc_close_cached_tables() {
   DBUG_TRACE;
 
   const int res = close_cached_tables(nullptr,  // No need for thd pointer

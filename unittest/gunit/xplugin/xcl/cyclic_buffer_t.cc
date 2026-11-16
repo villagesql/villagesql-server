@@ -163,7 +163,7 @@ class Cyclic_buffer_test_suite
     const auto param = GetParam();
     int index = 0;
 
-    for (auto action : param) {
+    for (const auto &action : param) {
       if (!action->execute(buffer, &matcher)) {
         ADD_FAILURE() << "Failed at action " << index;
         return false;

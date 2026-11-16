@@ -22,9 +22,9 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "server_metrics_component.h"
-#include <string.h>  // strdup
 #include <atomic>
-#include <string>  // std::size
+#include <cstring>  // strdup
+#include <string>   // std::size
 #include "server_metrics_helpers.h"
 
 /* test_server_telemetry_metrics_component requires/uses the following services.

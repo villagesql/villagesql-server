@@ -30,9 +30,8 @@
   @file mysys/my_rename.cc
 */
 
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
+#include <cerrno>
+#include <cstdio>
 
 #include "my_dbug.h"
 #include "my_inttypes.h"

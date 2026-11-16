@@ -413,6 +413,7 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
   if (n_ext_cols) {
     ext_cols = static_cast<ulint *>(
         mem_heap_alloc(heap, n_ext_cols * sizeof *ext_cols));
+    ut_ad(ext_cols != nullptr);
   }
 
   /* Avoid a debug assertion in rec_offs_validate(). */
@@ -504,6 +505,7 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
 
       col = col_table->get_col(col_no);
 
+      ut_ad(n_ext_cols > 0);
       if (col->ord_part) {
         /* We will have to fetch prefixes of
         externally stored columns that are
@@ -616,11 +618,7 @@ dtuple_t *row_rec_to_index_entry_low(
 
   ut_ad(rec_len == dict_index_get_n_fields(index) ||
         /* non-leaf record which has keys and child page no as record data */
-        rec_len == dict_index_get_n_unique(index) + 1U
-        /* a record for older SYS_INDEXES table
-        (missing merge_threshold column) is acceptable. */
-        || (index->table->id == DICT_INDEXES_ID &&
-            rec_len == dict_index_get_n_fields(index) - 1U));
+        rec_len == dict_index_get_n_unique(index) + 1U);
 
   dict_index_copy_types(entry, index, rec_len);
 

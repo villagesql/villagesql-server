@@ -86,6 +86,10 @@ DEFINE_METHOD(int, mysql_clone_get_configs,
 DEFINE_METHOD(int, mysql_clone_validate_configs,
               (THD * thd, Mysql_Clone_Key_Values &configs));
 
+DEFINE_METHOD(int, mysql_clone_validate_version,
+              (const std::string &recipient, const std::string &donor,
+               const bool is_recipient_lts, const bool is_donor_lts));
+
 /**
   Connect to a remote server and switch to clone protocol
   @param[in,out] thd      server session THD

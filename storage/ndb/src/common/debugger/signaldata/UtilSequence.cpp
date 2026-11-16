@@ -1,6 +1,5 @@
 /*
    Copyright (c) 2003, 2026, Oracle and/or its affiliates.
-    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,7 +46,7 @@ bool printUTIL_SEQUENCE_REQ(FILE *out, const Uint32 *data, Uint32 l,
     assert(false);
     return false;
   }
-  const UtilSequenceReq *sig = (const UtilSequenceReq *)data;
+  const auto *sig = (const UtilSequenceReq *)data;
   fprintf(out, " senderData: %d sequenceId: %d RequestType: %s\n",
           sig->senderData, sig->sequenceId,
           type2string((UtilSequenceReq::RequestType)sig->requestType));
@@ -60,7 +59,7 @@ bool printUTIL_SEQUENCE_CONF(FILE *out, const Uint32 *data, Uint32 l,
     assert(false);
     return false;
   }
-  const UtilSequenceConf *sig = (const UtilSequenceConf *)data;
+  const auto *sig = (const UtilSequenceConf *)data;
   fprintf(out, " senderData: %d sequenceId: %d RequestType: %s\n",
           sig->senderData, sig->sequenceId,
           type2string((UtilSequenceReq::RequestType)sig->requestType));
@@ -75,7 +74,7 @@ bool printUTIL_SEQUENCE_REF(FILE *out, const Uint32 *data, Uint32 l,
     assert(false);
     return false;
   }
-  const UtilSequenceRef *sig = (const UtilSequenceRef *)data;
+  const auto *sig = (const UtilSequenceRef *)data;
   fprintf(out, " senderData: %d sequenceId: %d RequestType: %s\n",
           sig->senderData, sig->sequenceId,
           type2string((UtilSequenceReq::RequestType)sig->requestType));

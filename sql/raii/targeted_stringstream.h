@@ -59,8 +59,8 @@ class Targeted_stringstream {
   friend Targeted_stringstream &operator<<(Targeted_stringstream &stream,
                                            const T &value);
   template <class T>
-  friend Targeted_stringstream &operator<<(Targeted_stringstream &&stream,
-                                           const T &value);
+  friend Targeted_stringstream &&operator<<(Targeted_stringstream &&stream,
+                                            const T &value);
 
  private:
   bool m_active;
@@ -71,10 +71,10 @@ class Targeted_stringstream {
 };
 
 template <class T>
-Targeted_stringstream &operator<<(Targeted_stringstream &&stream,
-                                  const T &value) {
+Targeted_stringstream &&operator<<(Targeted_stringstream &&stream,
+                                   const T &value) {
   stream.m_stream << value;
-  return stream;
+  return std::move(stream);
 }
 
 template <class T>

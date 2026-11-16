@@ -40,11 +40,13 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <algorithm>
+#include <array>
 
 #include "decimal.h"
 
 #include "my_inttypes.h"
 #include "my_macros.h"
+#include "my_temporal.h"
 #include "my_time_t.h"
 #include "mysql/strings/dtoa.h"
 #include "mysql/strings/m_ctype.h"
@@ -93,32 +95,12 @@ inline int my_decimal_int_part(uint precision, uint decimals) {
 */
 
 class my_decimal : public decimal_t {
-/*
-  Several of the routines in strings/decimal.c have had buffer
-  overrun/underrun problems. These are *not* caught by valgrind.
-  To catch them, we allocate dummy fields around the buffer,
-  and test that their values do not change.
- */
-#if !defined(NDEBUG)
-  int foo1;
-#endif
-
-  decimal_digit_t buffer[DECIMAL_BUFF_LENGTH];
-
-#if !defined(NDEBUG)
-  int foo2;
-  static const int test_value = 123;
-#endif
+  std::array<decimal_digit_t, DECIMAL_BUFF_LENGTH> buffer;
 
  public:
-  my_decimal(const my_decimal &rhs) : decimal_t(rhs) {
+  my_decimal(const my_decimal &rhs) : decimal_t(rhs), buffer(rhs.buffer) {
     rhs.sanity_check();
-#if !defined(NDEBUG)
-    foo1 = test_value;
-    foo2 = test_value;
-#endif
-    for (uint i = 0; i < DECIMAL_BUFF_LENGTH; i++) buffer[i] = rhs.buffer[i];
-    buf = buffer;
+    buf = buffer.data();
   }
 
   my_decimal &operator=(const my_decimal &rhs) {
@@ -129,18 +111,14 @@ class my_decimal : public decimal_t {
     decimal_t::frac = rhs.frac;
     decimal_t::len = rhs.len;
     decimal_t::sign = rhs.sign();
-    for (uint i = 0; i < DECIMAL_BUFF_LENGTH; i++) buffer[i] = rhs.buffer[i];
-    decimal_t::buf = buffer;
+    buffer = rhs.buffer;
+    decimal_t::buf = buffer.data();
     return *this;
   }
 
   void init() {
-#if !defined(NDEBUG)
-    foo1 = test_value;
-    foo2 = test_value;
-#endif
     len = DECIMAL_BUFF_LENGTH;
-    buf = buffer;
+    buf = buffer.data();
     decimal_make_zero(this);
   }
 
@@ -150,11 +128,7 @@ class my_decimal : public decimal_t {
   ~my_decimal() { sanity_check(); }
 #endif  // NDEBUG
 
-  void sanity_check() const {
-    assert(foo1 == test_value);
-    assert(foo2 == test_value);
-    assert(buf == buffer);
-  }
+  void sanity_check() const { assert(buf == buffer.data()); }
 
   bool sign() const { return decimal_t::sign; }
   void sign(bool s) { decimal_t::sign = s; }
@@ -181,8 +155,6 @@ const char *dbug_decimal_as_string(char *buff, const my_decimal *val);
 
 bool str_set_decimal(uint mask, const my_decimal *val, String *str,
                      const CHARSET_INFO *cs, uint decimals);
-
-extern my_decimal decimal_zero;
 
 inline void max_my_decimal(my_decimal *to, int precision, int frac) {
   assert((precision <= DECIMAL_MAX_PRECISION) && (frac <= DECIMAL_MAX_SCALE));
@@ -347,9 +319,10 @@ inline int str2my_decimal(uint mask, const char *str, my_decimal *d,
 int str2my_decimal(uint mask, const char *from, size_t length,
                    const CHARSET_INFO *charset, my_decimal *decimal_value);
 
-my_decimal *date2my_decimal(const MYSQL_TIME *ltime, my_decimal *dec);
-my_decimal *time2my_decimal(const MYSQL_TIME *ltime, my_decimal *dec);
-my_decimal *timeval2my_decimal(const my_timeval *tm, my_decimal *dec);
+my_decimal *time_to_decimal(const Time_val time, my_decimal *dec);
+my_decimal *date_to_decimal(const Date_val date, my_decimal *dec);
+my_decimal *datetime_to_decimal(const Datetime_val *dt, my_decimal *dec);
+my_decimal *timeval_to_decimal(const my_timeval *tm, my_decimal *dec);
 
 inline int double2my_decimal(uint mask, double val, my_decimal *d) {
   return check_result_and_overflow(mask, double2decimal(val, d), d);

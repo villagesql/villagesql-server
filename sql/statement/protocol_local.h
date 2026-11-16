@@ -164,8 +164,8 @@ class Protocol_local final : public Protocol {
   bool store_string(const char *from, size_t length,
                     const CHARSET_INFO *cs) override;
   bool store_datetime(const MYSQL_TIME &time, uint precision) override;
-  bool store_date(const MYSQL_TIME &time) override;
-  bool store_time(const MYSQL_TIME &time, uint precision) override;
+  bool store_date(const Date_val date) override;
+  bool store_time(const Time_val time, uint precision) override;
   bool store_float(float value, uint32 decimals, uint32 zerofill) override;
   bool store_double(double value, uint32 decimals, uint32 zerofill) override;
   bool store_field(const Field *field) override;

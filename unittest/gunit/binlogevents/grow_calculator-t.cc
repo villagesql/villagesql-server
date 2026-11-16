@@ -22,20 +22,16 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "mysql/binlog/event/compression/buffer/grow_calculator.h"
+#include "mysql/containers/buffers/grow_calculator.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-namespace mysql::binlog::event::compression::buffer {
-namespace grow_calculator::unittest {
+namespace mysql::containers::buffers::grow_calculator::unittest {
 
-using Grow_calculator_t =
-    mysql::binlog::event::compression::buffer::Grow_calculator;
-using Size_t =
-    mysql::binlog::event::compression::buffer::Grow_calculator::Size_t;
-using Result_t =
-    mysql::binlog::event::compression::buffer::Grow_calculator::Result_t;
+using Grow_calculator_t = mysql::containers::buffers::Grow_calculator;
+using Size_t = mysql::containers::buffers::Grow_calculator::Size_t;
+using Result_t = mysql::containers::buffers::Grow_calculator::Result_t;
 
 TEST(GrowPolicyTest, BasicGrowPolicyTest) {
   Grow_calculator_t grow_calculator;
@@ -63,5 +59,4 @@ TEST(GrowPolicyTest, BasicGrowPolicyTest) {
   EXPECT_EQ(error, grow_calculator.compute_new_size(0, 1001));
 }
 
-}  // namespace grow_calculator::unittest
-}  // namespace mysql::binlog::event::compression::buffer
+}  // namespace mysql::containers::buffers::grow_calculator::unittest

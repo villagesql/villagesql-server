@@ -306,6 +306,7 @@ EXPLAIN
 #
 # Bug#33905918 Server crashes after using explain of a query with except/intersect.
 #
+SET explain_json_format_version = 1;
 EXPLAIN SELECT * FROM r UNION ALL SELECT * FROM s;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	PRIMARY	r	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
@@ -1124,6 +1125,7 @@ EXPLAIN
 }
 Warnings:
 Note	1003	(/* select#1 */ select `test`.`r`.`a` AS `a` from `test`.`r` except /* select#2 */ select `test`.`s`.`a` AS `a` from `test`.`s`) union (/* select#3 */ select `test`.`t`.`a` AS `a` from `test`.`t` intersect /* select#4 */ select `test`.`t`.`a` AS `a` from `test`.`t`)
+SET explain_json_format_version = DEFAULT;
 DROP TABLE r, s, t;
 #
 # Check that more set ops don't interfere with
@@ -2454,6 +2456,23 @@ d	d
 FROM t1 INNER JOIN t2 USING (id) ) LIMIT 1)
 ORDER BY t1.d;
 ERROR 42S22: Unknown column 't1.d' in 'order clause'
+DROP TABLE t1, t2;
+#
+# Follow-up to Bug#36739383 Assertion 'false'
+# materialize_iterator::SpillState::read_next_row_secondary_over.
+# This is a case of too large a row for default hash table
+# space, which next also overflows the normal tmp table (error
+# 135 HA_ERR_RECORD_FILE_FULL) and must go to InnoDB tmp table.
+#
+CREATE TABLE t1 (a MEDIUMTEXT);
+INSERT INTO t1 VALUES ('a');
+CREATE TABLE t2 AS
+SELECT REPEAT(a,20000000) AS a FROM t1
+INTERSECT
+SELECT REPEAT(a,20000000) AS a FROM t1;
+SELECT LENGTH(a), SUBSTRING(a FROM 20000000-4 FOR 4) FROM t2;
+LENGTH(a)	SUBSTRING(a FROM 20000000-4 FOR 4)
+20000000	aaaa
 DROP TABLE t1, t2;
 # Pre WL#15257 tests using hash table of WL#15257
 SET optimizer_switch='hash_set_operations=default';
@@ -2763,6 +2782,7 @@ EXPLAIN
 #
 # Bug#33905918 Server crashes after using explain of a query with except/intersect.
 #
+SET explain_json_format_version = 1;
 EXPLAIN SELECT * FROM r UNION ALL SELECT * FROM s;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	PRIMARY	r	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
@@ -3581,6 +3601,7 @@ EXPLAIN
 }
 Warnings:
 Note	1003	(/* select#1 */ select `test`.`r`.`a` AS `a` from `test`.`r` except /* select#2 */ select `test`.`s`.`a` AS `a` from `test`.`s`) union (/* select#3 */ select `test`.`t`.`a` AS `a` from `test`.`t` intersect /* select#4 */ select `test`.`t`.`a` AS `a` from `test`.`t`)
+SET explain_json_format_version = DEFAULT;
 DROP TABLE r, s, t;
 #
 # Check that more set ops don't interfere with
@@ -4912,6 +4933,23 @@ FROM t1 INNER JOIN t2 USING (id) ) LIMIT 1)
 ORDER BY t1.d;
 ERROR 42S22: Unknown column 't1.d' in 'order clause'
 DROP TABLE t1, t2;
+#
+# Follow-up to Bug#36739383 Assertion 'false'
+# materialize_iterator::SpillState::read_next_row_secondary_over.
+# This is a case of too large a row for default hash table
+# space, which next also overflows the normal tmp table (error
+# 135 HA_ERR_RECORD_FILE_FULL) and must go to InnoDB tmp table.
+#
+CREATE TABLE t1 (a MEDIUMTEXT);
+INSERT INTO t1 VALUES ('a');
+CREATE TABLE t2 AS
+SELECT REPEAT(a,20000000) AS a FROM t1
+INTERSECT
+SELECT REPEAT(a,20000000) AS a FROM t1;
+SELECT LENGTH(a), SUBSTRING(a FROM 20000000-4 FOR 4) FROM t2;
+LENGTH(a)	SUBSTRING(a FROM 20000000-4 FOR 4)
+20000000	aaaa
+DROP TABLE t1, t2;
 # Test hash table set operations against "old" approach
 # and overflow of in-memory hash table
 #
@@ -5074,6 +5112,8 @@ DROP TABLE no_hashing, hashing_no_spill, hashing_spill;
 SET SESSION optimizer_trace="enabled=on";
 # a) When we spill
 SET SESSION tmp_table_size=100000;
+Warnings:
+Warning	48040	Tmp_table_size is set below 1MiB. The TEMPTABLE engine requires at least 1MiB table size, and will use that value instead. Please increase the limit to silence this warning.
 SELECT * FROM (SELECT * FROM t INTERSECT SELECT * FROM t) AS derived ORDER BY i LIMIT 20;
 i	d	c
 0	2022-04-30	abracadabra
@@ -5482,6 +5522,8 @@ DROP TABLE no_hashing, hashing_no_spill, hashing_spill;
 SET SESSION optimizer_trace="enabled=on";
 # a) When we spill
 SET SESSION tmp_table_size=100000;
+Warnings:
+Warning	48040	Tmp_table_size is set below 1MiB. The TEMPTABLE engine requires at least 1MiB table size, and will use that value instead. Please increase the limit to silence this warning.
 SELECT * FROM (SELECT * FROM t INTERSECT SELECT * FROM t) AS derived ORDER BY i LIMIT 20;
 i	d	c
 0	2022-04-30	abracadabra
