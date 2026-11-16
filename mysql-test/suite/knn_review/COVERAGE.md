@@ -42,6 +42,7 @@ whether it restarts the server, and the known issue it skips for.
 | hnsw_purge_locking_stress | delete/hnsw_purge_locking 50 times on one server, each round with a new table and index, and with a plain KNN read next to the locking reads. | HNSW | yes |  | KNN-27 |
 | hnsw_purge_restart | Deletes and a vector update on a table with an HNSW index (vsql-vector) are committed while purge is stopped (debug build), and the server is killed before purge runs. | HNSW | yes | yes | KNN-29 |
 | hnsw_purge_scattered | With an HNSW index (vsql-vector), KNN reads return the nearest rows after scattered deletes and their purge. 100 rows on a line, v = [id,0,0,0]; every 10th row is deleted. | HNSW | yes |  | KNN-27 |
+| hnsw_purge_then_restart | delete/hnsw_purge_restart with purge before the restart instead of after it. | HNSW | yes | yes | KNN-27 |
 | multi_table_delete | A multi-table DELETE removes the rows it matched from KNN results. | test ext |  |  |  |
 | purge_entries | After a committed DELETE or vector UPDATE is purged, the index holds one entry per row again: purge removes the entries of deleted rows and the old entries of updated vectors. | test ext |  |  |  |
 | purge_same_vector | Purge removes only the entries it should when a row is back at a vector it had before: a vector moved away and back, and a row deleted and inserted again with the same key and vector, each in separate transactions. | test ext |  |  |  |

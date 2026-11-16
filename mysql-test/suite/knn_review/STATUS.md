@@ -34,11 +34,13 @@ Review suite for the custom-index work on deb/custom-index/43 (851f84b).
 - Open, not filed:
   - KNN-4, 5, 7, 8, 10, 20, 22
   - KNN-29: after a restart, purge leaves the HNSW entries of committed
-    deletes and vector updates; locking reads then return too few rows
+    deletes and vector updates; locking reads then return too few rows.
+    Still on /43 with /35. With purge before the restart instead
+    (delete/hnsw_purge_then_restart) the reads are full.
 - Known behaviour, tuning planned: KNN-27 (with HNSW, after purge a KNN query
   can return wrong rows or too few rows; also with 8 rows, about one round in
   20 to 60 of delete/hnsw_purge_locking_stress). delete/hnsw_purge_locking
-  skips with it, so KNN-29 has no control test without a restart until then.
+  and delete/hnsw_purge_then_restart, the KNN-29 controls, skip with it.
 - Fixed in /42: KNN-25 (crash recovery asserted on a PK mapping B-tree redo
   record). rollback/hnsw_crash_recovery passes.
 - Fixed in /43: KNN-28 (rollback at recovery of a prepared transaction that
