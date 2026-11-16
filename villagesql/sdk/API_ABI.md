@@ -139,7 +139,7 @@ vsql builder (`vsql/extension_builder.h`, `vsql::ExtensionBuilder`) and the
 legacy builder (`extension_builder.h`,
 `villagesql::extension_builder::ExtensionBuilder`). It is also compiled against
 by the frozen SDK snapshots' test extensions in the ABI source-compatibility
-tests (`mysql-test/suite/villagesql/abi_v1`, `.../abi_v3`), which build an older
+tests (`mysql-test/suite/villagesql/abi_v1`, `.../abi_v3`, `.../abi_v5`), which build an older
 extension's source against the current dev SDK to catch source-level
 regressions.
 

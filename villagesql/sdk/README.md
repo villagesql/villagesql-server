@@ -140,16 +140,20 @@ diff as the reference for the full set of edit sites.
    check Markdown, so search the docs by hand. Their version history keeps the
    retired versions.
 
-**4. Update the build** — `villagesql/CMakeLists.txt` (`STABLE_SDK_DIR`) and
-   `villagesql/cmake/VsqlExtension.cmake` to point the stable include path at
-   `stable_sdk/v{M+1}`.
+**4. Update the build** — point `STABLE_SDK_DIR` in `villagesql/CMakeLists.txt`
+   at `stable_sdk/v{M+1}`, so the SDK package ships it. Add a
+   `VILLAGESQL_STABLE_SDK_V{M-1}` line to the test environment it writes, and
+   point the previous stable ABI suite's SDK-finding include at it.
+   `villagesql/cmake/VsqlExtension.cmake` builds the fixtures that name an ABI
+   against that ABI's snapshot, so they need no change.
 
 **5. Update the tests.** This is the long tail:
    - Clone the previous stable ABI suite into a new `mysql-test/suite/villagesql/abi_v{M+1}/`
      (binary- and source-compat tests + the SDK-finding include).
    - Rename `unittest/gunit/villagesql/abi_dev_layout.inc` to
      `abi_v{M+1}_layout.inc`, add an `abi_v{M+1}_check-t.cc` that checks it
-     against the new snapshot (copy `abi_v3_check-t.cc`), include it from
+     and the earlier stable lists against the new snapshot (copy
+     `abi_v5_check-t.cc`), include it from
      `abi_dev_check-t.cc` with the other stable lists, and start a new
      `abi_dev_layout.inc` holding only the current struct sizes.
    - Update expectations in the `extension` / `extension_registration` suites and
