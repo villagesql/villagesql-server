@@ -15,6 +15,7 @@
 
 #ifndef VILLAGESQL_PREVIEW_KEYRING_IMPL_H
 #define VILLAGESQL_PREVIEW_KEYRING_IMPL_H
+
 #include <villagesql/abi/preview/keyring.h>
 #include <villagesql/preview/keyring.h>
 
@@ -25,9 +26,8 @@ inline KeyringCapability::ReadResult KeyringCapability::read(
   std::string value;
   value.resize(4096);
   size_t out_len = 0;
-  vef_keyring_result_t result;
 
-  result = abi_->read(
+  vef_keyring_result_t result = abi_->read(
       data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
       reinterpret_cast<unsigned char *>(value.data()), value.size(), &out_len);
 
