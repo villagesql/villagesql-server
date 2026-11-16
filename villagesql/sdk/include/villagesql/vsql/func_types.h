@@ -111,7 +111,7 @@ class StringArg {
 };
 
 // BinaryArg: raw bytes, exactly as the caller supplied them; never converted.
-// Requires VEF_PROTOCOL_4.
+// Requires VEF_PROTOCOL_5.
 class BinaryArg {
  public:
   explicit BinaryArg(const vef_invalue_t *v) : v_(v) {}
@@ -267,7 +267,7 @@ class StringResult {
 
 // BinaryResult: raw bytes, returned with the binary charset. Write into
 // buffer(), then call set_length() with the number of bytes written.
-// buffer().size() is the maximum usable capacity. Requires VEF_PROTOCOL_4.
+// buffer().size() is the maximum usable capacity. Requires VEF_PROTOCOL_5.
 class BinaryResult {
  public:
   explicit BinaryResult(vef_vdf_result_t *r) : r_(r) {}

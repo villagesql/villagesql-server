@@ -1046,7 +1046,7 @@ TEST_F(TypeContextTest, UnknownParametersAreAssignableWithUnknown) {
 TEST_F(TypeContextTest, VariableLengthTypeEncodesIntrinsicDefault) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("BITFIELD", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_4, /*extension_protocol=*/VEF_PROTOCOL_4, 1,
+      VEF_PROTOCOL_5, /*extension_protocol=*/VEF_PROTOCOL_5, 1,
       /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
       villagesql::EncodeFunction(two_byte_encode),
@@ -1079,7 +1079,7 @@ TEST_F(TypeContextTest, VariableLengthTypeEncodesIntrinsicDefault) {
 TEST_F(TypeContextTest, VariableLengthEmptyEncodeIsFatal) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("EMPTYVAR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_4, /*extension_protocol=*/VEF_PROTOCOL_4, 1,
+      VEF_PROTOCOL_5, /*extension_protocol=*/VEF_PROTOCOL_5, 1,
       /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
       villagesql::EncodeFunction(empty_encode),
@@ -1122,7 +1122,7 @@ TEST_F(TypeContextTest, UnknownParameterizedTypeSkipsIntrinsicDefault) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VARVECTOR", "test_ext", "1.0.0"),
-      VEF_PROTOCOL_4, /*extension_protocol=*/VEF_PROTOCOL_4, 1,
+      VEF_PROTOCOL_5, /*extension_protocol=*/VEF_PROTOCOL_5, 1,
       /*persisted_len=*/-1, /*max_unpersisted_len=*/256,
       /*max_persisted_len=*/64, villagesql::LengthKind::Variable,
       villagesql::EncodeFunction(two_byte_encode),
@@ -1188,7 +1188,7 @@ static villagesql::TypeDescriptor make_variable_desc(
     std::optional<villagesql::ResolveParamsFunction> resolve = std::nullopt) {
   return villagesql::TypeDescriptor(
       villagesql::TypeDescriptorKey(type_name, "test_ext", "1.0.0"),
-      VEF_PROTOCOL_4, /*extension_protocol=*/VEF_PROTOCOL_4, /*impl_type=*/1,
+      VEF_PROTOCOL_5, /*extension_protocol=*/VEF_PROTOCOL_5, /*impl_type=*/1,
       /*persisted_len=*/-1,
       /*max_unpersisted_len=*/256, max_persisted_len,
       villagesql::LengthKind::Variable, villagesql::EncodeFunction(encode),

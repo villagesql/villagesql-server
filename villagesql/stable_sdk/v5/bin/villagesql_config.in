@@ -1,0 +1,99 @@
+#!/bin/sh
+# Copyright (c) 2026 VillageSQL Contributors
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+# villagesql_config - Configuration script for VillageSQL Extension SDK
+#
+# This script provides build configuration for projects using the VillageSQL
+# Extension SDK. It follows the same pattern as mysql_config.
+
+# Version is substituted during SDK packaging
+VERSION="@SDK_VERSION@"
+
+# Determine the SDK prefix from this script's location
+# Script is at: <prefix>/bin/villagesql_config
+get_prefix() {
+  script_dir=$(cd "$(dirname "$0")" && pwd)
+  echo "$(cd "$script_dir/.." && pwd)"
+}
+
+PREFIX=$(get_prefix)
+INCLUDE_DIR="$PREFIX/include"
+
+usage() {
+  cat <<EOF
+Usage: $0 [OPTIONS]
+
+Options:
+  --help         Display this help and exit
+  --version      Output version information
+  --prefix       Installation prefix
+  --include      Include directory path
+  --cflags       Compiler flags (C)
+  --cxxflags     Compiler flags (C++)
+  --cmake        CMake configuration flag (for use with cmake command)
+  --cmake-prefix CMAKE_PREFIX_PATH value for find_package()
+
+Examples:
+  # Compile an extension manually (C++17 or later required)
+  g++ -std=c++17 -c \$($0 --cxxflags) my_extension.cc
+
+  # Configure CMake project
+  cmake -DCMAKE_PREFIX_PATH=\$($0 --cmake-prefix) ..
+
+  # Or use the full cmake flag
+  cmake \$($0 --cmake) ..
+EOF
+  exit 0
+}
+
+if [ $# -eq 0 ]; then
+  usage
+fi
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help)
+      usage
+      ;;
+    --version)
+      echo "$VERSION"
+      ;;
+    --prefix)
+      echo "$PREFIX"
+      ;;
+    --include)
+      echo "$INCLUDE_DIR"
+      ;;
+    --cflags)
+      echo "-I$INCLUDE_DIR"
+      ;;
+    --cxxflags)
+      echo "-I$INCLUDE_DIR"
+      ;;
+    --cmake)
+      echo "-DCMAKE_PREFIX_PATH=$PREFIX"
+      ;;
+    --cmake-prefix)
+      echo "$PREFIX"
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Use --help for usage information" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done

@@ -238,21 +238,21 @@ TEST_F(ValidateExtensionRegistrationTest,
 TEST_F(ValidateExtensionRegistrationTest,
        MaxPersistedLengthAboveDeclaredLengthCap) {
   vef_type_desc_t td = make_v1_type("MYVARTYPE");
-  td.protocol = VEF_PROTOCOL_4;
+  td.protocol = VEF_PROTOCOL_5;
   td.variable_length = true;
   td.persisted_length = 0;  // variable-length types must not fix a footprint
   td.max_persisted_length = kExpectedMaxDeclaredLength + 1;
   vef_type_desc_t *types[] = {&td};
 
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_4;
+  reg.protocol = VEF_PROTOCOL_5;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_4), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_5), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("MYVARTYPE"), std::string::npos);
@@ -553,7 +553,7 @@ TEST_F(ValidateExtensionRegistrationTest,
       {"CAFÉ", "café", true},     {"CAFÉ", "cafe", false},
       {"CAFÉ", "thé", false},
   };
-  for (const auto protocol : {VEF_PROTOCOL_3, VEF_PROTOCOL_4}) {
+  for (const auto protocol : {VEF_PROTOCOL_3, VEF_PROTOCOL_5}) {
     for (const auto &tc : cases) {
       SCOPED_TRACE(protocol);
       SCOPED_TRACE(tc.prefix);
@@ -1481,7 +1481,7 @@ TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileNullParamsFails) {
 // every other func in the same extension still is.
 TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultVdfIsNotCallable) {
   vef_type_desc_t td = make_v1_type("MYTYPE");
-  td.protocol = VEF_PROTOCOL_4;
+  td.protocol = VEF_PROTOCOL_5;
   td.intrinsic_default_vdf_name = "my_default";
   vef_type_desc_t *types[] = {&td};
 
@@ -1490,16 +1490,16 @@ TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultVdfIsNotCallable) {
   vef_type_t str_ret = {VEF_TYPE_STRING, nullptr};
   vef_signature_t default_sig = {0, nullptr, str_ret};
   vef_func_desc_t default_fd = make_scalar_func("my_default", &default_sig);
-  default_fd.protocol = VEF_PROTOCOL_4;
+  default_fd.protocol = VEF_PROTOCOL_5;
 
   vef_signature_t other_sig = {0, nullptr, str_ret};
   vef_func_desc_t other_fd = make_scalar_func("my_func", &other_sig);
-  other_fd.protocol = VEF_PROTOCOL_4;
+  other_fd.protocol = VEF_PROTOCOL_5;
 
   vef_func_desc_t *funcs[] = {&default_fd, &other_fd};
 
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_4;
+  reg.protocol = VEF_PROTOCOL_5;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -1508,7 +1508,7 @@ TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultVdfIsNotCallable) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_4), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_5), "my_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value()) << error;
   ASSERT_EQ(result->funcs.size(), 2u);

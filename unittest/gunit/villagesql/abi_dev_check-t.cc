@@ -32,6 +32,7 @@
 
 #include "unittest/gunit/villagesql/abi_v1_layout.inc"
 #include "unittest/gunit/villagesql/abi_v3_layout.inc"
+#include "unittest/gunit/villagesql/abi_v5_layout.inc"
 
 // The dev list records the dev sizes, so check them exactly.
 #undef ABI_EXACT_SIZES
