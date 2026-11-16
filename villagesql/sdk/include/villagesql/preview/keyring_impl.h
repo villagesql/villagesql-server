@@ -27,23 +27,26 @@ inline KeyringCapability::ReadResult KeyringCapability::read(
   value.resize(4096);
   size_t out_len = 0;
 
-  vef_keyring_result_t result = abi_->read(
-      data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
-      reinterpret_cast<unsigned char *>(value.data()), value.size(), &out_len);
-
-  if (result == VEF_KEYRING_BUF_TOO_SMALL) {
-    value.resize(out_len);
-    result =
+  for (int attempt = 0; attempt < 3; ++attempt) {
+    vef_keyring_result_t result =
         abi_->read(data_id.data(), auth_id.empty() ? nullptr : auth_id.data(),
                    reinterpret_cast<unsigned char *>(value.data()),
                    value.size(), &out_len);
+
+    if (result == VEF_KEYRING_OK) {
+      value.resize(out_len);
+      return {Status::OK, std::move(value)};
+    }
+
+    if (result == VEF_KEYRING_BUF_TOO_SMALL) {
+      value.resize(out_len);
+      continue;
+    }
+
+    return {static_cast<Status>(result), {}};
   }
 
-  if (result == VEF_KEYRING_OK) {
-    value.resize(out_len);
-    return {Status::OK, std::move(value)};
-  }
-  return {static_cast<Status>(result), {}};
+  return {Status::ERROR, {}};
 }
 
 inline KeyringCapability::Status KeyringCapability::write(
