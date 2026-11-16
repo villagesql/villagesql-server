@@ -59,8 +59,12 @@ typedef enum {
 //   data_id:  identifier for the secret.
 //   auth_id:  owner of the secret, or NULL for internal keys.
 //   buf:      caller-provided buffer to receive the secret bytes.
-//   buf_len:  size of buf in bytes.
-//   out_len:  set to the actual number of bytes written on success.
+//   buf_len:  size of buf in bytes. buf_len = 0 is valid and queries the size
+//             without copying.
+//   out_len:  on VEF_KEYRING_OK, set to the actual number of bytes written.
+//             on VEF_KEYRING_BUF_TOO_SMALL, set to the required size.
+//             Always populated, allowing callers to retry with the correct
+//             buffer size after VEF_KEYRING_BUF_TOO_SMALL.
 typedef vef_keyring_result_t (*vef_read_keyring_fn)(const char *data_id,
                                                     const char *auth_id,
                                                     unsigned char *buf,
