@@ -39,10 +39,12 @@ server.
 
 | Version          | Status         | Notes                                                                                                                                                                                              |
 | ---------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VEF_PROTOCOL_1` | Stable         | Base protocol (stable as of v0.0.1). Likely to be deprecated before beta.                                                                                                                        |
-| `VEF_PROTOCOL_2` | Deprecated     | Was the unstable development version before being promoted to `VEF_PROTOCOL_3`. The server rejects extensions that declare this version, and no `stable_sdk/v2` snapshot exists.                  |
-| `VEF_PROTOCOL_3` | Stable         | Stable as of v0.0.4. Adds the `deterministic` VDF attribute; VDF-based type operations (encode/decode/compare/hash and int_to_params/resolve_params name fields); a values pointer array; and the preview-capability system. |
-| `VEF_PROTOCOL_4` | In development | Adds `max_result_length` on `vef_func_desc_t` so a STRING or BINARY result column can be sized to the full value instead of the argument width; adds `on_init` / `on_deinit` on `vef_registration_t`, which move the extension's load and unload hooks to the server so they run with the extension's capabilities populated; adds `VEF_TYPE_BINARY`, raw bytes that are never converted, and a STRING argument then arrives as utf8mb4; adds `const_args` on `vef_prerun_args_t`, so a prerun sees the value of each constant argument, such as a NULL literal, as the VDF will receive it; adds `from_binary_vdf_name` and `to_binary_vdf_name` on `vef_type_desc_t`, an optional encode from and decode to a type's binary form. |
+| `VEF_PROTOCOL_1` | Deprecated     | Base protocol (stable as of v0.0.1). The server still accepts it.                                                                                                                        |
+| `VEF_PROTOCOL_2` | Unsupported    | Was the unstable development version before being promoted to `VEF_PROTOCOL_3`. The server rejects extensions that declare this version, and no `stable_sdk/v2` snapshot exists.                  |
+| `VEF_PROTOCOL_3` | Deprecated     | Stable as of v0.0.4. The server still accepts it. Adds the `deterministic` VDF attribute; VDF-based type operations (encode/decode/compare/hash and int_to_params/resolve_params name fields); a values pointer array; and the preview-capability system. |
+| `VEF_PROTOCOL_4` | Unsupported    | Was the unstable development version before being promoted to `VEF_PROTOCOL_5`. The server rejects extensions that declare this version, and no `stable_sdk/v4` snapshot exists. |
+| `VEF_PROTOCOL_5` | Stable         | Stable as of v0.0.8. Adds `variable_length` on `vef_type_desc_t`, for a type whose persisted size is decided per value; adds `bind_and_check_types` on `vef_func_desc_t`, an optional hook that resolves a call's type parameters at analysis time; adds `vef_postrun_result_t`, so postrun can report an error; adds `max_result_length` on `vef_func_desc_t` so a STRING or BINARY result column can be sized to the full value instead of the argument width; adds `on_init` / `on_deinit` on `vef_registration_t`, which move the extension's load and unload hooks to the server so they run with the extension's capabilities populated; adds `VEF_TYPE_BINARY`, raw bytes that are never converted, and a STRING argument then arrives as utf8mb4; adds `const_args` on `vef_prerun_args_t`, so a prerun sees the value of each constant argument, such as a NULL literal, as the VDF will receive it; adds `from_binary_vdf_name` and `to_binary_vdf_name` on `vef_type_desc_t`, an optional encode from and decode to a type's binary form. |
+| `VEF_PROTOCOL_6` | In development | No changes yet. |
 
 The enum in `villagesql/sdk/include/villagesql/abi/types.h` is the source of truth
 for protocol status; keep this table in sync with it.
@@ -57,6 +59,10 @@ Protocol version parity encodes stability:
 - **Even versions are unstable/in-development** (`VEF_PROTOCOL_2`, `_4`, ...).
   Only one even version — the server's current one — exists at a time. It has no
   snapshot, and its ABI/API may still change.
+
+Once a newer stable version exists, an older stable version is **deprecated**:
+the server still accepts it, but new extensions should use the newest one. An
+older unstable version is **unsupported**: the server rejects it.
 
 The server advertises a single "current" version, `vef_server_protocol_version`
 in `villagesql/veb/veb_file.cc`, set from `VEF_PROTOCOL_CURRENT` in
@@ -79,7 +85,8 @@ Any changes to the ABI/API must be done in the Unstable/Development version of
 the headers (`villagesql/sdk/include`), never in a frozen `stable_sdk/` snapshot.
 New fields go at the **end** of the relevant descriptor struct, guarded by a
 comment marking the minimum protocol required (e.g.,
-`// protocol >= VEF_PROTOCOL_4`). See [API_ABI.md](API_ABI.md) for the full rules.
+`// protocol >= VEF_PROTOCOL_6`). See [API_ABI.md](API_ABI.md) for the full
+rules.
 
 ### Rolling the protocol version (stabilizing)
 
@@ -112,7 +119,7 @@ diff as the reference for the full set of edit sites.
 **2. Add both enum values** to `vef_protocol_t` in
    `villagesql/sdk/include/villagesql/abi/types.h`: `VEF_PROTOCOL_{M+1}` (now
    stable) and `VEF_PROTOCOL_{M+2}` (new unstable). Mark the old even value `M` as
-   deprecated/rejected.
+   unsupported, and the previous stable value `M-1` as deprecated.
 
 **3. Bump the current version to `M+2`** by changing `VEF_PROTOCOL_CURRENT` in
    `abi/types.h`. It is the only place the current version is written: the
@@ -138,17 +145,21 @@ diff as the reference for the full set of edit sites.
    check Markdown, so search the docs by hand. Their version history keeps the
    retired versions.
 
-**4. Update the build** — `villagesql/CMakeLists.txt` (`STABLE_SDK_DIR`) and
-   `villagesql/cmake/VsqlExtension.cmake` to point the stable include path at
-   `stable_sdk/v{M+1}`.
+**4. Update the build** — point `STABLE_SDK_DIR` in `villagesql/CMakeLists.txt`
+   at `stable_sdk/v{M+1}`, so the SDK package ships it. Add a
+   `VILLAGESQL_STABLE_SDK_V{M-1}` line to the test environment it writes, and
+   point the previous stable ABI suite's SDK-finding include at it.
+   `villagesql/cmake/VsqlExtension.cmake` builds the fixtures that name an ABI
+   against that ABI's snapshot, so they need no change.
 
 **5. Update the tests.** This is the long tail:
    - Clone the previous stable ABI suite into a new `mysql-test/suite/villagesql/abi_v{M+1}/`
      (binary- and source-compat tests + the SDK-finding include).
    - Rename `unittest/gunit/villagesql/abi_dev_layout.inc` to
      `abi_v{M+1}_layout.inc`, add an `abi_v{M+1}_check-t.cc` that checks it
-     against the new snapshot (copy `abi_v3_check-t.cc`), include it from
-     `abi_dev_check-t.cc` with the other stable lists, and start a new
+     and the earlier stable lists against the new snapshot (copy
+     `abi_v{M-1}_check-t.cc`), include it from `abi_dev_check-t.cc` with the
+     other stable lists, and start a new
      `abi_dev_layout.inc` holding only the current struct sizes.
    - Update expectations in the `extension` / `extension_registration` suites and
      `std_data/min_protocol_extension.cc`, plus the affected gunit tests
