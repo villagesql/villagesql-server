@@ -1365,19 +1365,31 @@ bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
   return true;  // Error
 }
 
-void CopyCustomToCustomField(const Field *from, Field *to) {
+// Returns true, without writing to `to`, if `to` is not a VARCHAR field.
+static bool CopyCustomToCustomField(const Field *from, Field *to) {
   // Both fields have the same custom type. Copy binary data directly.
   // Handle potential length_bytes differences (VARCHAR(255) vs VARCHAR(65535)).
   // Note: from->data_length() decodes the length and from->data_ptr() returns
   // a pointer to the data (skipping the length prefix). But to->field_ptr()
   // returns the start of the field including the length prefix area, so we must
   // manually encode the length prefix.
-  // TODO(villagesql-blob): needs update for blob implementation.
   assert(from->get_type_context()->is_compatible_with(*to->get_type_context()));
   assert(from->get_type_context()->descriptor()->implementation_type() ==
          MYSQL_TYPE_VARCHAR);
   assert(to->get_type_context()->descriptor()->implementation_type() ==
          MYSQL_TYPE_VARCHAR);
+  // A custom value is only ever copied into a VARCHAR field. Any other field,
+  // e.g. a BLOB in an internal temp table, has a different layout and would be
+  // corrupted by the writes below.
+  // TODO(villagesql-blob): handle BLOB fields once custom types can use blobs
+  // as their underlying storage.
+  if (should_assert_if_true(to->real_type() != MYSQL_TYPE_VARCHAR)) {
+    LogVSQL(ERROR_LEVEL,
+            "Cannot copy custom type %s value into field '%s' of type %d",
+            to->get_type_context()->type_name().c_str(), to->field_name,
+            static_cast<int>(to->real_type()));
+    return true;
+  }
   const size_t data_len = from->data_length();
   const uint32 to_length_bytes =
       down_cast<const Field_varstring *>(to)->get_length_bytes();
@@ -1398,11 +1410,14 @@ void CopyCustomToCustomField(const Field *from, Field *to) {
   assert(data_len <= to->field_length);
   // Copy the binary data
   memcpy(to_ptr + to_length_bytes, from_data, data_len);
+  return false;
 }
 
 static void do_field_custom_to_custom(Copy_field *, const Field *from,
                                       Field *to) {
-  CopyCustomToCustomField(from, to);
+  if (CopyCustomToCustomField(from, to)) {
+    villagesql_check_error_log();
+  }
 }
 
 static void do_field_custom_to_string(Copy_field *, const Field *from,
@@ -1446,7 +1461,9 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
         thd->get_stmt_da()->current_row_for_condition());
     return false;
   }
-  CopyCustomToCustomField(from, to);
+  if (CopyCustomToCustomField(from, to)) {
+    villagesql_check_error_log();
+  }
   return false;
 }
 
