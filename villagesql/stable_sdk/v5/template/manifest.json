@@ -1,0 +1,7 @@
+{
+  "name": "my_extension",
+  "version": "0.0.1",
+  "description": "My VillageSQL extension",
+  "author": "Your Name",
+  "license": "GPL-2.0"
+}

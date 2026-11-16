@@ -107,12 +107,12 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       // separately. That is needed regardless, since the version component is
       // not validated either).
 
-      bool is_v4 = td->protocol >= VEF_PROTOCOL_4 &&
-                   ext_reg.negotiated_protocol >= VEF_PROTOCOL_4;
-      bool is_v3 = !is_v4 && (td->protocol >= VEF_PROTOCOL_3 &&
+      bool is_v5 = td->protocol >= VEF_PROTOCOL_5 &&
+                   ext_reg.negotiated_protocol >= VEF_PROTOCOL_5;
+      bool is_v3 = !is_v5 && (td->protocol >= VEF_PROTOCOL_3 &&
                               ext_reg.negotiated_protocol >= VEF_PROTOCOL_3);
       std::optional<TypeDescriptor> maybe_descriptor =
-          is_v4 ? build_type_descriptor_v4(td, *reg, type_name, extension_name,
+          is_v5 ? build_type_descriptor_v5(td, *reg, type_name, extension_name,
                                            extension_version,
                                            ext_reg.negotiated_protocol)
           : is_v3 ? build_type_descriptor_v3(td, *reg, type_name,
@@ -151,7 +151,7 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         return std::nullopt;
       }
 
-      if ((is_v4 || is_v3) && td->intrinsic_default_vdf_name != nullptr)
+      if ((is_v5 || is_v3) && td->intrinsic_default_vdf_name != nullptr)
         intrinsic_default_vdf_names.insert(td->intrinsic_default_vdf_name);
 
       result.types.push_back(std::move(*maybe_descriptor));

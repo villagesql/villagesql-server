@@ -30,7 +30,7 @@ jobs:
   # Names what is about to be built, and checks for obvious mistakes.
   resolve:
     name: Resolve Rehearsal
-    runs-on: [self-hosted, vsql_build_worker]
+    runs-on: [self-hosted, server_build_worker, ubuntu_24]
 
     steps:
       # Cone mode brings the root-level VSQL_VERSION along, and

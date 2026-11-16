@@ -86,7 +86,7 @@ concurrency:
 jobs:
   valgrind-test:
     name: Build and Run Valgrind Tests
-    runs-on: [self-hosted, linux, x86_64]
+    runs-on: [self-hosted, linux-server, x86_64, server_build_worker, ubuntu_24]
     # The 360-minute default cancelled a full server run at 99% complete.
     timeout-minutes: 600
     permissions:

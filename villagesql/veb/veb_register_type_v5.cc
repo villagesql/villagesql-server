@@ -14,11 +14,11 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-// Protocol-4 type registration: builds a TypeDescriptor from a
+// Protocol-5 type registration: builds a TypeDescriptor from a
 // vef_type_desc_t that may use VDF names in addition to (or instead
 // of) direct function pointers.
 //
-// All protocol-1, protocol-3 and protocol-4 fields are read from td.
+// All protocol-1, protocol-3 and protocol-5 fields are read from td.
 
 #include "villagesql/veb/veb_register_type.h"
 
@@ -224,7 +224,7 @@ static const vef_func_desc_t *resolve_type_vdf(
   return vdf;
 }
 
-std::optional<TypeDescriptor> build_type_descriptor_v4(
+std::optional<TypeDescriptor> build_type_descriptor_v5(
     const vef_type_desc_t *td, const vef_registration_t &reg,
     const std::string &type_name, const std::string &extension_name,
     const std::string &extension_version, vef_protocol_t extension_protocol) {
@@ -470,7 +470,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v4(
   // 5. Build TypeDescriptor.
   TypeDescriptor descriptor(
       TypeDescriptorKey(type_name, extension_name, extension_version),
-      VEF_PROTOCOL_4, extension_protocol, MYSQL_TYPE_VARCHAR,
+      VEF_PROTOCOL_5, extension_protocol, MYSQL_TYPE_VARCHAR,
       td->persisted_length, td->max_decode_buffer_length,
       td->max_persisted_length,
       is_variable ? LengthKind::Variable : LengthKind::Fixed,

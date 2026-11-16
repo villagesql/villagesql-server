@@ -181,8 +181,8 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
         length.max_persisted_length =
             static_cast<int64_t>(t->max_persisted_length);
       }
-      if (t->protocol >= VEF_PROTOCOL_4 &&
-          target.negotiated_protocol >= VEF_PROTOCOL_4) {
+      if (t->protocol >= VEF_PROTOCOL_5 &&
+          target.negotiated_protocol >= VEF_PROTOCOL_5) {
         length.variable_length = t->variable_length;
       }
       target_lengths[t->name] = length;

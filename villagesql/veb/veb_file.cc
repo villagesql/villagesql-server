@@ -1832,7 +1832,7 @@ static T lookup_symbol(void *handle, const char *symbol_name,
 }
 
 // Whether a function called at `protocol` may use type id `id`. An id the
-// server does not know is never valid; BINARY needs VEF_PROTOCOL_4.
+// server does not know is never valid; BINARY needs VEF_PROTOCOL_5.
 static bool is_known_type_id(vef_type_id id, vef_protocol_t protocol) {
   switch (id) {
     case VEF_TYPE_STRING:
@@ -1841,7 +1841,7 @@ static bool is_known_type_id(vef_type_id id, vef_protocol_t protocol) {
     case VEF_TYPE_CUSTOM:
       return true;
     case VEF_TYPE_BINARY:
-      return protocol >= VEF_PROTOCOL_4;
+      return protocol >= VEF_PROTOCOL_5;
   }
   return false;
 }
@@ -1944,7 +1944,7 @@ bool check_vef_registration(const vef_registration_t *registration,
   }
   // The SDK rejects a half-registered pair at compile time; an extension that
   // arrives with one anyway was not built by it.
-  if (registration->protocol >= VEF_PROTOCOL_4 &&
+  if (registration->protocol >= VEF_PROTOCOL_5 &&
       (registration->on_init == nullptr) !=
           (registration->on_deinit == nullptr)) {
     error_message =
@@ -2146,7 +2146,7 @@ std::unordered_set<const vef_registration_t *> g_load_hook_done;
 // built against an older SDK has no such member for us to read, so the
 // protocol gates the field rather than the value.
 bool has_lifecycle_hooks(const vef_registration_t *reg) {
-  return reg != nullptr && reg->protocol >= VEF_PROTOCOL_4;
+  return reg != nullptr && reg->protocol >= VEF_PROTOCOL_5;
 }
 
 }  // namespace

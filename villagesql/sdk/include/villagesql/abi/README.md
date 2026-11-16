@@ -48,19 +48,19 @@ and accent-insensitive). Extensions cannot configure this collation.
 
 ## STRING and BINARY values
 
-A `VEF_TYPE_STRING` value is text in utf8mb4. From `VEF_PROTOCOL_4`, the server
+A `VEF_TYPE_STRING` value is text in utf8mb4. From `VEF_PROTOCOL_5`, the server
 converts a STRING argument from whatever charset it is in; an argument in the
 binary charset must already be valid UTF-8, or the statement fails. An
 extension at an older protocol gets an argument's bytes as they are. A STRING
 result must be utf8mb4, and the server labels it `utf8mb4_bin`.
 
-A `VEF_TYPE_BINARY` value (protocol >= `VEF_PROTOCOL_4`) is raw bytes. A BINARY
+A `VEF_TYPE_BINARY` value (protocol >= `VEF_PROTOCOL_5`) is raw bytes. A BINARY
 argument arrives exactly as the caller supplied it, whatever its charset, and a
 BINARY result is labelled `binary`. Use it for data that is not text, such as a
 hash or a serialized structure.
 
 A custom type may also declare `from_binary_vdf_name` (protocol >=
-`VEF_PROTOCOL_4`), an encode with signature `(BINARY) -> CUSTOM(this type)`
+`VEF_PROTOCOL_5`), an encode with signature `(BINARY) -> CUSTOM(this type)`
 that builds a value from its binary form, next to the required encode from
 text. It is registered as the SQL function `TYPE::from_binary`. As with the
 encode from text, a parameterized type's parameters are inferred from a
@@ -71,11 +71,11 @@ charset is text, converted to utf8mb4 for the encode from text. For a type
 without `from_binary`, a value in the binary charset is an error rather than
 being read as text, so adding `from_binary` later never changes what existing
 input means. This applies to the types of an extension built against protocol
->= 4. A type of an extension built against an earlier protocol, which cannot
+>= 5. A type of an extension built against an earlier protocol, which cannot
 declare `from_binary`, keeps receiving a value in the binary charset in its
 encode from text, as its bytes.
 
-The inverse is `to_binary_vdf_name` (protocol >= `VEF_PROTOCOL_4`), a decode
+The inverse is `to_binary_vdf_name` (protocol >= `VEF_PROTOCOL_5`), a decode
 with signature `(CUSTOM(this type)) -> BINARY` that returns a value's binary
 form, next to the required decode to text. It is registered as the SQL
 function `TYPE::to_binary`. The server does not call it itself: a custom type
@@ -87,7 +87,7 @@ on every platform: the type defines the byte order of its multi-byte numbers
 
 ## Constant arguments in prerun
 
-From `VEF_PROTOCOL_4`, a prerun sees the value of each constant argument in
+From `VEF_PROTOCOL_5`, a prerun sees the value of each constant argument in
 `const_args`: an argument the server can evaluate before the first row, such
 as a literal, `CAST(NULL AS SIGNED)` or a prepared-statement parameter. A
 subquery is never a constant here. Each value is the `vef_invalue_t` the VDF

@@ -43,7 +43,7 @@ struct TableTraits;
 //   Variable - decided per value; the backing field is sized to
 //              max_persisted_length().
 // The ABI carries this as the bool vef_type_desc_t::variable_length
-// (VEF_PROTOCOL_4); it is converted at the registration boundary.
+// (VEF_PROTOCOL_5); it is converted at the registration boundary.
 enum class LengthKind { Fixed, Variable };
 
 // Prefix key for querying TypeDescriptors by type name (and optionally
@@ -202,7 +202,7 @@ class TypeDescriptor {
 
   // How the type's persisted size is determined (fixed footprint vs. decided
   // per value). Set at registration from the protocol-appropriate source: the
-  // variable_length flag for VEF_PROTOCOL_4 types
+  // variable_length flag for VEF_PROTOCOL_5 types
   LengthKind length_kind() const { return length_kind_; }
 
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }

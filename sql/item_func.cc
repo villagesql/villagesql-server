@@ -4537,7 +4537,7 @@ void udf_handler::set_vdf_string_or_binary_result_type(Item *item,
   // length. A BINARY result is sized the same way, in bytes.
   size_t len = 0;
   if (u_d != nullptr && u_d->vdf_func_desc != nullptr &&
-      u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_4) {
+      u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_5) {
     len = u_d->vdf_func_desc->max_result_length;
   }
   if (len == 0) {
