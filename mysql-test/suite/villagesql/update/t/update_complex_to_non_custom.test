@@ -1,0 +1,32 @@
+# A COMPLEX value stored into a column of a non-custom type needs an explicit
+# conversion, whether it is copied from a column or assigned through an
+# expression such as a subquery or a VDF result.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t VALUES (1, '(1,2)');
+CREATE TABLE tb (id INT PRIMARY KEY, b VARBINARY(64));
+INSERT INTO tb VALUES (1, 'x');
+
+--echo # A column
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE tb, t SET tb.b = t.c WHERE tb.id = 1 AND t.id = 1;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO tb SELECT 2, c FROM t;
+
+--echo # A subquery
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE tb SET b = (SELECT c FROM t WHERE id = 1);
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO tb VALUES (2, (SELECT c FROM t WHERE id = 1));
+
+--echo # A VDF result
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE tb SET b = COMPLEX::from_string('(5,6)');
+
+--echo # Nothing was stored
+SELECT id, b FROM tb ORDER BY id;
+
+DROP TABLE t, tb;
+--source include/villagesql/uninstall_complex_extension.inc

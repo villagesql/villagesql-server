@@ -1,0 +1,88 @@
+# A stored procedure with a COMPLEX parameter, called with a COMPLEX value: a
+# column, a VDF result, a user variable holding a COMPLEX value and another
+# procedure's parameter. A value of another custom type, or a COMPLEX value for
+# a parameter or local variable of a non-custom type, is rejected. String
+# literal arguments are covered by stored_procedure_in_complex and
+# stored_procedure_inout_complex.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t VALUES (1, '(1,2)'), (2, '(3,4)');
+CREATE TABLE t3 (id INT PRIMARY KEY, c2 COMPLEX2);
+INSERT INTO t3 VALUES (1, '(7,8)');
+
+delimiter //;
+CREATE PROCEDURE p_in(IN x COMPLEX)
+BEGIN
+  SELECT x;
+END//
+CREATE PROCEDURE p_out(IN x COMPLEX, OUT y COMPLEX)
+BEGIN
+  SET y = x;
+END//
+CREATE PROCEDURE p_inout(INOUT x COMPLEX)
+BEGIN
+  SET x = vsql_complex.complex_conjugate(x);
+END//
+CREATE PROCEDURE p_outer(IN x COMPLEX)
+BEGIN
+  CALL p_in(x);
+END//
+CREATE PROCEDURE p_str(IN x VARCHAR(20))
+BEGIN
+  SELECT x;
+END//
+CREATE PROCEDURE p_local(IN x COMPLEX)
+BEGIN
+  DECLARE s VARCHAR(20);
+  SET s = x;
+  SELECT s;
+END//
+delimiter ;//
+
+--echo # A column
+CALL p_in((SELECT c FROM t WHERE id = 1));
+
+--echo # A VDF result
+CALL p_in(COMPLEX::from_string('(5,6)'));
+
+--echo # A user variable holding a COMPLEX value
+SELECT c INTO @v FROM t WHERE id = 2;
+CALL p_in(@v);
+
+--echo # OUT and INOUT with COMPLEX values
+CALL p_out((SELECT c FROM t WHERE id = 1), @o);
+SELECT @o;
+SELECT id FROM t WHERE c = @o;
+CALL p_inout(@v);
+SELECT @v;
+
+--echo # A procedure passing its COMPLEX parameter to another
+CALL p_outer((SELECT c FROM t WHERE id = 2));
+
+--echo # A value of another custom type
+--error ER_VILLAGESQL_GENERIC_ERROR
+CALL p_in((SELECT c2 FROM t3 WHERE id = 1));
+SELECT c2 INTO @v2 FROM t3 WHERE id = 1;
+--error ER_VILLAGESQL_GENERIC_ERROR
+CALL p_in(@v2);
+
+--echo # A COMPLEX value for a parameter of a non-custom type
+--error ER_VILLAGESQL_GENERIC_ERROR
+CALL p_str((SELECT c FROM t WHERE id = 1));
+
+--echo # A COMPLEX value for a local variable of a non-custom type
+--error ER_VILLAGESQL_GENERIC_ERROR
+CALL p_local((SELECT c FROM t WHERE id = 1));
+
+SET @v = NULL, @v2 = NULL, @o = NULL;
+DROP PROCEDURE p_in;
+DROP PROCEDURE p_out;
+DROP PROCEDURE p_inout;
+DROP PROCEDURE p_outer;
+DROP PROCEDURE p_str;
+DROP PROCEDURE p_local;
+DROP TABLE t, t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

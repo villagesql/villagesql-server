@@ -1227,6 +1227,25 @@ bool CanStoreInCustomField(const Item *item, const Field *field) {
   return false;
 }
 
+// Report that a value of custom type tc, shown as value, cannot be stored in
+// field without an explicit conversion.
+static void ReportTypeMismatch(const TypeContext &tc, const char *value,
+                               const Field *field) {
+  villagesql_error(
+      "Type mismatch. Use explicit conversion of %s value '%s' for column "
+      "'%s' at row %ld",
+      MYF(0), tc.type_name().c_str(), value, field->field_name,
+      current_thd->get_stmt_da()->current_row_for_condition());
+}
+
+void ReportCustomValueForNonCustomField(Item *item, const Field *field) {
+  assert(item->has_type_context() && !field->has_type_context());
+  String str_value;
+  String *value = item->val_external_str(&str_value);
+  ReportTypeMismatch(*item->get_type_context(),
+                     value != nullptr ? value->c_ptr_safe() : "NULL", field);
+}
+
 bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
   assert(field->has_type_context());
 
@@ -1378,14 +1397,7 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
     StringBuffer<MAX_FIELD_WIDTH> result(from->charset());
     result.length(0U);
     from->val_external_str(&result);
-
-    THD *thd = current_thd;
-    villagesql_error(
-        "Type mismatch. Use explicit conversion of %s value '%s' for column "
-        "'%s' at row %ld",
-        MYF(0), from->get_type_context()->type_name().c_str(),
-        result.c_ptr_safe(), to->field_name,
-        thd->get_stmt_da()->current_row_for_condition());
+    ReportTypeMismatch(*from->get_type_context(), result.c_ptr_safe(), to);
     return false;
   }
   if (CopyCustomToCustomField(from, to)) {
@@ -1735,6 +1747,10 @@ bool IsFuncAllowedWithCustom(THD *thd [[maybe_unused]], Item_func *func,
                tc.type_name().c_str());
       return false;
     }
+    case Item_func::FUNC_SP:
+      // A stored function's parameters are typed: each argument is checked
+      // when it is stored into its parameter, as for a procedure.
+      return true;
     // Allow pass-through functions that don't interpret the custom value
     case Item_func::ISNULL_FUNC:
     case Item_func::ISNOTNULL_FUNC:

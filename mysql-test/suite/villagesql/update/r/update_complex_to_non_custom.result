@@ -1,0 +1,22 @@
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t VALUES (1, '(1,2)');
+CREATE TABLE tb (id INT PRIMARY KEY, b VARBINARY(64));
+INSERT INTO tb VALUES (1, 'x');
+# A column
+UPDATE tb, t SET tb.b = t.c WHERE tb.id = 1 AND t.id = 1;
+ERROR HY000: Type mismatch. Use explicit conversion of COMPLEX value '(1,2)' for column 'b' at row 1
+INSERT INTO tb SELECT 2, c FROM t;
+ERROR HY000: Type mismatch. Use explicit conversion of COMPLEX value '(1,2)' for column 'b' at row 1
+# A subquery
+UPDATE tb SET b = (SELECT c FROM t WHERE id = 1);
+ERROR HY000: Type mismatch. Use explicit conversion of COMPLEX value '(1,2)' for column 'b' at row 2
+INSERT INTO tb VALUES (2, (SELECT c FROM t WHERE id = 1));
+ERROR HY000: Type mismatch. Use explicit conversion of COMPLEX value '(1,2)' for column 'b' at row 2
+# A VDF result
+UPDATE tb SET b = COMPLEX::from_string('(5,6)');
+ERROR HY000: Type mismatch. Use explicit conversion of COMPLEX value '(5,6)' for column 'b' at row 1
+# Nothing was stored
+SELECT id, b FROM tb ORDER BY id;
+id	b
+1	x
+DROP TABLE t, tb;

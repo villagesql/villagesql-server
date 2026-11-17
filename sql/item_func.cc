@@ -8423,6 +8423,9 @@ bool Item_func_sp::resolve_type(THD *) {
   collation.set(sp_result_field->charset());
   set_nullable(true);
   unsigned_flag = sp_result_field->is_flag_set(UNSIGNED_FLAG);
+  // VillageSQL: a custom-typed return value keeps its custom type.
+  if (sp_result_field->has_type_context())
+    set_type_context(sp_result_field->get_type_context());
 
   return false;
 }
@@ -8465,8 +8468,7 @@ String *Item_func_sp::val_str(String *str) {
     when SP is executed. In order to prevent occasional
     corruption of returned value, we make here a copy.
   */
-  // VillageSQL: use val_external_str so custom type fields are decoded.
-  sp_result_field->val_external_str(&buf);
+  sp_result_field->val_str(&buf);
   str->copy(buf);
   return str;
 }
