@@ -282,7 +282,7 @@ The full roadmap is at [villagesql.com/roadmap](https://villagesql.com/roadmap).
 
 **OpenSSL not found:**
 
-Install the OpenSSL development package.
+Install the OpenSSL 3.x development package. The build does not accept OpenSSL 4.
 
 ```bash
 # macOS with Homebrew
