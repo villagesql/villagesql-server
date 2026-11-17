@@ -56,7 +56,7 @@ Custom index DDL is refused by default, with `Extended Index feature not yet imp
 
 ### Build & Compatibility
 
-- **Rebuild extensions built with the development SDK** — An extension built with the development SDK (`VSQL_USE_DEV_ABI`) of 0.0.4 through 0.0.7 can declare protocol 4, which this release rejects. Rebuild it with this release's SDK. Extensions built with the stable SDK load unchanged. (`be1cdc29a6e`, #1566)
+- **Protocol 4 is now unsupported** — 0.0.8 does not load extensions built for protocol 4, so if your 0.0.7 server has one installed, the server will not start after you upgrade. To check whether any of your installed extensions use protocol 4, run `SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION WHERE NEGOTIATED_PROTOCOL = 4` on your 0.0.7 server. To upgrade, dump your data with `mysqldump`, install your extensions on a new 0.0.8 data directory, and then load the dump. (`be1cdc29a6e`, #1566)
 - **Protocols 1 and 3 are deprecated** — Extensions that declare them still load, but new extensions should use protocol 5. (`be1cdc29a6e`, #1566)
 - **macOS** — Configure finds Homebrew's `openssl@3` when no OpenSSL is named, and stops with `brew install openssl@3` when it is missing. The server builds with Xcode 27. (`5efd730e986`, #1416; `57dd227fcd8`, #1400)
 - **Server log** — `LogVSQL` messages no longer carry extra single quotes. (`a0d05d781ad`, #1282)
