@@ -47,6 +47,8 @@ INSERT INTO big2 SELECT * FROM a;
 --enable_result_log
 
 SET session optimizer_switch='duplicateweedout=off,materialization=on';
+# InnoDB's estimate for big2 varies between runs; mask the rows column.
+--replace_column 10 #
 EXPLAIN SELECT * FROM big1 WHERE id IN (SELECT id FROM big2 IGNORE INDEX (PRIMARY)) ORDER BY id ASC LIMIT 10;
 SELECT * FROM big1 WHERE id IN (SELECT id FROM big2 IGNORE INDEX (PRIMARY)) ORDER BY id ASC LIMIT 10;
 
