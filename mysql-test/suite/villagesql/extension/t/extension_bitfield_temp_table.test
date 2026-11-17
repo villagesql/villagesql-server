@@ -1,0 +1,57 @@
+# Regression test for issue #1444: queries that copy a BITFIELD column into
+# an internal temporary table.
+#
+# BITFIELD declares a 514-byte column whatever its parameter. Internal temp
+# tables used to turn string columns wider than 512 bytes into BLOB fields,
+# and copying a custom value into one aborted a debug server. Custom-typed
+# temp table columns now stay VARCHAR. Each query below materializes the
+# column into a temp table and must return the decoded values.
+
+INSTALL EXTENSION vsql_bitfield_test;
+
+--let $bits = 8
+while ($bits)
+{
+  --echo # max_number_of_bits=$bits
+  eval CREATE TABLE t1 (id INT,
+    b vsql_bitfield_test.BITFIELD('max_number_of_bits=$bits'));
+  INSERT INTO t1 VALUES (1, '101'), (2, '11'), (3, '101');
+  CREATE TABLE t2 LIKE t1;
+  INSERT INTO t2 SELECT * FROM t1;
+
+  --echo # The query from the issue.
+  SELECT id, b FROM t1 UNION ALL SELECT id, b FROM t2 ORDER BY id;
+
+  SELECT b FROM t1 UNION SELECT b FROM t2 ORDER BY b;
+  SELECT id, b FROM (SELECT id, b FROM t1 UNION ALL SELECT id, b FROM t2) d
+    ORDER BY id;
+  SELECT DISTINCT b FROM t1 ORDER BY b;
+  SELECT b, COUNT(*) FROM t1 GROUP BY b ORDER BY b;
+  SELECT id FROM t1 WHERE b IN (SELECT b FROM t2) ORDER BY id;
+  WITH RECURSIVE c AS (SELECT b, 1 AS n FROM t1 WHERE id = 1
+                       UNION ALL SELECT b, n + 1 FROM c WHERE n < 3)
+    SELECT b, n FROM c ORDER BY n;
+  SELECT id, b, ROW_NUMBER() OVER (PARTITION BY b ORDER BY id) AS rn
+    FROM t1 ORDER BY id;
+
+  --echo # CREATE TABLE ... SELECT keeps the custom type.
+  CREATE TABLE t3 AS SELECT id, b FROM t1 UNION ALL SELECT id, b FROM t2;
+  SELECT id, b FROM t3 ORDER BY id, b;
+  SELECT COLUMN_TYPE, CHARACTER_OCTET_LENGTH FROM information_schema.columns
+    WHERE table_schema = 'test' AND table_name = 't3' AND column_name = 'b';
+
+  DROP TABLE t3;
+  DROP TABLE t2;
+  DROP TABLE t1;
+
+  if ($bits == 4096)
+  {
+    --let $bits = 0
+  }
+  if ($bits == 8)
+  {
+    --let $bits = 4096
+  }
+}
+
+UNINSTALL EXTENSION vsql_bitfield_test;
