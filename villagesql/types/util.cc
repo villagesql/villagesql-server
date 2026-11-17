@@ -80,8 +80,7 @@ namespace villagesql {
 static bool is_alter_rebuild_table(const TABLE_SHARE &share) {
   return share.tmp_table == INTERNAL_TMP_TABLE &&
          share.table_name.str != nullptr &&
-         strncmp(share.table_name.str, tmp_file_prefix,
-                 tmp_file_prefix_length) == 0;
+         std::string_view(share.table_name.str).starts_with(tmp_file_prefix);
 }
 
 static const char *ER_INCOMPARABLE_TYPES =

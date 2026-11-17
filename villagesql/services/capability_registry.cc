@@ -260,8 +260,7 @@ bool populate_capabilities(const PopulateContext &ctx,
     }
     // Distinguish "name unknown" from "name known but no version matches"
     // so the diagnostic points at the right thing.
-    auto it = g_registry.find(req.name);
-    if (it == g_registry.end()) {
+    if (!g_registry.contains(req.name)) {
       error_message =
           std::string("required capability not registered: ") + req.name;
       return true;
