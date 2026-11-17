@@ -90,11 +90,11 @@ class Sql_cmd_install_extension : public Sql_cmd {
   bool execute_update_version(THD *thd);
 
   LEX_CSTRING m_name;
-  LEX_CSTRING m_version;
-  LEX_STRING m_source;
+  LEX_CSTRING m_version{};
+  LEX_STRING m_source{};
   bool m_update_version;
   bool m_at_restart;
-  bool m_download_extension;
+  bool m_download_extension{false};
 };
 
 // This class implements the UNINSTALL EXTENSION statement.
