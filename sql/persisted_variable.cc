@@ -2194,6 +2194,16 @@ bool Persisted_variables_cache::reset_persisted_variables(THD *thd,
                                                           bool if_exists) {
   bool result = false, found = false;
   const bool reset_all = (name ? 0 : 1);
+  // VillageSQL: look up the alias before taking m_LOCK_persist_variables.
+  // register_variable and plugin install hold LOCK_system_variables_hash when
+  // they take m_LOCK_persist_variables, so it must not be taken inside it.
+  std::string alias_name;
+  if (!reset_all) {
+    mysql_mutex_assert_not_owner(&LOCK_plugin);
+    mysql_rwlock_rdlock(&LOCK_system_variables_hash);
+    alias_name = get_variable_alias(name);
+    mysql_rwlock_unlock(&LOCK_system_variables_hash);
+  }
   /* update on m_persisted_dynamic_variables/m_persisted_static_variables must
    * be thread safe */
   lock();
@@ -2281,11 +2291,6 @@ bool Persisted_variables_cache::reset_persisted_variables(THD *thd,
     if (erase_variable(name)) goto end;
 
     // If the variable has an alias, erase that too.
-    std::string alias_name;
-    mysql_mutex_assert_not_owner(&LOCK_plugin);
-    mysql_rwlock_rdlock(&LOCK_system_variables_hash);
-    { alias_name = get_variable_alias(name); }
-    mysql_rwlock_unlock(&LOCK_system_variables_hash);
     if (!alias_name.empty() && erase_variable(alias_name.c_str())) goto end;
 
     if (!found) {
