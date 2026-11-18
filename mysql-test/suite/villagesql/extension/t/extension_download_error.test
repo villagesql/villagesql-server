@@ -1,0 +1,19 @@
+# Both curl-enabled and curl-disabled builds must report a SQL error.
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+call mtr.add_suppression("VillageSQL: Error installing extension: 'download_test' from 'invalid://example[.]invalid/test[.]veb'$");
+
+--disable_result_log
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION download_test FROM 'invalid://example.invalid/test.veb';
+--enable_result_log
+GET DIAGNOSTICS CONDITION 1 @message = MESSAGE_TEXT;
+SELECT @message = 'Extension downloads require a build with curl support'
+    OR @message = "Failed to download extension 'download_test'"
+    AS expected_error;
