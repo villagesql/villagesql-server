@@ -1,0 +1,145 @@
+# UNINSTALL EXTENSION must not remove a custom type while a statement that is
+# resolving it holds the type's descriptor without a reference.
+#
+# The parser resolves a custom type name to its TypeDescriptor under the
+# victionary read lock, releases the lock, and only later acquires a TypeContext
+# from that descriptor under the write lock. For a parameterized type it also
+# calls the type's resolve_params in between. Until the TypeContext is acquired
+# nothing counts as a use of the type, so UNINSTALL's in-use checks pass. The
+# villagesql_after_resolve_type_descriptor sync point parks the statement at
+# the start of that window.
+#
+# Expected: the extension stays installed, the parked statement succeeds, and
+# the object it created then blocks UNINSTALL as usual. The parked UNINSTALL
+# accepts success too, so that if it removes the type the statement resumes
+# into the freed descriptor instead of stopping the test early; the
+# INFORMATION_SCHEMA query records whether the extension survived.
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+
+connect (con_parse,localhost,root,,test);
+
+--echo #
+--echo # CREATE TABLE with a COMPLEX column
+--echo #
+connection con_parse;
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+--send CREATE TABLE t1 (id INT PRIMARY KEY, c COMPLEX)
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+--error 0,ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_parse;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+DROP TABLE t1;
+
+--echo #
+--echo # CREATE FUNCTION with a COMPLEX parameter
+--echo #
+connection con_parse;
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+--send CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+--error 0,ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_parse;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+DROP FUNCTION f_arg;
+
+--echo #
+--echo # CREATE FUNCTION returning COMPLEX
+--echo #
+connection con_parse;
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+--send CREATE FUNCTION f_ret() RETURNS COMPLEX DETERMINISTIC RETURN '(1,2)'
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+--error 0,ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_parse;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+DROP FUNCTION f_ret;
+
+--echo #
+--echo # CREATE PROCEDURE with a COMPLEX parameter
+--echo #
+connection con_parse;
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+--send CREATE PROCEDURE p_arg(IN x COMPLEX) SET @x = 1
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+--error 0,ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_parse;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+DROP PROCEDURE p_arg;
+
+--echo #
+--echo # CREATE FUNCTION with a TVECTOR(3) parameter: resolve_params runs in
+--echo # the window
+--echo #
+connection con_parse;
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+--send CREATE FUNCTION f_tv(x TVECTOR(3)) RETURNS INT DETERMINISTIC RETURN 1
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+--error 0,ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_tvector;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_tvector';
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_parse;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_tvector;
+DROP FUNCTION f_tv;
+
+disconnect con_parse;
+SET DEBUG_SYNC = 'RESET';
+--source include/villagesql/uninstall_tvector_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc
+--source include/wait_until_count_sessions.inc
