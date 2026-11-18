@@ -1,0 +1,75 @@
+# INSTALL EXTENSION of an extension with system variables must not deadlock
+# with a concurrent RESET PERSIST.
+#
+# register_variable takes LOCK_system_variables_hash for write, then
+# set_persisted_options takes m_LOCK_persist_variables. reset_persisted_variables
+# takes m_LOCK_persist_variables, then LOCK_system_variables_hash for read to
+# look up the variable's alias. The two sync points park each statement after
+# its first lock: RESET PERSIST holds m_LOCK_persist_variables and waits for
+# INSTALL EXTENSION to signal that it holds LOCK_system_variables_hash, then
+# both continue to their second lock.
+#
+# Once INSTALL EXTENSION holds LOCK_system_variables_hash, no session can set a
+# system variable (SET DEBUG_SYNC included), so RESET PERSIST waits for the
+# signal itself and this connection only watches performance_schema.threads.
+# If both statements are still running after 10 seconds, the test dies: the
+# server cannot finish it.
+#
+# Expected: both statements complete.
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+SET PERSIST sort_buffer_size = 262144;
+
+connect (con_reset,localhost,root,,);
+connect (con_install,localhost,root,,);
+
+connection con_reset;
+--echo # con_reset: park RESET PERSIST holding m_LOCK_persist_variables until
+--echo # INSTALL EXTENSION holds LOCK_system_variables_hash
+SET DEBUG_SYNC = 'reset_persisted_variables_after_lock SIGNAL reset_locked WAIT_FOR install_locked';
+--send RESET PERSIST sort_buffer_size
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR reset_locked';
+
+connection con_install;
+--echo # con_install: INSTALL EXTENSION signals once it holds
+--echo # LOCK_system_variables_hash
+SET DEBUG_SYNC = 'register_variable_after_hash_lock SIGNAL install_locked';
+--send INSTALL EXTENSION vsql_config_vars_test
+
+connection default;
+--echo # default: both statements complete
+--let $wait_timeout = 10
+--let $silent_failure = 1
+--let $wait_condition = SELECT COUNT(*) = 0 FROM performance_schema.threads WHERE PROCESSLIST_INFO LIKE 'RESET PERSIST sort_buffer_size%' OR PROCESSLIST_INFO LIKE 'INSTALL EXTENSION vsql_config_vars_test%'
+--source include/wait_condition.inc
+if (!$success)
+{
+  --die RESET PERSIST and INSTALL EXTENSION deadlocked on m_LOCK_persist_variables and LOCK_system_variables_hash
+}
+
+connection con_reset;
+--reap
+
+connection con_install;
+--reap
+
+connection default;
+disconnect con_reset;
+disconnect con_install;
+
+SET DEBUG_SYNC = 'RESET';
+UNINSTALL EXTENSION vsql_config_vars_test;
+
+# Uninstalling this extension runs its on_deinit hook, which appends to a
+# marker file (read by config_vars_on_init). Remove it so the test leaves no
+# files behind.
+--remove_file $MYSQL_TMP_DIR/vsql_config_vars_test.marker
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+--source include/wait_until_count_sessions.inc

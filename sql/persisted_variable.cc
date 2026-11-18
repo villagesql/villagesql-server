@@ -2197,6 +2197,8 @@ bool Persisted_variables_cache::reset_persisted_variables(THD *thd,
   /* update on m_persisted_dynamic_variables/m_persisted_static_variables must
    * be thread safe */
   lock();
+  // VillageSQL: holds m_LOCK_persist_variables.
+  DEBUG_SYNC_C("reset_persisted_variables_after_lock");
 
   if (reset_all) {
     /* check for necessary privileges */
