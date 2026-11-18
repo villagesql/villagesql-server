@@ -16,7 +16,6 @@
 
 #include "villagesql/veb/veb_file.h"
 
-#include <dirent.h>
 #include <fcntl.h>
 #include <cctype>
 #include <cstring>
@@ -321,16 +320,18 @@ bool find_veb_version(const std::string &name, std::string &version) {
   std::string suffix = ".veb";
   std::string unversioned = name + ".veb";
 
-  DIR *dir = opendir(veb_dir.c_str());
-  if (!dir) {
+  std::error_code ec;
+  std::filesystem::directory_iterator it(veb_dir, ec);
+  if (ec) {
     villagesql_error("Cannot open VEB directory '%s'", MYF(0), veb_dir.c_str());
     return true;
   }
 
   std::vector<std::string> found_versions;
   bool found_unversioned = false;
-  while (dirent *entry = readdir(dir)) {
-    std::string filename(entry->d_name);
+  for (const std::filesystem::directory_iterator end; it != end;
+       it.increment(ec)) {
+    std::string filename = it->path().filename().string();
     if (filename == unversioned) {
       found_unversioned = true;
       continue;
@@ -342,7 +343,6 @@ bool find_veb_version(const std::string &name, std::string &version) {
           prefix.size(), filename.size() - prefix.size() - suffix.size()));
     }
   }
-  closedir(dir);
 
   if (found_unversioned) {
     version.clear();
@@ -1696,17 +1696,18 @@ bool load_installed_extensions(THD *thd) {
 // Remove every expansion staging directory inside {cache}/{name}/. Returns
 // how many were removed.
 static int remove_staging_dirs(const std::string &name_dir_path) {
-  DIR *name_dir = opendir(name_dir_path.c_str());
-  if (!name_dir) {
+  std::error_code ec;
+  std::filesystem::directory_iterator it(name_dir_path, ec);
+  if (ec) {
     LogVSQL(WARNING_LEVEL, "Failed to open expansion directory: %s",
             name_dir_path.c_str());
     return 0;
   }
 
   int removed_count = 0;
-  struct dirent *entry;
-  while ((entry = readdir(name_dir)) != nullptr) {
-    std::string entry_name = entry->d_name;
+  for (const std::filesystem::directory_iterator end; it != end;
+       it.increment(ec)) {
+    std::string entry_name = it->path().filename().string();
     if (!is_staging_dir_name(entry_name)) continue;
 
     char staging_path_buf[FN_REFLEN];
@@ -1715,18 +1716,17 @@ static int remove_staging_dirs(const std::string &name_dir_path) {
 
     LogVSQL(INFORMATION_LEVEL, "Removing stale expansion staging directory: %s",
             staging_path_buf);
-    std::error_code ec;
-    std::filesystem::remove_all(staging_path_buf, ec);
-    if (!ec) {
+    std::error_code remove_ec;
+    std::filesystem::remove_all(staging_path_buf, remove_ec);
+    if (!remove_ec) {
       removed_count++;
     } else {
       LogVSQL(WARNING_LEVEL,
               "Failed to remove staging directory: %s (error: %s)",
-              staging_path_buf, ec.message().c_str());
+              staging_path_buf, remove_ec.message().c_str());
     }
   }
 
-  closedir(name_dir);
   return removed_count;
 }
 
@@ -1745,22 +1745,19 @@ void cleanup_orphaned_expansion_directories(
   }
 
   // Open .veb_expansion_cache directory
-  DIR *expanded_dir = opendir(expanded_base_path.c_str());
-  if (!expanded_dir) {
+  std::error_code ec;
+  std::filesystem::directory_iterator it(expanded_base_path, ec);
+  if (ec) {
     LogVSQL(WARNING_LEVEL, "Failed to open .veb_expansion_cache directory");
     return;
   }
 
   // Scan for extension name directories
-  struct dirent *entry;
   int removed_count = 0;
 
-  while ((entry = readdir(expanded_dir)) != nullptr) {
-    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-      continue;
-    }
-
-    std::string extension_name = entry->d_name;
+  for (const std::filesystem::directory_iterator end; it != end;
+       it.increment(ec)) {
+    std::string extension_name = it->path().filename().string();
 
     char name_dir_path_buf[FN_REFLEN];
     fn_format(name_dir_path_buf, extension_name.c_str(),
@@ -1779,14 +1776,14 @@ void cleanup_orphaned_expansion_directories(
       LogVSQL(INFORMATION_LEVEL, "Removing orphaned expansion directory: %s",
               name_dir_path.c_str());
 
-      std::error_code ec;
-      std::filesystem::remove_all(name_dir_path, ec);
-      if (!ec) {
+      std::error_code remove_ec;
+      std::filesystem::remove_all(name_dir_path, remove_ec);
+      if (!remove_ec) {
         removed_count++;
       } else {
         LogVSQL(WARNING_LEVEL,
                 "Failed to remove orphaned directory: %s (error: %s)",
-                name_dir_path.c_str(), ec.message().c_str());
+                name_dir_path.c_str(), remove_ec.message().c_str());
       }
       continue;
     }
@@ -1795,8 +1792,6 @@ void cleanup_orphaned_expansion_directories(
     // staging directories inside it.
     removed_count += remove_staging_dirs(name_dir_path);
   }
-
-  closedir(expanded_dir);
 
   if (removed_count > 0) {
     LogVSQL(INFORMATION_LEVEL, "Cleaned up %d orphaned expansion directories",
