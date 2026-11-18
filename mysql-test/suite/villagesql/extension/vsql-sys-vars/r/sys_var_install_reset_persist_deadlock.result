@@ -1,0 +1,16 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+SET PERSIST sort_buffer_size = 262144;
+# con_reset: park RESET PERSIST holding m_LOCK_persist_variables until
+# INSTALL EXTENSION holds LOCK_system_variables_hash
+SET DEBUG_SYNC = 'reset_persisted_variables_after_lock SIGNAL reset_locked WAIT_FOR install_locked';
+RESET PERSIST sort_buffer_size;
+SET DEBUG_SYNC = 'now WAIT_FOR reset_locked';
+# con_install: INSTALL EXTENSION signals once it holds
+# LOCK_system_variables_hash
+SET DEBUG_SYNC = 'register_variable_after_hash_lock SIGNAL install_locked';
+INSTALL EXTENSION vsql_config_vars_test;
+# default: both statements complete
+SET DEBUG_SYNC = 'RESET';
+UNINSTALL EXTENSION vsql_config_vars_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
