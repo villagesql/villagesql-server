@@ -941,6 +941,11 @@ bool remove_extension_from_victionary(
     victionary.extension_descriptors().MarkForDeletion(*thd, ext_desc->key());
   }
 
+  // The checks above found the extension unused. Remove its entries from the
+  // committed maps now, under the same lock, so no other session starts using
+  // it before the commit; rollback puts them back.
+  victionary.retire_marked_deletions(thd);
+
   return false;
 }
 

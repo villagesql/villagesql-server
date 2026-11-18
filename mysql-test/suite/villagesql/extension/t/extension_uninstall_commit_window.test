@@ -6,10 +6,9 @@
 # passed. The uninstall_after_victionary_checks sync point parks UNINSTALL
 # there.
 #
-# Expected: nothing that uses the extension survives a successful UNINSTALL.
-# Each case records an invariant that holds whether a fix refuses the
-# UNINSTALL or rejects the other statement, so the statements in the window
-# accept both success and failure.
+# Expected: UNINSTALL succeeds, and a statement in the window fails because
+# the extension's entries are already gone, so nothing that uses the
+# extension survives the UNINSTALL.
 
 --source include/have_debug_sync.inc
 --source include/count_sessions.inc
@@ -27,12 +26,11 @@ SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
 
 connection default;
 SET DEBUG_SYNC = 'now WAIT_FOR checked';
---error 0,ER_VILLAGESQL_GENERIC_ERROR
+--error ER_PARSE_ERROR
 CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1;
 SET DEBUG_SYNC = 'now SIGNAL go';
 
 connection con_uninstall;
---error 0,ER_VILLAGESQL_GENERIC_ERROR
 --reap
 SET DEBUG_SYNC = 'RESET';
 
@@ -44,7 +42,6 @@ SELECT (SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS
 --disable_warnings
 DROP FUNCTION IF EXISTS f_arg;
 --enable_warnings
---error 0,ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION vsql_complex;
 
 --echo #
@@ -57,31 +54,24 @@ SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
 
 connection default;
 SET DEBUG_SYNC = 'now WAIT_FOR checked';
---error 0,ER_VILLAGESQL_GENERIC_ERROR
+--error ER_VILLAGESQL_GENERIC_ERROR
 PREPARE s FROM 'SELECT complex_abs(COMPLEX::from_string(''(3,4)'')) AS a';
 SET DEBUG_SYNC = 'now SIGNAL go';
 
 connection con_uninstall;
---error 0,ER_VILLAGESQL_GENERIC_ERROR
 --reap
 SET DEBUG_SYNC = 'RESET';
 
 connection default;
---disable_result_log
---error 0,ER_UNKNOWN_STMT_HANDLER,ER_SP_DOES_NOT_EXIST,ER_VILLAGESQL_GENERIC_ERROR
+--error ER_UNKNOWN_STMT_HANDLER
 EXECUTE s;
---enable_result_log
 --let $execute_errno = $mysql_errno
 --disable_query_log
 --eval SELECT ($execute_errno = 0) = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex') AS consistent
 --enable_query_log
---error 0,ER_UNKNOWN_STMT_HANDLER
+--error ER_UNKNOWN_STMT_HANDLER
 DEALLOCATE PREPARE s;
 
 disconnect con_uninstall;
 SET DEBUG_SYNC = 'RESET';
---disable_query_log
---error 0,ER_VILLAGESQL_GENERIC_ERROR
-UNINSTALL EXTENSION vsql_complex;
---enable_query_log
 --source include/wait_until_count_sessions.inc
