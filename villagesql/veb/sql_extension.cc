@@ -1015,6 +1015,9 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  // After the in-use and dependency checks, before the commit.
+  DEBUG_SYNC_C("uninstall_after_victionary_checks");
+
   // Phase 2: write tables
   if (victionary.write_all_uncommitted_entries(thd)) {
     villagesql_error("Failed to delete extension '%s'", MYF(0),
