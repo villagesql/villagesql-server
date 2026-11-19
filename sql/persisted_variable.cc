@@ -2197,13 +2197,11 @@ bool Persisted_variables_cache::reset_persisted_variables(THD *thd,
   // VillageSQL: look up the alias before taking m_LOCK_persist_variables.
   // register_variable and plugin install hold LOCK_system_variables_hash when
   // they take m_LOCK_persist_variables, so it must not be taken inside it.
+  // get_variable_alias() takes LOCK_system_variables_hash itself; holding it
+  // here as well would nest the read lock, which waits behind a queued
+  // writer that is waiting for this thread.
   std::string alias_name;
-  if (!reset_all) {
-    mysql_mutex_assert_not_owner(&LOCK_plugin);
-    mysql_rwlock_rdlock(&LOCK_system_variables_hash);
-    alias_name = get_variable_alias(name);
-    mysql_rwlock_unlock(&LOCK_system_variables_hash);
-  }
+  if (!reset_all) alias_name = get_variable_alias(name);
   /* update on m_persisted_dynamic_variables/m_persisted_static_variables must
    * be thread safe */
   lock();
