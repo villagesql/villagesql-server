@@ -55,6 +55,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql/udf_registration_types.h"
 #include "mysqld_error.h"
 #include "nulls.h"
+#include "scope_guard.h"
 #include "sql/current_thd.h"
 #include "sql/error_handler.h"  // Internal_error_handler
 #include "sql/log.h"
@@ -104,18 +105,14 @@ int mysql_add_sysvar(sys_var *var) {
   assert(var->cast_pluginvar() != nullptr);
   /* A write lock should be held on LOCK_system_variables_hash */
   /* this fails if there is a conflicting variable name. see HASH_UNIQUE */
-  mysql_mutex_assert_not_owner(&LOCK_plugin);
-  mysql_rwlock_wrlock(&LOCK_system_variables_hash);
   if (!get_dynamic_system_variable_hash()
            ->emplace(to_string(var->name), var)
            .second) {
     LogErr(ERROR_LEVEL, ER_DUPLICATE_SYS_VAR, var->name.str);
-    mysql_rwlock_unlock(&LOCK_system_variables_hash);
     return 1;
   }
   /* Update system_variable_hash version. */
   dynamic_system_variable_hash_version++;
-  mysql_rwlock_unlock(&LOCK_system_variables_hash);
   return 0;
 }
 
@@ -143,6 +140,10 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
     bool option_value_found_in_install = false;
     MEM_ROOT local_root{key_memory_comp_sys_var, 512};
     unsigned int offset = 0;
+    bool hash_locked = false;
+    auto unlock_hash = create_scope_guard([&hash_locked] {
+      if (hash_locked) mysql_rwlock_unlock(&LOCK_system_variables_hash);
+    });
 
     com_sys_var_len = strlen(component_name) + strlen(var_name) + 2;
     com_sys_var_name = new (&local_root) char[com_sys_var_len];
@@ -463,6 +464,16 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
 
     unique_opt.reset(opt);
     plugin_opt_set_limits(opts, opt);
+
+    // VillageSQL: hold LOCK_system_variables_hash from register_var() until the
+    // variable is in the hash, as mysql_install_plugin() does. register_var()
+    // publishes the variable's slot, and a session that copied its dynamic
+    // variables before the variable is in the hash would not get its own copy
+    // of a MEMALLOC string.
+    mysql_mutex_assert_not_owner(&LOCK_plugin);
+    mysql_rwlock_wrlock(&LOCK_system_variables_hash);
+    hash_locked = true;
+
     if ((flags & PLUGIN_VAR_NOSYSVAR) == 0) {
       // TODO(villagesql-rebase): key the bookmark by the fully-qualified
       // name this variable is registered as ("component.var", built above as
@@ -587,6 +598,9 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
         goto end;
       }
     }
+
+    mysql_rwlock_unlock(&LOCK_system_variables_hash);
+    hash_locked = false;
 
     /*
       Once server is started and if there are few persisted plugin variables
@@ -767,11 +781,14 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::unregister_variable,
         !get_dynamic_system_variable_hash()->erase(to_string(sysvar->name));
     /* Update system_variable_hash version. */
     dynamic_system_variable_hash_version++;
-    mysql_rwlock_unlock(&LOCK_system_variables_hash);
 
     /*
        Freeing the value of string variables if they have PLUGIN_VAR_MEMALLOC
        flag enabled while registering variables.
+       VillageSQL: free it before releasing LOCK_system_variables_hash, as
+       plugin_del() does: a session that copies its dynamic variables while the
+       variable is out of the hash must not copy a pointer to the value being
+       freed.
     */
 
     sys_var_pluginvar *sv_pluginvar =
@@ -788,6 +805,12 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::unregister_variable,
         *valptr = nullptr;
       }
     }
+    // VillageSQL: give the variable a new offset if it is registered again.
+    if (var_flags & PLUGIN_VAR_THDLOCAL) {
+      st_bookmark *v = find_bookmark(nullptr, sysvar->name.str, var_flags);
+      if (v) v->offset = -1;
+    }
+    mysql_rwlock_unlock(&LOCK_system_variables_hash);
 
     FREE_RECORD(sysvar)
 

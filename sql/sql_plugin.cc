@@ -2833,13 +2833,26 @@ st_bookmark *register_var(const char *plugin, const char *name, int flags) {
     memcpy(varname + 1, name, strlen(name) + 1);
   }
 
-  if (!(result = find_bookmark(nullptr, varname + 1, flags))) {
-    result =
-        (st_bookmark *)plugin_mem_root.Alloc(sizeof(st_bookmark) + length - 1);
-    varname[0] = flags & PLUGIN_VAR_TYPEMASK;
-    memcpy(result->key, varname, length);
-    result->name_len = length - 2;
-    result->offset = -1;
+  result = find_bookmark(nullptr, varname + 1, flags);
+
+  /*
+    VillageSQL: a bookmark outlives its variable. Unregistering the variable
+    sets the bookmark's offset to -1, and registering it again gives it a new
+    offset: sessions keep their copy of the old slot, which no longer holds the
+    variable's value, and a MEMALLOC string slot can point to the freed global
+    value. A new offset makes each session copy the variable from the global
+    value again.
+  */
+  if (!result || result->offset < 0) {
+    const bool new_bookmark = result == nullptr;
+    if (new_bookmark) {
+      result = (st_bookmark *)plugin_mem_root.Alloc(sizeof(st_bookmark) +
+                                                    length - 1);
+      varname[0] = flags & PLUGIN_VAR_TYPEMASK;
+      memcpy(result->key, varname, length);
+      result->name_len = length - 2;
+      result->offset = -1;
+    }
 
     assert(size && !(size & (size - 1))); /* must be power of 2 */
 
@@ -2881,21 +2894,23 @@ st_bookmark *register_var(const char *plugin, const char *name, int flags) {
 
     result->version = global_system_variables.dynamic_variables_version;
 
-    /* this should succeed because we have already checked if a dup exists */
-    std::string key(result->key, result->name_len + 1);
-    bookmark_hash->emplace(key, result);
+    if (new_bookmark) {
+      /* this should succeed because we have already checked if a dup exists */
+      std::string key(result->key, result->name_len + 1);
+      bookmark_hash->emplace(key, result);
 
-    /*
-      Hashing vars of string type with MEMALLOC flag.
-    */
-    if (((flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) &&
-        (flags & PLUGIN_VAR_MEMALLOC) &&
-        !malloced_string_type_sysvars_bookmark_hash->emplace(key, result)
-             .second) {
-      fprintf(stderr,
-              "failed to add placeholder to"
-              " hash of malloced string type sysvars");
-      assert(0);
+      /*
+        Hashing vars of string type with MEMALLOC flag.
+      */
+      if (((flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) &&
+          (flags & PLUGIN_VAR_MEMALLOC) &&
+          !malloced_string_type_sysvars_bookmark_hash->emplace(key, result)
+               .second) {
+        fprintf(stderr,
+                "failed to add placeholder to"
+                " hash of malloced string type sysvars");
+        assert(0);
+      }
     }
   }
   return result;
@@ -3136,6 +3151,12 @@ static void plugin_vars_free_values(sys_var *vars) {
 
   for (sys_var *var = vars; var; var = var->next) {
     sys_var_pluginvar *piv = var->cast_pluginvar();
+    // VillageSQL: give the variable a new offset if it is registered again.
+    if (piv && (piv->plugin_var->flags & PLUGIN_VAR_THDLOCAL)) {
+      st_bookmark *v =
+          find_bookmark(nullptr, var->name.str, piv->plugin_var->flags);
+      if (v) v->offset = -1;
+    }
     if (piv &&
         ((piv->plugin_var->flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR) &&
         (piv->plugin_var->flags & PLUGIN_VAR_MEMALLOC)) {
