@@ -40,7 +40,7 @@ mark the issue fixed here.
 | KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | fixed in vsql-vector /34 | delete/hnsw_many_deleted |
 | KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress, hnsw_purge_then_restart |
 | KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | fixed in /43 | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
-| KNN-29 | After a restart, purge leaves the HNSW entries of committed deletes and vector updates | open | delete/hnsw_purge_restart |
+| KNN-29 | After a restart, purge of HNSW entries deleted before it makes other rows unreachable | open | delete/hnsw_purge_restart |
 
 ## Not implemented yet
 
@@ -673,6 +673,14 @@ still not implemented on /40.
   two rows. Seen with vsql-vector deb/hnsw_index/33 (ce25b42) and
   deb/hnsw_index/35 (cc56eee) on deb/custom-index/43 (851f84b), debug build.
   delete/hnsw_purge_locking failed this way once in a full suite run.
+- With include/villagesql/wait_innodb_history_purged.inc instead of
+  wait_innodb_all_purged.inc (which can return before purge has run), on
+  deb/custom-index/43 with deb/hnsw_index/37 (c91f417):
+  delete/hnsw_purge_scattered returns `11 12 13 14 15` at `[1.3,0,0,0]` and
+  `89 88 87 86 85` at `[98.3,0,0,0]`, and delete/hnsw_purge_locking_stress
+  fails in 2 of 50 rounds, returning `9 7` in one and `2 3` in the other for
+  LIMIT 7.
+  delete/hnsw_purge_locking passes.
 
 ## KNN-28: Rollback at recovery of a prepared transaction that changed an HNSW index fails
 
@@ -707,29 +715,31 @@ still not implemented on /40.
 - Expected: the server recovers and rolls the transaction back.
 - UPDATE and DELETE: the server cannot start. INSERT: wrong results.
 
-## KNN-29: After a restart, purge leaves the HNSW entries of committed deletes and vector updates
+## KNN-29: After a restart, purge of HNSW entries deleted before it makes other rows unreachable
 
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
-  vsql-vector deb/hnsw_index/33 (ce25b42), debug build.
+  vsql-vector deb/hnsw_index/33 (ce25b42), debug build. Still seen with
+  deb/custom-index/43 (851f84b) and deb/hnsw_index/37 (c91f417), which has
+  the locking read fix for delete-marked entries (0f8b1f8).
 - Repro: HNSW index on the standard 8 rows. `SET GLOBAL
   innodb_purge_stop_now = ON`, then `DELETE FROM t WHERE id IN (4, 8)`,
   `UPDATE t SET v = '[9,9,9,9]' WHERE id = 1` and an insert of row 9. Kill and
-  restart (kill_and_restart_mysqld.inc), then wait for purge
-  (wait_innodb_all_purged.inc). At READ COMMITTED,
-  `SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3 FOR UPDATE`
-  returns `9`; expected `9 2 5`. With LIMIT 7 it returns `9 2 5 3`; expected
-  `9 2 5 3 6 7 1`. The same after another restart. Plain (non-locking) reads
-  return the right rows. Nothing about purge in the server log.
-- The same steps without the restart (delete/hnsw_purge_locking) return the
-  full results.
-- Still seen on tomas/knn-review-stack-40 (deb/custom-index/43 851f84b) with
-  vsql-vector deb/hnsw_index/35 (cc56eee), debug build, so it is not KNN-26.
-- delete/hnsw_purge_then_restart runs purge before the restart instead of
-  after it, and passes: locking reads after the restart return full results.
-  So the restart alone does not make locking reads short; purge that runs
-  after a restart leaves something a normal purge removes.
-- Three rows are missing, one for each old entry (rows 4 and 8, the old
-  vector of row 1), as in KNN-24.
-- Expected: purge after the restart removes the old entries, as it does
-  without the restart.
-- Wrong results (too few rows) for locking reads, silently and permanently.
+  restart (kill_and_restart_mysqld.inc). KNN reads are right:
+  `SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7`
+  returns `9 2 5 3 6 7 1`. Then wait until purge has finished
+  (include/villagesql/wait_innodb_history_purged.inc). The table still has 7
+  rows, but the same query returns `9 7`, and so do LIMIT 3 and the
+  READ COMMITTED `FOR UPDATE` reads. The same after another restart. A row
+  inserted afterwards is found (`10 7`); rows 2, 5, 3, 6 and 1 stay
+  unreachable.
+- The same steps without the restart (delete/hnsw_purge_locking) and with
+  purge before the restart (delete/hnsw_purge_then_restart) pass. So purge
+  of entries deleted before a restart breaks the graph; the restart alone
+  does not.
+- Earlier runs waited with include/wait_innodb_all_purged.inc, which can
+  return before purge has run (pointed out by Deb). They read before purge
+  and saw only the locking reads short, by one row per old entry. With purge
+  really finished the plain reads are short too.
+- Expected: purge after the restart removes the old entries and leaves the
+  other rows reachable, as it does without the restart.
+- Wrong results (too few rows) for every KNN read, silently and permanently.
