@@ -1083,6 +1083,14 @@ bool Persisted_variables_cache::set_persisted_options(
     sorted_vars.insert(persist_sensitive_variables.begin(),
                        persist_sensitive_variables.end());
   }
+  /*
+    VillageSQL: sorted_vars holds copies. Do not hold m_LOCK_persist_variables while
+    setting them: sql_set_variables() takes LOCK_global_system_variables,
+    LOCK_plugin and THD locks, and those are taken before
+    m_LOCK_persist_variables elsewhere. Take it again only to read or update
+    the persisted variables below.
+  */
+  unlock();
 
   for (const st_persist_var &iter : sorted_vars) {
     const std::string &var_name = iter.key;
@@ -1199,6 +1207,7 @@ bool Persisted_variables_cache::set_persisted_options(
         return true;
       };
 
+      lock();
       if (set_source(m_persisted_dynamic_variables))
         (void)set_source(m_persisted_dynamic_sensitive_variables);
 
@@ -1220,6 +1229,7 @@ bool Persisted_variables_cache::set_persisted_options(
         // the value should not be present in the plugins copy
         assert(ret.second);
       }
+      unlock();
 
       return false;
     };
@@ -1271,7 +1281,11 @@ bool Persisted_variables_cache::set_persisted_options(
         keep track of this variable so that it is set when plugin
         is loaded and continue with remaining persisted variables
       */
-      if (m_persisted_dynamic_plugin_variables.insert(iter).second)
+      lock();
+      const bool inserted =
+          m_persisted_dynamic_plugin_variables.insert(iter).second;
+      unlock();
+      if (inserted)
         LogErr(WARNING_LEVEL, ER_UNKNOWN_VARIABLE_IN_PERSISTED_CONFIG_FILE,
                var_name.c_str());
       continue;
@@ -1284,7 +1298,11 @@ bool Persisted_variables_cache::set_persisted_options(
      If the function is called at start-up time, set
      source information for PARSE_EARLY variables
   */
-  if (!plugin_options) set_parse_early_sources();
+  if (!plugin_options) {
+    lock();
+    set_parse_early_sources();
+    unlock();
+  }
 
   if (new_thd) {
     /* check for warnings in DA */
@@ -1318,7 +1336,6 @@ bool Persisted_variables_cache::set_persisted_options(
     ctx.reset(nullptr);
     delete thd;
   }
-  unlock();
   return result;
 }
 
