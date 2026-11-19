@@ -894,6 +894,14 @@ class System_variable_tracker final {
 
   void cache_metadata(THD *thd, sys_var *v) const;
 
+ public:
+  /**
+    VillageSQL: true while this thread is in access_system_variable() for a
+    plugin or component variable, which holds LOCK_system_variables_hash for
+    this thread or runs where the lock is not needed.
+  */
+  static bool in_hash_lock_scope() { return m_hash_lock_recursion_depth > 0; }
+
  private:
   Lifetime m_tag;
 

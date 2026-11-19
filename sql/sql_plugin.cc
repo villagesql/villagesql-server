@@ -2934,7 +2934,13 @@ static void restore_pluginvar_names(sys_var *first) {
 */
 void alloc_and_copy_thd_dynamic_variables(THD *thd, bool global_lock) {
   mysql_mutex_assert_not_owner(&LOCK_plugin);
-  mysql_rwlock_rdlock(&LOCK_system_variables_hash);
+  /*
+    VillageSQL: reading a variable through System_variable_tracker already
+    holds LOCK_system_variables_hash. Taking it again for read can wait behind
+    a thread that waits for the write lock, which waits for this thread.
+  */
+  const bool hash_lock = !System_variable_tracker::in_hash_lock_scope();
+  if (hash_lock) mysql_rwlock_rdlock(&LOCK_system_variables_hash);
 
   if (global_lock) mysql_mutex_lock(&LOCK_global_system_variables);
 
@@ -2999,7 +3005,7 @@ void alloc_and_copy_thd_dynamic_variables(THD *thd, bool global_lock) {
   thd->variables.dynamic_variables_size =
       global_system_variables.dynamic_variables_size;
 
-  mysql_rwlock_unlock(&LOCK_system_variables_hash);
+  if (hash_lock) mysql_rwlock_unlock(&LOCK_system_variables_hash);
 }
 
 /**
