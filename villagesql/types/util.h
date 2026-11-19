@@ -378,9 +378,11 @@ const TypeContext *GetCompatibleCustomType(const Item &item1,
 // 2. String literals that can be encoded by the custom type
 extern bool CanStoreInCustomField(const Item *item, const Field *field);
 
-// Reports that a custom-typed item cannot be stored in a field without a custom
-// type, which needs an explicit conversion.
-extern void ReportCustomValueForNonCustomField(Item *item, const Field *field);
+// Stores a custom-typed item in a field without a custom type: NULL is stored
+// as NULL, and any other value is an error that asks for an explicit
+// conversion.
+extern type_conversion_status StoreCustomValueInNonCustomField(
+    Item *item, Field *field, bool no_conversions);
 
 // Validates storing an Item into a custom type Field and generates appropriate
 // error message if validation fails.

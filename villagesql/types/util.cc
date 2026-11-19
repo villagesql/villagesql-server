@@ -1231,6 +1231,8 @@ bool CanStoreInCustomField(const Item *item, const Field *field) {
 // field without an explicit conversion.
 static void ReportTypeMismatch(const TypeContext &tc, const char *value,
                                const Field *field) {
+  // Reading the value failed and has already reported why.
+  if (current_thd->is_error()) return;
   villagesql_error(
       "Type mismatch. Use explicit conversion of %s value '%s' for column "
       "'%s' at row %ld",
@@ -1238,12 +1240,18 @@ static void ReportTypeMismatch(const TypeContext &tc, const char *value,
       current_thd->get_stmt_da()->current_row_for_condition());
 }
 
-void ReportCustomValueForNonCustomField(Item *item, const Field *field) {
+type_conversion_status StoreCustomValueInNonCustomField(Item *item,
+                                                        Field *field,
+                                                        bool no_conversions) {
   assert(item->has_type_context() && !field->has_type_context());
   String str_value;
   String *value = item->val_external_str(&str_value);
-  ReportTypeMismatch(*item->get_type_context(),
-                     value != nullptr ? value->c_ptr_safe() : "NULL", field);
+  if (current_thd->is_error()) return TYPE_ERR_BAD_VALUE;
+  if (value == nullptr) {
+    return set_field_to_null_with_conversions(field, no_conversions);
+  }
+  ReportTypeMismatch(*item->get_type_context(), value->c_ptr_safe(), field);
+  return TYPE_ERR_BAD_VALUE;
 }
 
 bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
