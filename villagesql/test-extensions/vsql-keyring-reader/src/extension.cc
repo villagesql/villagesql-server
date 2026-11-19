@@ -53,10 +53,7 @@ void keyring_read(StringArg data_id, StringArg auth_id, StringResult out) {
     return;
   }
 
-  auto buf = out.buffer();
-  size_t len = std::min(value.size(), buf.size());
-  memcpy(buf.data(), value.data(), len);
-  out.set_length(len);
+  out.set(value);
 }
 
 // keyring_store(data_id, auth_id, value) - stores a secret in the keyring.
