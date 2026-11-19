@@ -33,10 +33,10 @@ Review suite for the custom-index work on deb/custom-index/43 (851f84b).
   - KNN-23 → #1382
 - Open, not filed:
   - KNN-4, 5, 7, 8, 10, 20, 22
-  - KNN-29: after a restart, purge leaves the HNSW entries of committed
-    deletes and vector updates; locking reads then return too few rows.
-    Still on /43 with /35. With purge before the restart instead
-    (delete/hnsw_purge_then_restart) the reads are full.
+  - KNN-29: after a restart, purge of HNSW entries deleted before it makes
+    other rows unreachable; every KNN read then returns too few rows. Still
+    on /43 with hnsw /37. Without the restart (delete/hnsw_purge_locking) or
+    with purge before it (delete/hnsw_purge_then_restart) the reads are full.
 - Known behaviour, tuning planned: KNN-27 (with HNSW, after purge a KNN query
   can return wrong rows or too few rows; also with 8 rows, about one round in
   20 to 60 of delete/hnsw_purge_locking_stress). delete/hnsw_purge_locking
@@ -83,7 +83,7 @@ index corrupt (KNN-10), so the question is whether a bad index can be dropped:
   still marked, do KNN queries fail (ER 1712) or fall back to a scan, and does
   DROP INDEX work and remove the victionary rows and the extension's storage.
   Recreating it needs NYI-4.
-- Index with leaked entries (KNN-29). Leak entries through purge after a
+- Index with unreachable entries (KNN-29). Purge after a
   restart, then DROP INDEX and DROP TABLE and restart: no orphaned storage, no
   errors at startup.
 

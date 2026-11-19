@@ -20,7 +20,7 @@ SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1.3,0,0,0]') LIMIT 5;
 SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[45.3,0,0,0]') LIMIT 5;
 SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[98.3,0,0,0]') LIMIT 5;
 SET GLOBAL innodb_purge_run_now = ON;
---source include/wait_innodb_all_purged.inc
+--source include/villagesql/wait_innodb_history_purged.inc
 --echo # Purged
 SELECT COUNT(*) AS n FROM t;
 SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1.3,0,0,0]') LIMIT 5;

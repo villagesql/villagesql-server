@@ -5,7 +5,7 @@
 # return full results too (the old entries no longer use up the LIMIT, see
 # KNN-24), and the purged state survives another restart.
 
---let $knn_issue = KNN-29 After a restart, purge leaves the HNSW entries of committed deletes and vector updates
+--let $knn_issue = KNN-29 After a restart, purge of HNSW entries deleted before it makes other rows unreachable
 --source suite/knn_review/include/known_issue.inc
 
 --source include/have_debug.inc
@@ -27,7 +27,7 @@ SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
 SELECT COUNT(*) AS n FROM t;
 SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;
 SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
---source include/wait_innodb_all_purged.inc
+--source include/villagesql/wait_innodb_history_purged.inc
 --echo # Purged
 SELECT COUNT(*) AS n FROM t;
 SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 7;

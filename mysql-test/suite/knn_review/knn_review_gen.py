@@ -34,7 +34,7 @@ KNOWN_ISSUES = {
     "locking/hnsw_current_entry_after_change": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_delete": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_vector_update": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
-    "delete/hnsw_purge_restart": "KNN-29 After a restart, purge leaves the HNSW entries of committed deletes and vector updates",
+    "delete/hnsw_purge_restart": "KNN-29 After a restart, purge of HNSW entries deleted before it makes other rows unreachable",
     "delete/hnsw_purge_scattered": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
     "delete/hnsw_purge_locking": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
     "delete/hnsw_purge_then_restart": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
@@ -2463,7 +2463,7 @@ qs = [(x, 0, 0, 0) for x in (1.3, 45.3, 98.3)]
 t.echo("Deleted, not purged")
 knn_points(t, rows, qs)
 t.sql("SET GLOBAL innodb_purge_run_now = ON")
-t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.raw(["--source include/villagesql/wait_innodb_history_purged.inc"])
 t.echo("Purged")
 knn_points(t, rows, qs)
 t.sql("DROP TABLE t")
@@ -2649,7 +2649,7 @@ t.sql("UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
 t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
 m = with_vec(model(r4=None, r8=None), 1, "[9,9,9,9]") | {9: (1, "i", (1, 0, 0, 0.1))}
 t.sql("SET GLOBAL innodb_purge_run_now = ON")
-t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.raw(["--source include/villagesql/wait_innodb_history_purged.inc"])
 t.sql("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
 t.sql("START TRANSACTION")
 hknn(t, extra=" FOR UPDATE", rows=near(m))
@@ -2686,7 +2686,7 @@ reads.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
 t.raw(["--let $i = 1", f"while ($i <= {ROUNDS})", "{", "--echo # Round $i",
        "--disable_query_log"]
       + [l for l in setup.t if not l.startswith("INSTALL")]
-      + ["--source include/wait_innodb_all_purged.inc", "--enable_query_log"]
+      + ["--source include/villagesql/wait_innodb_history_purged.inc", "--enable_query_log"]
       + reads.t
       + ["--disable_query_log", "DROP TABLE t;", "--enable_query_log",
          "--inc $i", "}"],
@@ -2729,7 +2729,7 @@ purge_restart_reads(t, False)
 t.raw(*KILL_RESTART)
 t.echo("After the restart")
 purge_restart_reads(t, False)
-t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.raw(["--source include/villagesql/wait_innodb_history_purged.inc"])
 t.echo("Purged")
 purge_restart_reads(t, True)
 t.raw(*KILL_RESTART)
@@ -2758,7 +2758,7 @@ t.sql("DELETE FROM t WHERE id IN (4, 8)")
 t.sql("UPDATE t SET v = '[9,9,9,9]' WHERE id = 1")
 t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
 t.sql("SET GLOBAL innodb_purge_run_now = ON")
-t.raw(["--source include/wait_innodb_all_purged.inc"])
+t.raw(["--source include/villagesql/wait_innodb_history_purged.inc"])
 t.echo("Purged")
 purge_restart_reads(t, True)
 t.raw(*KILL_RESTART)
