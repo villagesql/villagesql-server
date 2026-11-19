@@ -355,9 +355,24 @@ bool sys_var::update(THD *thd, set_var *var) {
       to make it safe we'll need value_ptr_unlock().
     */
     const AutoWLock lock1(&PLock_global_system_variables);
-    const AutoWLock lock2(guard);
-    return global_update(thd, var) ||
-           (on_update && on_update(this, thd, OPT_GLOBAL));
+    {
+      const AutoWLock lock2(guard);
+      if (global_update(thd, var) ||
+          (on_update && on_update(this, thd, OPT_GLOBAL)))
+        return true;
+    }
+    /*
+      VillageSQL: read the value to persist before releasing LOCK_global_system_variables,
+      so that a concurrent SET GLOBAL cannot change it in between.
+    */
+    if (type == OPT_PERSIST) {
+      String str;
+      Persisted_variables_cache::get_variable_value(thd, this, &str,
+                                                    &var->persist_value_is_null);
+      var->persist_value = {thd->strmake(str.ptr(), str.length()),
+                            str.length()};
+    }
+    return false;
   } else {
     /* Block reads from other threads. */
     mysql_mutex_lock(&thd->LOCK_thd_sysvar);

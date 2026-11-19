@@ -483,9 +483,9 @@ bool Persisted_variables_cache::set_variable(THD *thd, set_var *setvar) {
         var_value = utf8_str.c_ptr_quick();
       }
     } else {
-      Persisted_variables_cache::get_variable_value(thd, system_var, &utf8_str,
-                                                    &is_null);
-      var_value = utf8_str.c_ptr_quick();
+      assert(setvar->persist_value.str != nullptr);
+      var_value = setvar->persist_value.str;
+      is_null = setvar->persist_value_is_null;
     }
 
     // 2. Store local variable var_value into member st_persist_var object.
@@ -607,12 +607,11 @@ String *Persisted_variables_cache::get_variable_value(THD *thd,
   show->name = system_var->name.str;
   show->value = (char *)system_var;
 
-  mysql_mutex_lock(&LOCK_global_system_variables);
+  mysql_mutex_assert_owner(&LOCK_global_system_variables);
   value = get_one_variable(thd, show, OPT_GLOBAL, show->type, nullptr, &fromcs,
                            val_buf, &val_length, is_null);
   /* convert the retrieved value to utf8mb4 */
   str->copy(value, val_length, fromcs, tocs, &dummy_err);
-  mysql_mutex_unlock(&LOCK_global_system_variables);
   return str;
 }
 

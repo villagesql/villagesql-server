@@ -229,13 +229,17 @@ class Persisted_variables_cache final {
   */
   void keyring_support_available();
 
+  /**
+    VillageSQL: get the global value of a variable as a utf8mb4 string. The caller holds
+    LOCK_global_system_variables.
+  */
+  static String *get_variable_value(THD *thd, sys_var *system_var, String *str,
+                                    bool *is_null);
+
   std::string to_hex(const std::string &value);
   std::string from_hex(const std::string &value);
 
  private:
-  /* Helper function to get variable value */
-  static String *get_variable_value(THD *thd, sys_var *system_var, String *str,
-                                    bool *is_null);
   /**
     If the variable has an alias, return the name for the alias.
   */

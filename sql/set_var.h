@@ -997,6 +997,11 @@ class set_var : public set_var_base {
     const void *ptr;            ///< for Sys_var_struct
   } save_result;
 
+  /// VillageSQL: for SET PERSIST, the global value after the update, read by
+  /// sys_var::update() under LOCK_global_system_variables.
+  LEX_CSTRING persist_value{nullptr, 0};
+  bool persist_value_is_null{false};
+
   ///< Resolver of the variable at the left hand side of the assignment.
   const System_variable_tracker m_var_tracker;
 
