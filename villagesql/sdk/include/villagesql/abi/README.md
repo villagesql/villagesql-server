@@ -118,7 +118,8 @@ text to an existing column's charset on assignment and to `character_set_results
 when sending it to the client. Setting `character_set_results` to NULL or binary
 disables that client conversion. Extensions must still return UTF-8; they should
 not convert STRING results to the client's charset themselves. Characters that
-the destination charset cannot represent cannot be preserved by conversion.
+the destination charset cannot represent become `?` when sent to the client, and
+are rejected on column assignment in strict mode.
 
 CREATE TABLE AS SELECT inherits the expression's charset/collation unless
 overridden. Once stored, the value has column collation precedence rather than
