@@ -129,6 +129,7 @@ bin_echo	BINARY	["BINARY"]
 bin_hex	STRING	["BINARY"]
 int_const	INT	["INT"]
 int_echo	INT	["INT"]
+str_concat	STRING	["STRING", "STRING"]
 str_const	STRING	["STRING"]
 str_echo	STRING	["STRING"]
 str_hex	STRING	["STRING"]
@@ -141,6 +142,16 @@ SELECT COLLATION(vdf_sb.str_echo('a' COLLATE utf8mb4_0900_ai_ci)) AS result_coll
 COERCIBILITY(vdf_sb.str_echo('a')) AS coercibility;
 result_collation	coercibility
 utf8mb4_bin	4
+SELECT vdf_sb.str_concat('A' COLLATE utf8mb4_0900_ai_ci,
+'é' COLLATE utf8mb4_bin) AS mixed_text,
+COLLATION(vdf_sb.str_concat('A' COLLATE utf8mb4_0900_ai_ci,
+'é' COLLATE utf8mb4_bin)) AS result_collation;
+mixed_text	result_collation
+Aé	utf8mb4_bin
+SELECT vdf_sb.bin_hex(0xC3A9) AS binary_hex,
+COLLATION(vdf_sb.bin_hex(0xC3A9)) AS result_collation;
+binary_hex	result_collation
+C3A9	utf8mb4_bin
 SELECT vdf_sb.str_echo('A') = vdf_sb.str_echo('a') AS case_equal,
 vdf_sb.str_echo('e') = vdf_sb.str_echo('é') AS accent_equal,
 vdf_sb.str_echo('a') = vdf_sb.str_echo('a ') AS space_equal,
@@ -151,14 +162,15 @@ case_equal	accent_equal	space_equal	space_like	preserved_spaces
 CREATE TABLE result_policy (s VARCHAR(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci);
 INSERT INTO result_policy VALUES ('a'), ('A'), ('a '), ('é'), ('e');
 SELECT s, s = vdf_sb.str_echo('A') AS column_equal,
-s = (vdf_sb.str_echo('A') COLLATE utf8mb4_bin) AS explicit_equal
+s = (vdf_sb.str_echo('A') COLLATE utf8mb4_bin) AS explicit_equal,
+s = (vdf_sb.str_echo('A') COLLATE utf8mb4_0900_ai_ci) AS explicit_ci_equal
 FROM result_policy ORDER BY HEX(s);
-s	column_equal	explicit_equal
-A	1	1
-a	1	0
-a 	0	0
-e	0	0
-é	0	0
+s	column_equal	explicit_equal	explicit_ci_equal
+A	1	1	1
+a	1	0	1
+a 	0	0	0
+e	0	0	0
+é	0	0	0
 SELECT COUNT(DISTINCT vdf_sb.str_echo(s)) AS distinct_values FROM result_policy;
 distinct_values
 4

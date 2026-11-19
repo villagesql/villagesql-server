@@ -125,6 +125,14 @@ ORDER BY jt.name;
 # Result collation is fixed even when the argument has an explicit collation.
 SELECT COLLATION(vdf_sb.str_echo('a' COLLATE utf8mb4_0900_ai_ci)) AS result_collation,
        COERCIBILITY(vdf_sb.str_echo('a')) AS coercibility;
+# Mixed input collations do not determine the result collation.
+SELECT vdf_sb.str_concat('A' COLLATE utf8mb4_0900_ai_ci,
+                         'é' COLLATE utf8mb4_bin) AS mixed_text,
+       COLLATION(vdf_sb.str_concat('A' COLLATE utf8mb4_0900_ai_ci,
+                                  'é' COLLATE utf8mb4_bin)) AS result_collation;
+# A STRING result with no text arguments has the same fixed collation.
+SELECT vdf_sb.bin_hex(0xC3A9) AS binary_hex,
+       COLLATION(vdf_sb.bin_hex(0xC3A9)) AS result_collation;
 SELECT vdf_sb.str_echo('A') = vdf_sb.str_echo('a') AS case_equal,
        vdf_sb.str_echo('e') = vdf_sb.str_echo('é') AS accent_equal,
        vdf_sb.str_echo('a') = vdf_sb.str_echo('a ') AS space_equal,
@@ -135,7 +143,8 @@ SELECT vdf_sb.str_echo('A') = vdf_sb.str_echo('a') AS case_equal,
 CREATE TABLE result_policy (s VARCHAR(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci);
 INSERT INTO result_policy VALUES ('a'), ('A'), ('a '), ('é'), ('e');
 SELECT s, s = vdf_sb.str_echo('A') AS column_equal,
-       s = (vdf_sb.str_echo('A') COLLATE utf8mb4_bin) AS explicit_equal
+       s = (vdf_sb.str_echo('A') COLLATE utf8mb4_bin) AS explicit_equal,
+       s = (vdf_sb.str_echo('A') COLLATE utf8mb4_0900_ai_ci) AS explicit_ci_equal
 FROM result_policy ORDER BY HEX(s);
 SELECT COUNT(DISTINCT vdf_sb.str_echo(s)) AS distinct_values FROM result_policy;
 SELECT MIN(HEX(s)) AS representative, COUNT(*) AS members

@@ -88,9 +88,10 @@ on every platform: the type defines the byte order of its multi-byte numbers
 ### SQL result collation
 
 Scalar and aggregate VDF STRING results use the fixed `utf8mb4_bin` collation,
-independent of argument and connection collations. This includes functions with
-mixed input collations or no text arguments. The server does not automatically
-convert the returned UTF-8 text back to an input's charset.
+independent of argument and connection collations. This includes STRING-returning
+type-associated VDFs such as `TYPE::to_string`, as well as functions with mixed
+input collations or no text arguments. The server does not automatically convert
+the returned UTF-8 text back to an input's charset.
 
 When `utf8mb4_bin` is used for comparison, case and accents are significant:
 `'A'` differs from `'a'`, and `'e'` differs from `'é'`. Trailing spaces are ignored
