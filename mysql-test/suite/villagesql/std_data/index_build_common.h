@@ -109,9 +109,11 @@ inline bool dup_position(Index::Cursor /*cursor*/, Index::CursorOp /*op*/,
 
 inline bool dup_fetch(Index::Cursor /*cursor*/,
                       IndexScanKey::KeyPartRef * /*key_ref*/,
+                      IndexScanKey::KeyPartRef * /*key_column_refs*/,
                       IndexScanKey::KeyPartData * /*key_columns*/,
                       IndexScanKey::KeyPartData * /*pkey_columns*/,
-                      char * /*err*/, uint32_t /*err_len*/) {
+                      Segment::TrxRef * /*trx_ref*/, char * /*err*/,
+                      uint32_t /*err_len*/) {
   return false;
 }
 
