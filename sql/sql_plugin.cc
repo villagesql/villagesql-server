@@ -3056,6 +3056,9 @@ void plugin_thdvar_init(THD *thd, bool enable_plugins) {
   }
   mysql_mutex_unlock(&LOCK_global_system_variables);
 
+  DBUG_EXECUTE_IF("plugin_thdvar_init_sleep_before_sysvar_copy",
+                  my_sleep(3000000););
+
   /* Initialize all Sys_var_charptr variables here. */
 
   // @@session.session_track_system_variables
