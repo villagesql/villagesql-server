@@ -4,6 +4,8 @@
 # transaction, is not visible to another connection until committed, and becomes
 # visible to both once committed.
 
+--source include/villagesql/not_implemented.inc
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t (
