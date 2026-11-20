@@ -309,6 +309,30 @@ bool VictionaryClient::reload_all_tables(THD *thd) {
                                      SchemaManager::EXTENSIONS_TABLE_NAME)) {
     error = true;
   }
+  if (reload_ddl_tables_locked(thd)) {
+    error = true;
+  }
+
+  return error;
+}
+
+bool VictionaryClient::reload_ddl_tables(THD *thd) {
+  if (should_assert_if_false(m_initialized.load())) {
+    LogVSQL(ERROR_LEVEL,
+            "VictionaryClient must be initialized when calling "
+            "reload_ddl_tables");
+    return true;
+  }
+
+  LogVSQL(INFORMATION_LEVEL, "Reloading DDL system table metadata");
+
+  auto guard = get_write_lock();
+  return reload_ddl_tables_locked(thd);
+}
+
+bool VictionaryClient::reload_ddl_tables_locked(THD *thd) {
+  bool error = false;
+
   if (m_columns.reload_from_table(thd, SchemaManager::VILLAGESQL_SCHEMA_NAME,
                                   SchemaManager::COLUMNS_TABLE_NAME)) {
     error = true;
@@ -355,7 +379,8 @@ std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
 }
 
 void VictionaryClient::init_index_id_counter() {
-  // Must be called while holding write lock (reload_all_tables holds it).
+  // Must be called while holding write lock (reload_ddl_tables_locked holds
+  // it).
   uint64_t max_id = 0;
   for (const IndexEntry *entry : m_custom_indexes.get_all_committed()) {
     if (entry->index_id > max_id) max_id = entry->index_id;
