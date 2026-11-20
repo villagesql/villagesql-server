@@ -926,6 +926,8 @@ row_prebuilt_t *row_create_prebuilt(
 
   prebuilt->fts_doc_id_in_read_set = false;
   prebuilt->blob_heap = nullptr;
+  prebuilt->custom_pk_heap = nullptr;
+  prebuilt->custom_offset_heap = nullptr;
 
   prebuilt->no_read_locking = false;
   prebuilt->no_autoinc_locking = false;
@@ -979,6 +981,14 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
 
   if (prebuilt->old_vers_heap) {
     mem_heap_free(prebuilt->old_vers_heap);
+  }
+
+  if (prebuilt->custom_pk_heap) {
+    mem_heap_free(prebuilt->custom_pk_heap);
+  }
+
+  if (prebuilt->custom_offset_heap) {
+    mem_heap_free(prebuilt->custom_offset_heap);
   }
 
   if (prebuilt->fetch_cache[0] != nullptr) {

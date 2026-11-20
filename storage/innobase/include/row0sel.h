@@ -120,6 +120,16 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
                              lob::undo_vers_t *lob_undo,
                              mem_heap_t *&blob_heap);
 
+/** Stores the row id to the prebuilt struct.
+@param[in,out]  prebuilt        prebuilt
+@param[in]      index_rec       record
+@param[in]      index           index of the record
+@param[in]      offsets         rec_get_offsets(index_rec, index) */
+void row_sel_store_row_id_to_prebuilt(row_prebuilt_t *prebuilt,
+                                      const rec_t *index_rec,
+                                      const dict_index_t *index,
+                                      const ulint *offsets);
+
 /** Converts a key value stored in MySQL format to an Innobase dtuple. The last
 field of the key value may be just a prefix of a fixed length field: hence
 the parameter key_len. But currently we do not allow search keys where the

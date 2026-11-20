@@ -3253,9 +3253,10 @@ and return. don't execute actual insert. */
 
   using villagesql::innodb::Custom_index;
   if (Custom_index::is_custom(index)) {
-    err =
-        Custom_index::insert(index, thr_get_trx(thr)->id, entry, dup_chk_only);
-    if (err != DB_SUCCESS || !index->has_mapping_btree()) {
+    bool is_key_null = false;
+    err = Custom_index::insert(index, thr_get_trx(thr)->id, entry, dup_chk_only,
+                               &is_key_null);
+    if (err != DB_SUCCESS || !index->has_mapping_btree() || is_key_null) {
       return err;
     }
   }
