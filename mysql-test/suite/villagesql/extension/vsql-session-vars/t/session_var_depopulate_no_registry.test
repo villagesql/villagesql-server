@@ -1,0 +1,59 @@
+# When on_depopulate_session_var cannot get the plugin registry, it returns
+# without unregistering the variables. UNINSTALL EXTENSION then unloads the
+# extension. The variables stay registered with default and comment pointers
+# into the unloaded library: register_variable stores the default string
+# pointer without copying it.
+#
+# The debug point vef_depopulate_no_registry makes the registry unavailable.
+# The probes then read, set and reset the variables of the uninstalled
+# extension, in an existing session and in a new one. They may fail with an
+# error.
+#
+# Expected: the server stays up.
+
+--source include/have_debug.inc
+--source include/count_sessions.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_session_var_test;
+SET GLOBAL vsql_session_var_test.session_str_var = 'before';
+
+SET GLOBAL DEBUG = '+d,vef_depopulate_no_registry';
+UNINSTALL EXTENSION vsql_session_var_test;
+SET GLOBAL DEBUG = '-d,vef_depopulate_no_registry';
+
+--echo # Use the variables of the uninstalled extension
+--disable_abort_on_error
+--disable_result_log
+SELECT @@global.vsql_session_var_test.session_str_var;
+SELECT @@session.vsql_session_var_test.session_str_var;
+SET GLOBAL vsql_session_var_test.session_str_var = DEFAULT;
+SET SESSION vsql_session_var_test.session_str_var = DEFAULT;
+SET GLOBAL vsql_session_var_test.session_int_var = DEFAULT;
+--enable_result_log
+--enable_abort_on_error
+
+--echo # A new session reads them too
+--connect(con1, localhost, root,,)
+--disable_abort_on_error
+--disable_result_log
+SELECT @@session.vsql_session_var_test.session_str_var;
+SELECT @@session.vsql_session_var_test.session_int_var;
+SET SESSION vsql_session_var_test.session_str_var = DEFAULT;
+--enable_result_log
+--enable_abort_on_error
+--disconnect con1
+--connection default
+
+--echo # The server is still up
+SELECT 1 AS alive;
+
+--echo # Restart to drop the variables left registered
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+--source include/wait_until_count_sessions.inc

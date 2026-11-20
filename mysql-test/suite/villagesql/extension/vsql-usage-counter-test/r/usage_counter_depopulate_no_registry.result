@@ -1,0 +1,21 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_usage_counter;
+SELECT vsql_usage_counter.add(3, 4);
+vsql_usage_counter.add(3, 4)
+7
+SET GLOBAL DEBUG = '+d,vef_depopulate_no_registry';
+UNINSTALL EXTENSION vsql_usage_counter;
+SET GLOBAL DEBUG = '-d,vef_depopulate_no_registry';
+# Read the status variables of the uninstalled extension
+SHOW GLOBAL STATUS LIKE 'vsql_usage_counter%';
+SELECT * FROM performance_schema.global_status
+WHERE VARIABLE_NAME LIKE 'vsql_usage_counter%';
+SHOW GLOBAL STATUS;
+# The server is still up
+SELECT 1 AS alive;
+alive
+1
+# Restart to drop the variables left registered
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

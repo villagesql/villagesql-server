@@ -1,0 +1,21 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_config_vars_test;
+SET GLOBAL vsql_config_vars_test.label = 'before';
+SET GLOBAL DEBUG = '+d,vef_depopulate_no_registry';
+UNINSTALL EXTENSION vsql_config_vars_test;
+SET GLOBAL DEBUG = '-d,vef_depopulate_no_registry';
+# Use the variables of the uninstalled extension
+SELECT @@global.vsql_config_vars_test.max_items;
+SELECT @@global.vsql_config_vars_test.label;
+SELECT @@global.vsql_config_vars_test.mode;
+SET GLOBAL vsql_config_vars_test.mode = 'sync';
+SET GLOBAL vsql_config_vars_test.max_items = 7;
+SET GLOBAL vsql_config_vars_test.label = DEFAULT;
+# The server is still up
+SELECT 1 AS alive;
+alive
+1
+# Restart to drop the variables left registered
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "my_dbug.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_status_var_service.h"
 #include "mysql/status_var.h"
@@ -147,6 +148,9 @@ void on_depopulate_status_var(const DepopulateContext &ctx) {
     g_extensions.erase(it);
   }
 
+  // Behaves as if the plugin registry were unavailable, so the variables stay
+  // registered.
+  DBUG_EXECUTE_IF("vef_depopulate_no_registry", return;);
   PluginRegistry registry;
   if (registry.is_valid()) {
     my_service<SERVICE_TYPE(status_variable_registration)> reg_svc(

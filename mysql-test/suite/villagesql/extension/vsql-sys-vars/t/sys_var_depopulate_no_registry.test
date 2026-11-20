@@ -1,0 +1,50 @@
+# When on_depopulate_sys_var cannot get the plugin registry, it frees the
+# extension's g_sys_vars entries and returns without unregistering the
+# variables. UNINSTALL EXTENSION then unloads the extension. The variables stay
+# registered with a freed enum TYPE_LIB, and with value, default and comment
+# pointers into the unloaded library.
+#
+# The debug point vef_depopulate_no_registry makes the registry unavailable.
+# The probes then read, set and reset each variable of the uninstalled
+# extension. They may fail with an error.
+#
+# Expected: the server stays up.
+
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_config_vars_test;
+SET GLOBAL vsql_config_vars_test.label = 'before';
+
+SET GLOBAL DEBUG = '+d,vef_depopulate_no_registry';
+UNINSTALL EXTENSION vsql_config_vars_test;
+SET GLOBAL DEBUG = '-d,vef_depopulate_no_registry';
+
+# Uninstalling this extension runs its on_deinit hook, which appends to a
+# marker file (read by config_vars_on_init). Remove it so the test leaves no
+# files behind.
+--remove_file $MYSQL_TMP_DIR/vsql_config_vars_test.marker
+
+--echo # Use the variables of the uninstalled extension
+--disable_abort_on_error
+--disable_result_log
+SELECT @@global.vsql_config_vars_test.max_items;
+SELECT @@global.vsql_config_vars_test.label;
+SELECT @@global.vsql_config_vars_test.mode;
+SET GLOBAL vsql_config_vars_test.mode = 'sync';
+SET GLOBAL vsql_config_vars_test.max_items = 7;
+SET GLOBAL vsql_config_vars_test.label = DEFAULT;
+--enable_result_log
+--enable_abort_on_error
+
+--echo # The server is still up
+SELECT 1 AS alive;
+
+--echo # Restart to drop the variables left registered
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

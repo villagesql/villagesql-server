@@ -1,0 +1,41 @@
+# When on_depopulate_status_var cannot get the plugin registry, it frees the
+# extension's SHOW_VAR arrays and names and returns without unregistering the
+# variables. UNINSTALL EXTENSION then unloads the extension. MySQL still lists
+# the variables, with freed names and value pointers into the unloaded library.
+#
+# The debug point vef_depopulate_no_registry makes the registry unavailable.
+# The probes then read the global status. They may fail with an error.
+#
+# Expected: the server stays up.
+
+--source include/have_debug.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_usage_counter;
+SELECT vsql_usage_counter.add(3, 4);
+
+SET GLOBAL DEBUG = '+d,vef_depopulate_no_registry';
+UNINSTALL EXTENSION vsql_usage_counter;
+SET GLOBAL DEBUG = '-d,vef_depopulate_no_registry';
+
+--echo # Read the status variables of the uninstalled extension
+--disable_abort_on_error
+--disable_result_log
+SHOW GLOBAL STATUS LIKE 'vsql_usage_counter%';
+SELECT * FROM performance_schema.global_status
+WHERE VARIABLE_NAME LIKE 'vsql_usage_counter%';
+SHOW GLOBAL STATUS;
+--enable_result_log
+--enable_abort_on_error
+
+--echo # The server is still up
+SELECT 1 AS alive;
+
+--echo # Restart to drop the variables left registered
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "my_sys.h"
+#include "my_dbug.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
@@ -548,6 +549,9 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
     }
   }
 
+  // Behaves as if the plugin registry were unavailable, so the variables stay
+  // registered.
+  DBUG_EXECUTE_IF("vef_depopulate_no_registry", return;);
   PluginRegistry registry;
   if (!registry.is_valid()) return;
 

@@ -1,0 +1,24 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_session_var_test;
+SET GLOBAL vsql_session_var_test.session_str_var = 'before';
+SET GLOBAL DEBUG = '+d,vef_depopulate_no_registry';
+UNINSTALL EXTENSION vsql_session_var_test;
+SET GLOBAL DEBUG = '-d,vef_depopulate_no_registry';
+# Use the variables of the uninstalled extension
+SELECT @@global.vsql_session_var_test.session_str_var;
+SELECT @@session.vsql_session_var_test.session_str_var;
+SET GLOBAL vsql_session_var_test.session_str_var = DEFAULT;
+SET SESSION vsql_session_var_test.session_str_var = DEFAULT;
+SET GLOBAL vsql_session_var_test.session_int_var = DEFAULT;
+# A new session reads them too
+SELECT @@session.vsql_session_var_test.session_str_var;
+SELECT @@session.vsql_session_var_test.session_int_var;
+SET SESSION vsql_session_var_test.session_str_var = DEFAULT;
+# The server is still up
+SELECT 1 AS alive;
+alive
+1
+# Restart to drop the variables left registered
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
