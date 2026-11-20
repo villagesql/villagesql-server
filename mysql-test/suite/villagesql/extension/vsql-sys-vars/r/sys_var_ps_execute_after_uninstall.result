@@ -1,0 +1,20 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_config_vars_test;
+# Case 1: not executed before the uninstall
+PREPARE s FROM 'SELECT @@global.vsql_config_vars_test.max_items <= 5 AS le';
+UNINSTALL EXTENSION vsql_config_vars_test;
+EXECUTE s;
+ERROR HY000: Unknown system variable 'vsql_config_vars_test.max_items'
+DEALLOCATE PREPARE s;
+# Case 2: executed once before the uninstall
+INSTALL EXTENSION vsql_config_vars_test;
+PREPARE s FROM 'SELECT @@global.vsql_config_vars_test.max_items <= 5 AS le';
+EXECUTE s;
+le
+0
+UNINSTALL EXTENSION vsql_config_vars_test;
+EXECUTE s;
+ERROR HY000: Unknown system variable 'vsql_config_vars_test.max_items'
+DEALLOCATE PREPARE s;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

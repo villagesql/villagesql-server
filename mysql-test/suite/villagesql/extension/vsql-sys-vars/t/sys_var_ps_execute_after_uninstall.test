@@ -1,0 +1,51 @@
+# A prepared statement that reads an extension's global system variable,
+# executed after the extension is uninstalled.
+#
+# PREPARE resolves @@global.vsql_config_vars_test.max_items. EXECUTE then reads
+# it through Item_func_get_system_var::val_int(), which finds no variable and
+# returns without caching a value. Its Audit_global_variable_get_event
+# destructor then reads Item_func_get_system_var::cached_null_value.
+#
+# Case 1, never executed before the uninstall: cached_null_value was never
+# set. UBSan reports "load of value ..., which is not a valid value for type
+# 'bool'" in the destructor. Builds without UBSan show no failure.
+#
+# Case 2, executed once before the uninstall: cached_null_value and the cached
+# value are left from that execution. The destructor reports the earlier
+# value, and debug builds fail its assertion that the value was cached by the
+# current query.
+#
+# Expected: EXECUTE fails with ER_UNKNOWN_SYSTEM_VARIABLE in both cases.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_config_vars_test;
+
+--echo # Case 1: not executed before the uninstall
+PREPARE s FROM 'SELECT @@global.vsql_config_vars_test.max_items <= 5 AS le';
+
+UNINSTALL EXTENSION vsql_config_vars_test;
+
+# Uninstalling this extension runs its on_deinit hook, which appends to a
+# marker file (read by config_vars_on_init). Remove it so the test leaves no
+# files behind.
+--remove_file $MYSQL_TMP_DIR/vsql_config_vars_test.marker
+
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+EXECUTE s;
+
+DEALLOCATE PREPARE s;
+
+--echo # Case 2: executed once before the uninstall
+INSTALL EXTENSION vsql_config_vars_test;
+PREPARE s FROM 'SELECT @@global.vsql_config_vars_test.max_items <= 5 AS le';
+EXECUTE s;
+
+UNINSTALL EXTENSION vsql_config_vars_test;
+--remove_file $MYSQL_TMP_DIR/vsql_config_vars_test.marker
+
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+EXECUTE s;
+
+DEALLOCATE PREPARE s;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
