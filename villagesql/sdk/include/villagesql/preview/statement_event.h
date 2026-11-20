@@ -47,6 +47,8 @@ class StatementEventArgs {
                      : std::string_view{};
   }
 
+  const char *query_charset() const { return a_->query_charset; }
+
   const char *user() const { return a_->user; }
   const char *client_ip() const { return a_->client_ip; }
   unsigned long connection_id() const { return a_->connection_id; }
@@ -99,9 +101,23 @@ class StatementEventArgs {
   uint64_t read_rnd() const { return a_->read_rnd; }
   uint64_t read_rnd_next() const { return a_->read_rnd_next; }
 
-  const char *client_pid() const { return a_->client_pid; }
-  const char *client_name() const { return a_->client_name; }
-  const char *program_name() const { return a_->program_name; }
+  std::string_view client_pid() const {
+    return a_->client_pid ? std::string_view(a_->client_pid, a_->client_pid_len)
+                          : std::string_view{};
+  }
+  const char *client_pid_charset() const { return a_->client_pid_charset; }
+  std::string_view client_name() const {
+    return a_->client_name
+               ? std::string_view(a_->client_name, a_->client_name_len)
+               : std::string_view{};
+  }
+  const char *client_name_charset() const { return a_->client_name_charset; }
+  std::string_view program_name() const {
+    return a_->program_name
+               ? std::string_view(a_->program_name, a_->program_name_len)
+               : std::string_view{};
+  }
+  const char *program_name_charset() const { return a_->program_name_charset; }
 
  private:
   const vef_statement_event_args_t *a_;

@@ -44,6 +44,7 @@ namespace sv = vsql::preview_sys_var;
 namespace se = vsql::preview_statement_event;
 
 static bool g_enabled;
+static bool g_encoding_details;
 static long long g_threshold_ms;
 static char *g_log_filename;
 
@@ -109,11 +110,23 @@ static void slow_query_hook(const se::StatementEventArgs &args,
 
   fprintf(f, "SET timestamp=%llu;\n", (unsigned long long)now);
   auto q = args.query();
+  if (g_encoding_details) {
+    fprintf(f, "# Encoding: %s query=", args.query_charset());
+    for (unsigned char byte : q) fprintf(f, "%02X", byte);
+    fprintf(
+        f, " program_charset=%s program=",
+        args.program_name_charset() ? args.program_name_charset() : "missing");
+    for (unsigned char byte : args.program_name()) fprintf(f, "%02X", byte);
+    fprintf(f, "\n");
+  }
   fprintf(f, "%.*s;\n", (int)q.size(), q.data());
   fclose(f);
 }
 
 static auto SYS_VARS = sv::make_capability({
+    sv::make_bool("encoding_details",
+                  "Include query bytes and encoding metadata",
+                  &g_encoding_details, false),
     sv::make_bool("enabled",
                   "Enable or disable the slow query log (default: OFF)",
                   &g_enabled, false),

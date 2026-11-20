@@ -62,3 +62,9 @@ When a preview capability's shape has settled and we are ready to commit to
 its stability, it will move out of `villagesql/preview/` into the stable
 SDK surface, with appropriate protocol/version guarantees. Until then,
 assume nothing in this directory is stable.
+
+## Statement-event encodings
+
+Statement-event ABI 2 reports query bytes with a MySQL charset/collation name. It does not convert or validate SQL text. The metadata follows the query buffer, even if the statement changes the session charset. A `binary` label means the server has not established a single text encoding, as can happen with expanded prepared statements or redacted buffers. Existing password redaction is preserved.
+
+Selected connection attributes include byte lengths and their handshake charset, independent of later `SET NAMES` statements. SDK accessors return `std::string_view` so embedded NUL is retained. Copy callback data before returning if you need to retain it. Preview consumers must rebuild against the new event layout (`ver-4`).

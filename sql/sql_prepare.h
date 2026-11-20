@@ -180,6 +180,7 @@ class Prepared_statement final {
 
   /// The query string associated with this statement.
   LEX_CSTRING m_query_string{NULL_CSTR};
+  const CHARSET_INFO *m_query_charset{nullptr};
 
   /// Performance Schema interface for a prepared statement.
   PSI_prepared_stmt *m_prepared_stmt{nullptr};
