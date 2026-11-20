@@ -195,98 +195,46 @@ typedef struct {
 
 } vef_index_ctx_t;
 
-// Index scan type. Determines the structure of the keys array in
-// vef_index_scan_desc_t:
-//
-//   POINT: Exact-match lookup. The keys array contains exactly one entry of
-//          type BEGIN with include_key=true and key_columns != NULL. The
-//          extension must match only entries equal to that key value.
-//
-//   RANGE: Range scan. The keys array contains a BEGIN entry (lower bound) and
-//          an END entry (upper bound) in any order. Either may be unbounded
-//          (key_columns == NULL). include_key on each entry controls whether
-//          the bound is inclusive or exclusive.
-//
-//   KNN:   K nearest neighbour scan. The keys array contains exactly one entry
-//          of type KNN_QUERY carrying the query vector. limit in the descriptor
-//          specifies K.
-typedef uint32_t vef_index_scan_type_t;
-#define VEF_INDEX_SCAN_TYPE_POINT ((vef_index_scan_type_t)0)
-#define VEF_INDEX_SCAN_TYPE_RANGE ((vef_index_scan_type_t)1)
-#define VEF_INDEX_SCAN_TYPE_KNN ((vef_index_scan_type_t)2)
-
-// Index scan key type.
-// BEGIN and END are value-space bounds, not traversal-order positions.
-// BEGIN is always the lower value bound; END is always the upper value bound.
-// The `reverse` field in vef_index_scan_desc_t controls traversal direction
-// within those fixed bounds: a reverse scan starts at the END bound and
-// advances toward BEGIN using PREV. The extension must account for `reverse`
-// when positioning the cursor in scan_begin, but the meaning of BEGIN/END
-// does not change.
-typedef uint32_t vef_index_scan_key_type_t;
-#define VEF_INDEX_SCAN_KEY_TYPE_BEGIN ((vef_index_scan_key_type_t)0)
-#define VEF_INDEX_SCAN_KEY_TYPE_END ((vef_index_scan_key_type_t)1)
-#define VEF_INDEX_SCAN_KEY_TYPE_KNN_QUERY ((vef_index_scan_key_type_t)2)
-
+// Scan key used to define an index scan. The profile function determines the
+// semantics of the key and how its key columns are interpreted by the
+// extension.
 typedef struct {
-  // Version for future extensibility
+  // Version for future extensibility.
   uint32_t version;
 
-  // Key type determines which fields below are meaningful:
-  //   BEGIN / END:  range bound (lower / upper value bound respectively)
-  //   KNN_QUERY:    the query vector to find K nearest neighbours of
-  vef_index_scan_key_type_t type;
+  // Identifies the profile function that defines the semantics of this scan
+  // key. The profile function is defined by the index profile.
+  uint32_t profile_function_id;
 
   // Number of key columns.
-  // For BEGIN/END: may be a prefix of the full index key.
-  // For KNN_QUERY: number of columns in the query vector; must not be 0.
   uint32_t num_key_columns;
 
-  // Key data for each column.
-  // For BEGIN/END: NULL means unbounded on that side:
-  //   BEGIN with key_columns == NULL -> no lower value bound (-INF)
-  //   END with key_columns == NULL   -> no upper value bound (+INF)
-  //   These semantics are value-space and do not change with `reverse`: a
-  //   reverse scan with a NULL END key still starts at +INF and advances
-  //   downward. When NULL, num_key_columns must be 0 and include_key is
-  //   ignored.
-  // For KNN_QUERY: must not be NULL.
+  // Key data for each column. The interpretation of the key columns is
+  // determined by the profile function.
   vef_storage_col_data_t *key_columns;
-
-  // Whether the range bound is inclusive. Applies to BEGIN/END only.
-  // true -> GE (BEGIN) or LE (END); false -> GT (BEGIN) or LT (END).
-  // Ignored for KNN_QUERY and when key_columns is NULL.
-  uint8_t include_key;
 
 } vef_index_scan_key_t;
 
 // Index scan descriptor.
 typedef struct {
-  // Version for future extensibility
+  // Version for future extensibility.
   uint32_t version;
 
-  // Scan type: point lookup, range scan, or KNN. The server sets this so the
-  // extension can dispatch without inspecting the key array.
-  vef_index_scan_type_t scan_type;
-
-  // Scan direction. false = ascending (BEGIN -> END), true = descending
-  // (END -> BEGIN). Does not change the value-space meaning of BEGIN/END keys.
-  // Ignored for VEF_INDEX_SCAN_TYPE_KNN.
+  // Scan direction. false = ascending, true = descending.
   uint8_t reverse;
 
-  // 1 if the KNN limit is exact, 0 if more rows may be needed.
-  uint8_t knn_limit_is_exact;
+  // 1 if the limit is exact, 0 if more rows may be needed.
+  uint8_t limit_is_exact;
 
   // Maximum number of rows the server will read from this scan; 0 means
-  // unlimited. For VEF_INDEX_SCAN_TYPE_KNN this is K. For other scan types
-  // it signals that the server will call scan_end after at most limit rows,
-  // which the extension may use to optimize internal structures (e.g. avoid
-  // materializing more results than needed).
+  // unlimited.
   uint32_t limit;
 
-  // Number of keys in the keys array.
+  // Number of scan keys.
   uint32_t num_keys;
-  // Array of num_keys scan keys describing the bounds or query for this scan.
+
+  // Array of scan keys describing the scan. The semantics of each key are
+  // determined by its profile function.
   vef_index_scan_key_t *keys;
 
   // MVCC read view the scan must be consistent with. It remains valid during
@@ -672,14 +620,27 @@ typedef struct {
 // whose signature.param_count exceeds this at load time.
 #define VEF_INDEX_PROFILE_FN_MAX_ARGS 8
 
+// Kind of an index profile function.
+//   INVALID:  not a valid kind for a profile function. Helpers must use it.
+//   RESTRICT: the function acts as a filter condition on the indexed rows.
+//   ORDER:    the function defines an ordering of the indexed rows.
+// Profile functions must be RESTRICT or ORDER. Helpers must be INVALID. The
+// server rejects registrations that violate this.
+typedef uint32_t vef_index_profile_fn_kind_t;
+#define VEF_INDEX_PROFILE_FN_KIND_INVALID ((vef_index_profile_fn_kind_t)0)
+#define VEF_INDEX_PROFILE_FN_KIND_RESTRICT ((vef_index_profile_fn_kind_t)1)
+#define VEF_INDEX_PROFILE_FN_KIND_ORDER ((vef_index_profile_fn_kind_t)2)
+
 // One function binding within an index profile.
 // fn_id is the identifier used by the index storage implementation when it
-// calls vef_index_profile_fn in the index context. The remaining fields carry
+// calls vef_index_profile_fn in the index context. kind classifies a profile
+// function as a restriction or an ordering. The remaining fields carry
 // the VDF metadata the server uses to register the function as a SQL function.
 typedef struct {
   // Minimum VEF protocol version required to call vdf.
   vef_protocol_t protocol;
   uint32_t fn_id;
+  vef_index_profile_fn_kind_t kind;
   const char *name;
   vef_vdf_func_t vdf;
   vef_signature_t signature;

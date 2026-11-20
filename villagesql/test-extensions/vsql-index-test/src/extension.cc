@@ -335,20 +335,21 @@ static constexpr auto DUMMY_HELPER_FN =
 // Index profile
 // ============================================================================
 
-static const auto DUMMY_HNSW_L2_PROFILE = make_index_profile(kDummyProfileL2)
-                                              .for_type(kDummyVECTOR)
-                                              .using_index(kDummyHNSW)
-                                              .with_function<DUMMY_L2_FN>(1)
-                                              .with_helper<DUMMY_HELPER_FN>(1)
-                                              .ordering(Index::Ordering::ASC)
-                                              .default_for_type(true)
-                                              .build();
+static const auto DUMMY_HNSW_L2_PROFILE =
+    make_index_profile(kDummyProfileL2)
+        .for_type(kDummyVECTOR)
+        .using_index(kDummyHNSW)
+        .with_function<DUMMY_L2_FN>(1, FunctionKind::Order)
+        .with_helper<DUMMY_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .default_for_type(true)
+        .build();
 
 static const auto DUMMY_HNSW_DESC_PROFILE =
     make_index_profile(kDummyProfileDesc)
         .for_type(kDummyVECTOR)
         .using_index(kDummyHNSW)
-        .with_function<DUMMY_L2_FN>(1)
+        .with_function<DUMMY_L2_FN>(1, FunctionKind::Order)
         .with_helper<DUMMY_HELPER_FN>(1)
         .ordering(Index::Ordering::DESC)
         .build();
@@ -357,7 +358,7 @@ static const auto DUMMY_HNSW_NONE_PROFILE =
     make_index_profile(kDummyProfileNone)
         .for_type(kDummyVECTOR)
         .using_index(kDummyHNSW)
-        .with_function<DUMMY_L2_FN>(1)
+        .with_function<DUMMY_L2_FN>(1, FunctionKind::Order)
         .with_helper<DUMMY_HELPER_FN>(1)
         .ordering(Index::Ordering::NONE)
         .build();

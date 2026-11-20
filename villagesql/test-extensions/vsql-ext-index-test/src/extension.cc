@@ -484,14 +484,15 @@ static constexpr auto EXT_INDEX_HELPER_FN =
         .deterministic()
         .build();
 
-static const auto EXT_INDEX_PROFILE = make_index_profile(kExtIndexProfile)
-                                          .for_type(kWideBlobTypeName)
-                                          .using_index(kExtIndex)
-                                          .with_function<EXT_INDEX_FN>(1)
-                                          .with_helper<EXT_INDEX_HELPER_FN>(1)
-                                          .ordering(Index::Ordering::ASC)
-                                          .default_for_type(true)
-                                          .build();
+static const auto EXT_INDEX_PROFILE =
+    make_index_profile(kExtIndexProfile)
+        .for_type(kWideBlobTypeName)
+        .using_index(kExtIndex)
+        .with_function<EXT_INDEX_FN>(1, FunctionKind::Order)
+        .with_helper<EXT_INDEX_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .default_for_type(true)
+        .build();
 
 // ============================================================================
 // Extension entry point
