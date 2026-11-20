@@ -1,0 +1,22 @@
+INSTALL EXTENSION vsql_simple;
+# Crash after the CREATE TABLE is binlogged, before InnoDB commits it
+SET SESSION DEBUG = '+d,crash_after_flush_binlog';
+CREATE TABLE t2 (id INT PRIMARY KEY, data vsql_simple.BYTEARRAY);
+ERROR HY000: Lost connection to MySQL server during query
+# Restart
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/ --innodb-lock-wait-timeout=5
+# The table was rolled forward with its custom-type column
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `data` vsql_simple.bytearray DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# The extension's VDFs work on the column
+INSERT INTO t2 VALUES (1, 'hello');
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") AS rotated FROM t2;
+id	rotated
+1	'uryyb   '
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_simple;

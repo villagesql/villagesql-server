@@ -1,0 +1,44 @@
+# A CREATE TABLE with a custom-type column that crash recovery rolls forward
+# must keep its custom-type column after the restart.
+#
+# CREATE TABLE writes the column's villagesql.custom_columns row in the DDL
+# transaction, which is binlogged and so prepared before it commits.
+# crash_after_flush_binlog kills the server after the binlog is written and
+# before InnoDB commits. On restart, VictionaryClient::init() reads
+# villagesql.custom_columns while the transaction is still prepared; binlog
+# crash recovery commits it afterwards, in tc_log->open(). The column's row
+# must still reach VillageSQL's in-memory metadata.
+#
+# The restart uses a short innodb_lock_wait_timeout so a read that waits on
+# the prepared transaction fails quickly.
+#
+# Expected: the server restarts, t2.data is a vsql_simple.bytearray column,
+# and the extension's VDFs work on it.
+
+--source include/have_debug.inc
+--source include/have_log_bin.inc
+--source include/not_valgrind.inc
+
+--let $veb_dir = `SELECT @@veb_dir`
+INSTALL EXTENSION vsql_simple;
+
+--echo # Crash after the CREATE TABLE is binlogged, before InnoDB commits it
+--source include/expect_crash.inc
+SET SESSION DEBUG = '+d,crash_after_flush_binlog';
+--error CR_SERVER_LOST
+CREATE TABLE t2 (id INT PRIMARY KEY, data vsql_simple.BYTEARRAY);
+
+--echo # Restart
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir --innodb-lock-wait-timeout=5
+--source include/start_mysqld.inc
+
+--echo # The table was rolled forward with its custom-type column
+SHOW CREATE TABLE t2;
+
+--echo # The extension's VDFs work on the column
+INSERT INTO t2 VALUES (1, 'hello');
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") AS rotated FROM t2;
+
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_simple;

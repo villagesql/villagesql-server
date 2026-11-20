@@ -12,12 +12,12 @@ ERROR HY000: Lost connection to MySQL server during query
 # The interrupted install was rolled back
 SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
 WHERE extension_name = 'vsql_simple';
-extension_name
+EXTENSION_NAME
 # The extension can be installed and uninstalled again
 INSTALL EXTENSION vsql_simple;
 SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
 WHERE extension_name = 'vsql_simple';
-extension_name
+EXTENSION_NAME
 vsql_simple
 UNINSTALL EXTENSION vsql_simple;
 DROP TABLE t1;
