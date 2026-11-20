@@ -2324,7 +2324,14 @@ void row_sel_convert_mysql_key_to_innobase(dtuple_t *tuple, byte *buf,
     }
 
     /* Calculate data length and data field total length */
-    if (DATA_LARGE_MTYPE(type) || DATA_GEOMETRY_MTYPE(type)) {
+    if (dfield_get_type(dfield)->extended_storage) {
+      using villagesql::innodb::Custom_column;
+
+      data_len = Custom_column::get_mysql_true_varchar_length(
+          field->col, field->prefix_len);
+      data_field_len = data_offset + data_len;
+
+    } else if (DATA_LARGE_MTYPE(type) || DATA_GEOMETRY_MTYPE(type)) {
       /* For R-tree index, data length should be the
       total size of the wkb data.*/
       if (dict_index_is_spatial(index)) {
@@ -2528,6 +2535,20 @@ void row_sel_field_store_in_mysql_format_func(
   UNIV_MEM_ASSERT_W(dest, mysql_col_len);
   UNIV_MEM_INVALID(dest, mysql_col_len);
 
+  if (column != nullptr && column->stored_by_extn()) {
+    ut_ad(templ->mysql_type == DATA_MYSQL_TRUE_VARCHAR);
+    using villagesql::innodb::Custom_column;
+    dberr_t err = Custom_column::store_mysql_true_varchar(
+        index->table, column, dest, mysql_col_len, templ->mysql_length_bytes,
+        data, len);
+    if (err != DB_SUCCESS) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: Custom column fetch failed";
+      // TODO(villagesql-indexing): surface this failure to the caller.
+    }
+    return;
+  }
+
   switch (templ->type) {
     const byte *field_end;
     byte *pad;
@@ -2564,12 +2585,8 @@ void row_sel_field_store_in_mysql_format_func(
         length of the data to the first byte or the first
         two bytes of dest. */
 
-        // For extended storage, len holds the reference length.
-        ulint data_length =
-            (column && column->stored_by_extn()) ? column->len : len;
-
-        dest = row_mysql_store_true_var_len(dest, data_length,
-                                            templ->mysql_length_bytes);
+        dest =
+            row_mysql_store_true_var_len(dest, len, templ->mysql_length_bytes);
         ut_a(mysql_col_len >= templ->mysql_length_bytes);
         ulint dest_len = mysql_col_len - templ->mysql_length_bytes;
 
@@ -2577,20 +2594,6 @@ void row_sel_field_store_in_mysql_format_func(
         buffer uninitialized. */
         ut_a(dest_len >= len);
         memcpy(dest, data, len);
-
-        if (column && column->stored_by_extn()) {
-          dest += len;
-          dest_len -= len;
-          // We have copied the reference stored in the table. Now, fetch
-          // and append actual column data from extended storage.
-          using villagesql::innodb::Custom_column;
-          dberr_t err = Custom_column::fetch(index->table, column, dest,
-                                             dest_len, data, len);
-          if (err != DB_SUCCESS) {
-            ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-                << "InnoDB: Custom column fetch failed";
-          }
-        }
         break;
       }
 

@@ -413,6 +413,11 @@ byte *row_mysql_store_col_in_innobase_format(
 
   dtype = dfield_get_type(dfield);
 
+  if (dtype->extended_storage) {
+    villagesql::innodb::Custom_column::store_innodb_true_varchar(
+        dfield, row_format_col, mysql_data);
+    return buf;
+  }
   type = dtype->mtype;
 
   if (type == DATA_INT) {

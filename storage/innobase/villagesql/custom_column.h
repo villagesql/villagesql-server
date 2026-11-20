@@ -20,6 +20,7 @@
 #include <memory>
 #include <utility>
 
+#include "data0type.h"
 #include "db0err.h"
 #include "mem0mem.h"
 #include "trx0types.h"
@@ -90,6 +91,20 @@ class Custom_column {
 
   // Returns true if the column storage is managed by an extension.
   bool stored_by_extension() const { return storage_interface().has_value(); }
+
+  // Returns custom column length: the MySQL true-VARCHAR payload length
+  // (REF plus extension data), not including the length prefix.
+  uint32_t get_len() const { return mysql_type_.len; }
+
+  // Returns true if the column's MySQL true-VARCHAR row value uses a 2-byte
+  // length prefix (payload longer than 255 bytes); false if 1-byte.
+  bool is_long_true_varchar() const {
+    return (mysql_type_.prtype & DATA_LONG_TRUE_VARCHAR) != 0;
+  }
+
+  // Returns true if field's InnoDB type matches the column's original MySQL
+  // type, captured before load() rewrote dict_col_t for extended storage.
+  bool matches_mysql_type(const Field *field) const;
 
   // Returns true if ha_alter_info adds or drops a column with extended storage.
   static bool alter_add_drop_with_extended_storage(
@@ -254,6 +269,38 @@ class Custom_column {
                        byte *dest, ulint dest_len, const byte *src,
                        ulint src_len, TrxRef *trx_ref = nullptr);
 
+  // Stores an extended column in MySQL true-VARCHAR format: length prefix,
+  // REF, and payload fetched from extended storage.
+  // @param table The table.
+  // @param col The column definition.
+  // @param dest Destination buffer in MySQL true-VARCHAR format.
+  // @param mysql_col_len Total capacity of dest (templ->mysql_col_len).
+  // @param length_bytes True-VARCHAR length-prefix size.
+  // @param ref_data Reference bytes stored in the record.
+  // @param ref_len Length of ref_data; must equal
+  // dfield_t::extended_ref_size().
+  // @return DB_SUCCESS or an error code.
+  static dberr_t store_mysql_true_varchar(const dict_table_t *table,
+                                          const dict_col_t *col, byte *dest,
+                                          ulint mysql_col_len,
+                                          ulint length_bytes,
+                                          const byte *ref_data, ulint ref_len);
+
+  // Converts a MySQL true-varchar value for an extended column to InnoDB
+  // tuple format.
+  // @param dfield Destination field; its type must already be set.
+  // @param row_format_col true if mysql_data is from a MySQL row.
+  // @param mysql_data MySQL-format true-varchar value.
+  static void store_innodb_true_varchar(dfield_t *dfield, bool row_format_col,
+                                        const byte *mysql_data);
+
+  // Returns the total length of an extended column's MySQL true-VARCHAR key
+  // value including length prefix.
+  // @param col The extended column definition.
+  // @param prefix_len The index field's prefix_len, or 0 if unprefixed.
+  static uint32_t get_mysql_true_varchar_length(const dict_col_t *col,
+                                                ulint prefix_len);
+
   // Allocates memory and fetches the data for a single extended column.
   // @param table The table.
   // @param col The column definition.
@@ -284,6 +331,7 @@ class Custom_column {
  private:
   std::shared_ptr<const TypeContext> type_context_;
   StorageCtx *storage_ctx_ = nullptr;
+  dtype_t mysql_type_{};
 };
 
 }  // namespace innodb
