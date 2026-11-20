@@ -3,8 +3,6 @@
 # profile, also when the ALTER rebuilds or renames the table. No row is left under the old name, so the old name can be reused and
 # the extension can be uninstalled once the table is dropped.
 
---source include/villagesql/not_implemented.inc
-
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
 
