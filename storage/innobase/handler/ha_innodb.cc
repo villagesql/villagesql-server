@@ -3169,6 +3169,7 @@ void ha_innobase::reset_template(void) {
   m_prebuilt->m_end_range = false;
   m_prebuilt->m_knn_query = false;
   m_prebuilt->m_knn_limit_is_exact = true;
+  m_prebuilt->m_knn_limit = 0;
 
   /* Reset index condition pushdown state. */
   if (m_prebuilt->idx_cond) {

@@ -933,6 +933,10 @@ row_prebuilt_t *row_create_prebuilt(
   prebuilt->m_no_prefetch = false;
   prebuilt->m_read_virtual_key = false;
 
+  prebuilt->m_knn_query = false;
+  prebuilt->m_knn_limit_is_exact = true;
+  prebuilt->m_knn_limit = 0;
+
   return prebuilt;
 }
 

@@ -849,29 +849,24 @@ struct row_prebuilt_t {
   /** limit value to avoid fts result overflow */
   ulonglong m_fts_limit;
 
+  // KNN Limit
+  ulonglong m_knn_limit;
+
   /** Set the limit value for a KNN query.
   @param[in]  limit     the KNN result row limit
   @param[in]  is_exact  true if limit is an exact row count, false if it is
                         only an estimate */
   void set_knn_limit(ulonglong limit, bool is_exact) {
-    // KNN scan is not used for FTS.
-    ut_ad(!in_fts_query);
-    m_fts_limit = limit;
+    m_knn_limit = limit;
     m_knn_limit_is_exact = is_exact;
   }
 
   /** @return the limit value for a KNN query */
-  ulonglong get_knn_limit() const {
-    // KNN scan is not used for FTS.
-    ut_ad(!in_fts_query);
-    return m_fts_limit;
-  }
+  ulonglong get_knn_limit() const { return m_knn_limit; }
 
   /** @return true if the KNN limit is an exact row count, false if it is
   only an estimate */
   bool knn_limit_is_exact() const {
-    // KNN scan is not used for FTS.
-    ut_ad(!in_fts_query);
     return m_knn_limit_is_exact;
   }
 
