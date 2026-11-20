@@ -172,6 +172,13 @@ class udf_handler {
   // before m_vdf is instantiated.
   bool is_vdf_returns_string_or_binary() const;
 
+  // For a VDF, returns the extension's function descriptor (nullptr for
+  // classic UDFs). Used to match a resolved VDF call against the function
+  // bindings declared by an index profile.
+  const vef_func_desc_t *vdf_func_desc() const {
+    return is_vdf() ? u_d->vdf_func_desc : nullptr;
+  }
+
   // Set `item`'s data type for a STRING- or BINARY-returning VDF result, and
   // set the runtime result charset to match (utf8mb4 for STRING, binary for
   // BINARY), so the String returned by val_str() carries the same charset the
