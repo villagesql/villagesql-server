@@ -7347,7 +7347,13 @@ Audit_global_variable_get_event::~Audit_global_variable_get_event() {
     String str;
     String *outStr = nullptr;
 
-    if (!m_item->cached_null_value || !m_thd->is_error()) {
+    // VillageSQL: report a value only if this query cached one. A read of a
+    // variable that is no longer registered caches nothing, and leaves
+    // cached_null_value unset or as an earlier execution left it. MySQL
+    // Bug #121848.
+    if (m_item->cache_present != 0 &&
+        m_item->used_query_id == m_thd->query_id &&
+        (!m_item->cached_null_value || !m_thd->is_error())) {
       outStr = &str;
 
       assert(m_item->cache_present != 0 &&
