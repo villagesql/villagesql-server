@@ -1,0 +1,25 @@
+call mtr.add_suppression("Unknown variable type code");
+call mtr.add_suppression("Failed to register system variable");
+SET PERSIST vsql_allow_preview_extensions = ON;
+# con_install: park the rollback after the entries are moved out
+SET DEBUG_SYNC = 'vef_sys_var_after_rollback_extract SIGNAL extracted WAIT_FOR continue_install';
+INSTALL EXTENSION vsql_sys_var_rollback_test;
+SET DEBUG_SYNC = 'now WAIT_FOR extracted';
+# con_set: SET GLOBAL validates against good_enum's TYPE_LIB while the
+# variable is still registered
+SET GLOBAL vsql_sys_var_rollback_test.good_enum = 'auto';
+SELECT @@global.vsql_sys_var_rollback_test.good_enum;
+@@global.vsql_sys_var_rollback_test.good_enum
+auto
+# Let the rollback finish unregistering
+SET DEBUG_SYNC = 'now SIGNAL continue_install';
+ERROR HY000: Failed to load VEF extension 'vsql_sys_var_rollback_test': Failed to register system variable 'bad_double' for extension 'vsql_sys_var_rollback_test'
+SET DEBUG_SYNC = 'RESET';
+# The rolled-back variables are gone
+SELECT @@global.vsql_sys_var_rollback_test.good_enum;
+ERROR HY000: Unknown system variable 'vsql_sys_var_rollback_test.good_enum'
+SELECT @@global.vsql_sys_var_rollback_test.good_int;
+ERROR HY000: Unknown system variable 'vsql_sys_var_rollback_test.good_int'
+SET DEBUG_SYNC = 'RESET';
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
