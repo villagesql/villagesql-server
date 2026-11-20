@@ -30,7 +30,6 @@ call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
 call mtr.add_suppression("VillageSQL.*Extension error decoding column.*FAULT_BLOB");
 call mtr.add_suppression("VillageSQL.*VDF threw an exception.*throw");
 
---echo # Verify extension is installed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 --echo # Create a table with a FAULT_BLOB column
@@ -95,20 +94,14 @@ SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
 --echo # Insert a value that will throw on hash
 INSERT INTO t1 VALUES (6, 'HASH_THROW');
 
-# TODO(villagesql-production): Wire error report to client
+--error ER_VILLAGESQL_GENERIC_ERROR
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
-
---echo # Verify the failure was logged
---source include/villagesql/decode_failure_log_print.inc
 
 --echo # Insert a value that will throw on compare
 INSERT INTO t1 VALUES (7, 'COMPARE_THROW');
 
-# TODO(villagesql-production): Wire error report to client
+--error ER_VILLAGESQL_GENERIC_ERROR
 SELECT id, val FROM t1 ORDER BY val;
-
---echo # Verify the failure was logged
---source include/villagesql/decode_failure_log_print.inc
 
 --echo # UPDATE: overwrite a good row with a DECODE_FAIL value
 UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
@@ -144,5 +137,4 @@ DROP TABLE t2;
 --source include/villagesql/decode_failure_log_end.inc
 UNINSTALL EXTENSION vsql_test_only;
 
---echo # Verify extension was removed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;

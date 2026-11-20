@@ -2,7 +2,6 @@ INSTALL EXTENSION vsql_test_only;
 call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
 call mtr.add_suppression("VillageSQL.*Extension error decoding column.*FAULT_BLOB");
 call mtr.add_suppression("VillageSQL.*VDF threw an exception.*throw");
-# Verify extension is installed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
 vsql_test_only	0.0.1
@@ -66,27 +65,11 @@ sum(id)	val
 # Insert a value that will throw on hash
 INSERT INTO t1 VALUES (6, 'HASH_THROW');
 SELECT sum(id), val FROM t1 GROUP BY val ORDER BY val;
-sum(id)	val
-6	HASH_THROW
-3	OK abc
-9	OK fixed
-1	OK hello
-2	OK world
-# Verify the failure was logged
-VillageSQL: hash VDF 'FAULT_BLOB::hash' returned error: VDF threw an exception (fault_blob_hash throw)
+ERROR HY000: hash VDF 'FAULT_BLOB::hash' returned error: VDF threw an exception (fault_blob_hash throw)
 # Insert a value that will throw on compare
 INSERT INTO t1 VALUES (7, 'COMPARE_THROW');
 SELECT id, val FROM t1 ORDER BY val;
-id	val
-6	HASH_THROW
-3	OK abc
-4	OK fixed
-5	OK fixed
-1	OK hello
-2	OK world
-7	COMPARE_THROW
-# Verify the failure was logged
-VillageSQL: compare VDF 'FAULT_BLOB::compare' returned error: VDF threw an exception (fault_blob_compare throw)
+ERROR HY000: compare VDF 'FAULT_BLOB::compare' returned error: VDF threw an exception (fault_blob_compare throw)
 # UPDATE: overwrite a good row with a DECODE_FAIL value
 UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
 # The updated row now causes an error on SELECT
@@ -112,6 +95,5 @@ INSERT INTO t2 VALUES (3, 'ENCODE_THROW');
 ERROR HY000: VDF threw an exception (fault_blob_encode throw)
 DROP TABLE t2;
 UNINSTALL EXTENSION vsql_test_only;
-# Verify extension was removed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
