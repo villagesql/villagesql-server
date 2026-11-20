@@ -26,7 +26,7 @@
 # them into the array. Add a target by adding a line.
 #
 # Testable locally:
-#   villagesql/bld_matrix/json_deb.sh | jq .
+#   packaging/villagesql-deb/bld_tools/json_debian.sh | jq .
 
 set -euo pipefail
 

@@ -1,8 +1,9 @@
 name: Release Debian Branch
 
 # Builds the VillageSQL Debian packages for every distro and architecture in
-# villagesql/bld_matrix/json_deb.sh, smoke tests each set by installing it into
-# a clean container, and attaches them to an existing GitHub Release.
+# packaging/villagesql-deb/bld_tools/json_debian.sh, smoke tests each set by
+# installing it into a clean container, and attaches them to an existing GitHub
+# Release.
 #
 # Each target is built inside its own distro image by
 # packaging/villagesql-deb/bld_tools/build_deb_docker.sh, which can be run the
@@ -69,7 +70,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
-          sparse-checkout: villagesql/bld_matrix/
+          sparse-checkout: packaging/villagesql-deb/bld_tools/
           ref: ${{ inputs.ref }}
 
       - name: Report Parameters
@@ -81,17 +82,17 @@ jobs:
           echo "Release Build: ${{ inputs.release_build }}"
           echo "Pre-release Version: '$VSQL_PRE_RELEASE_VERSION'"
 
-      # Matrix logic lives in villagesql/bld_matrix, so it can be run locally
-      # exactly as it runs here:
-      #   villagesql/bld_matrix/json_deb.sh | jq .
+      # Matrix logic lives in packaging/villagesql-deb/bld_tools, so it can be run
+      # locally exactly as it runs here:
+      #   packaging/villagesql-deb/bld_tools/json_debian.sh | jq .
       - name: Read target table
         id: targets
         run: |
-          TARGETS=$(villagesql/bld_matrix/json_deb.sh)
+          TARGETS=$(packaging/villagesql-deb/bld_tools/json_debian.sh)
 
           COUNT=$(jq 'length' <<<"$TARGETS")
           if [ "$COUNT" -eq 0 ]; then
-            echo "::error::json_deb.sh listed no targets. Nothing to build."
+            echo "::error::json_debian.sh listed no targets. Nothing to build."
             exit 1
           fi
 
