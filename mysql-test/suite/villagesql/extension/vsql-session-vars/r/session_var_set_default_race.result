@@ -1,0 +1,24 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_session_var_test;
+SET GLOBAL vsql_session_var_test.session_str_var = 'global value one';
+# Read the variable first, so the session has its own copy before the
+# sync point is set
+SELECT @@session.vsql_session_var_test.session_str_var;
+@@session.vsql_session_var_test.session_str_var
+global value one
+# Park SET SESSION ... = DEFAULT before it copies the global string
+SET DEBUG_SYNC = 'plugin_var_memalloc_session_update_before_copy SIGNAL copying WAIT_FOR freed';
+SET SESSION vsql_session_var_test.session_str_var = DEFAULT;
+SET DEBUG_SYNC = 'now WAIT_FOR copying';
+# Replace the global value, which frees the old string
+SET GLOBAL vsql_session_var_test.session_str_var = 'global value two';
+SET DEBUG_SYNC = 'now SIGNAL freed';
+SELECT @@session.vsql_session_var_test.session_str_var IN
+('global value one', 'global value two') AS copied_a_global_value;
+copied_a_global_value
+1
+SET DEBUG_SYNC = 'RESET';
+SET GLOBAL vsql_session_var_test.session_str_var = DEFAULT;
+UNINSTALL EXTENSION vsql_session_var_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

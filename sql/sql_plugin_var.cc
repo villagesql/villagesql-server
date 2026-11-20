@@ -39,6 +39,7 @@
 #include "mysql/strings/m_ctype.h"
 #include "nulls.h"
 #include "sql/current_thd.h"
+#include "sql/debug_sync.h"
 #include "sql/item.h"
 #include "sql/mysqld.h"
 #include "sql/psi_memory_key.h"
@@ -130,6 +131,7 @@ bool plugin_var_memalloc_session_update(THD *thd, SYS_VAR *var, char **dest,
   DBUG_TRACE;
 
   if (value) {
+    DEBUG_SYNC(thd, "plugin_var_memalloc_session_update_before_copy");
     const size_t length = strlen(value) + 1;
     LIST *element;
     if (!(element = (LIST *)my_malloc(key_memory_THD_variables,
