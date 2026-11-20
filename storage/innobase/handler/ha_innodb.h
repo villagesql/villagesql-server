@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2000, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -148,6 +149,9 @@ class ha_innobase : public handler {
   void unlock_row() override;
 
   int index_init(uint index, bool sorted) override;
+
+  int knn_index_init(uint index, const uchar *key, uint length, ha_rows limit,
+                     bool limit_is_exact) override;
 
   int index_end() override;
 

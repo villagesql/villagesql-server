@@ -84,6 +84,12 @@ const vef_index_profile_fn_binding_t *find_profile_function(
 // backed by a KNN-capable custom index type whose profile for this key
 // declares `order_call` as one of its functions. Returns the key number, or
 // -1 if no such key exists.
+// Returns true if a KNN scan on `tab` returning `select_limit` rows fully
+// satisfies the query block's LIMIT.
+bool knn_limit_is_exact(const JOIN_TAB *tab) {
+  return tab->condition() == nullptr && tab->join()->plan_is_single_table();
+}
+
 int find_knn_capable_key(const Field *field, const Key_map *map,
                          const Item_udf_func *order_call) {
   const TABLE *table = field->table;
@@ -157,7 +163,7 @@ bool try_knn_order(JOIN_TAB *tab, ORDER_with_src &order, int ref_key,
   // Use an index scan on the KNN-capable index instead of a filesort,
   // carrying the query point and row limit through to execution.
   auto *knn_scan_info = new (tab->join()->thd->mem_root)
-      KnnScanInfo{query_point_arg, select_limit};
+      KnnScanInfo{query_point_arg, select_limit, knn_limit_is_exact(tab)};
   tab->set_index(key_nr);
   tab->set_type(JT_KNN_SCAN);
   tab->set_knn_scan_info(knn_scan_info);

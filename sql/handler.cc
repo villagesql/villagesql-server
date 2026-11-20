@@ -2921,6 +2921,19 @@ int handler::ha_index_init(uint idx, bool sorted) {
   return result;
 }
 
+int handler::ha_knn_index_init(uint idx, const uchar *key, uint length,
+                               ha_rows limit, bool limit_is_exact) {
+  int result;
+  DBUG_TRACE;
+  assert(table_share->tmp_table != NO_TMP_TABLE || m_lock_type != F_UNLCK);
+  assert(inited == NONE);
+  if (!(result = knn_index_init(idx, key, length, limit, limit_is_exact)))
+    inited = INDEX;
+  mrr_have_range = false;
+  end_range = nullptr;
+  return result;
+}
+
 /**
   End use of index.
 
