@@ -14,10 +14,12 @@
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 // VillageSQL extension for testing sys var rollback on partial registration
-// failure. Declares a valid INT variable followed by a DOUBLE variable.
+// failure. Declares valid INT and ENUM variables followed by a DOUBLE variable.
 // DOUBLE registration fails because MySQL's component_sys_variable_register
-// does not support PLUGIN_VAR_DOUBLE. The server must roll back the INT
-// variable so that INSTALL EXTENSION fails cleanly with no variables left.
+// does not support PLUGIN_VAR_DOUBLE. The server must roll back the INT and
+// ENUM variables so that INSTALL EXTENSION fails cleanly with no variables
+// left. The ENUM gives the rollback a TYPE_LIB to keep alive until it
+// unregisters the variable.
 
 #include <villagesql/preview/sys_var.h>
 #include <villagesql/vsql.h>
@@ -26,11 +28,15 @@ using namespace vsql;
 namespace sv = vsql::preview_sys_var;
 
 static long long g_good_int;
+static const char *const MODE_NAMES[] = {"off", "on", "auto"};
+static unsigned long g_good_enum = 0;
 static double g_bad_double;
 
 static auto SYS_VARS = sv::make_capability({
     sv::make_int("good_int", "An INT variable that registers successfully",
                  &g_good_int, 0, 0, 1000),
+    sv::make_enum("good_enum", "An ENUM variable that registers successfully",
+                  &g_good_enum, MODE_NAMES, 3, 0),
     sv::make_double("bad_double",
                     "A DOUBLE variable that fails to register (unsupported)",
                     &g_bad_double, 1.0, 0.0, 10.0),

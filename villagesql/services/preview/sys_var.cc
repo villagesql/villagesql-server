@@ -483,12 +483,15 @@ bool on_populate_sys_var(const PopulateContext &ctx,
               v->name, extension_name.c_str());
       error_message = std::string("Failed to register system variable '") +
                       v->name + "' for extension '" + extension_name + "'";
-      // Roll back the variables registered so far. retired must outlive
-      // unregister_vars(), so that each enum variable's enum_typelib stays
-      // valid until the variable is unregistered.
+      // Roll back the variables registered so far.
       // See extract_registered_vars().
       const std::vector<RegisteredSysVar> retired =
           extract_registered_vars(ctx.capability_config);
+      // The variables are out of g_sys_vars but stay registered with MySQL
+      // until unregister_vars(), so a concurrent SET can still reach them. The
+      // sync point lets a test run that SET here; see
+      // sys_var_rollback_set_race.test.
+      DEBUG_SYNC_C("vef_sys_var_after_rollback_extract");
       unregister_vars(registry, retired);
       return true;
     }
@@ -502,8 +505,7 @@ bool on_populate_sys_var(const PopulateContext &ctx,
 }
 
 void on_depopulate_sys_var(const DepopulateContext &ctx) {
-  // Destroyed at end of scope, after unregister_vars(), so that each enum
-  // variable's enum_typelib stays valid until the variable is unregistered.
+  // Destroyed at end of scope, after unregister_vars().
   // See extract_registered_vars().
   const std::vector<RegisteredSysVar> retired =
       extract_registered_vars(ctx.capability_config);

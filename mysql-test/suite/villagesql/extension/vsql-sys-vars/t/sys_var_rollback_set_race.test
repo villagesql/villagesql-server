@@ -1,0 +1,59 @@
+# A SET GLOBAL on an enum variable that happens while a failed INSTALL EXTENSION
+# rolls back must not read freed memory.
+#
+# vsql_sys_var_rollback_test registers good_int and good_enum, then fails on
+# bad_double, so the INSTALL rolls the first two back. The rollback moves their
+# g_sys_vars entries out before it unregisters the variables, and good_enum's
+# entry owns the TYPE_LIB listing its allowed values. The server validates a
+# SET against that TYPE_LIB, so it must stay valid until the variable is
+# unregistered. Without that, the SET below reads freed memory, which the
+# ASan build reports.
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+call mtr.add_suppression("Unknown variable type code");
+call mtr.add_suppression("Failed to register system variable");
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+connect (con_set,localhost,root);
+connect (con_install,localhost,root);
+
+connection con_install;
+--echo # con_install: park the rollback after the entries are moved out
+SET DEBUG_SYNC = 'vef_sys_var_after_rollback_extract SIGNAL extracted WAIT_FOR continue_install';
+--send INSTALL EXTENSION vsql_sys_var_rollback_test
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR extracted';
+
+connection con_set;
+--echo # con_set: SET GLOBAL validates against good_enum's TYPE_LIB while the
+--echo # variable is still registered
+SET GLOBAL vsql_sys_var_rollback_test.good_enum = 'auto';
+SELECT @@global.vsql_sys_var_rollback_test.good_enum;
+
+connection default;
+--echo # Let the rollback finish unregistering
+SET DEBUG_SYNC = 'now SIGNAL continue_install';
+
+connection con_install;
+--error ER_VILLAGESQL_GENERIC_ERROR
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+disconnect con_set;
+disconnect con_install;
+
+--echo # The rolled-back variables are gone
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_sys_var_rollback_test.good_enum;
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_sys_var_rollback_test.good_int;
+
+SET DEBUG_SYNC = 'RESET';
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+--source include/wait_until_count_sessions.inc
