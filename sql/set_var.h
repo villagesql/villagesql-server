@@ -1,6 +1,7 @@
 #ifndef SET_VAR_INCLUDED
 #define SET_VAR_INCLUDED
 /* Copyright (c) 2002, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -183,6 +184,7 @@ class sys_var {
   on_update_function on_update;
   const char *const deprecation_substitute;
   bool is_os_charset;  ///< true if the value is in character_set_filesystem
+  const CHARSET_INFO *m_value_charset{nullptr};
   struct get_opt_arg_source source;
   char user[USERNAME_CHAR_LENGTH + 1]; /* which user  has set this variable */
   char host[HOSTNAME_LENGTH + 1];      /* host on which this variable is set */
@@ -273,6 +275,8 @@ class sys_var {
   SHOW_TYPE show_type() { return show_val_type; }
   int scope() const { return flags & SCOPE_MASK; }
   const CHARSET_INFO *charset(THD *thd);
+  // Optional encoding for component-owned string values.
+  const CHARSET_INFO *value_charset() const { return m_value_charset; }
   bool is_readonly() const { return flags & READONLY; }
   bool not_visible() const { return flags & INVISIBLE; }
   bool is_trilevel() const { return flags & TRI_LEVEL; }

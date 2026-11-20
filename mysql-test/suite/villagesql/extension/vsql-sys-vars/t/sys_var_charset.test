@@ -1,0 +1,61 @@
+# String values use UTF-8 through SQL, SDK getters/setters and change callbacks.
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_config_vars_test;
+INSTALL EXTENSION vsql_session_var_test;
+SET NAMES utf8mb4;
+SELECT HEX(@@global.vsql_config_vars_test.unicode_default);
+SELECT vsql_config_vars_test.write_var_str('label', 'café😀');
+SELECT HEX(@@global.vsql_config_vars_test.label),
+       HEX(vsql_config_vars_test.read_label()), HEX(vsql_config_vars_test.last_label());
+SELECT CHARSET(@@global.vsql_config_vars_test.label),
+       COLLATION(@@global.vsql_config_vars_test.label);
+
+SET GLOBAL vsql_config_vars_test.label = _latin1 0x636166E9;
+SELECT HEX(@@global.vsql_config_vars_test.label),
+       HEX(vsql_config_vars_test.read_label()), HEX(vsql_config_vars_test.last_label());
+SET SESSION vsql_session_var_test.session_str_var = _ucs2 0x00630061006600E9;
+SELECT HEX(@@session.vsql_session_var_test.session_str_var),
+       HEX(vsql_session_var_test.read_session_str_var());
+SET SESSION vsql_session_var_test.session_str_var = 'café😀';
+SELECT HEX(@@session.vsql_session_var_test.session_str_var),
+       HEX(vsql_session_var_test.read_session_str_var());
+
+# Repeated prepared SET must evaluate each new value, not retain the first one.
+PREPARE p FROM 'SET GLOBAL vsql_config_vars_test.label = ?';
+SET @v = _latin1 0xE9;
+EXECUTE p USING @v;
+SELECT HEX(vsql_config_vars_test.read_label());
+SET @v = '😀';
+EXECUTE p USING @v;
+SELECT HEX(vsql_config_vars_test.read_label());
+DEALLOCATE PREPARE p;
+
+# Neither SQL assignment nor the SDK may silently truncate or replace bytes.
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL vsql_config_vars_test.label = _binary 0xFF;
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL vsql_config_vars_test.label = 'x\0y';
+--error ER_WRONG_VALUE_FOR_VAR
+SET SESSION vsql_session_var_test.session_str_var = _binary 0xFF;
+SELECT vsql_config_vars_test.write_label_bytes(_binary 0xFF);
+SELECT vsql_config_vars_test.write_label_bytes(_binary 0x780079);
+SELECT HEX(vsql_config_vars_test.read_label());
+SET GLOBAL vsql_config_vars_test.label = '';
+SELECT LENGTH(vsql_config_vars_test.read_label());
+SET GLOBAL vsql_config_vars_test.label = NULL;
+SELECT @@global.vsql_config_vars_test.label IS NULL;
+
+SET PERSIST vsql_config_vars_test.label = 'café😀';
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+SET NAMES utf8mb4;
+SELECT HEX(@@global.vsql_config_vars_test.label),
+       HEX(vsql_config_vars_test.read_label()), HEX(vsql_config_vars_test.last_label());
+RESET PERSIST vsql_config_vars_test.label;
+UNINSTALL EXTENSION vsql_config_vars_test;
+--remove_file $MYSQL_TMP_DIR/vsql_config_vars_test.marker
+UNINSTALL EXTENSION vsql_session_var_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

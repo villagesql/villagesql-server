@@ -22,7 +22,7 @@
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 // VillageSQL extension for testing config variable registration.
-// Declares one INT variable, one STRING variable, and one ENUM variable with
+// Declares INT, STRING, and ENUM variables with
 // known defaults.
 //
 // Demonstrates three patterns for accessing config vars from VDFs:
@@ -45,6 +45,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <mutex>
 #include <string>
 
 #include <villagesql/preview/sys_var.h>
@@ -55,6 +56,9 @@ namespace sv = vsql::preview_sys_var;
 
 static long long g_max_items;
 static char *g_label;
+static char *g_unicode_default;
+static std::mutex g_label_mutex;
+static std::string g_last_label;
 static unsigned long g_mode;  // index into MODE_NAMES; default "grant"
 static long long g_last_mode_change = -1;  // last index seen by on_change
 
@@ -69,11 +73,20 @@ static void on_mode_change(sv::SysVarChange change) {
     g_last_mode_change = static_cast<long long>(change.as_enum());
 }
 
+static void on_label_change(sv::SysVarChange change) {
+  std::lock_guard<std::mutex> lock(g_label_mutex);
+  const auto value = change.as_str();
+  g_last_label = value.is_null() ? "<null>" : std::string(value.value());
+}
+
 static auto SYS_VARS = sv::make_capability({
+    sv::make_str("unicode_default", "A UTF-8 default", &g_unicode_default,
+                 "café😀"),
     sv::make_int("max_items", "Maximum number of items to process",
                  &g_max_items, 100, 0, 1000000),
     sv::make_str("label", "A label string for this extension", &g_label,
-                 "default_label"),
+                 "default_label")
+        .on_change<&on_label_change>(),
     sv::make_enum("mode", "An enumerated mode (activate, grant, sync)", &g_mode,
                   MODE_NAMES, /*def_val=*/1)
         .on_change<&on_mode_change>(),
@@ -168,6 +181,24 @@ void write_var_str_impl(StringArg var_name, StringArg value, IntResult out) {
               : 0);
 }
 
+// BINARY bypasses VDF text validation so this exercises the SDK setter itself.
+void write_label_bytes_impl(BinaryArg input, IntResult out) {
+  if (input.is_null()) {
+    out.set(1);
+    return;
+  }
+  const auto bytes = input.value();
+  const std::string value(reinterpret_cast<const char *>(bytes.data()),
+                          bytes.size());
+  out.set(SYS_VARS.set("vsql_config_vars_test", "label", nullptr, value) ? 1
+                                                                         : 0);
+}
+
+void last_label_impl(StringResult out) {
+  std::lock_guard<std::mutex> lock(g_label_mutex);
+  out.set(g_last_label);
+}
+
 // Reads the label variable via SYS_VARS.get() to exercise the get path.
 // Returns NULL if the get fails.
 void read_label_impl(StringResult out) {
@@ -203,6 +234,14 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(INT)
                   .param(STRING)
                   .param(STRING)
+                  .build())
+        .func(make_func<&write_label_bytes_impl>("write_label_bytes")
+                  .returns(INT)
+                  .param(BINARY)
+                  .build())
+        .func(make_func<&last_label_impl>("last_label")
+                  .returns(STRING)
+                  .no_params()
                   .build())
         .func(make_func<&read_label_impl>("read_label")
                   .returns(STRING)
