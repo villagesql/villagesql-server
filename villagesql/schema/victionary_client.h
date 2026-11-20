@@ -807,6 +807,12 @@ class VictionaryClient {
   // Initialize the client (called during server startup), and load all records.
   bool init(THD *thd);
 
+  // Reload the tables that DDL writes: custom columns, stored program
+  // parameters, custom indexes and their columns. Startup calls this after
+  // binlog crash recovery, which can commit DDL that was still prepared when
+  // init() read these tables. Returns false on success, true on error.
+  bool reload_ddl_tables(THD *thd);
+
   // Destroy the client (called during server shutdown)
   void destroy();
 
@@ -1049,9 +1055,12 @@ class VictionaryClient {
   // init(). Returns false on success, true on error.
   bool reload_all_tables(THD *thd);
 
+  // Reload the tables listed at reload_ddl_tables(). Requires the write lock.
+  bool reload_ddl_tables_locked(THD *thd);
+
   // Seed m_next_index_id from the maximum index_id present in m_custom_indexes.
-  // Called once after m_custom_indexes is loaded during reload_all_tables.
-  // Requires write lock (already held by reload_all_tables).
+  // Called after m_custom_indexes is loaded in reload_ddl_tables_locked().
+  // Requires write lock (already held by reload_ddl_tables_locked).
   //
   // We manage the counter explicitly rather than using an AUTO_INCREMENT column
   // because index_id must be known before the transaction commits: both
