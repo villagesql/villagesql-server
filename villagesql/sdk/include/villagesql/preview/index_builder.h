@@ -133,7 +133,7 @@
 // --------------
 //
 // with_helper() functions are internal to the index implementation (not
-// SQL-visible) and are declared with make_index_function():
+// SQL-callable) and are declared with make_index_function():
 //
 //   static constexpr auto MY_HELPER_FN =
 //       make_index_function<&my_helper_fn>("my_helper_fn")
@@ -1166,7 +1166,7 @@ constexpr const vsql::func_builder::detail::StaticFuncDesc<N> &UnwrapFuncDesc(
 
 // Enforces the norm shared by with_function() and with_helper(): the bound
 // function must be deterministic, stateless, not an aggregate, fixed-arity,
-// have no parameterized custom-type argument, and return REAL. This holds
+// have no bind_and_check_types() hook, and return REAL. This holds
 // for both kinds of binding -- index scan implementations might invoke them
 // through the same raw vef_vdf_func_t call, with no prerun()/user_data round
 // trip, and require a REAL result.
@@ -1187,6 +1187,10 @@ void CheckIndexProfileFuncNorm() {
   static_assert(d.num_params() != VEF_PARAM_VARARGS,
                 "varargs VDFs are not supported as index profile functions "
                 "or helpers");
+  static_assert(d.bind() == nullptr,
+                "index profile function/helper must not use "
+                "bind_and_check_types() -- it is invoked directly, without "
+                "the type-binding step");
   static_assert(d.return_type().id == VEF_TYPE_REAL,
                 "index profile functions and helpers must return REAL");
 }
@@ -1313,7 +1317,7 @@ class IndexProfileBuilder {
   // Bind fn_id to a helper function invoked only by the index implementation
   // via vef_index_ctx_t.helper_fn. FuncDesc is declared with
   // make_index_function(...).build() -- unlike with_function(), helpers are
-  // not SQL-visible. A descriptor from vsql::make_func() is rejected at
+  // not SQL-callable. A descriptor from vsql::make_func() is rejected at
   // compile time. Declare FuncDesc with static storage duration usable in
   // a constant expression, e.g. `static constexpr auto MY_HELPER_FN =
   // make_index_function<&my_helper_fn>(...).build();`.
