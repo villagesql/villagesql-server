@@ -2,6 +2,9 @@
 # VillageSQL development server control script
 
 BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# This script as the user invoked it, so the commands it suggests match how
+# they reached it.
+SELF="$0"
 
 # Default instance directory. Override with --dir <path> to run multiple
 # independent instances.
@@ -121,8 +124,8 @@ cmd_init() {
     echo "✓ Database initialized successfully!"
     echo ""
     echo "Next steps:"
-    echo "  1. Start the server: ./villagesql${DIR_ARG} start"
-    echo "  2. Connect to it: ./villagesql${DIR_ARG} connect"
+    echo "  1. Start the server: $SELF${DIR_ARG} start"
+    echo "  2. Connect to it: $SELF${DIR_ARG} connect"
 }
 
 cmd_start() {
@@ -141,7 +144,7 @@ cmd_start() {
             *)
                 echo "Error: Unknown start option: $1"
                 echo "Use '--' to pass arbitrary flags to mysqld:"
-                echo "  ./villagesql${DIR_ARG} start -- --skip-name-resolve"
+                echo "  $SELF${DIR_ARG} start -- --skip-name-resolve"
                 exit 1
                 ;;
         esac
@@ -149,7 +152,7 @@ cmd_start() {
 
     if [[ ! -d "$DIR" ]]; then
         echo "Error: Instance directory not found at $DIR"
-        echo "Run './villagesql${DIR_ARG} init' first."
+        echo "Run '$SELF${DIR_ARG} init' first."
         exit 1
     fi
 
@@ -163,7 +166,7 @@ cmd_start() {
     local logfile="$datadir/error.log"
 
     if [[ ! -d "$datadir" ]]; then
-        echo "Error: Database not initialized. Run './villagesql${DIR_ARG} init' first."
+        echo "Error: Database not initialized. Run '$SELF${DIR_ARG} init' first."
         exit 1
     fi
 
@@ -216,8 +219,8 @@ cmd_start() {
             echo ""
             echo "✓ Server is ready!"
             echo ""
-            echo "Connect with: ./villagesql${DIR_ARG} connect"
-            echo "Stop with: ./villagesql${DIR_ARG} stop"
+            echo "Connect with: $SELF${DIR_ARG} connect"
+            echo "Stop with: $SELF${DIR_ARG} stop"
             echo "View logs: tail -f $logfile"
             exit 0
         fi
@@ -242,7 +245,7 @@ cmd_connect() {
 
     if [[ ! -S "$socket" ]]; then
         echo "Error: Server doesn't appear to be running (socket not found: $socket)"
-        echo "Start it with: ./villagesql${DIR_ARG} start"
+        echo "Start it with: $SELF${DIR_ARG} start"
         exit 1
     fi
 
@@ -345,7 +348,7 @@ cmd_veb() {
         ls)
             if [[ ! -d "$vebdir" ]]; then
                 echo "No veb directory found at $vebdir"
-                echo "Run './villagesql${DIR_ARG} init' first."
+                echo "Run '$SELF${DIR_ARG} init' first."
                 exit 1
             fi
             local found=0
@@ -446,13 +449,13 @@ cmd_help() {
     echo "  MYSQL_PORT  Port to use for start (default: 3307)"
     echo ""
     echo "Examples:"
-    echo "  ./villagesql init && ./villagesql start"
-    echo "  ./villagesql init --password && ./villagesql start"
-    echo "  ./villagesql --dir /tmp/test-instance init"
-    echo "  ./villagesql --dir /tmp/test-instance start"
-    echo "  MYSQL_PORT=3308 ./villagesql --dir ./second start"
-    echo "  ./villagesql start -- --skip-name-resolve --general-log"
-    echo "  ./villagesql --dir /tmp/deep/nested/instance --socket /tmp/vsql.sock start"
+    echo "  $SELF init && $SELF start"
+    echo "  $SELF init --password && $SELF start"
+    echo "  $SELF --dir /tmp/test-instance init"
+    echo "  $SELF --dir /tmp/test-instance start"
+    echo "  MYSQL_PORT=3308 $SELF --dir ./second start"
+    echo "  $SELF start -- --skip-name-resolve --general-log"
+    echo "  $SELF --dir /tmp/deep/nested/instance --socket /tmp/vsql.sock start"
 }
 
 # Build a DIR_ARG string for use in user-facing messages so they can copy-paste

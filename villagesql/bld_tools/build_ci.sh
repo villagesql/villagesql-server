@@ -8,6 +8,8 @@
 #   BUILD_TYPE         - debug or release (default: release, uses RelWithDebInfo)
 #   PARALLEL_JOBS      - parallel make jobs (default: auto-detected)
 #   CMAKE_EXTRA_FLAGS  - additional cmake flags appended verbatim
+#   BUILD_UNIT_TESTS   - 1 (default) also builds the villagesql-unit-tests
+#                        target; 0 skips it (an install build has no use for it)
 #
 # Control pre-release version naming by including "-DVSQL_PRE_RELEASE_VERSION="
 # in the CMAKE_EXTRA_FLAGS variable. A blank value as above will remove the
@@ -76,8 +78,12 @@ if [[ ! -x "$BUILD_DIR/runtime_output_directory/mysqld" ]]; then
 fi
 log_info "Build complete"
 
-log_step "Step 3: Building unit tests..."
-make -j"${PARALLEL_JOBS}" villagesql-unit-tests || die "Unit test build failed"
-log_info "Unit tests built"
+if [[ "${BUILD_UNIT_TESTS:-1}" == "1" ]]; then
+    log_step "Step 3: Building unit tests..."
+    make -j"${PARALLEL_JOBS}" villagesql-unit-tests || die "Unit test build failed"
+    log_info "Unit tests built"
+else
+    log_info "Step 3: Skipping unit test build (BUILD_UNIT_TESTS=0)"
+fi
 
 log_step "Build succeeded: $BUILD_DIR/runtime_output_directory/mysqld"
