@@ -48,10 +48,15 @@ typedef uint32_t vef_index_cap_t;
 // Supports scanning in descending key order.
 #define VEF_INDEX_CAP_REVERSE_SCAN ((vef_index_cap_t)1u << 2)
 // Index scan returns results in key order, allowing the optimizer to satisfy
-// ORDER BY on the index columns without a separate sort step.
+// ORDER BY on the index columns without a separate sort step. NULL entries are
+// not stored in the index, so the optimizer does not use it for ORDER BY on a
+// nullable column.
 #define VEF_INDEX_CAP_ORDER_BY ((vef_index_cap_t)1u << 3)
 // Supports index scan for K nearest neighbours.
 // ORDER BY distance_function(index_column, reference_key) LIMIT K;
+// KNN does not depend on VEF_INDEX_CAP_ORDER_BY and is used on nullable
+// columns too: rows with a NULL value are not in the index and are not
+// returned by the KNN scan.
 #define VEF_INDEX_CAP_KNN ((vef_index_cap_t)1u << 4)
 // Index scan may return approximate results (e.g. approximate nearest
 // neighbour search); results may omit or misorder some matching rows.
