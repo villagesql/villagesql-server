@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,6 +39,12 @@ class JOIN;
 class Item_func_match;
 class store_key;
 struct POSITION;
+
+// KNN query parameters
+struct KnnScanInfo {
+  Item *query_point;
+  ha_rows limit;
+};
 
 /**
    This represents the index of a JOIN_TAB/QEP_TAB in an array. "plan_idx":
@@ -229,7 +236,12 @@ enum join_type {
     the results into one. The merge can be used to
     produce unions and intersections
   */
-  JT_INDEX_MERGE
+  JT_INDEX_MERGE,
+  /*
+    KNN scan on a VillageSQL custom index, ordering rows by distance from a
+    query point instead of by key value.
+  */
+  JT_KNN_SCAN
 };
 
 /// Holds members common to JOIN_TAB and QEP_TAB.
@@ -255,6 +267,7 @@ class QEP_shared {
         prefix_tables_map(0),
         added_tables_map(0),
         m_ft_func(nullptr),
+        m_knn_scan_info(nullptr),
         m_skip_records_in_range(false) {}
 
   /*
@@ -311,6 +324,8 @@ class QEP_shared {
   table_map added_tables() const { return added_tables_map; }
   Item_func_match *ft_func() const { return m_ft_func; }
   void set_ft_func(Item_func_match *f) { m_ft_func = f; }
+  const KnnScanInfo *knn_scan_info() const { return m_knn_scan_info; }
+  void set_knn_scan_info(const KnnScanInfo *info) { m_knn_scan_info = info; }
 
   // More elaborate functions:
 
@@ -467,6 +482,10 @@ class QEP_shared {
   /** FT function */
   Item_func_match *m_ft_func;
 
+  /// Set when type() is a KNN index scan; carries the query point and
+  /// row limit through to execution. Owned by the query's mem_root.
+  const KnnScanInfo *m_knn_scan_info;
+
   /**
     Set if index dive can be skipped for this query.
     See comments for check_skip_records_in_range_qualification.
@@ -540,6 +559,10 @@ class QEP_shared_owner {
   table_map added_tables() const { return m_qs->added_tables(); }
   Item_func_match *ft_func() const { return m_qs->ft_func(); }
   void set_ft_func(Item_func_match *f) { return m_qs->set_ft_func(f); }
+  const KnnScanInfo *knn_scan_info() const { return m_qs->knn_scan_info(); }
+  void set_knn_scan_info(const KnnScanInfo *info) {
+    return m_qs->set_knn_scan_info(info);
+  }
   void set_prefix_tables(table_map prefix_tables, table_map prev_tables) {
     return m_qs->set_prefix_tables(prefix_tables, prev_tables);
   }

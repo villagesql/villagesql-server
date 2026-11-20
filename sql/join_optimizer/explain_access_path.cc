@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1151,6 +1152,26 @@ static unique_ptr<Json_object> SetObjectMembers(
                                     /*lookup condition*/ "", /*range*/ nullptr,
                                     nullptr, false,
                                     /*push_condition*/ nullptr, obj);
+      error |= AddChildrenFromPushedCondition(table, children);
+      break;
+    }
+    case AccessPath::INDEX_KNN_SCAN: {
+      const TABLE &table = *path->index_knn_scan().table;
+
+      const KEY &key = table.key_info[path->index_knn_scan().idx];
+      const string lookup_condition =
+          string(key.key_part[0].field->field_name) + " <-> " +
+          ItemToString(path->index_knn_scan().query_point);
+      error |= SetIndexInfoInObject(&description, "index_knn_scan", nullptr,
+                                    table, key, "KNN scan", lookup_condition,
+                                    /*range*/ nullptr, nullptr, false,
+                                    table.file->pushed_idx_cond, obj);
+      char buf[64];
+      snprintf(buf, sizeof(buf), ", limit %llu",
+               static_cast<ulonglong>(path->index_knn_scan().limit));
+      description += buf;
+      error |= AddMemberToObject<Json_int>(obj, "limit",
+                                           path->index_knn_scan().limit);
       error |= AddChildrenFromPushedCondition(table, children);
       break;
     }
