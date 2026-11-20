@@ -3,8 +3,6 @@
 # the outer query consumes its result (derived-table materialization). Same
 # plan-wrapping class as DISTINCT and views.
 
---source include/villagesql/not_implemented.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 
 CREATE TABLE t1 (

@@ -21,8 +21,9 @@ HAVING d <= 1
 ORDER BY d LIMIT 10;
 EXPLAIN
 -> Limit: 10 row(s)  (cost=COST rows=ROWS)
-    -> Filter: (d <= 1)  (cost=COST rows=ROWS)
-        -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Sort: d, limit input to 10 row(s) per chunk  (cost=COST rows=ROWS)
+        -> Filter: (d <= 1)  (cost=COST rows=ROWS)
+            -> Table scan on t  (cost=COST rows=ROWS)
 
 SELECT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
 FROM t

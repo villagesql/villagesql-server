@@ -7,8 +7,6 @@
 # Falls back to scan + sort: DESC ordering, no LIMIT, and a distance between two
 # columns (not a column vs. a constant).
 
---source include/villagesql/not_implemented.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 
 --disable_query_log
@@ -98,10 +96,10 @@ ORDER BY vsql_knn_index_test.kvec_l2_distance(a.v, b.v) LIMIT 3;
 --echo # routes; the predicate selects a subset of the ordered rows.
 --replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
 EXPLAIN FORMAT=tree
-SELECT id FROM t
+SELECT id FROM t IGNORE INDEX (PRIMARY)
 WHERE id > 2
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
-SELECT id FROM t
+SELECT id FROM t IGNORE INDEX (PRIMARY)
 WHERE id > 2
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
 

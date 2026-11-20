@@ -3,8 +3,6 @@
 #
 # [1,2,3,4] as floats is 0x0000803F000000400000404000008040.
 
---source include/villagesql/not_implemented.inc
-
 INSTALL EXTENSION vsql_knn_index_test;
 
 --echo # A constant: to_binary drops the placeholder, from_binary restores it

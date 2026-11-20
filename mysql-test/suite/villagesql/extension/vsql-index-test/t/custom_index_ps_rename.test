@@ -2,8 +2,6 @@
 # statements executed several times, several in one query, and in a stored
 # procedure called several times. The index metadata follows each rename.
 
---source include/villagesql/not_implemented.inc
-
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
 
