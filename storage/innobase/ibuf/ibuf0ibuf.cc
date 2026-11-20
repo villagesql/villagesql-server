@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1997, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -3002,7 +3003,7 @@ unique or clustered
   mtr_t bitmap_mtr;
 
   ut_a(!index->is_clustered());
-  ut_ad(!dict_index_is_spatial(index));
+  ut_ad(!dict_index_no_change_buffering(index));
   ut_ad(dtuple_check_typed(entry));
   ut_ad(!no_counter || op == IBUF_OP_INSERT);
   ut_a(op < IBUF_OP_COUNT);
@@ -3719,7 +3720,7 @@ static void ibuf_delete(const dtuple_t *entry, /*!< in: entry */
 
   ut_ad(ibuf_inside(mtr));
   ut_ad(dtuple_check_typed(entry));
-  ut_ad(!dict_index_is_spatial(index));
+  ut_ad(!dict_index_no_change_buffering(index));
 
   low_match = page_cur_search(block, index, entry, &page_cur);
 

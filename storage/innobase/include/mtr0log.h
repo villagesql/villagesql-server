@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -45,6 +46,12 @@ struct dict_index_t;
 constexpr uint8_t INDEX_LOG_VERSION_0 = 0;
 constexpr uint8_t INDEX_LOG_VERSION_CURRENT = 1;
 constexpr uint8_t INDEX_LOG_VERSION_MAX = INDEX_LOG_VERSION_CURRENT;
+
+// VillageSQL: High bit of the logged n_uniq marks a mapping B-tree index for
+// a custom index. Safe because the number of unique columns cannot exceed
+// 0x7FFF. No INDEX_LOG_VERSION bump is needed for upgrade safety, and this
+// remains compatible with upstream.
+constexpr uint16_t N_UNIQ_MAPPING_INDEX_FLAG = 0x8000;
 
 #define COMPACT_FLAG 0x01
 #define VERSION_FLAG 0x02
