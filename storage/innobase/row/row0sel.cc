@@ -74,6 +74,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "ut0new.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 #include "my_dbug.h"
 
@@ -3980,6 +3981,13 @@ The cursor is an iterator over the table/index.
 dberr_t row_search_no_mvcc(byte *buf, page_cur_mode_t mode,
                            row_prebuilt_t *prebuilt, ulint match_mode,
                            ulint direction) {
+  using villagesql::innodb::Custom_index;
+
+  if (Custom_index::is_custom(prebuilt->index)) {
+    return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
+                                    /*is_mvcc=*/false);
+  }
+
   dict_index_t *index = prebuilt->index;
   ut_ad(index->table->is_intrinsic());
 
@@ -4446,6 +4454,13 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
                         row_prebuilt_t *prebuilt, ulint match_mode,
                         const ulint direction) {
   DBUG_TRACE;
+
+  using villagesql::innodb::Custom_index;
+
+  if (Custom_index::is_custom(prebuilt->index)) {
+    return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
+                                    /*is_mvcc=*/true);
+  }
 
   dict_index_t *index = prebuilt->index;
   bool comp = dict_table_is_comp(index->table);

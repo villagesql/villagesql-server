@@ -247,10 +247,12 @@ class Custom_column {
   // @param dest_len Length of the destination buffer.
   // @param src Source buffer containing the extended column reference.
   // @param src_len Length of the source buffer.
+  // @param[out] trx_ref If not nullptr, set to the transaction reference
+  // returned by the storage interface's select().
   // @return DB_SUCCESS or an error code.
   static dberr_t fetch(const dict_table_t *table, const dict_col_t *col,
                        byte *dest, ulint dest_len, const byte *src,
-                       ulint src_len);
+                       ulint src_len, TrxRef *trx_ref = nullptr);
 
   // Allocates memory and fetches the data for a single extended column.
   // @param table The table.

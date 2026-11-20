@@ -966,7 +966,7 @@ dberr_t Custom_column::rollback_updated(const dict_table_t *table, ulint type,
 
 dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
                              byte *dest, ulint dest_len, const byte *src,
-                             ulint src_len) {
+                             ulint src_len, TrxRef *trx_ref_out) {
   ut_a(table->has_extended_storage);
   ut_a(col->stored_by_extn());
 
@@ -1017,6 +1017,9 @@ dberr_t Custom_column::fetch(const dict_table_t *table, const dict_col_t *col,
     return DB_VILLAGESQL_ERROR;
   }
   memcpy(dest, col_data.data, col_data.length);
+  if (trx_ref_out != nullptr) {
+    *trx_ref_out = trx_ref;
+  }
 
   mtr_commit(&mtr);
   return DB_SUCCESS;
