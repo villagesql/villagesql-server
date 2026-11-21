@@ -111,7 +111,9 @@ extern void BuildQualifiedParamsString(THD *thd, enum_sp_type sp_type,
 // Looks up just the TypeDescriptor for a (possibly extension-qualified) type
 // name. Returns false on success and true on internal failure.
 // If the type isn't known the function returns false (success) with result
-// nullptr.
+// nullptr. A found descriptor is referenced until the statement's MEM_ROOT is
+// cleared, so UNINSTALL EXTENSION refuses to remove it while the caller uses
+// it.
 extern bool ResolveTypeDescriptor(std::string_view extension_name,
                                   std::string_view type_name,
                                   const TypeDescriptor *&result);

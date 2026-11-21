@@ -447,8 +447,24 @@ bool ResolveTypeDescriptor(std::string_view extension_name,
                            const TypeDescriptor *&result) {
   auto &vclient = VictionaryClient::instance();
   auto guard = vclient.get_read_lock();
-  return resolve_type_descriptor_locked(vclient, extension_name, type_name,
-                                        result);
+  if (resolve_type_descriptor_locked(vclient, extension_name, type_name,
+                                     result))
+    return true;
+  if (result == nullptr) return false;
+
+  // The caller uses the descriptor after the lock is released, so take a
+  // reference that UNINSTALL EXTENSION's in-use check sees.
+  const TypeDescriptor *found = result;
+  result =
+      vclient.type_descriptors().acquire(found->key(), *current_thd->mem_root);
+  if (result == nullptr) {
+    if (!current_thd->is_error()) {
+      villagesql_error("Failed to acquire type '%s'", MYF(0),
+                       found->qualified_base_name().c_str());
+    }
+    return true;
+  }
+  return false;
 }
 
 bool AcquireOrCreateTypeContext(const TypeDescriptor *descriptor,
@@ -2526,8 +2542,6 @@ static bool BuildVarargsExpectedTypes(
           MYF(0), func_name, hook_names[i].c_str(), i + 1);
       return true;
     }
-    // Copy the canonical spelling: the read lock is gone once we return, and
-    // an UNINSTALL EXTENSION could free the registry entry behind it.
     (*name_store)[i] = td->type_name();
   }
 
