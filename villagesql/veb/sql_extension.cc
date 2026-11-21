@@ -941,6 +941,11 @@ bool remove_extension_from_victionary(
     victionary.extension_descriptors().MarkForDeletion(*thd, ext_desc->key());
   }
 
+  // The checks above found the extension unused. Remove its entries from the
+  // committed maps now, under the same lock, so no other session starts using
+  // it before the commit; rollback puts them back.
+  victionary.retire_marked_deletions(thd);
+
   return false;
 }
 
@@ -1014,6 +1019,9 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
           thd, victionary, extension_name, expected_version, to_unregister)) {
     return end_transaction(thd, true);
   }
+
+  // After the in-use and dependency checks, before the commit.
+  DEBUG_SYNC_C("uninstall_after_victionary_checks");
 
   // Phase 2: write tables
   if (victionary.write_all_uncommitted_entries(thd)) {

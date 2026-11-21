@@ -1,0 +1,37 @@
+#
+# CREATE FUNCTION with a COMPLEX parameter after the checks: the
+# extension and the routine must not outlive each other
+#
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+UNINSTALL EXTENSION vsql_complex;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1;
+ERROR 42000: Expected a type or a custom type instead of "COMPLEX" near 'COMPLEX) RETURNS INT DETERMINISTIC RETURN 1' at line 1
+SET DEBUG_SYNC = 'now SIGNAL go';
+SET DEBUG_SYNC = 'RESET';
+SELECT (SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE EXTENSION_NAME = 'vsql_complex') =
+(SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES
+WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME = 'f_arg') AS consistent;
+consistent
+1
+DROP FUNCTION IF EXISTS f_arg;
+INSTALL EXTENSION vsql_complex;
+#
+# PREPARE using vsql_complex VDFs after the checks, EXECUTE after the
+# UNINSTALL: a VDF must not run once its extension is uninstalled
+#
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+UNINSTALL EXTENSION vsql_complex;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+PREPARE s FROM 'SELECT complex_abs(COMPLEX::from_string(''(3,4)'')) AS a';
+ERROR HY000: Unknown custom type 'COMPLEX'
+SET DEBUG_SYNC = 'now SIGNAL go';
+SET DEBUG_SYNC = 'RESET';
+EXECUTE s;
+ERROR HY000: Unknown prepared statement handler (s) given to EXECUTE
+consistent
+1
+DEALLOCATE PREPARE s;
+ERROR HY000: Unknown prepared statement handler (s) given to DEALLOCATE PREPARE
+SET DEBUG_SYNC = 'RESET';

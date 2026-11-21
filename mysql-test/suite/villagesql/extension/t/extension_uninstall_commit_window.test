@@ -1,0 +1,77 @@
+# UNINSTALL EXTENSION runs its in-use and dependency checks and marks the
+# extension's victionary entries for deletion under the victionary write lock,
+# then releases the lock, writes the system tables, commits, and unloads the
+# .so. Until the commit, other sessions still see the committed entries, so a
+# statement in that window can start using the extension after the checks
+# passed. The uninstall_after_victionary_checks sync point parks UNINSTALL
+# there.
+#
+# Expected: UNINSTALL succeeds, and a statement in the window fails because
+# the extension's entries are already gone, so nothing that uses the
+# extension survives the UNINSTALL.
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+--source include/villagesql/install_complex_extension.inc
+
+connect (con_uninstall,localhost,root,,test);
+
+--echo #
+--echo # CREATE FUNCTION with a COMPLEX parameter after the checks: the
+--echo # extension and the routine must not outlive each other
+--echo #
+connection con_uninstall;
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+--error ER_PARSE_ERROR
+CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1;
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+SELECT (SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS
+        WHERE EXTENSION_NAME = 'vsql_complex') =
+       (SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES
+        WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME = 'f_arg') AS consistent;
+--disable_warnings
+DROP FUNCTION IF EXISTS f_arg;
+--enable_warnings
+INSTALL EXTENSION vsql_complex;
+
+--echo #
+--echo # PREPARE using vsql_complex VDFs after the checks, EXECUTE after the
+--echo # UNINSTALL: a VDF must not run once its extension is uninstalled
+--echo #
+connection con_uninstall;
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM 'SELECT complex_abs(COMPLEX::from_string(''(3,4)'')) AS a';
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection default;
+--error ER_UNKNOWN_STMT_HANDLER
+EXECUTE s;
+--let $execute_errno = $mysql_errno
+--disable_query_log
+--eval SELECT ($execute_errno = 0) = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex') AS consistent
+--enable_query_log
+--error ER_UNKNOWN_STMT_HANDLER
+DEALLOCATE PREPARE s;
+
+disconnect con_uninstall;
+SET DEBUG_SYNC = 'RESET';
+--source include/wait_until_count_sessions.inc
