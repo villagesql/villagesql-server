@@ -273,7 +273,23 @@ static bool do_init_extension_infrastructure(THD *thd) {
   return false;
 }
 
+static bool do_reload_after_binlog_recovery(THD *thd) {
+  const dd::cache::Dictionary_client::Auto_releaser scope_releaser(
+      thd->dd_client());
+  return VictionaryClient::instance().reload_ddl_tables(thd);
+}
+
 }  // namespace
+
+bool reload_after_binlog_recovery() {
+  if (bootstrap::run_bootstrap_thread(nullptr, nullptr,
+                                      &do_reload_after_binlog_recovery,
+                                      SYSTEM_THREAD_DD_INITIALIZE)) {
+    LogVSQL(ERROR_LEVEL, "Failed to reload system tables after recovery");
+    return true;
+  }
+  return false;
+}
 
 /**
   For now, this just initializes villagesql system tables.

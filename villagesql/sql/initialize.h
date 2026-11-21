@@ -23,6 +23,12 @@ namespace villagesql {
 // Initialize the villagesql extension framework.
 bool init_extension_infrastructure();
 
+// Read the VillageSQL system tables that DDL writes again, after binlog crash
+// recovery. init_extension_infrastructure() reads them before that recovery,
+// which can then commit DDL that was still prepared, so the first read misses
+// its rows. Call this once, right after tc_log->open().
+bool reload_after_binlog_recovery();
+
 // VillageSQL extension shutdown runs in two phases, invoked from two different
 // points in the server shutdown sequence (sql/mysqld.cc). The split exists
 // because the teardown steps have opposing ordering constraints relative to

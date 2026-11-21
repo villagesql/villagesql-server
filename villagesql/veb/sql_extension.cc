@@ -535,6 +535,8 @@ bool Sql_cmd_install_extension::execute_install(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  DEBUG_SYNC_C("install_extension_before_commit");
+
   if (end_transaction(thd, false)) return true;
 
   unload_guard.release();
@@ -1021,6 +1023,8 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
                      extension_name.c_str());
     return end_transaction(thd, true);
   }
+
+  DEBUG_SYNC_C("uninstall_extension_before_commit");
 
   // Phase 3: perform the commit
   if (end_transaction(thd, false)) {
