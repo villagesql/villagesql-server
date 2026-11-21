@@ -1,0 +1,57 @@
+# SET SESSION of an extension's session string variable to DEFAULT copies the
+# global value. It must not read the global string after a concurrent
+# SET GLOBAL has freed it.
+#
+# sys_var_pluginvar::session_update() takes the address of the global value
+# under LOCK_global_system_variables, then unlocks. The global string pointer
+# is read after the unlock, and plugin_var_memalloc_session_update() copies
+# the string. A SET GLOBAL in between frees that string in
+# plugin_var_memalloc_global_update(). MySQL Bug #121849.
+#
+# The sync point parks the session update before it copies the string. ASan
+# reports a heap-use-after-free there. Without ASan, run with
+# --mysqld-env=MallocScribble=1 on macOS so the freed string is overwritten;
+# the session value is then neither global value.
+#
+# Expected: the session value is one of the two global values, and nothing
+# reads freed memory.
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_session_var_test;
+
+SET GLOBAL vsql_session_var_test.session_str_var = 'global value one';
+
+connect (con_session,localhost,root,,);
+connect (con_global,localhost,root,,);
+
+connection con_session;
+--echo # Read the variable first, so the session has its own copy before the
+--echo # sync point is set
+SELECT @@session.vsql_session_var_test.session_str_var;
+--echo # Park SET SESSION ... = DEFAULT before it copies the global string
+SET DEBUG_SYNC = 'plugin_var_memalloc_session_update_before_copy SIGNAL copying WAIT_FOR freed';
+--send SET SESSION vsql_session_var_test.session_str_var = DEFAULT
+
+connection con_global;
+SET DEBUG_SYNC = 'now WAIT_FOR copying';
+--echo # Replace the global value, which frees the old string
+SET GLOBAL vsql_session_var_test.session_str_var = 'global value two';
+SET DEBUG_SYNC = 'now SIGNAL freed';
+
+connection con_session;
+--reap
+SELECT @@session.vsql_session_var_test.session_str_var IN
+       ('global value one', 'global value two') AS copied_a_global_value;
+
+connection default;
+disconnect con_session;
+disconnect con_global;
+SET DEBUG_SYNC = 'RESET';
+SET GLOBAL vsql_session_var_test.session_str_var = DEFAULT;
+UNINSTALL EXTENSION vsql_session_var_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+--source include/wait_until_count_sessions.inc

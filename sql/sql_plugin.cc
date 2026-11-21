@@ -3054,12 +3054,17 @@ void plugin_thdvar_init(THD *thd, bool enable_plugins) {
     intern_plugin_unlock(nullptr, old_temp_table_plugin);
     mysql_mutex_unlock(&LOCK_plugin);
   }
-  mysql_mutex_unlock(&LOCK_global_system_variables);
 
   /* Initialize all Sys_var_charptr variables here. */
 
   // @@session.session_track_system_variables
+  // VillageSQL: copy it before unlocking. track_sysvars_ptr points at the
+  // global string, which a concurrent SET GLOBAL frees. MySQL Bug #121849.
   thd->session_sysvar_res_mgr.init(&thd->variables.track_sysvars_ptr);
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+
+  DBUG_EXECUTE_IF("plugin_thdvar_init_sleep_before_sysvar_copy",
+                  my_sleep(3000000););
 }
 
 /*

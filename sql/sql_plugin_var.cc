@@ -39,6 +39,7 @@
 #include "mysql/strings/m_ctype.h"
 #include "nulls.h"
 #include "sql/current_thd.h"
+#include "sql/debug_sync.h"
 #include "sql/item.h"
 #include "sql/mysqld.h"
 #include "sql/psi_memory_key.h"
@@ -130,6 +131,7 @@ bool plugin_var_memalloc_session_update(THD *thd, SYS_VAR *var, char **dest,
   DBUG_TRACE;
 
   if (value) {
+    DEBUG_SYNC(thd, "plugin_var_memalloc_session_update_before_copy");
     const size_t length = strlen(value) + 1;
     LIST *element;
     if (!(element = (LIST *)my_malloc(key_memory_THD_variables,
@@ -382,20 +384,37 @@ bool sys_var_pluginvar::session_update(THD *thd, set_var *var) {
   assert(plugin_var->flags & PLUGIN_VAR_THDLOCAL);
   assert(thd == current_thd);
 
+  const bool memalloc_str =
+      (plugin_var->flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR &&
+      plugin_var->flags & PLUGIN_VAR_MEMALLOC;
+
   mysql_mutex_lock(&LOCK_global_system_variables);
   void *tgt = real_value_ptr(thd, var->type);
   const void *src = var->value ? (void *)&var->save_result
                                : (void *)real_value_ptr(thd, OPT_GLOBAL);
+  // VillageSQL: copy the global MEMALLOC string before unlocking. A
+  // concurrent SET GLOBAL frees it in plugin_var_memalloc_global_update().
+  // MySQL Bug #121849.
+  char *global_copy = nullptr;
+  if (memalloc_str && !var->value) {
+    const char *global_value = *static_cast<char *const *>(src);
+    if (global_value != nullptr &&
+        (global_copy = my_strdup(key_memory_THD_variables, global_value,
+                                 MYF(MY_WME))) == nullptr) {
+      mysql_mutex_unlock(&LOCK_global_system_variables);
+      return true;
+    }
+  }
   mysql_mutex_unlock(&LOCK_global_system_variables);
 
-  if ((plugin_var->flags & PLUGIN_VAR_TYPEMASK) == PLUGIN_VAR_STR &&
-      plugin_var->flags & PLUGIN_VAR_MEMALLOC)
-    rc = plugin_var_memalloc_session_update(thd, plugin_var,
-                                            static_cast<char **>(tgt),
-                                            *static_cast<char *const *>(src));
+  if (memalloc_str)
+    rc = plugin_var_memalloc_session_update(
+        thd, plugin_var, static_cast<char **>(tgt),
+        var->value ? *static_cast<char *const *>(src) : global_copy);
   else
     plugin_var->update(thd, plugin_var, tgt, src);
 
+  my_free(global_copy);
   return rc;
 }
 
