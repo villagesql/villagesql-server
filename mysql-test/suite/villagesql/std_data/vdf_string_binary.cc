@@ -62,6 +62,11 @@ void str_echo_impl(StringArg in, StringResult out) {
   out.set(in.value());
 }
 
+void str_concat_impl(StringArg a, StringArg b, StringResult out) {
+  if (a.is_null() || b.is_null()) return out.set_null();
+  out.set(std::string(a.value()) + std::string(b.value()));
+}
+
 void bin_echo_impl(BinaryArg in, BinaryResult out) {
   if (in.is_null()) return out.set_null();
   out.set(in.value());
@@ -135,6 +140,11 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                                         .build())
                               .func(make_func<&str_echo_impl>("str_echo")
                                         .returns(STRING)
+                                        .param(STRING)
+                                        .build())
+                              .func(make_func<&str_concat_impl>("str_concat")
+                                        .returns(STRING)
+                                        .param(STRING)
                                         .param(STRING)
                                         .build())
                               .func(make_func<&bin_echo_impl>("bin_echo")
