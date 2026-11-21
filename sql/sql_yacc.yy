@@ -1542,6 +1542,7 @@ void warn_on_deprecated_user_defined_collation(
         persisted_variable_ident
         routine_string
         opt_explain_into
+        install_extension_from
 
 %type <lex_cstr>
         key_cache_name
@@ -10017,7 +10018,12 @@ query_specification:
                                       @4.raw.is_empty()); // implicit FROM
           }
         ;
-
+install_extension_from:
+        FROM TEXT_STRING_sys
+          {
+            $$ = $2;
+          }
+        ;
 opt_from_clause:
           %empty %prec EMPTY_FROM_CLAUSE { $$.init(YYMEM_ROOT); }
         | from_clause
@@ -18296,6 +18302,14 @@ install_stmt:
           }
         // TODO(villagesql-rebase): INSTALL EXTENSION grammar rule, check placement during MySQL rebase
         | INSTALL_SYM EXTENSION_SYM IDENT_sys opt_extension_version
+          {
+            LEX *lex= Lex;
+            lex->sql_command= SQLCOM_INSTALL_EXTENSION;
+            lex->m_sql_cmd= new (YYMEM_ROOT)
+                Sql_cmd_install_extension(to_lex_cstring($3), $4);
+            $$ = nullptr;
+          }
+        | INSTALL_SYM EXTENSION_SYM IDENT_sys install_extension_from
           {
             LEX *lex= Lex;
             lex->sql_command= SQLCOM_INSTALL_EXTENSION;

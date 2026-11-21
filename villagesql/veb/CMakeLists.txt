@@ -31,6 +31,10 @@ ADD_LIBRARY(villagesql_veb OBJECT
 
 # Link to libraries (OBJECT libraries can have link dependencies for include paths and compile defs)
 TARGET_LINK_LIBRARIES(villagesql_veb PRIVATE extra::rapidjson extra::unordered_dense)
+IF(TARGET ext::curl)
+  TARGET_LINK_LIBRARIES(villagesql_veb PRIVATE ext::curl)
+  TARGET_COMPILE_DEFINITIONS(villagesql_veb PRIVATE VILLAGESQL_HAVE_CURL)
+ENDIF()
 
 # Include paths for libarchive (no target to link to, must add manually)
 TARGET_INCLUDE_DIRECTORIES(villagesql_veb SYSTEM PRIVATE

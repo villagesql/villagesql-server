@@ -123,6 +123,11 @@ pipx ensurepath   # adds ~/.local/bin to PATH in your shell startup file; open a
    cmake "$HOME/villagesql-server" -DWITH_DEBUG=1
    ```
 
+   Extension downloads require curl support. Use `-DWITH_CURL=system` to use
+   the system library or `-DWITH_CURL=bundled` to use bundled curl.
+   With `-DWITH_CURL=none`, local extension installation remains available,
+   but `INSTALL EXTENSION ... FROM` reports an error.
+
 5. **Build:**
    ```bash
    make -j $(getconf _NPROCESSORS_ONLN)
