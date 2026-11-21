@@ -1,0 +1,94 @@
+# Column-store (extended storage) columns in user temporary tables.
+#
+# A CREATE TEMPORARY TABLE with a STORED_INT column must behave like the base
+# table case in storage_basic.test and storage_rollback.test: DML, rollback,
+# DROP, and implicit drop at disconnect. The column store lives in the
+# session temporary tablespace, so its pages are written without redo.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_storage_test;
+
+--echo #
+--echo # DML on a temporary table with one column-store column
+--echo #
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, '42');
+INSERT INTO t1 VALUES (2, '-7');
+INSERT INTO t1 VALUES (3, '0');
+INSERT INTO t1 VALUES (4, NULL);
+SELECT id, n FROM t1 ORDER BY id;
+
+UPDATE t1 SET n = '999' WHERE id = 1;
+UPDATE t1 SET n = '5' WHERE n IS NULL;
+SELECT id, n FROM t1 ORDER BY id;
+
+DELETE FROM t1 WHERE id = 2;
+SELECT id, n FROM t1 ORDER BY id;
+SELECT id, n FROM t1 WHERE n = '999';
+
+--echo #
+--echo # Rollback of INSERT, UPDATE and DELETE on a temporary table
+--echo #
+START TRANSACTION;
+INSERT INTO t1 VALUES (6, '666');
+UPDATE t1 SET n = '888' WHERE id = 3;
+DELETE FROM t1 WHERE id = 1;
+SELECT id, n FROM t1 ORDER BY id;
+ROLLBACK;
+SELECT id, n FROM t1 ORDER BY id;
+CHECK TABLE t1;
+
+DROP TEMPORARY TABLE t1;
+
+--echo #
+--echo # Two column-store columns, each with its own segment
+--echo #
+CREATE TEMPORARY TABLE t2 (id INT PRIMARY KEY, a STORED_INT, b STORED_INT_2)
+  ENGINE=InnoDB;
+INSERT INTO t2 VALUES (1, '10', '20'), (2, '-3', '0'), (3, NULL, '7');
+UPDATE t2 SET b = '999' WHERE id = 2;
+SELECT id, a, b FROM t2 ORDER BY id;
+DROP TEMPORARY TABLE t2;
+
+--echo #
+--echo # Temporary table filled from a base table
+--echo #
+CREATE TABLE base (id INT PRIMARY KEY, n STORED_INT);
+INSERT INTO base VALUES (1, '100'), (2, '200'), (3, '300');
+
+CREATE TEMPORARY TABLE t3 ENGINE=InnoDB AS SELECT id, n FROM base;
+SELECT id, n FROM t3 ORDER BY id;
+DROP TEMPORARY TABLE t3;
+
+CREATE TEMPORARY TABLE t4 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t4 SELECT id, n FROM base WHERE id > 1;
+SELECT id, n FROM t4 ORDER BY id;
+
+--echo # A temporary table shadowing a base table of the same name
+CREATE TEMPORARY TABLE base (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO base VALUES (9, '9');
+SELECT id, n FROM base ORDER BY id;
+DROP TEMPORARY TABLE base;
+SELECT id, n FROM base ORDER BY id;
+
+DROP TEMPORARY TABLE t4;
+
+--echo #
+--echo # A temporary table dropped implicitly at disconnect
+--echo #
+connect (con1, localhost, root,,);
+CREATE TEMPORARY TABLE t5 (id INT PRIMARY KEY, n STORED_INT) ENGINE=InnoDB;
+INSERT INTO t5 VALUES (1, '1'), (2, '2');
+SELECT id, n FROM t5 ORDER BY id;
+disconnect con1;
+connection default;
+--let $wait_condition = SELECT COUNT(*) = 0 FROM information_schema.innodb_temp_table_info
+--source include/wait_condition.inc
+
+DROP TABLE base;
+
+UNINSTALL EXTENSION vsql_storage_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
