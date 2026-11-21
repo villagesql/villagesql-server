@@ -6938,6 +6938,11 @@ type_conversion_status Item::save_in_field(Field *field, bool no_conversions) {
     if (villagesql::ValidateAndReportCustomFieldStore(this, field)) {
       return TYPE_ERR_BAD_VALUE;
     }
+  } else if (has_type_context()) {
+    // VillageSQL: a custom value needs an explicit conversion to be stored in
+    // a field without a custom type.
+    return villagesql::StoreCustomValueInNonCustomField(this, field,
+                                                        no_conversions);
   }
 
   // In case this is a hidden column used for a functional index, insert
