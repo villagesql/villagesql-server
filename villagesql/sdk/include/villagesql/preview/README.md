@@ -62,3 +62,7 @@ When a preview capability's shape has settled and we are ready to commit to
 its stability, it will move out of `villagesql/preview/` into the stable
 SDK surface, with appropriate protocol/version guarantees. Until then,
 assume nothing in this directory is stable.
+
+## SQL query results
+
+SQL query results return text cells as UTF-8 in both buffered and streaming queries. Binary cells remain unchanged; lengths include embedded NUL bytes. Invalid text produces a result error. Buffered queries discard their rows on conversion failure; streaming queries stop delivering rows, but earlier callbacks cannot be undone.

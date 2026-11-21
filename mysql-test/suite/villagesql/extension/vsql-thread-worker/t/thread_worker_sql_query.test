@@ -14,6 +14,18 @@ SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
 
 --exec $tw_pl "SQL_EXECUTE SELECT 'hello'"
 
+# Both APIs return UTF-8 text and preserve binary cells, NULL and empty text.
+CREATE TABLE query_charset (id INT, amount DOUBLE, latin VARCHAR(10) CHARACTER SET latin1,
+  wide VARCHAR(10) CHARACTER SET ucs2, unicode VARCHAR(10) CHARACTER SET utf8mb4,
+  bytes VARBINARY(10));
+INSERT INTO query_charset VALUES (42, 1.5, _latin1 0xE9, _ucs2 0x00E9, _utf8mb4 0xF09F9880, 0xFF0041);
+--exec $tw_pl "SQL_EXECUTE_HEX SELECT id,amount,latin,wide,unicode,bytes,NULL,'' FROM test.query_charset"
+--exec $tw_pl "SQL_FOR_EACH_HEX SELECT id,amount,latin,wide,unicode,bytes,NULL,'' FROM test.query_charset"
+# Numeric expressions use different command-service callbacks from columns.
+--exec $tw_pl "SQL_EXECUTE_HEX SELECT 42,1.5e0,_latin1 0xE9,_ucs2 0x00E9,_binary 0xFF00"
+--exec $tw_pl "SQL_FOR_EACH_HEX SELECT 42,1.5e0,_latin1 0xE9,_ucs2 0x00E9,_binary 0xFF00"
+DROP TABLE query_charset;
+
 SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
 
 UNINSTALL EXTENSION vsql_thread_worker_test;

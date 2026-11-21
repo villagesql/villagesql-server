@@ -159,8 +159,31 @@ static void capture_warnings(const vsql::preview_sql_query::Result &r,
   }
 }
 
+// Hex output exposes the exact bytes and distinguishes NULL from empty text.
+template <typename Row>
+static void append_hex_row(const Row &row, std::string &out) {
+  static constexpr char digits[] = "0123456789ABCDEF";
+  if (!out.empty()) out += ";";
+  out += "[";
+  for (unsigned int i = 0; i < row.num_columns(); ++i) {
+    if (i != 0) out += ",";
+    const auto value = row.column_str(i);
+    if (value.data() == nullptr) {
+      out += "NULL";
+    } else {
+      out += std::to_string(value.size()) + ":";
+      for (unsigned char byte : value) {
+        out += digits[byte >> 4];
+        out += digits[byte & 15];
+      }
+    }
+  }
+  out += "]";
+}
+
 static void run_monitor_sql_for_each(struct vef_thread_handle_t *handle,
-                                     const char *sql, ReturnCtx &return_ctx) {
+                                     const char *sql, ReturnCtx &return_ctx,
+                                     bool hex = false) {
   auto session = SQL_QUERY.open(handle);
   if (!session) {
     return_ctx.sql_err = "Session open failed";
@@ -170,7 +193,11 @@ static void run_monitor_sql_for_each(struct vef_thread_handle_t *handle,
   // This test extension returns one scalar value in its TCP response, so use
   // the first column from the first row.
   auto status =
-      session.sql(sql).for_each([&got_row, &return_ctx](const auto &row) {
+      session.sql(sql).for_each([&got_row, &return_ctx, hex](const auto &row) {
+        if (hex) {
+          append_hex_row(row, return_ctx.sql_res);
+          return;
+        }
         if (got_row) return;
         got_row = true;
         set_value(row.column_str(0), return_ctx.sql_res);
@@ -180,7 +207,8 @@ static void run_monitor_sql_for_each(struct vef_thread_handle_t *handle,
 }
 
 static void run_monitor_sql_execute(struct vef_thread_handle_t *handle,
-                                    const char *sql, ReturnCtx &return_ctx) {
+                                    const char *sql, ReturnCtx &return_ctx,
+                                    bool hex = false) {
   auto session = SQL_QUERY.open(handle);
   if (!session) {
     return_ctx.sql_err = "Session open failed";
@@ -190,7 +218,11 @@ static void run_monitor_sql_execute(struct vef_thread_handle_t *handle,
   if (capture_error(result, return_ctx)) {
     return_ctx.sql_res.clear();
   } else {
-    if (result.next()) set_value(result.column_str(0), return_ctx.sql_res);
+    if (hex) {
+      while (result.next()) append_hex_row(result, return_ctx.sql_res);
+    } else if (result.next()) {
+      set_value(result.column_str(0), return_ctx.sql_res);
+    }
   }
   capture_warnings(result, return_ctx);
 }
@@ -245,7 +277,11 @@ static vef_next_wakeup_t worker(vef_wakeup_reason_t reason,
         const char *sql;
         ReturnCtx return_ctx;
 
-        if ((sql = get_cmd(rbuf, "SQL_FOR_EACH ")) != nullptr)
+        if ((sql = get_cmd(rbuf, "SQL_FOR_EACH_HEX ")) != nullptr)
+          run_monitor_sql_for_each(handle, sql, return_ctx, true);
+        else if ((sql = get_cmd(rbuf, "SQL_EXECUTE_HEX ")) != nullptr)
+          run_monitor_sql_execute(handle, sql, return_ctx, true);
+        else if ((sql = get_cmd(rbuf, "SQL_FOR_EACH ")) != nullptr)
           run_monitor_sql_for_each(handle, sql, return_ctx);
         else if ((sql = get_cmd(rbuf, "SQL_EXECUTE ")) != nullptr)
           run_monitor_sql_execute(handle, sql, return_ctx);

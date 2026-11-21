@@ -98,7 +98,8 @@ typedef void (*vef_sql_close_session_fn)(vef_sql_session_t *session);
 // Returns a result handle. NULL only on allocation / setup failure
 // (no session, OOM, etc.). A non-NULL result may still represent a failed
 // query — check has_error() / get_error() on the returned handle.
-// The entire result set is buffered before returning.
+// The entire result set is buffered before returning. A text-conversion error
+// discards all buffered rows and is reported through get_error().
 typedef vef_sql_result_t *(*vef_sql_execute_fn)(vef_sql_session_t *session,
                                                 const char *sql,
                                                 size_t sql_len);
@@ -113,7 +114,9 @@ typedef bool (*vef_sql_row_cb)(const char **row, const unsigned long *lengths,
 // Returns a result handle that carries diagnostics only — no buffered rows.
 // NULL only on allocation / setup failure. Check has_error() / get_error()
 // on the returned handle to distinguish a successful query from a failed one.
-// The handle must be closed with close_result.
+// On a text-conversion error, no incomplete row or subsequent rows are
+// delivered. Earlier rows may already have reached cb. The error is available
+// in get_error(). The handle must be closed with close_result.
 typedef vef_sql_result_t *(*vef_sql_for_each_row_fn)(vef_sql_session_t *session,
                                                      const char *sql,
                                                      size_t sql_len,
@@ -122,7 +125,11 @@ typedef vef_sql_result_t *(*vef_sql_for_each_row_fn)(vef_sql_session_t *session,
 
 // Fetch the next row. Returns true when a row was fetched; row_out and
 // lengths_out are then valid until the next fetch_row or close_result call.
-// NULL entries in row_out indicate SQL NULL column values.
+// NULL entries in row_out indicate SQL NULL column values. Text cells are
+// UTF-8; binary cells retain their original bytes. Lengths count returned
+// bytes, including embedded NUL. Numeric values retain their ASCII text
+// representation. These rules also apply to for_each_row. An empty cell is
+// distinct from SQL NULL.
 typedef bool (*vef_sql_fetch_row_fn)(vef_sql_result_t *result,
                                      const char ***row_out,
                                      const unsigned long **lengths_out);
