@@ -1,0 +1,56 @@
+# A statement_event hook reads each statement's text, so EXECUTE gives it the
+# expanded text, with each ? replaced by its value, as it does for the general
+# log. That holds also for a statement prepared before the hook was installed.
+#
+# The vsql_slow_query_log test extension writes the text it is given to its
+# log file. Each value is built with CONCAT so that only the expanded text
+# contains it. The general and slow logs are off, so the hook is the only
+# reader of the expanded text.
+
+--source include/no_ps_protocol.inc
+
+--let $slow_log = $MYSQLTEST_VARDIR/tmp/vsql_slow_prepared.log
+
+SET @saved_general_log = @@global.general_log;
+SET @saved_slow_query_log = @@global.slow_query_log;
+SET GLOBAL general_log = OFF;
+SET GLOBAL slow_query_log = OFF;
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--error 0,1
+--remove_file $slow_log
+
+PREPARE s1 FROM 'SELECT ? AS v';
+
+INSTALL EXTENSION vsql_slow_query_log;
+
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SET GLOBAL vsql_slow_query_log.log_file = '$slow_log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+
+PREPARE s2 FROM 'SELECT ? AS v';
+SET @p = CONCAT('marker', '_after');
+EXECUTE s2 USING @p;
+SET @p = CONCAT('marker', '_before');
+EXECUTE s1 USING @p;
+
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+
+--echo # Prepared after the hook was installed: the expanded text.
+--exec sh -c "grep -q \"SELECT 'marker_after' AS v\" $slow_log && echo logged || echo missing"
+--echo # Prepared before the hook was installed: the expanded text too.
+--exec sh -c "grep -q \"SELECT 'marker_before' AS v\" $slow_log && echo logged || echo missing"
+
+DEALLOCATE PREPARE s1;
+DEALLOCATE PREPARE s2;
+SET @p = NULL;
+SET GLOBAL general_log = @saved_general_log;
+SET GLOBAL slow_query_log = @saved_slow_query_log;
+
+UNINSTALL EXTENSION vsql_slow_query_log;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+
+--remove_file $slow_log
