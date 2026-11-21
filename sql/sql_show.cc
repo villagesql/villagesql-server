@@ -1198,6 +1198,14 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
 
   if (table_list->is_view()) {
     buffer.set_charset(table_list->view_creation_ctx->get_client_cs());
+  } else {
+    // Custom type parameters can contain characters outside utf8mb3.
+    for (Field **field = table_list->table->field; *field; ++field) {
+      if ((*field)->has_type_context()) {
+        buffer.set_charset(&my_charset_utf8mb4_bin);
+        break;
+      }
+    }
   }
   if (table_list->is_view())
     view_store_create_info(thd, table_list, &buffer);
@@ -1218,7 +1226,7 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
     field_list.push_back(new Item_empty_string("Table", NAME_CHAR_LEN));
     // 1024 is for not to confuse old clients
     field_list.push_back(new Item_empty_string(
-        "Create Table", max<size_t>(buffer.length(), 1024U)));
+        "Create Table", max<size_t>(buffer.length(), 1024U), buffer.charset()));
   }
 
   if (thd->send_result_metadata(field_list,
