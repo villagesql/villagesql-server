@@ -1,0 +1,60 @@
+# Stored routines with a parameterized custom type, TVECTOR(3), as a parameter
+# and as a function's return type. The routine keeps its type parameters when
+# it is loaded, so it can be called, and the function's result compares with and
+# stores into a TVECTOR(3) column but not a TVECTOR(4) column. A local variable
+# of the type is a control: the routine body is stored as written.
+
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[4,5,6]');
+
+delimiter //;
+CREATE FUNCTION f(x TVECTOR(3)) RETURNS TVECTOR(3) DETERMINISTIC
+BEGIN
+  RETURN x;
+END//
+CREATE PROCEDURE p(IN x TVECTOR(3))
+BEGIN
+  SELECT x;
+END//
+CREATE PROCEDURE p_local()
+BEGIN
+  DECLARE y TVECTOR(3) DEFAULT '[7,8,9]';
+  SELECT y;
+END//
+delimiter ;//
+
+--echo # The function
+SELECT id, f(v) FROM t ORDER BY id;
+SELECT id FROM t WHERE f(v) = v ORDER BY id;
+
+--echo # The function result stored into a column
+CREATE TABLE t3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t3 SELECT id, f(v) FROM t;
+SELECT id, v FROM t3 ORDER BY id;
+CREATE TABLE t4 (id INT PRIMARY KEY, v TVECTOR(4));
+# TODO(villagesql-general): The error should name TVECTOR(3).
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t4 SELECT id, f(v) FROM t;
+
+--echo # The procedure
+CALL p((SELECT v FROM t WHERE id = 1));
+
+--echo # A local variable
+CALL p_local();
+
+--echo # The stored definitions
+SHOW CREATE FUNCTION f;
+SHOW CREATE PROCEDURE p;
+SELECT SPECIFIC_NAME, ORDINAL_POSITION, PARAMETER_NAME, DTD_IDENTIFIER
+  FROM INFORMATION_SCHEMA.PARAMETERS
+  WHERE SPECIFIC_SCHEMA = 'test' AND SPECIFIC_NAME IN ('f', 'p')
+  ORDER BY SPECIFIC_NAME, ORDINAL_POSITION;
+
+DROP FUNCTION f;
+DROP PROCEDURE p;
+DROP PROCEDURE p_local;
+DROP TABLE t, t3, t4;
+
+--source include/villagesql/uninstall_tvector_extension.inc
