@@ -533,6 +533,7 @@ class AggFuncBuilder {
     next.clear_ = clear_;
     next.accumulate_ = accumulate_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -575,6 +576,23 @@ class AggFuncBuilder {
     return *this;
   }
 
+  // Install a type binding/checking hook, as FuncBuilder::
+  // bind_and_check_types() does for scalar VDFs. Called once at resolution
+  // time to work out the return type's parameters when the built-in rules
+  // cannot (e.g. an aggregate over INT that returns a parameterized custom
+  // type). Bumps the required protocol to VEF_PROTOCOL_5.
+  //
+  //   void my_hook(vsql::BindArgs args, vsql::BindResult out);
+  template <auto Hook>
+  constexpr AggFuncBuilder<State, Func, NumParams, HasClear, HasAccumulate> &
+  bind_and_check_types() {
+    static_assert(detail::is_typed_bind<Hook>(),
+                  "bind_and_check_types<Hook>(): Hook must be void(BindArgs, "
+                  "BindResult). Raw ABI signatures are not accepted.");
+    bind_ = &detail::typed_bind_wrapper<Hook>;
+    return *this;
+  }
+
   // void(State&) — first parameter must match the State type declared in
   // make_aggregate_func<State, ...>. Sets HasClear on the returned builder so
   // build() can static_assert that both clear and accumulate were configured.
@@ -598,6 +616,7 @@ class AggFuncBuilder {
     next.clear_ = &detail::agg_clear_wrapper<State, Fn>;
     next.accumulate_ = accumulate_;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -639,6 +658,7 @@ class AggFuncBuilder {
     next.accumulate_ =
         &detail::AggAccumulateWrapper<State, Fn, NumParams>::invoke;
     next.deterministic_ = deterministic_;
+    next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -668,6 +688,7 @@ class AggFuncBuilder {
     meta.buffer_size = buffer_size_;
     meta.max_result_length = max_result_length_;
     meta.deterministic = deterministic_;
+    meta.bind = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);
     }
@@ -687,7 +708,8 @@ class AggFuncBuilder {
         max_result_length_(0),
         deterministic_(false),
         clear_(nullptr),
-        accumulate_(nullptr) {}
+        accumulate_(nullptr),
+        bind_(nullptr) {}
 
   const char *name_;
   const char *return_type_;
@@ -697,6 +719,7 @@ class AggFuncBuilder {
   bool deterministic_;
   vef_vdf_clear_func_t clear_;
   vef_vdf_accumulate_func_t accumulate_;
+  vef_bind_types_func_t bind_;
 
   template <typename S, auto F, size_t M, bool C, bool A>
   friend class AggFuncBuilder;
