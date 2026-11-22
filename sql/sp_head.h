@@ -27,6 +27,8 @@
 
 #include <stddef.h>
 #include <sys/types.h>
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -443,6 +445,23 @@ class sp_head {
     VSQL_SP_PARAMS_NO_CUSTOM = 2,
   };
   int8_t m_vsql_custom_params_state{VSQL_SP_PARAMS_UNCHECKED};
+
+  // VillageSQL: for an SP with custom-typed params, the variables that hold a
+  // custom type and their TypeContexts, remembered by the CALL that injected
+  // them so that later CALLs re-attach them without the victionary lock, the
+  // custom_sp_params lookup, the name matching or parsing the type parameters
+  // (see sp_rcontext::maybe_inject_custom_sp_params). The references are weak:
+  // they keep no TypeContext alive, so UNINSTALL EXTENSION sees the same uses
+  // as before. The list is used only while m_vsql_custom_params_gen equals the
+  // victionary generation (villagesql::VictionaryGeneration()), which any
+  // victionary commit or reload changes; otherwise the full injection runs and
+  // refills it. Not shared across threads (see above).
+  struct Vsql_custom_param_ref {
+    uint field_idx;
+    std::weak_ptr<const villagesql::TypeContext> type_context;
+  };
+  std::vector<Vsql_custom_param_ref> m_vsql_custom_params_cache;
+  uint64_t m_vsql_custom_params_gen{0};
 
   /**
     Instrumentation interface for SP.

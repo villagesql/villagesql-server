@@ -63,6 +63,22 @@ class CustomIndexesVictionaryTest;
 
 namespace villagesql {
 
+// Generation of the committed victionary state. Changes whenever a commit
+// applies staged operations to any committed map, and on clear() and reload.
+// Code that keeps something derived from committed entries past the lock that
+// read them (e.g. the per-routine list of custom-typed SP variables in
+// sp_head) records the generation it read under the lock and uses what it kept
+// only while the generation is unchanged. Read without any victionary lock.
+inline std::atomic<uint64_t> g_victionary_generation{1};
+
+inline uint64_t VictionaryGeneration() {
+  return g_victionary_generation.load(std::memory_order_acquire);
+}
+
+inline void BumpVictionaryGeneration() {
+  g_victionary_generation.fetch_add(1, std::memory_order_acq_rel);
+}
+
 // Forward declaration of TableTraits (specialized per entry type)
 template <typename EntryType>
 struct TableTraits;
@@ -451,6 +467,7 @@ class SystemTableMap {
     }
 
     m_uncommitted.erase(thd);
+    BumpVictionaryGeneration();
   }
 
   // Requires write lock
@@ -501,6 +518,7 @@ class SystemTableMap {
     assert_write_lock_held();
     m_committed.clear();
     m_uncommitted.clear();
+    BumpVictionaryGeneration();
   }
 
   // ===== Table I/O (PERSISTENT mode only) =====

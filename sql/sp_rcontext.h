@@ -403,6 +403,10 @@ class sp_rcontext {
   // does not drop to zero while SP variables referencing it are alive.
   std::vector<std::shared_ptr<const villagesql::TypeContext>>
       m_custom_type_refs;
+
+  // VillageSQL: re-attaches the TypeContexts that sp_head remembered from a
+  // previous CALL. Returns true (nothing attached) if one no longer exists.
+  bool reattach_cached_custom_sp_params();
 };
 
 ///////////////////////////////////////////////////////////////////////////

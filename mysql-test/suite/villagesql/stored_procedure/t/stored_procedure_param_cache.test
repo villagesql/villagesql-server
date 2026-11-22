@@ -1,0 +1,186 @@
+# Custom-typed SP variables are re-attached from a per-routine list kept by
+# the first CALL (sp_head::m_vsql_custom_params_cache) while the victionary
+# generation is unchanged; any victionary commit makes the next CALL inject
+# them again from villagesql.custom_sp_params. Every case below must give the
+# same result as the full injection: repeated calls, other connections, a
+# victionary commit between calls, a routine recreated with other type
+# parameters, a stored function called once per row, and UNINSTALL EXTENSION
+# after the routine is dropped (the kept references must not hold the type).
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_array;
+
+--echo #
+--echo # Case 1: the same procedure called repeatedly in one connection.
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_sum(IN n INT)
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=int32,max_size=16') DEFAULT '[]';
+  DECLARE i INT DEFAULT 1;
+  WHILE i <= n DO
+    SET a = vsql_array.array_append(a, i * 10);
+    SET i = i + 1;
+  END WHILE;
+  SELECT a, vsql_array.array_length(a) AS len,
+         vsql_array.array_get(a, n) AS last;
+END//
+delimiter ;//
+
+CALL p_sum(1);
+CALL p_sum(2);
+CALL p_sum(3);
+CALL p_sum(3);
+
+--echo # The element type still applies: int32 overflow is an error.
+delimiter //;
+CREATE PROCEDURE p_overflow()
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=int32,max_size=2') DEFAULT '[1,2]';
+  SET a = vsql_array.array_append(a, 3);
+  SELECT a;
+END//
+delimiter ;//
+--error ER_UDF_ERROR
+CALL p_overflow();
+--error ER_UDF_ERROR
+CALL p_overflow();
+
+--echo #
+--echo # Case 2: another connection, with its own copy of the routine.
+--echo #
+
+connect (con1, localhost, root,,);
+CALL p_sum(2);
+CALL p_sum(4);
+connection default;
+CALL p_sum(4);
+
+--echo #
+--echo # Case 3: a victionary commit between calls (a table with a custom
+--echo # column), then the same procedure again in both connections.
+--echo #
+
+CREATE TABLE t_arr (id INT PRIMARY KEY,
+                    a vsql_array.ARRAY('type=int32,max_size=16'));
+CALL p_sum(5);
+connection con1;
+CALL p_sum(5);
+connection default;
+DROP TABLE t_arr;
+CALL p_sum(1);
+
+--echo #
+--echo # Case 4: the procedure dropped and created again with other type
+--echo # parameters (double elements); both connections see the new type.
+--echo #
+
+DROP PROCEDURE p_sum;
+delimiter //;
+CREATE PROCEDURE p_sum(IN n INT)
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=double,max_size=16') DEFAULT '[]';
+  DECLARE i INT DEFAULT 1;
+  WHILE i <= n DO
+    SET a = vsql_array.array_append(a, i * 25e-2);
+    SET i = i + 1;
+  END WHILE;
+  SELECT a, vsql_array.array_length(a) AS len,
+         vsql_array.array_get_double(a, n) AS last;
+END//
+delimiter ;//
+CALL p_sum(3);
+CALL p_sum(3);
+connection con1;
+CALL p_sum(2);
+connection default;
+
+--echo #
+--echo # Case 5: a procedure with an array variable called in a loop of another
+--echo # procedure (array values passed as scalars: a routine PARAMETER of a
+--echo # parameterized custom type cannot be loaded yet, ISSUES-LOG F95).
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_add(IN k INT, OUT len INT, OUT last BIGINT)
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=int64,max_size=8') DEFAULT '[]';
+  DECLARE i INT DEFAULT 1;
+  WHILE i <= k DO
+    SET a = vsql_array.array_append(a, i * 1000000000);
+    SET i = i + 1;
+  END WHILE;
+  SET len = vsql_array.array_length(a), last = vsql_array.array_get(a, k);
+END//
+CREATE PROCEDURE p_outer(IN n INT)
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  DECLARE len INT;
+  DECLARE last BIGINT;
+  WHILE i <= n DO
+    CALL p_add(i, len, last);
+    SELECT i, len, last;
+    SET i = i + 1;
+  END WHILE;
+END//
+delimiter ;//
+CALL p_outer(3);
+CALL p_outer(5);
+
+--echo #
+--echo # Case 6: a stored function with an array variable, called once per row
+--echo # (the value passed as text: a routine PARAMETER of a parameterized custom
+--echo # type cannot be loaded yet, ISSUES-LOG F95).
+--echo #
+
+delimiter //;
+CREATE FUNCTION f_len(s VARCHAR(64)) RETURNS INT DETERMINISTIC
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=int32,max_size=16');
+  SET a = s;
+  RETURN IFNULL(vsql_array.array_length(a), -1);
+END//
+delimiter ;//
+CREATE TABLE t_rows (id INT PRIMARY KEY, s VARCHAR(64));
+INSERT INTO t_rows VALUES (1, '[]'), (2, '[1]'), (3, '[1,2,3]'), (4, NULL),
+                          (5, '[4,5,6,7,8]');
+SELECT id, f_len(s) AS len FROM t_rows ORDER BY id;
+SELECT id, f_len(s) AS len FROM t_rows ORDER BY id;
+DROP TABLE t_rows;
+
+--echo #
+--echo # Case 7: after the routines are dropped, UNINSTALL EXTENSION succeeds:
+--echo # the kept references do not hold the type. (con1 is disconnected first:
+--echo # DROP removes a routine only from the cache of the connection that drops
+--echo # it, and a routine still cached in another connection keeps the
+--echo # extension's functions in use, which is not about the kept references.)
+--echo #
+
+DROP PROCEDURE p_sum;
+DROP PROCEDURE p_overflow;
+DROP PROCEDURE p_add;
+DROP PROCEDURE p_outer;
+DROP FUNCTION f_len;
+disconnect con1;
+connection default;
+--source include/wait_until_count_sessions.inc
+UNINSTALL EXTENSION vsql_array;
+
+--echo # And installing it again works with a new procedure.
+INSTALL EXTENSION vsql_array;
+delimiter //;
+CREATE PROCEDURE p_again()
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=int32,max_size=4') DEFAULT '[7]';
+  SET a = vsql_array.array_append(a, 8);
+  SELECT a;
+END//
+delimiter ;//
+CALL p_again();
+CALL p_again();
+DROP PROCEDURE p_again;
+UNINSTALL EXTENSION vsql_array;
+
+--source include/wait_until_count_sessions.inc

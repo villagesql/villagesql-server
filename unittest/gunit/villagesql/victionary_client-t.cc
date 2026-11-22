@@ -918,6 +918,69 @@ TEST_F(VictionaryClientTest, TransactionRollback) {
   }
 }
 
+// The victionary generation changes on every commit that applies staged
+// operations and on clear(), and not on a rollback, a commit with nothing
+// staged, or reads. Per-routine caches of custom SP params depend on this.
+TEST_F(VictionaryClientTest, GenerationChangesOnCommitAndClear) {
+  // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
+  THD *fake_thd = reinterpret_cast<THD *>(0x7770);
+  ColumnKey key("db1", "table1", "gen_col");
+
+  const uint64_t g0 = villagesql::VictionaryGeneration();
+
+  // Nothing staged: commit leaves the generation alone.
+  client_->commit_all_tables(fake_thd);
+  EXPECT_EQ(villagesql::VictionaryGeneration(), g0);
+
+  // A staged insert that is rolled back: unchanged.
+  {
+    ColumnEntry entry(key);
+    entry.extension_name = "ext1";
+    entry.extension_version = "1.0";
+    entry.type_name = "TYPE1";
+    auto guard = client_->get_write_lock();
+    client_->columns().MarkForInsertion(*fake_thd, std::move(entry));
+  }
+  client_->rollback_all_tables(fake_thd);
+  EXPECT_EQ(villagesql::VictionaryGeneration(), g0);
+
+  // A committed insert: changed.
+  {
+    ColumnEntry entry(key);
+    entry.extension_name = "ext1";
+    entry.extension_version = "1.0";
+    entry.type_name = "TYPE1";
+    auto guard = client_->get_write_lock();
+    client_->columns().MarkForInsertion(*fake_thd, std::move(entry));
+  }
+  client_->commit_all_tables(fake_thd);
+  const uint64_t g1 = villagesql::VictionaryGeneration();
+  EXPECT_GT(g1, g0);
+
+  // Reads: unchanged.
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_NE(client_->columns().get_committed(key), nullptr);
+  }
+  EXPECT_EQ(villagesql::VictionaryGeneration(), g1);
+
+  // A committed delete: changed.
+  {
+    auto guard = client_->get_write_lock();
+    EXPECT_FALSE(client_->columns().MarkForDeletion(*fake_thd, key));
+  }
+  client_->commit_all_tables(fake_thd);
+  const uint64_t g2 = villagesql::VictionaryGeneration();
+  EXPECT_GT(g2, g1);
+
+  // clear(): changed.
+  {
+    auto guard = client_->get_write_lock();
+    client_->columns().clear();
+  }
+  EXPECT_GT(villagesql::VictionaryGeneration(), g2);
+}
+
 // Test operation ordering with complex scenario
 TEST_F(VictionaryClientTest, ComplexOperationOrdering) {
   // Use a fake THD pointer for testing that is 8-byte aligned (for ubsan)
