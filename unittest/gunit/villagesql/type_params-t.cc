@@ -241,4 +241,76 @@ TEST_F(WriteParamsToTest, ReuseClearsOverflow) {
   EXPECT_EQ(out_.actual_len, written.length());
 }
 
+// TypeParamsCache::get from a vef_type_params_t finds its entry without
+// building the key string (lookup_raw). These tests pin down that it returns
+// the same entry as the key-string and map paths do, for sorted and unsorted
+// input, and that near-miss parameters stay distinct.
+struct CacheTestParams {
+  int id;
+};
+
+class TypeParamsCacheRawTest : public ::testing::Test {
+ protected:
+  static vef_type_params_t Raw(const char **keys, const char **values,
+                               unsigned count) {
+    vef_type_params_t raw{};
+    raw.keys = keys;
+    raw.values = values;
+    raw.count = count;
+    return raw;
+  }
+  const CacheTestParams &Get(const vef_type_params_t &raw) {
+    return cache_.get(raw, [this](const std::map<std::string, std::string> &) {
+      return CacheTestParams{++parses_};
+    });
+  }
+  vsql::TypeParamsCache<CacheTestParams> cache_;
+  int parses_ = 0;
+};
+
+TEST_F(TypeParamsCacheRawTest, SecondGetIsAHitWithoutParsing) {
+  const char *keys[] = {"max_size", "type"};
+  const char *values[] = {"15", "int32"};
+  const CacheTestParams &first = Get(Raw(keys, values, 2));
+  const CacheTestParams &second = Get(Raw(keys, values, 2));
+  EXPECT_EQ(&first, &second);
+  EXPECT_EQ(parses_, 1);
+}
+
+TEST_F(TypeParamsCacheRawTest, UnsortedAndMapInputReachTheSameEntry) {
+  const char *keys[] = {"max_size", "type"};
+  const char *values[] = {"15", "int32"};
+  const char *keys_unsorted[] = {"type", "max_size"};
+  const char *values_unsorted[] = {"int32", "15"};
+  const CacheTestParams &sorted = Get(Raw(keys, values, 2));
+  const CacheTestParams &unsorted = Get(Raw(keys_unsorted, values_unsorted, 2));
+  const std::map<std::string, std::string> as_map = {{"type", "int32"},
+                                                     {"max_size", "15"}};
+  const CacheTestParams &from_map = cache_.get(
+      as_map, [this](const std::map<std::string, std::string> &) {
+        return CacheTestParams{++parses_};
+      });
+  EXPECT_EQ(&sorted, &unsorted);
+  EXPECT_EQ(&sorted, &from_map);
+  EXPECT_EQ(parses_, 1);
+}
+
+TEST_F(TypeParamsCacheRawTest, NearMissParamsStayDistinct) {
+  const char *keys[] = {"max_size", "type"};
+  const char *values[] = {"15", "int32"};
+  const char *values_longer[] = {"150", "int32"};
+  const char *one_key[] = {"max_size"};
+  const char *one_value[] = {"15"};
+  const CacheTestParams &base = Get(Raw(keys, values, 2));
+  const CacheTestParams &longer = Get(Raw(keys, values_longer, 2));
+  const CacheTestParams &fewer = Get(Raw(one_key, one_value, 1));
+  const CacheTestParams &none = Get(vef_type_params_t{});
+  EXPECT_NE(&base, &longer);
+  EXPECT_NE(&base, &fewer);
+  EXPECT_NE(&fewer, &none);
+  EXPECT_EQ(parses_, 4);
+  EXPECT_EQ(&none, &Get(vef_type_params_t{}));
+  EXPECT_EQ(parses_, 4);
+}
+
 }  // namespace villagesql_unittest

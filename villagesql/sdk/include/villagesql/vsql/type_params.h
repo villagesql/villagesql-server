@@ -20,6 +20,7 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <cstdint>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -161,6 +162,7 @@ class TypeParamsCache {
   // std::map on the hot per-row path; the map is built only on a cache miss.
   template <typename ParseFn>
   const T &get(const vef_type_params_t &raw, ParseFn &&parse_fn) {
+    if (const T *hit = lookup_raw(raw)) return *hit;
     std::string key = key_from_raw(raw);
     if (const T *hit = lookup(key)) return *hit;
     return insert(std::move(key), parse_fn(map_from_raw(raw)));
@@ -190,8 +192,65 @@ class TypeParamsCache {
   std::array<std::atomic<const Node *>, kBucketCount> buckets_{};
   std::mutex insert_mu_;
 
+  // FNV-1a over the key's bytes. The same hash can be fed piece by piece from
+  // a vef_type_params_t (see lookup_raw), so the hot path finds its entry
+  // without building the key string.
+  static constexpr uint64_t kFnvOffsetBasis = 14695981039346656037ULL;
+  static constexpr uint64_t kFnvPrime = 1099511628211ULL;
+
+  static uint64_t hash_add(uint64_t h, const char *s, size_t n) {
+    for (size_t i = 0; i < n; ++i) {
+      h ^= static_cast<unsigned char>(s[i]);
+      h *= kFnvPrime;
+    }
+    return h;
+  }
+
   static size_t bucket_of(const std::string &key) {
-    return std::hash<std::string>{}(key) % kBucketCount;
+    return hash_add(kFnvOffsetBasis, key.data(), key.size()) % kBucketCount;
+  }
+
+  // Whether key is exactly "k1=v1,k2=v2,..." of raw, in raw's order.
+  static bool key_equals_raw(const std::string &key,
+                             const vef_type_params_t &raw) {
+    const char *p = key.data();
+    size_t left = key.size();
+    auto take = [&](const char *s, size_t n) {
+      if (left < n || std::memcmp(p, s, n) != 0) return false;
+      p += n;
+      left -= n;
+      return true;
+    };
+    for (unsigned i = 0; i < raw.count; ++i) {
+      if (i > 0 && !take(",", 1)) return false;
+      if (!take(raw.keys[i], std::strlen(raw.keys[i]))) return false;
+      if (!take("=", 1)) return false;
+      if (!take(raw.values[i], std::strlen(raw.values[i]))) return false;
+    }
+    return left == 0;
+  }
+
+  // Lookup straight from raw, with no allocation: the per-call path of every
+  // function that takes a parameterized type. Returns nullptr on a miss and
+  // also when raw's keys are not in sorted order (the caller then builds the
+  // canonical key, as before).
+  const T *lookup_raw(const vef_type_params_t &raw) const {
+    uint64_t h = kFnvOffsetBasis;
+    for (unsigned i = 0; i < raw.count; ++i) {
+      if (i > 0) {
+        if (std::strcmp(raw.keys[i - 1], raw.keys[i]) >= 0) return nullptr;
+        h = hash_add(h, ",", 1);
+      }
+      h = hash_add(h, raw.keys[i], std::strlen(raw.keys[i]));
+      h = hash_add(h, "=", 1);
+      h = hash_add(h, raw.values[i], std::strlen(raw.values[i]));
+    }
+    for (const Node *n =
+             buckets_[h % kBucketCount].load(std::memory_order_acquire);
+         n != nullptr; n = n->next) {
+      if (key_equals_raw(n->key, raw)) return &n->value;
+    }
+    return nullptr;
   }
 
   const T *lookup(const std::string &key) const {
