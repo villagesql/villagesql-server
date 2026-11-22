@@ -42,7 +42,8 @@ ABI_SIZE(vef_postrun_result_t, 16);
 ABI_SIZE(vef_bind_types_args_t, 40);
 ABI_SIZE(vef_bind_types_result_t, 40);
 ABI_SIZE(vef_func_desc_t, 96);
-ABI_SIZE(vef_type_desc_t, 160);
+ABI_SIZE(vef_type_desc_t, 168);
+ABI_FIELD(vef_type_desc_t, collect_aggregate_vdf_name, 160);
 ABI_SIZE(vef_registration_t, 120);
 
 #undef ABI_LIST
