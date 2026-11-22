@@ -1,0 +1,202 @@
+#
+# Variables without DEFAULT are NULL at every call; values do not leak.
+#
+CREATE PROCEDURE p_leak(IN set_them INT)
+BEGIN
+DECLARE i INT;
+DECLARE s VARCHAR(20);
+DECLARE t TEXT;
+DECLARE j JSON;
+SELECT i, s, t, j;
+IF set_them THEN
+SET i = 42, s = 'abc', t = REPEAT('x', 5000), j = '{"k": [1, 2, 3]}';
+SELECT i, s, LENGTH(t) AS tlen, j;
+END IF;
+END//
+CALL p_leak(1);
+i	s	t	j
+NULL	NULL	NULL	NULL
+i	s	tlen	j
+42	abc	5000	{"k": [1, 2, 3]}
+CALL p_leak(0);
+i	s	t	j
+NULL	NULL	NULL	NULL
+CALL p_leak(1);
+i	s	t	j
+NULL	NULL	NULL	NULL
+i	s	tlen	j
+42	abc	5000	{"k": [1, 2, 3]}
+CALL p_leak(1);
+i	s	t	j
+NULL	NULL	NULL	NULL
+i	s	tlen	j
+42	abc	5000	{"k": [1, 2, 3]}
+CALL p_leak(0);
+i	s	t	j
+NULL	NULL	NULL	NULL
+#
+# OUT parameters start NULL; INOUT keep the passed value.
+#
+CREATE PROCEDURE p_out(OUT o TEXT, INOUT io INT)
+BEGIN
+SELECT o AS o_at_start, io AS io_at_start;
+SET o = CONCAT('call ', io), io = io + 1;
+END//
+SET @o = 'outside', @io = 1;
+CALL p_out(@o, @io);
+o_at_start	io_at_start
+NULL	1
+SELECT @o, @io;
+@o	@io
+call 1	2
+CALL p_out(@o, @io);
+o_at_start	io_at_start
+NULL	2
+SELECT @o, @io;
+@o	@io
+call 2	3
+#
+# A stored function with TEXT variables, called once per row.
+#
+CREATE FUNCTION f_rep(n INT) RETURNS TEXT DETERMINISTIC
+BEGIN
+DECLARE acc TEXT;
+DECLARE k INT DEFAULT 0;
+SET acc = CONCAT('n', n, ':');
+WHILE k < n DO
+SET acc = CONCAT(acc, k);
+SET k = k + 1;
+END WHILE;
+RETURN acc;
+END//
+CREATE TABLE t_n (n INT PRIMARY KEY);
+INSERT INTO t_n VALUES (0), (1), (2), (3), (4), (5);
+SELECT n, f_rep(n) AS r FROM t_n ORDER BY n;
+n	r
+0	n0:
+1	n1:0
+2	n2:01
+3	n3:012
+4	n4:0123
+5	n5:01234
+SELECT n, f_rep(n) AS r FROM t_n ORDER BY n DESC;
+n	r
+5	n5:01234
+4	n4:0123
+3	n3:012
+2	n2:01
+1	n1:0
+0	n0:
+# The same function as an argument of itself (the inner call runs while
+# the outer call holds the kept table).
+SELECT f_rep(LENGTH(f_rep(3))) AS nested, f_rep(2) AS plain;
+nested	plain
+n6:012345	n2:01
+DROP TABLE t_n;
+#
+# Recursion and a procedure calling another one.
+#
+SET SESSION max_sp_recursion_depth = 5;
+CREATE PROCEDURE p_rec(IN n INT, INOUT acc TEXT)
+BEGIN
+DECLARE mine VARCHAR(10);
+SET mine = CONCAT('<', n, '>');
+IF n > 0 THEN
+CALL p_rec(n - 1, acc);
+END IF;
+SET acc = CONCAT(IFNULL(acc, ''), mine);
+END//
+SET @acc = NULL;
+CALL p_rec(4, @acc);
+SELECT @acc;
+@acc
+<0><1><2><3><4>
+SET @acc = NULL;
+CALL p_rec(4, @acc);
+SELECT @acc;
+@acc
+<0><1><2><3><4>
+SET SESSION max_sp_recursion_depth = DEFAULT;
+#
+# Dropped and recreated with other variable types.
+#
+DROP PROCEDURE p_leak;
+CREATE PROCEDURE p_leak(IN set_them INT)
+BEGIN
+DECLARE d DATE;
+DECLARE x DECIMAL(10,2);
+SELECT d, x;
+IF set_them THEN
+SET d = '2026-11-20', x = 12.5;
+SELECT d, x;
+END IF;
+END//
+CALL p_leak(1);
+d	x
+NULL	NULL
+d	x
+2026-11-20	12.50
+CALL p_leak(0);
+d	x
+NULL	NULL
+#
+# Another connection, with its own copy of the routine.
+#
+CALL p_leak(1);
+d	x
+NULL	NULL
+d	x
+2026-11-20	12.50
+CALL p_leak(0);
+d	x
+NULL	NULL
+#
+# Custom types: a victionary change between calls (extension
+# uninstalled and installed again after the routine is recreated).
+#
+INSTALL EXTENSION vsql_complex;
+CREATE PROCEDURE p_cx(IN set_it INT)
+BEGIN
+DECLARE c COMPLEX;
+SELECT c;
+IF set_it THEN
+SET c = '(1.0,2.0)';
+SELECT c;
+END IF;
+END//
+CALL p_cx(1);
+c
+NULL
+c
+(1,2)
+CALL p_cx(0);
+c
+NULL
+CREATE TABLE t_cx (c COMPLEX);
+DROP TABLE t_cx;
+CALL p_cx(1);
+c
+NULL
+c
+(1,2)
+DROP PROCEDURE p_cx;
+UNINSTALL EXTENSION vsql_complex;
+INSTALL EXTENSION vsql_complex;
+CREATE PROCEDURE p_cx()
+BEGIN
+DECLARE c COMPLEX;
+SET c = '(3.0,4.0)';
+SELECT c;
+END//
+CALL p_cx();
+c
+(3,4)
+CALL p_cx();
+c
+(3,4)
+DROP PROCEDURE p_cx;
+UNINSTALL EXTENSION vsql_complex;
+DROP PROCEDURE p_leak;
+DROP PROCEDURE p_out;
+DROP PROCEDURE p_rec;
+DROP FUNCTION f_rep;

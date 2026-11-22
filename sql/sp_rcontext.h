@@ -45,6 +45,7 @@ class THD;
 class sp_cursor;
 class sp_handler;
 class sp_head;
+struct Vsql_var_table_keeper;
 class sp_instr;
 class sp_instr_cpush;
 class sp_pcontext;
@@ -88,7 +89,8 @@ class sp_rcontext {
   ///
   /// @return valid sp_rcontext object or NULL in case of OOM-error.
   static sp_rcontext *create(THD *thd, const sp_pcontext *root_parsing_ctx,
-                             Field *return_value_fld);
+                             Field *return_value_fld,
+                             Vsql_var_table_keeper *var_table_owner = nullptr);
 
   ~sp_rcontext();
 
@@ -332,7 +334,7 @@ class sp_rcontext {
   /// @return error flag.
   /// @retval false on success.
   /// @retval true on error.
-  bool init_var_table(THD *thd);
+  bool init_var_table(THD *thd, Vsql_var_table_keeper *var_table_owner);
 
   /// Create and initialize an Item-adapter (Item_field) for each SP-var field.
   ///
@@ -367,6 +369,11 @@ class sp_rcontext {
 
   /// Virtual table for storing SP-variables.
   TABLE *m_var_table;
+
+  /// VillageSQL: the routine's keeper whose kept variable table m_var_table
+  /// is (Vsql_var_table_keeper::m_vsql_var_table_cache), or nullptr when
+  /// m_var_table belongs to this context only.
+  Vsql_var_table_keeper *m_var_table_owner{nullptr};
 
   /// Collection of Item_field proxies, each of them points to the
   /// corresponding field in m_var_table.
