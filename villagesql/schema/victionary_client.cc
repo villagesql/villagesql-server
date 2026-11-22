@@ -146,6 +146,10 @@ std::vector<const SpParamEntry *> VictionaryClient::GetCustomSpParamsForSP(
 void VictionaryClient::commit_all_tables(THD *thd) {
   if (!m_initialized.load() || !thd) return;
 
+  // Every transaction commit reaches this point. Without pending operations
+  // there is nothing to apply, so do not take the global write lock.
+  if (!has_uncommitted_operations()) return;
+
   auto guard = get_write_lock();
 
   m_properties.commit(thd);
@@ -165,6 +169,9 @@ void VictionaryClient::commit_all_tables(THD *thd) {
 
 void VictionaryClient::rollback_all_tables(THD *thd) {
   if (!m_initialized.load() || !thd) return;
+
+  // See commit_all_tables(): nothing pending means nothing to discard.
+  if (!has_uncommitted_operations()) return;
 
   auto guard = get_write_lock();
 

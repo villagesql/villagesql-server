@@ -16,6 +16,9 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <future>
+
 #include "mysql/strings/m_ctype.h"
 #include "sql/mysqld.h"
 #include "sql/strfunc.h"
@@ -2440,6 +2443,98 @@ TEST_F(VictionaryClientTest, SpParamOnlyHasUncommittedOnSpParams) {
   }
 
   client_->rollback_all_tables(fake_thd);
+}
+
+// ===== Lock-free transaction end when nothing is pending =====
+
+// How long a transaction-end call may take before the test decides it is
+// blocked on the write lock.
+static const std::chrono::seconds kNoLockWaitLimit{5};
+
+// The pending-operation count follows mark / commit / rollback / clear.
+TEST_F(VictionaryClientTest, UncommittedOperationCount) {
+  THD *fake_thd = reinterpret_cast<THD *>(0x9a10);
+  THD *other_thd = reinterpret_cast<THD *>(0x9a20);
+
+  EXPECT_FALSE(client_->has_uncommitted_operations());
+
+  {
+    auto guard = client_->get_write_lock();
+    ColumnEntry entry1(ColumnKey("testdb", "counttable", "col1"));
+    ColumnEntry entry2(ColumnKey("testdb", "counttable", "col2"));
+    ColumnEntry entry3(ColumnKey("testdb", "counttable", "col3"));
+    client_->columns().MarkForInsertion(*fake_thd, std::move(entry1));
+    client_->columns().MarkForInsertion(*fake_thd, std::move(entry2));
+    client_->columns().MarkForInsertion(*other_thd, std::move(entry3));
+  }
+  EXPECT_EQ(client_->columns().uncommitted_ops(), 3u);
+  EXPECT_TRUE(client_->has_uncommitted_operations());
+
+  // Committing one session leaves the other session's operation pending.
+  client_->commit_all_tables(fake_thd);
+  EXPECT_EQ(client_->columns().uncommitted_ops(), 1u);
+  EXPECT_TRUE(client_->has_uncommitted_operations());
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->columns()
+                  .get_prefix_committed(ColumnKeyPrefix("testdb", "counttable"))
+                  .size(),
+              2u);
+  }
+
+  client_->rollback_all_tables(other_thd);
+  EXPECT_EQ(client_->columns().uncommitted_ops(), 0u);
+  EXPECT_FALSE(client_->has_uncommitted_operations());
+
+  // A staged DELETE counts too, and clear_all_tables() resets the count.
+  {
+    auto guard = client_->get_write_lock();
+    client_->columns().MarkForDeletion(
+        *fake_thd, ColumnKey("testdb", "counttable", "col1"));
+  }
+  EXPECT_TRUE(client_->has_uncommitted_operations());
+  client_->clear_all_tables();
+  EXPECT_FALSE(client_->has_uncommitted_operations());
+}
+
+// With nothing pending, commit and rollback must not take the write lock:
+// they complete while another thread holds the read lock.
+TEST_F(VictionaryClientTest, TransactionEndDoesNotLockWhenNothingPending) {
+  THD *fake_thd = reinterpret_cast<THD *>(0x9b10);
+  ASSERT_FALSE(client_->has_uncommitted_operations());
+
+  std::future<void> done;
+  std::future_status status;
+  {
+    auto guard = client_->get_read_lock();
+    done = std::async(std::launch::async, [&]() {
+      client_->commit_all_tables(fake_thd);
+      client_->rollback_all_tables(fake_thd);
+    });
+    status = done.wait_for(kNoLockWaitLimit);
+  }  // read lock released: a blocked call can now finish
+  done.get();
+  EXPECT_EQ(status, std::future_status::ready);
+}
+
+// With an operation pending, commit still applies it (takes the write lock).
+TEST_F(VictionaryClientTest, TransactionEndStillAppliesPendingOperations) {
+  THD *fake_thd = reinterpret_cast<THD *>(0x9c10);
+  {
+    auto guard = client_->get_write_lock();
+    ColumnEntry entry(ColumnKey("testdb", "pendingtable", "col1"));
+    client_->columns().MarkForInsertion(*fake_thd, std::move(entry));
+  }
+  client_->commit_all_tables(fake_thd);
+  {
+    auto guard = client_->get_read_lock();
+    EXPECT_EQ(client_->columns()
+                  .get_prefix_committed(
+                      ColumnKeyPrefix("testdb", "pendingtable"))
+                  .size(),
+              1u);
+  }
+  EXPECT_FALSE(client_->has_uncommitted_operations());
 }
 
 }  // namespace villagesql_unittest
