@@ -1373,9 +1373,10 @@ class PT_select_var_list : public PT_into_destination {
 
 /**
   Target of RETURNING ... INTO: either a single JSON variable
-  (INTO JSON <var>; rows captured as a JSON array) or a list of scalar
+  (INTO JSON <var>; rows captured as a JSON array), a list of scalar
   variables (INTO v1, v2, ...; exactly one row, columns assigned positionally,
-  like SELECT ... INTO).
+  like SELECT ... INTO), or an existing table (INTO TABLE <tbl>; every row is
+  inserted into the table, columns assigned positionally).
 
   Unlike PT_select_var_list this does not install a Query_dumpvar into
   lex->result: RETURNING drives its own Query_result_returning.
@@ -1388,13 +1389,33 @@ class PT_returning_into : public Parse_tree_node {
   PT_select_var *const json_var;
   /// INTO v1, v2, ... targets, or nullptr
   PT_select_var_list *const scalar_vars;
+  /// INTO TABLE <tbl> target as parsed, or nullptr
+  Table_ident *const table_ident;
+  /// INTO TABLE <tbl> target, added to the statement's global table list by
+  /// do_contextualize() so it is opened and locked with the statement (and
+  /// collected by a stored routine's table list); nullptr for the other modes.
+  Table_ref *table_ref{nullptr};
 
   PT_returning_into(const POS &pos, PT_select_var *json_var_arg)
-      : super(pos), json_var(json_var_arg), scalar_vars(nullptr) {}
+      : super(pos),
+        json_var(json_var_arg),
+        scalar_vars(nullptr),
+        table_ident(nullptr) {}
   PT_returning_into(const POS &pos, PT_select_var_list *scalar_vars_arg)
-      : super(pos), json_var(nullptr), scalar_vars(scalar_vars_arg) {}
+      : super(pos),
+        json_var(nullptr),
+        scalar_vars(scalar_vars_arg),
+        table_ident(nullptr) {}
+  PT_returning_into(const POS &pos, Table_ident *table_ident_arg)
+      : super(pos),
+        json_var(nullptr),
+        scalar_vars(nullptr),
+        table_ident(table_ident_arg) {}
 
   bool do_contextualize(Parse_context *pc) override;
+
+ private:
+  bool add_into_table(Parse_context *pc);
 };
 
 /**

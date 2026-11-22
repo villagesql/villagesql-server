@@ -1,0 +1,199 @@
+--echo #
+--echo # RETURNING ... INTO TABLE <tbl>
+--echo #
+--echo # Every returned row is inserted into an existing table (typically a
+--echo # TEMPORARY table), columns assigned positionally, inside the same
+--echo # statement and transaction. Column counts must match.
+--echo #
+
+CREATE TABLE new_order (no_w_id INT, no_d_id INT, no_o_id INT,
+                        PRIMARY KEY (no_w_id, no_d_id, no_o_id));
+CREATE TABLE orders (o_w_id INT, o_d_id INT, o_id INT, o_carrier_id INT,
+                     PRIMARY KEY (o_w_id, o_d_id, o_id));
+INSERT INTO new_order VALUES (1,1,10),(1,1,11),(1,2,20),(1,2,21),(2,1,30);
+INSERT INTO orders VALUES (1,1,10,NULL),(1,1,11,NULL),(1,2,20,NULL),
+                          (1,2,21,NULL),(2,1,30,NULL);
+CREATE TEMPORARY TABLE dlv_tmp (d INT, o INT);
+
+--echo # --- Basic DELETE ... RETURNING ... INTO TABLE (temporary target)
+DELETE FROM new_order WHERE no_w_id = 1 AND no_d_id = 1
+RETURNING no_d_id, no_o_id INTO TABLE dlv_tmp;
+SELECT ROW_COUNT();
+SELECT * FROM dlv_tmp ORDER BY d, o;
+SELECT * FROM new_order ORDER BY no_w_id, no_d_id, no_o_id;
+
+--echo # --- Zero rows: nothing inserted, OK with row count 0, no warning
+DELETE FROM new_order WHERE no_w_id = 99
+RETURNING no_d_id, no_o_id INTO TABLE dlv_tmp;
+SELECT ROW_COUNT();
+SHOW WARNINGS;
+SELECT COUNT(*) FROM dlv_tmp;
+
+--echo # --- Expressions and a qualified name; target column names do not matter
+DELETE FROM dlv_tmp;
+DELETE FROM new_order WHERE no_w_id = 2
+RETURNING no_d_id * 100, no_o_id + 1 INTO TABLE test.dlv_tmp;
+SELECT * FROM dlv_tmp;
+
+--echo # --- Many rows
+CREATE TABLE big (id INT PRIMARY KEY, v INT);
+INSERT INTO big
+  WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 500)
+  SELECT n, n * 2 FROM s;
+CREATE TEMPORARY TABLE big_tmp (id INT, v INT);
+DELETE FROM big WHERE id > 100 RETURNING id, v INTO TABLE big_tmp;
+SELECT ROW_COUNT();
+SELECT COUNT(*), MIN(id), MAX(id), SUM(v) FROM big_tmp;
+SELECT COUNT(*) FROM big;
+
+--echo # --- UPDATE ... RETURNING ... INTO TABLE (new and old values)
+CREATE TEMPORARY TABLE upd_tmp (id INT, new_v INT, old_v INT);
+UPDATE big SET v = v + 1 WHERE id <= 3
+RETURNING id, v, OLD_VALUE(v) INTO TABLE upd_tmp;
+SELECT ROW_COUNT();
+SELECT * FROM upd_tmp ORDER BY id;
+
+--echo # --- Column-count mismatch: error, and the DELETE is rolled back
+--error ER_WRONG_VALUE_COUNT
+DELETE FROM big WHERE id <= 10 RETURNING id INTO TABLE big_tmp;
+--error ER_WRONG_VALUE_COUNT
+DELETE FROM big WHERE id <= 10 RETURNING id, v, v INTO TABLE big_tmp;
+--echo # zero matching rows is still a mismatch
+--error ER_WRONG_VALUE_COUNT
+DELETE FROM big WHERE id = -1 RETURNING id INTO TABLE big_tmp;
+SELECT COUNT(*) FROM big;
+
+--echo # --- Target table does not exist
+--error ER_NO_SUCH_TABLE
+DELETE FROM big WHERE id = 1 RETURNING id, v INTO TABLE no_such_tmp;
+SELECT COUNT(*) FROM big;
+
+--echo # --- Target is a view: rejected
+CREATE VIEW v_tmp AS SELECT * FROM orders;
+--error ER_WRONG_OBJECT
+DELETE FROM big WHERE id = 1 RETURNING id, v, v, v INTO TABLE v_tmp;
+DROP VIEW v_tmp;
+
+--echo # --- Target is the table being modified: rejected
+--error ER_UPDATE_TABLE_USED
+DELETE FROM big WHERE id = 1 RETURNING id, v INTO TABLE big;
+--error ER_UPDATE_TABLE_USED
+UPDATE big SET v = v WHERE id = 1 RETURNING id, v INTO TABLE big;
+SELECT COUNT(*) FROM big;
+
+--echo # --- Base-table target works too; duplicate key fails the whole statement
+CREATE TABLE keep_log (id INT PRIMARY KEY, v INT);
+DELETE FROM big WHERE id IN (1, 2) RETURNING id, v INTO TABLE keep_log;
+SELECT * FROM keep_log ORDER BY id;
+INSERT INTO big VALUES (1, 2), (5000, 1);
+--error ER_DUP_ENTRY
+DELETE FROM big WHERE id IN (1, 5000) RETURNING id, v INTO TABLE keep_log;
+SELECT * FROM big WHERE id IN (1, 5000) ORDER BY id;
+SELECT * FROM keep_log ORDER BY id;
+
+--echo # --- NOT NULL target column receiving NULL: error
+CREATE TEMPORARY TABLE nn_tmp (a INT NOT NULL, b INT);
+INSERT INTO big VALUES (6000, NULL);
+--error ER_BAD_NULL_ERROR
+DELETE FROM big WHERE id = 6000 RETURNING v, id INTO TABLE nn_tmp;
+SELECT * FROM big WHERE id = 6000;
+SELECT COUNT(*) FROM nn_tmp;
+
+--echo # --- Target with triggers: not supported
+CREATE TABLE trg_target (a INT, b INT);
+CREATE TRIGGER trg_target_bi BEFORE INSERT ON trg_target
+  FOR EACH ROW SET NEW.b = NEW.b + 1;
+--error ER_NOT_SUPPORTED_YET
+DELETE FROM big WHERE id = 6000 RETURNING id, v INTO TABLE trg_target;
+SELECT COUNT(*) FROM big WHERE id = 6000;
+DROP TABLE trg_target;
+
+--echo # --- Rollback undoes both the DELETE and the rows written to the target
+DELETE FROM big_tmp;
+START TRANSACTION;
+DELETE FROM big WHERE id BETWEEN 3 AND 7 RETURNING id, v INTO TABLE big_tmp;
+SELECT COUNT(*) FROM big_tmp;
+SELECT COUNT(*) FROM big WHERE id BETWEEN 3 AND 7;
+ROLLBACK;
+SELECT COUNT(*) FROM big_tmp;
+SELECT COUNT(*) FROM big WHERE id BETWEEN 3 AND 7;
+
+--echo # --- Prepared statement, executed twice
+PREPARE ps FROM 'DELETE FROM big WHERE id = ? RETURNING id, v INTO TABLE big_tmp';
+SET @id = 3;
+EXECUTE ps USING @id;
+SET @id = 4;
+EXECUTE ps USING @id;
+SELECT * FROM big_tmp ORDER BY id;
+DEALLOCATE PREPARE ps;
+
+--echo # --- Stored procedure: TEMPORARY table created outside, CALL twice
+INSERT INTO new_order VALUES (1,1,10),(1,1,11),(1,3,40);
+DELIMITER |;
+CREATE PROCEDURE p_delivery(IN p_w INT, IN p_carrier INT)
+BEGIN
+  DELETE FROM dlv_tmp;
+  DELETE FROM new_order WHERE no_w_id = p_w
+    RETURNING no_d_id, no_o_id INTO TABLE dlv_tmp;
+  UPDATE orders JOIN dlv_tmp ON o_w_id = p_w AND o_d_id = d AND o_id = o
+    SET o_carrier_id = p_carrier;
+  SELECT d, o FROM dlv_tmp ORDER BY d, o;
+END|
+DELIMITER ;|
+CALL p_delivery(1, 7);
+SELECT * FROM orders ORDER BY o_w_id, o_d_id, o_id;
+SELECT * FROM new_order ORDER BY no_w_id, no_d_id, no_o_id;
+INSERT INTO new_order VALUES (1,2,22);
+CALL p_delivery(1, 8);
+SELECT * FROM new_order ORDER BY no_w_id, no_d_id, no_o_id;
+--echo # the target is re-checked on every execution
+DROP TEMPORARY TABLE dlv_tmp;
+CREATE TEMPORARY TABLE dlv_tmp (d INT);
+INSERT INTO new_order VALUES (1,2,23);
+--error ER_WRONG_VALUE_COUNT
+CALL p_delivery(1, 9);
+SELECT * FROM new_order ORDER BY no_w_id, no_d_id, no_o_id;
+DROP TEMPORARY TABLE dlv_tmp;
+CREATE TEMPORARY TABLE dlv_tmp (d INT, o INT);
+CALL p_delivery(1, 9);
+DROP PROCEDURE p_delivery;
+
+--echo # --- Privileges: INSERT on a base-table target is required
+--echo # (own database: the default test database is open to every user)
+CREATE DATABASE mysqltest_into;
+CREATE TABLE mysqltest_into.src (id INT PRIMARY KEY, v INT);
+CREATE TABLE mysqltest_into.dst (id INT, v INT);
+INSERT INTO mysqltest_into.src VALUES (1, 10), (2, 20);
+CREATE USER u_into@localhost;
+GRANT SELECT, DELETE ON mysqltest_into.src TO u_into@localhost;
+GRANT SELECT ON mysqltest_into.dst TO u_into@localhost;
+connect (con_into, localhost, u_into,, mysqltest_into);
+--error ER_TABLEACCESS_DENIED_ERROR
+DELETE FROM src WHERE id = 1 RETURNING id, v INTO TABLE dst;
+connection default;
+GRANT INSERT ON mysqltest_into.dst TO u_into@localhost;
+connection con_into;
+DELETE FROM src WHERE id = 1 RETURNING id, v INTO TABLE dst;
+--echo # a TEMPORARY target needs no table privilege beyond creating it
+disconnect con_into;
+connection default;
+GRANT CREATE TEMPORARY TABLES ON mysqltest_into.* TO u_into@localhost;
+connect (con_into, localhost, u_into,, mysqltest_into);
+CREATE TEMPORARY TABLE t_tmp (id INT, v INT);
+DELETE FROM src WHERE id = 2 RETURNING id, v INTO TABLE t_tmp;
+SELECT * FROM t_tmp;
+disconnect con_into;
+connection default;
+SELECT * FROM mysqltest_into.dst;
+SELECT COUNT(*) FROM mysqltest_into.src;
+DROP USER u_into@localhost;
+DROP DATABASE mysqltest_into;
+
+--echo # --- The other INTO forms are unchanged
+DELETE FROM big WHERE id = 9 RETURNING id INTO @one;
+SELECT @one;
+DELETE FROM big WHERE id IN (10, 11) RETURNING id INTO JSON @j;
+SELECT @j;
+
+DROP TEMPORARY TABLE dlv_tmp, big_tmp, upd_tmp, nn_tmp;
+DROP TABLE new_order, orders, big, keep_log;

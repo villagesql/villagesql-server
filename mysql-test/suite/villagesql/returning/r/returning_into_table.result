@@ -1,0 +1,260 @@
+#
+# RETURNING ... INTO TABLE <tbl>
+#
+# Every returned row is inserted into an existing table (typically a
+# TEMPORARY table), columns assigned positionally, inside the same
+# statement and transaction. Column counts must match.
+#
+CREATE TABLE new_order (no_w_id INT, no_d_id INT, no_o_id INT,
+PRIMARY KEY (no_w_id, no_d_id, no_o_id));
+CREATE TABLE orders (o_w_id INT, o_d_id INT, o_id INT, o_carrier_id INT,
+PRIMARY KEY (o_w_id, o_d_id, o_id));
+INSERT INTO new_order VALUES (1,1,10),(1,1,11),(1,2,20),(1,2,21),(2,1,30);
+INSERT INTO orders VALUES (1,1,10,NULL),(1,1,11,NULL),(1,2,20,NULL),
+(1,2,21,NULL),(2,1,30,NULL);
+CREATE TEMPORARY TABLE dlv_tmp (d INT, o INT);
+# --- Basic DELETE ... RETURNING ... INTO TABLE (temporary target)
+DELETE FROM new_order WHERE no_w_id = 1 AND no_d_id = 1
+RETURNING no_d_id, no_o_id INTO TABLE dlv_tmp;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+SELECT * FROM dlv_tmp ORDER BY d, o;
+d	o
+1	10
+1	11
+SELECT * FROM new_order ORDER BY no_w_id, no_d_id, no_o_id;
+no_w_id	no_d_id	no_o_id
+1	2	20
+1	2	21
+2	1	30
+# --- Zero rows: nothing inserted, OK with row count 0, no warning
+DELETE FROM new_order WHERE no_w_id = 99
+RETURNING no_d_id, no_o_id INTO TABLE dlv_tmp;
+SELECT ROW_COUNT();
+ROW_COUNT()
+0
+SHOW WARNINGS;
+Level	Code	Message
+SELECT COUNT(*) FROM dlv_tmp;
+COUNT(*)
+2
+# --- Expressions and a qualified name; target column names do not matter
+DELETE FROM dlv_tmp;
+DELETE FROM new_order WHERE no_w_id = 2
+RETURNING no_d_id * 100, no_o_id + 1 INTO TABLE test.dlv_tmp;
+SELECT * FROM dlv_tmp;
+d	o
+100	31
+# --- Many rows
+CREATE TABLE big (id INT PRIMARY KEY, v INT);
+INSERT INTO big
+WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 500)
+SELECT n, n * 2 FROM s;
+CREATE TEMPORARY TABLE big_tmp (id INT, v INT);
+DELETE FROM big WHERE id > 100 RETURNING id, v INTO TABLE big_tmp;
+SELECT ROW_COUNT();
+ROW_COUNT()
+400
+SELECT COUNT(*), MIN(id), MAX(id), SUM(v) FROM big_tmp;
+COUNT(*)	MIN(id)	MAX(id)	SUM(v)
+400	101	500	240400
+SELECT COUNT(*) FROM big;
+COUNT(*)
+100
+# --- UPDATE ... RETURNING ... INTO TABLE (new and old values)
+CREATE TEMPORARY TABLE upd_tmp (id INT, new_v INT, old_v INT);
+UPDATE big SET v = v + 1 WHERE id <= 3
+RETURNING id, v, OLD_VALUE(v) INTO TABLE upd_tmp;
+SELECT ROW_COUNT();
+ROW_COUNT()
+3
+SELECT * FROM upd_tmp ORDER BY id;
+id	new_v	old_v
+1	3	2
+2	5	4
+3	7	6
+# --- Column-count mismatch: error, and the DELETE is rolled back
+DELETE FROM big WHERE id <= 10 RETURNING id INTO TABLE big_tmp;
+ERROR 21S01: Column count doesn't match value count
+DELETE FROM big WHERE id <= 10 RETURNING id, v, v INTO TABLE big_tmp;
+ERROR 21S01: Column count doesn't match value count
+# zero matching rows is still a mismatch
+DELETE FROM big WHERE id = -1 RETURNING id INTO TABLE big_tmp;
+ERROR 21S01: Column count doesn't match value count
+SELECT COUNT(*) FROM big;
+COUNT(*)
+100
+# --- Target table does not exist
+DELETE FROM big WHERE id = 1 RETURNING id, v INTO TABLE no_such_tmp;
+ERROR 42S02: Table 'test.no_such_tmp' doesn't exist
+SELECT COUNT(*) FROM big;
+COUNT(*)
+100
+# --- Target is a view: rejected
+CREATE VIEW v_tmp AS SELECT * FROM orders;
+DELETE FROM big WHERE id = 1 RETURNING id, v, v, v INTO TABLE v_tmp;
+ERROR HY000: 'test.v_tmp' is not BASE TABLE
+DROP VIEW v_tmp;
+# --- Target is the table being modified: rejected
+DELETE FROM big WHERE id = 1 RETURNING id, v INTO TABLE big;
+ERROR HY000: You can't specify target table 'big' for update in FROM clause
+UPDATE big SET v = v WHERE id = 1 RETURNING id, v INTO TABLE big;
+ERROR HY000: You can't specify target table 'big' for update in FROM clause
+SELECT COUNT(*) FROM big;
+COUNT(*)
+100
+# --- Base-table target works too; duplicate key fails the whole statement
+CREATE TABLE keep_log (id INT PRIMARY KEY, v INT);
+DELETE FROM big WHERE id IN (1, 2) RETURNING id, v INTO TABLE keep_log;
+SELECT * FROM keep_log ORDER BY id;
+id	v
+1	3
+2	5
+INSERT INTO big VALUES (1, 2), (5000, 1);
+DELETE FROM big WHERE id IN (1, 5000) RETURNING id, v INTO TABLE keep_log;
+ERROR 23000: Duplicate entry '1' for key 'keep_log.PRIMARY'
+SELECT * FROM big WHERE id IN (1, 5000) ORDER BY id;
+id	v
+1	2
+5000	1
+SELECT * FROM keep_log ORDER BY id;
+id	v
+1	3
+2	5
+# --- NOT NULL target column receiving NULL: error
+CREATE TEMPORARY TABLE nn_tmp (a INT NOT NULL, b INT);
+INSERT INTO big VALUES (6000, NULL);
+DELETE FROM big WHERE id = 6000 RETURNING v, id INTO TABLE nn_tmp;
+ERROR 23000: Column 'a' cannot be null
+SELECT * FROM big WHERE id = 6000;
+id	v
+6000	NULL
+SELECT COUNT(*) FROM nn_tmp;
+COUNT(*)
+0
+# --- Target with triggers: not supported
+CREATE TABLE trg_target (a INT, b INT);
+CREATE TRIGGER trg_target_bi BEFORE INSERT ON trg_target
+FOR EACH ROW SET NEW.b = NEW.b + 1;
+DELETE FROM big WHERE id = 6000 RETURNING id, v INTO TABLE trg_target;
+ERROR 42000: This version of MySQL doesn't yet support 'RETURNING ... INTO TABLE into a table with triggers'
+SELECT COUNT(*) FROM big WHERE id = 6000;
+COUNT(*)
+1
+DROP TABLE trg_target;
+# --- Rollback undoes both the DELETE and the rows written to the target
+DELETE FROM big_tmp;
+START TRANSACTION;
+DELETE FROM big WHERE id BETWEEN 3 AND 7 RETURNING id, v INTO TABLE big_tmp;
+SELECT COUNT(*) FROM big_tmp;
+COUNT(*)
+5
+SELECT COUNT(*) FROM big WHERE id BETWEEN 3 AND 7;
+COUNT(*)
+0
+ROLLBACK;
+SELECT COUNT(*) FROM big_tmp;
+COUNT(*)
+0
+SELECT COUNT(*) FROM big WHERE id BETWEEN 3 AND 7;
+COUNT(*)
+5
+# --- Prepared statement, executed twice
+PREPARE ps FROM 'DELETE FROM big WHERE id = ? RETURNING id, v INTO TABLE big_tmp';
+SET @id = 3;
+EXECUTE ps USING @id;
+SET @id = 4;
+EXECUTE ps USING @id;
+SELECT * FROM big_tmp ORDER BY id;
+id	v
+3	7
+4	8
+DEALLOCATE PREPARE ps;
+# --- Stored procedure: TEMPORARY table created outside, CALL twice
+INSERT INTO new_order VALUES (1,1,10),(1,1,11),(1,3,40);
+CREATE PROCEDURE p_delivery(IN p_w INT, IN p_carrier INT)
+BEGIN
+DELETE FROM dlv_tmp;
+DELETE FROM new_order WHERE no_w_id = p_w
+RETURNING no_d_id, no_o_id INTO TABLE dlv_tmp;
+UPDATE orders JOIN dlv_tmp ON o_w_id = p_w AND o_d_id = d AND o_id = o
+SET o_carrier_id = p_carrier;
+SELECT d, o FROM dlv_tmp ORDER BY d, o;
+END|
+CALL p_delivery(1, 7);
+d	o
+1	10
+1	11
+2	20
+2	21
+3	40
+SELECT * FROM orders ORDER BY o_w_id, o_d_id, o_id;
+o_w_id	o_d_id	o_id	o_carrier_id
+1	1	10	7
+1	1	11	7
+1	2	20	7
+1	2	21	7
+2	1	30	NULL
+SELECT * FROM new_order ORDER BY no_w_id, no_d_id, no_o_id;
+no_w_id	no_d_id	no_o_id
+INSERT INTO new_order VALUES (1,2,22);
+CALL p_delivery(1, 8);
+d	o
+2	22
+SELECT * FROM new_order ORDER BY no_w_id, no_d_id, no_o_id;
+no_w_id	no_d_id	no_o_id
+# the target is re-checked on every execution
+DROP TEMPORARY TABLE dlv_tmp;
+CREATE TEMPORARY TABLE dlv_tmp (d INT);
+INSERT INTO new_order VALUES (1,2,23);
+CALL p_delivery(1, 9);
+ERROR 21S01: Column count doesn't match value count
+SELECT * FROM new_order ORDER BY no_w_id, no_d_id, no_o_id;
+no_w_id	no_d_id	no_o_id
+1	2	23
+DROP TEMPORARY TABLE dlv_tmp;
+CREATE TEMPORARY TABLE dlv_tmp (d INT, o INT);
+CALL p_delivery(1, 9);
+d	o
+2	23
+DROP PROCEDURE p_delivery;
+# --- Privileges: INSERT on a base-table target is required
+# (own database: the default test database is open to every user)
+CREATE DATABASE mysqltest_into;
+CREATE TABLE mysqltest_into.src (id INT PRIMARY KEY, v INT);
+CREATE TABLE mysqltest_into.dst (id INT, v INT);
+INSERT INTO mysqltest_into.src VALUES (1, 10), (2, 20);
+CREATE USER u_into@localhost;
+GRANT SELECT, DELETE ON mysqltest_into.src TO u_into@localhost;
+GRANT SELECT ON mysqltest_into.dst TO u_into@localhost;
+DELETE FROM src WHERE id = 1 RETURNING id, v INTO TABLE dst;
+ERROR 42000: INSERT command denied to user 'u_into'@'localhost' for table 'dst'
+GRANT INSERT ON mysqltest_into.dst TO u_into@localhost;
+DELETE FROM src WHERE id = 1 RETURNING id, v INTO TABLE dst;
+# a TEMPORARY target needs no table privilege beyond creating it
+GRANT CREATE TEMPORARY TABLES ON mysqltest_into.* TO u_into@localhost;
+CREATE TEMPORARY TABLE t_tmp (id INT, v INT);
+DELETE FROM src WHERE id = 2 RETURNING id, v INTO TABLE t_tmp;
+SELECT * FROM t_tmp;
+id	v
+2	20
+SELECT * FROM mysqltest_into.dst;
+id	v
+1	10
+SELECT COUNT(*) FROM mysqltest_into.src;
+COUNT(*)
+0
+DROP USER u_into@localhost;
+DROP DATABASE mysqltest_into;
+# --- The other INTO forms are unchanged
+DELETE FROM big WHERE id = 9 RETURNING id INTO @one;
+SELECT @one;
+@one
+9
+DELETE FROM big WHERE id IN (10, 11) RETURNING id INTO JSON @j;
+SELECT @j;
+@j
+[{"id": 10}, {"id": 11}]
+DROP TEMPORARY TABLE dlv_tmp, big_tmp, upd_tmp, nn_tmp;
+DROP TABLE new_order, orders, big, keep_log;

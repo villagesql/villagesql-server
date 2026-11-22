@@ -154,12 +154,12 @@ bool contextualize_returning_clause(
   select->parsing_place = CTX_NONE;
   if (returning_error) return true;
 
-  // Resolve the RETURNING ... INTO target (JSON var or scalar var list; each an
-  // SP-local offset or a @user_var). Unlike SELECT ... INTO, we do not install
-  // a Query_dumpvar into lex->result: RETURNING drives its own
-  // Query_result_returning, which handles the JSON capture. We still mark the
-  // statement uncacheable because it writes a session/routine variable as a
-  // side effect.
+  // Resolve the RETURNING ... INTO target (JSON var or scalar var list, each an
+  // SP-local offset or a @user_var; or a table, added to the statement's table
+  // list). Unlike SELECT ... INTO, we do not install a Query_dumpvar into
+  // lex->result: RETURNING drives its own Query_result_returning, which handles
+  // the JSON capture. We still mark the statement uncacheable because it writes
+  // a session/routine variable as a side effect.
   if (returning_into != nullptr) {
     if (returning_into->contextualize(pc)) return true;
     lex->set_uncacheable(select, UNCACHEABLE_SIDEEFFECT);
@@ -4355,8 +4355,57 @@ bool PT_into_destination_dumpfile::do_contextualize(Parse_context *pc) {
   return lex->result == nullptr;
 }
 
+bool PT_returning_into::add_into_table(Parse_context *pc) {
+  THD *const thd = pc->thd;
+  LEX *const lex = thd->lex;
+
+  const Ident_name_check ident_check_status =
+      check_table_name(table_ident->table.str, table_ident->table.length);
+  if (ident_check_status == Ident_name_check::WRONG) {
+    my_error(ER_WRONG_TABLE_NAME, MYF(0), table_ident->table.str);
+    return true;
+  } else if (ident_check_status == Ident_name_check::TOO_LONG) {
+    my_error(ER_TOO_LONG_IDENT, MYF(0), table_ident->table.str);
+    return true;
+  }
+
+  const char *db = nullptr;
+  size_t db_length = 0;
+  if (table_ident->db.str != nullptr) {
+    LEX_STRING db_str = to_lex_string(table_ident->db);
+    if (check_and_convert_db_name(&db_str, false) != Ident_name_check::OK)
+      return true;
+    db = db_str.str;
+    db_length = db_str.length;
+  } else if (lex->copy_db_to(&db, &db_length)) {
+    return true;
+  }
+
+  if (lower_case_table_names && table_ident->table.length)
+    table_ident->table.length = my_casedn_str(
+        files_charset_info, const_cast<char *>(table_ident->table.str));
+
+  // Same lock and metadata lock as an INSERT target. The reference is linked
+  // into the statement's global table list only (not into the query block's
+  // FROM list), so the DML statement still sees a single target table while
+  // open_tables()/lock_tables() and stored-routine table collection pick the
+  // INTO table up like any other table the statement uses.
+  table_ref = new (pc->mem_root)
+      Table_ref(db, db_length, table_ident->table.str,
+                table_ident->table.length, TL_WRITE, MDL_SHARED_WRITE);
+  if (table_ref == nullptr) return true; /* purecov: inspected */
+  table_ref->query_block = pc->select;
+  table_ref->updating = true;
+  // A view (or anything that is not a base or temporary table) is rejected by
+  // open_tables() with ER_WRONG_OBJECT.
+  table_ref->required_type = dd::enum_table_type::BASE_TABLE;
+  lex->add_to_query_tables(table_ref);
+  return false;
+}
+
 bool PT_returning_into::do_contextualize(Parse_context *pc) {
   if (super::do_contextualize(pc)) return true;
+  if (table_ident != nullptr) return add_into_table(pc);
   if (json_var != nullptr) return json_var->contextualize(pc);
   List_iterator<PT_select_var> it(scalar_vars->value);
   PT_select_var *var;
