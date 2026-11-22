@@ -1,0 +1,222 @@
+# vsql_array example extension: the ARRAY type as a column.
+#
+# ARRAY is a variable-length typed array. Parameters:
+#   type     = int32 | int64 | double (default int64)
+#   max_size = maximum element count (required; ARRAY(N) is max_size=N)
+# The stored value is capped at 8192 bytes of elements: 2048 int32, 1024 int64
+# or 1024 double. The text form is '[1,2,3]'; '[]' is the empty array.
+# ARRAY is a MySQL keyword, so the type is always written qualified as
+# vsql_array.ARRAY.
+
+INSTALL EXTENSION vsql_array;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo #
+--echo # DDL: parameters and their validation.
+--echo #
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  a vsql_array.ARRAY(4),
+  i32 vsql_array.ARRAY('type=int32,max_size=3'),
+  d vsql_array.ARRAY('max_size=3,type=double')
+);
+SHOW CREATE TABLE t;
+
+--echo # The default element type is int64: ARRAY(4) and
+--echo # ARRAY('type=int64,max_size=4') are the same type.
+CREATE TABLE t_same (a vsql_array.ARRAY('type=int64,max_size=4'));
+INSERT INTO t_same VALUES ('[1,2]');
+INSERT INTO t (id, a) SELECT 100, a FROM t_same;
+SELECT id, a FROM t WHERE id = 100;
+DELETE FROM t WHERE id = 100;
+DROP TABLE t_same;
+
+--echo # Unqualified ARRAY is the MySQL keyword, not this type.
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a ARRAY(4));
+--echo # Missing max_size.
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY('type=int32'));
+--echo # Non-positive max_size.
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY(0));
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY('max_size=-1'));
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY('max_size=abc'));
+--echo # Unknown element type and unknown parameter key.
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY('type=int16,max_size=4'));
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY('max_size=4,dims=2'));
+--echo # Bounds: 1024 int64 / 1024 double / 2048 int32 are accepted; one more
+--echo # element is rejected.
+CREATE TABLE bounds (
+  a vsql_array.ARRAY(1024),
+  b vsql_array.ARRAY('type=double,max_size=1024'),
+  c vsql_array.ARRAY('type=int32,max_size=2048')
+);
+DROP TABLE bounds;
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY(1025));
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY('type=double,max_size=1025'));
+--error ER_PARSE_ERROR
+CREATE TABLE bad (a vsql_array.ARRAY('type=int32,max_size=2049'));
+
+--echo #
+--echo # Insert / select: text in and out, empty array, NULL, whitespace.
+--echo #
+INSERT INTO t VALUES
+  (1, '[1,2,3]', '[-2147483648,0,2147483647]', '[1.5,-2.25e10,0.1]'),
+  (2, '[]', '[]', '[]'),
+  (3, NULL, NULL, NULL),
+  (4, ' [ 9223372036854775807 , -9223372036854775808 ] ', '[ 7 ]', '[1e300, -1e-300, 0]'),
+  (5, '[1,2]', '[1]', '[0.30000000000000004]');
+SELECT id, a, i32, d FROM t ORDER BY id;
+
+--echo #
+--echo # Compare: element-wise, then shorter first.
+--echo #
+SELECT id, a FROM t WHERE a = '[1,2,3]' ORDER BY id;
+SELECT id, a FROM t WHERE a > '[1,2]' ORDER BY id;
+SELECT id, a FROM t WHERE a < '[1,2]' ORDER BY id;
+SELECT id, a FROM t WHERE a IS NOT NULL ORDER BY a, id;
+SELECT x.id, y.id FROM t x JOIN t y ON x.a = y.a WHERE x.id < y.id ORDER BY x.id;
+--echo # Comparing arrays with different parameters is rejected.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id FROM t WHERE a = i32;
+
+--echo #
+--echo # max_size overflow and wrong element text are rejected (strict mode).
+--echo #
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[1,2,3,4,5]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, i32) VALUES (10, '[2147483648]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[9223372036854775808]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[1.5]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[1,x]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[1,,2]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[1,2,]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '1,2');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[1,2');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[1 2]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, a) VALUES (10, '[1] x');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, d) VALUES (10, '[nan]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, d) VALUES (10, '[inf]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t (id, d) VALUES (10, '[1e400]');
+SELECT COUNT(*) FROM t WHERE id = 10;
+--echo # INSERT IGNORE stores the intrinsic default '[]' in a NOT NULL column.
+CREATE TABLE t_nn (id INT PRIMARY KEY, a vsql_array.ARRAY(2) NOT NULL);
+INSERT IGNORE INTO t_nn VALUES (1, 'not-an-array');
+SELECT id, a, vsql_array.array_length(a) FROM t_nn ORDER BY id;
+DROP TABLE t_nn;
+
+--echo #
+--echo # Functions (1-based index, NULL out of range).
+--echo #
+SELECT id,
+       vsql_array.array_length(a) AS len,
+       vsql_array.array_get(a, 1) AS first,
+       vsql_array.array_get(a, vsql_array.array_length(a)) AS last,
+       vsql_array.array_get(a, 0) AS zero,
+       vsql_array.array_get(a, 99) AS past_end,
+       vsql_array.array_get(a, NULL) AS null_idx,
+       vsql_array.array_get(i32, 3) AS i32_3,
+       vsql_array.array_get_double(d, 1) AS d_1,
+       vsql_array.array_get_double(a, 1) AS a_1_as_double
+FROM t ORDER BY id;
+SELECT id,
+       vsql_array.array_contains(a, 2) AS has_2,
+       vsql_array.array_contains(a, '9223372036854775807') AS has_max,
+       vsql_array.array_contains(d, 0.1) AS has_0_1,
+       vsql_array.array_contains(d, '1.5') AS has_1_5,
+       vsql_array.array_contains(a, NULL) AS null_probe
+FROM t ORDER BY id;
+--echo # A probe that is not an element of the array's type gives NULL and a
+--echo # warning.
+SELECT vsql_array.array_contains(a, '1.5') FROM t WHERE id = 1;
+SELECT vsql_array.array_contains(a, 'abc') FROM t WHERE id = 1;
+--echo # array_get on a double array is an error (use array_get_double).
+--error ER_UDF_ERROR
+SELECT vsql_array.array_get(d, 1) FROM t WHERE id = 1;
+--echo # array_append: NULL array = empty array; NULL element = NULL result.
+SELECT id, vsql_array.array_append(a, 42) AS a2,
+       vsql_array.array_append(d, '2.5') AS d2,
+       vsql_array.array_append(a, NULL) AS null_elem
+FROM t WHERE id IN (2, 3, 5) ORDER BY id;
+UPDATE t SET a = vsql_array.array_append(a, 3) WHERE id = 5;
+SELECT id, a FROM t WHERE id = 5;
+--echo # Appending past max_size, or a value of the wrong type, is an error.
+--error ER_UDF_ERROR
+UPDATE t SET a = vsql_array.array_append(vsql_array.array_append(a, 4), 5) WHERE id = 1;
+--error ER_UDF_ERROR
+UPDATE t SET a = vsql_array.array_append(a, 'x') WHERE id = 2;
+--error ER_UDF_ERROR
+UPDATE t SET i32 = vsql_array.array_append(i32, 2147483648) WHERE id = 2;
+--error ER_UDF_ERROR
+SELECT vsql_array.array_append(NULL, 1);
+SELECT id, a, i32 FROM t WHERE id IN (1, 2) ORDER BY id;
+--echo # A bare string has no ARRAY parameters, so a function cannot use it
+--echo # without a typed ARRAY value to take them from.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_array.array_length('[1,2]');
+
+--echo #
+--echo # Full-size values: 1024 int64 and 2048 int32 elements round-trip.
+--echo #
+SET SESSION group_concat_max_len = 1000000;
+SET SESSION cte_max_recursion_depth = 5000;
+CREATE TABLE big (
+  id INT PRIMARY KEY,
+  a vsql_array.ARRAY(1024),
+  c vsql_array.ARRAY('type=int32,max_size=2048')
+);
+SET @s1024 = (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 1024)
+              SELECT CONCAT('[', GROUP_CONCAT(i * 9000000000000 ORDER BY i), ']') FROM n);
+SET @s2048 = (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2048)
+              SELECT CONCAT('[', GROUP_CONCAT(-i * 1000000 ORDER BY i), ']') FROM n);
+INSERT INTO big VALUES (1, @s1024, @s2048);
+SELECT vsql_array.array_length(a), vsql_array.array_get(a, 1024),
+       vsql_array.array_length(c), vsql_array.array_get(c, 2048)
+FROM big;
+--echo # The text read back equals the text written (compared in mysqltest,
+--echo # because SQL string functions are not allowed on ARRAY values).
+--let $got_a= query_get_value(SELECT a FROM big, a, 1)
+--let $want_a= query_get_value(SELECT @s1024 AS s, s, 1)
+--let $got_c= query_get_value(SELECT c FROM big, c, 1)
+--let $want_c= query_get_value(SELECT @s2048 AS s, s, 1)
+if ($got_a != $want_a)
+{
+  --die ARRAY(1024) int64 text did not round-trip
+}
+if ($got_c != $want_c)
+{
+  --die ARRAY(int32, 2048) text did not round-trip
+}
+--echo # Round-trip of 1024 int64 and 2048 int32 elements: equal.
+--echo # One element more than max_size is rejected.
+SET @s1025 = CONCAT(LEFT(@s1024, LENGTH(@s1024) - 1), ',1]');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO big (id, a) VALUES (2, @s1025);
+--error ER_UDF_ERROR
+UPDATE big SET a = vsql_array.array_append(a, 1);
+DROP TABLE big;
+
+--echo # Clean up.
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_array;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;

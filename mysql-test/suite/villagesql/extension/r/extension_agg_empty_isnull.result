@@ -1,0 +1,80 @@
+INSTALL EXTENSION vsql_array;
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE src (id INT PRIMARY KEY, g INT, x INT, d DOUBLE);
+INSERT INTO src VALUES (1, 1, 10, 1.5), (2, 1, NULL, NULL), (3, 2, NULL, NULL);
+CREATE TABLE cx (id INT PRIMARY KEY, c vsql_complex.COMPLEX);
+INSERT INTO cx VALUES (1, '(1,2)');
+# Empty implicit group: value NULL, IS NULL 1, IS NOT NULL 0.
+SELECT vsql_array.array_agg(x) AS a,
+vsql_array.array_agg(x) IS NULL AS isn,
+vsql_array.array_agg(x) IS NOT NULL AS isnn,
+ISNULL(vsql_array.array_agg(x)) AS isnull_fn
+FROM src WHERE id > 100;
+a	isn	isnn	isnull_fn
+NULL	1	0	1
+# IS NULL alone (no plain value in the same select list).
+SELECT vsql_array.array_agg(x) IS NULL AS isn FROM src WHERE id > 100;
+isn
+1
+SELECT vsql_array.array_agg_int32(x) IS NULL AS isn32,
+vsql_array.array_agg_double(d) IS NULL AS isnd
+FROM src WHERE id > 100;
+isn32	isnd
+1	1
+# IS NULL before the value in the select list.
+SELECT vsql_array.array_agg(x) IS NULL AS isn, vsql_array.array_agg(x) AS a
+FROM src WHERE id > 100;
+isn	a
+1	NULL
+# In an expression and in HAVING.
+SELECT IF(vsql_array.array_agg(x) IS NULL, 'null', 'not null') AS r
+FROM src WHERE id > 100;
+r
+null
+SELECT COUNT(*) AS c FROM src WHERE id > 100
+HAVING vsql_array.array_agg(x) IS NULL;
+c
+0
+# Rows that are all NULL: value '[]', IS NULL 0.
+SELECT vsql_array.array_agg(x) AS a, vsql_array.array_agg(x) IS NULL AS isn
+FROM src WHERE id = 2;
+a	isn
+[]	0
+# Rows with values: IS NULL 0.
+SELECT vsql_array.array_agg(x) AS a, vsql_array.array_agg(x) IS NULL AS isn
+FROM src;
+a	isn
+[10]	0
+# Per group (GROUP BY): every group has rows, so IS NULL is 0.
+SELECT g, vsql_array.array_agg(x) AS a, vsql_array.array_agg(x) IS NULL AS isn
+FROM src GROUP BY g ORDER BY g;
+g	a	isn
+1	[10]	0
+2	[]	0
+# Shipped vsql_complex.complex_sum: same rule.
+SELECT vsql_complex.complex_sum(c) AS s, vsql_complex.complex_sum(c) IS NULL AS isn
+FROM cx WHERE id > 100;
+s	isn
+NULL	1
+SELECT vsql_complex.complex_sum(c) IS NULL AS isn FROM cx;
+isn
+0
+# Inside a procedure, the result agrees with the stored variable.
+CREATE PROCEDURE p_isnull()
+BEGIN
+DECLARE v vsql_array.ARRAY(1024);
+DECLARE n INT;
+SELECT vsql_array.array_agg(x), vsql_array.array_agg(x) IS NULL INTO v, n
+FROM src WHERE id > 100;
+SELECT v IS NULL AS var_is_null, n AS agg_is_null;
+END//
+CALL p_isnull();
+var_is_null	agg_is_null
+1	1
+CALL p_isnull();
+var_is_null	agg_is_null
+1	1
+DROP PROCEDURE p_isnull;
+DROP TABLE src, cx;
+UNINSTALL EXTENSION vsql_complex;
+UNINSTALL EXTENSION vsql_array;

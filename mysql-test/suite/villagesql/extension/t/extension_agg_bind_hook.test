@@ -1,0 +1,56 @@
+# AggFuncBuilder::bind_and_check_types<Hook>() (SDK): an aggregate VDF can
+# declare a bind hook that sets its return type's parameters. vsql_array's
+# array_agg* now declare their hook with this builder call
+# (before, the extension patched the built descriptor). They take INT/REAL, so
+# no built-in rule could give their ARRAY result parameters: the parameters
+# below can only come from the hook (element type per function,
+# max_size=1024). A target with exactly those parameters accepts the value; a
+# target with other parameters is refused.
+
+INSTALL EXTENSION vsql_array;
+
+CREATE TABLE src (id INT PRIMARY KEY, x INT, d DOUBLE);
+INSERT INTO src VALUES (1, 10, 1.5), (2, 20, 2.5);
+
+--echo # Matching parameters: accepted.
+delimiter //;
+CREATE PROCEDURE p_bind()
+BEGIN
+  DECLARE v64 vsql_array.ARRAY('type=int64,max_size=1024');
+  DECLARE v32 vsql_array.ARRAY('type=int32,max_size=1024');
+  DECLARE vd vsql_array.ARRAY('type=double,max_size=1024');
+  SELECT vsql_array.array_agg(x), vsql_array.array_agg_int32(x),
+         vsql_array.array_agg_double(d)
+    INTO v64, v32, vd FROM src;
+  SELECT v64, v32, vd;
+END//
+--echo # Other element type: refused.
+CREATE PROCEDURE p_bind_wrong_type()
+BEGIN
+  DECLARE v vsql_array.ARRAY('type=int64,max_size=1024');
+  SELECT vsql_array.array_agg_int32(x) INTO v FROM src;
+END//
+--echo # Other max_size: refused.
+CREATE PROCEDURE p_bind_wrong_size()
+BEGIN
+  DECLARE v vsql_array.ARRAY('type=double,max_size=1023');
+  SELECT vsql_array.array_agg_double(d) INTO v FROM src;
+END//
+delimiter ;//
+CALL p_bind();
+--error ER_VILLAGESQL_GENERIC_ERROR
+CALL p_bind_wrong_type();
+--error ER_VILLAGESQL_GENERIC_ERROR
+CALL p_bind_wrong_size();
+--echo # Same through a table column.
+CREATE TABLE t32 (a vsql_array.ARRAY('type=int32,max_size=1024'));
+INSERT INTO t32 SELECT vsql_array.array_agg_int32(x) FROM src;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t32 SELECT vsql_array.array_agg(x) FROM src;
+SELECT * FROM t32;
+
+DROP PROCEDURE p_bind;
+DROP PROCEDURE p_bind_wrong_type;
+DROP PROCEDURE p_bind_wrong_size;
+DROP TABLE t32, src;
+UNINSTALL EXTENSION vsql_array;
