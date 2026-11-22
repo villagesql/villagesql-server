@@ -1,0 +1,7 @@
+{
+  "name": "vsql_array",
+  "version": "0.0.1",
+  "description": "Variable-length typed array (ARRAY) with int32, int64 and double elements, a max_size cap, element access functions and an array_agg aggregate.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}
