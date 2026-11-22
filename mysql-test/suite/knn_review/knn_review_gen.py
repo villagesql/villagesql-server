@@ -2471,6 +2471,56 @@ t.sql("UNINSTALL EXTENSION vsql_vector")
 tests.append(t)
 
 
+# Counts printed by include/hnsw_graph_check.inc for a correct graph.
+GRAPH_OK = ["dangling: 0", "aliased: 0", "unrecorded: 0", "vector freed: 0",
+            "lower mismatch: 0"]
+
+
+def graph_check(t, text):
+    t.echo(text)
+    t.raw([f"--source {INC}/hnsw_graph_check.inc"], GRAPH_OK)
+
+
+t = T("delete", "hnsw_stale_link", """
+With an HNSW index (vsql-vector), no link in the graph points at a node slot
+or a vector slot that purge has freed, or that a later insert has reused for
+another node. A link is (nid, vid): nid is the target node's slot and vid its
+vector's slot. include/hnsw_graph_check.inc reads the exported .ibd file and
+counts, for every link A -> B: B's slot free (dangling), B's owner vid not the
+link's vid (aliased), B not recording A (unrecorded: removing B could not
+repair A's link), and the vid freed in the vector store. 100 rows on a line,
+v = [id,0,0,0]; every 10th row is deleted and purged, then 30 rows are
+inserted into the gaps and take freed slots. The KNN reads after these steps
+are checked by hnsw_purge_scattered. Needs SVECTOR_PAGE_DUMP set to
+vsql-vector's svector_page_dump tool.""")
+t.raw(["--source include/have_debug.inc", "",
+       "--let $svdump = $SVECTOR_PAGE_DUMP",
+       "if (!$svdump)",
+       "{",
+       "  --skip Needs SVECTOR_PAGE_DUMP (vsql-vector's svector_page_dump tool)",
+       "}", ""])
+t.sql("INSTALL EXTENSION vsql_vector")
+t.sql("CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), "
+      "v SVECTOR(4), KEY k_grp (grp))")
+t.sql("CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw)")
+t.sql(insert_stmts(line_rows(range(1, 101)))[0])
+graph_check(t, "Built")
+t.sql("SET GLOBAL innodb_purge_stop_now = ON")
+t.sql("DELETE FROM t WHERE id % 10 = 0")
+graph_check(t, "Deleted, not purged")
+t.sql("SET GLOBAL innodb_purge_run_now = ON")
+t.raw(["--source include/villagesql/wait_innodb_history_purged.inc"])
+graph_check(t, "Purged")
+gaps = {100 + k: (2, "n", (10 * ((k - 1) % 10) + (5.5, 3.5, 7.5)[(k - 1) // 10],
+                           0, 0, 0))
+        for k in range(1, 31)}
+t.sql(insert_stmts(gaps)[0])
+graph_check(t, "Inserted into the gaps")
+t.sql("DROP TABLE t")
+t.sql("UNINSTALL EXTENSION vsql_vector")
+tests.append(t)
+
+
 t = T("rollback", "hnsw_recovery_redo", """
 Committed changes to an HNSW index (vsql-vector) are redone at restart from the
 redo log alone: checkpoints and the page cleaner are stopped (debug build)
