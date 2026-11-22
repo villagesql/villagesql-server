@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstring>
 #include <map>
 #include <string>
 #include <thread>
@@ -311,6 +312,23 @@ TEST_F(TypeParamsCacheRawTest, NearMissParamsStayDistinct) {
   EXPECT_EQ(parses_, 4);
   EXPECT_EQ(&none, &Get(vef_type_params_t{}));
   EXPECT_EQ(parses_, 4);
+}
+
+// get(raw) remembers which entry a pair of parameter arrays led to, but an
+// address match alone must not decide: arrays freed and reallocated at the
+// same addresses can hold other parameters.
+TEST_F(TypeParamsCacheRawTest, SameAddressesChangedContentIsNotAHit) {
+  const char *keys[] = {"max_size", "type"};
+  char size[8] = "15";
+  const char *values[] = {size, "int32"};
+  const CacheTestParams &first = Get(Raw(keys, values, 2));
+  EXPECT_EQ(&first, &Get(Raw(keys, values, 2)));
+  std::strcpy(size, "64");
+  const CacheTestParams &changed = Get(Raw(keys, values, 2));
+  EXPECT_NE(&first, &changed);
+  std::strcpy(size, "15");
+  EXPECT_EQ(&first, &Get(Raw(keys, values, 2)));
+  EXPECT_EQ(parses_, 2);
 }
 
 }  // namespace villagesql_unittest
