@@ -183,6 +183,8 @@ class TypeBuilder {
         false,    // variable_length: only set via vsql's variable_length_type()
         nullptr,  // from_binary_vdf_name: only set via vsql's from_binary()
         nullptr,  // to_binary_vdf_name: only set via vsql's to_binary()
+        nullptr,  // collect_aggregate_vdf_name: only via vsql's
+                  // collect_aggregate()
     };
     return desc;
   }
