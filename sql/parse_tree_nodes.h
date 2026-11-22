@@ -2027,7 +2027,9 @@ class PT_delete final : public Parse_tree_root {
             PT_hint_list *opt_hints_arg, int opt_delete_options_arg,
             const Mem_root_array_YY<Table_ident *> &table_list_arg,
             const Mem_root_array_YY<PT_table_reference *> &join_table_list_arg,
-            Item *opt_where_clause_arg)
+            Item *opt_where_clause_arg,
+            PT_item_list *opt_returning_clause_arg = nullptr,
+            PT_returning_into *opt_returning_into_arg = nullptr)
       : super(pos),
         m_with_clause(with_clause_arg),
         opt_hints(opt_hints_arg),
@@ -2040,8 +2042,8 @@ class PT_delete final : public Parse_tree_root {
         opt_where_clause(opt_where_clause_arg),
         opt_order_clause(nullptr),
         opt_delete_limit_clause(nullptr),
-        opt_returning_clause(nullptr),
-        opt_returning_into(nullptr) {}
+        opt_returning_clause(opt_returning_clause_arg),
+        opt_returning_into(opt_returning_into_arg) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 

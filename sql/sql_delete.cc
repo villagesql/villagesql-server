@@ -29,6 +29,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <sys/types.h>
+#include <bit>
 #include <atomic>
 #include <memory>
 #include <utility>
@@ -105,11 +106,97 @@ class Query_result_delete final : public Query_result_interceptor {
     assert(false);  // DELETE does not return any data.
     return false;
   }
+  // Multi-table DELETE ... RETURNING (also a single-table DELETE switched to
+  // the multi-table executor): the RETURNING result rides alongside this
+  // interceptor. DeleteRowsIterator feeds it one row per deleted row of
+  // returning_table; this object opens and closes the result set.
+  void set_returning(Query_result_returning *returning,
+                     Table_ref *returning_table) {
+    m_returning = returning;
+    m_returning_table = returning_table;
+  }
+  Query_result_returning *returning(const THD *thd) const {
+    return thd->lex->is_explain() ? nullptr : m_returning;
+  }
+  Table_ref *returning_table() const { return m_returning_table; }
+  bool start_execution(THD *thd) override {
+    // Send the RETURNING result-set metadata before rows start flowing (a
+    // no-op for the INTO targets).
+    Query_result_returning *ret = returning(thd);
+    return ret != nullptr && ret->send_metadata(thd);
+  }
   bool send_eof(THD *thd) override {
+    if (Query_result_returning *ret = returning(thd))
+      return finish_returning_or_ok(thd, ret, thd->get_row_count_func());
     my_ok(thd, thd->get_row_count_func());
     return false;
   }
+  void abort_result_set(THD *thd) override {
+    if (Query_result_returning *ret = returning(thd))
+      ret->abort_result_set(thd);
+  }
+
+ private:
+  Query_result_returning *m_returning{nullptr};
+  Table_ref *m_returning_table{nullptr};
 };
+
+// Multi-table DELETE ... RETURNING: find the one deleted table whose rows
+// RETURNING produces. Every RETURNING item may only refer to columns of a
+// single deleted table; with no column reference at all (e.g. RETURNING 1) the
+// statement must delete from exactly one table. Returns true (error reported)
+// otherwise.
+bool find_returning_table(Query_block *select, Table_ref **returning_table) {
+  table_map used = 0;
+  for (Item *item : select->visible_fields()) used |= item->used_tables();
+  used &= ~PSEUDO_TABLE_BITS;
+  table_map deleted = 0;
+  uint deleted_count = 0;
+  for (Table_ref *tr = select->leaf_tables; tr != nullptr; tr = tr->next_leaf) {
+    if (!tr->is_deleted()) continue;
+    deleted |= tr->map();
+    ++deleted_count;
+  }
+  if ((used & ~deleted) != 0) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "multi-table DELETE ... RETURNING referencing a table that is not "
+             "deleted from");
+    return true;
+  }
+  if (std::popcount(used) > 1) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "multi-table DELETE ... RETURNING columns of more than one table");
+    return true;
+  }
+  const table_map target = used != 0 ? used : deleted;
+  if (deleted_count == 0 || std::popcount(target) != 1) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "multi-table DELETE ... RETURNING without a column of the deleted "
+             "table, when more than one table is deleted from");
+    return true;
+  }
+  for (Table_ref *tr = select->leaf_tables; tr != nullptr; tr = tr->next_leaf) {
+    if (tr->map() == target) {
+      *returning_table = tr;
+      return false;
+    }
+  }
+  assert(false); /* purecov: deadcode */
+  my_error(ER_NOT_SUPPORTED_YET, MYF(0), "multi-table DELETE ... RETURNING");
+  return true;
+}
+
+// The multi-table DELETE result of the statement being executed, if it has a
+// RETURNING clause, else nullptr.
+Query_result_delete *multi_delete_returning_result(THD *thd, JOIN *join) {
+  const enum_sql_command cmd = thd->lex->sql_command;
+  if (cmd != SQLCOM_DELETE && cmd != SQLCOM_DELETE_MULTI) return nullptr;
+  if (!thd->lex->has_returning_clause) return nullptr;
+  auto *result = down_cast<Query_result_delete *>(join->query_block->query_result());
+  if (result->returning(thd) == nullptr || result->returning_table() == nullptr)
+    return nullptr;
+  return result;
+}
 
 bool DeleteCurrentRowAndProcessTriggers(
     THD *thd, TABLE *table, bool invoke_before_triggers,
@@ -721,6 +808,10 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
 
   apply_semijoin = multitable;
 
+  // The multi-table executor's result (also used when a single-table DELETE is
+  // switched to that executor below); carries the RETURNING result, if any.
+  Query_result_delete *multi_result = nullptr;
+
   if (select->setup_tables(thd, table_list, false))
     return true; /* purecov: inspected */
 
@@ -804,7 +895,8 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
       propagate_nullability(&select->m_table_nest, false);
 
     const Prepared_stmt_arena_holder ps_holder(thd);
-    result = new (thd->mem_root) Query_result_delete;
+    multi_result = new (thd->mem_root) Query_result_delete;
+    result = multi_result;
     if (result == nullptr) return true; /* purecov: inspected */
 
     // The former is for the pre-iterator executor; the latter is for the
@@ -849,6 +941,13 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
                                  &returning_result, returning_into))
       return true;
     result = returning_result;
+    // Multi-table executor: the RETURNING rows come from exactly one deleted
+    // table; DeleteRowsIterator emits one row per row deleted from it.
+    if (multitable) {
+      Table_ref *returning_table = nullptr;
+      if (find_returning_table(select, &returning_table)) return true;
+      multi_result->set_returning(returning_result, returning_table);
+    }
   }
 
   // check ORDER BY even if it can be ignored
@@ -964,6 +1063,11 @@ DeleteRowsIterator::DeleteRowsIterator(
                              : 0),
       m_tempfiles(thd->mem_root),
       m_delayed_tables(thd->mem_root) {
+  if (Query_result_delete *result = multi_delete_returning_result(thd, join)) {
+    m_returning = result->returning(thd);
+    m_returning_table =
+        result->returning_table()->map() & tables_to_delete_from;
+  }
   for (const Table_ref *tr = join->query_block->leaf_tables; tr != nullptr;
        tr = tr->next_leaf) {
     TABLE *const table = tr->table;
@@ -1124,9 +1228,12 @@ bool DeleteRowsIterator::DoImmediateDeletesAndBufferRowIds() {
       // Rows from this table can be deleted immediately
       const ha_rows last_deleted = m_deleted_rows;
       table->set_deleted_row();
+      // RETURNING: the row is sent once, as it is deleted once (a repeated
+      // join match is skipped above through has_deleted_row()).
       if (DeleteCurrentRowAndProcessTriggers(
               thd(), table, Overlaps(map, m_tables_with_before_triggers),
-              Overlaps(map, m_tables_with_after_triggers), &m_deleted_rows)) {
+              Overlaps(map, m_tables_with_after_triggers), &m_deleted_rows,
+              Overlaps(map, m_returning_table) ? m_returning : nullptr)) {
         return true;
       }
       if (last_deleted != m_deleted_rows &&
@@ -1186,9 +1293,12 @@ bool DeleteRowsIterator::DoDelayedDeletesFromTable(TABLE *table) {
   while (!thd()->killed) {
     const int read_error = iterator->Read();
     if (read_error == 0) {
-      if (DeleteCurrentRowAndProcessTriggers(thd(), table, has_before_triggers,
-                                             has_after_triggers,
-                                             &m_deleted_rows)) {
+      // RETURNING: row IDs were de-duplicated by the Unique object, so each
+      // row is read, returned and deleted once.
+      if (DeleteCurrentRowAndProcessTriggers(
+              thd(), table, has_before_triggers, has_after_triggers,
+              &m_deleted_rows,
+              IsBitSet(tableno, m_returning_table) ? m_returning : nullptr)) {
         local_error = true;
         break;
       }

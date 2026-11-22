@@ -34,6 +34,7 @@
 #include "sql/uniques.h"
 
 class JOIN;
+class Query_result_returning;
 class THD;
 struct TABLE;
 
@@ -86,6 +87,11 @@ class DeleteRowsIterator final : public RowIterator {
   ha_rows m_deleted_rows{0};
   /// True if any row ID has been stored in one of the m_tempfiles.
   bool m_has_delayed_deletes{false};
+  /// DELETE ... RETURNING on the multi-table executor: the result receiving
+  /// one row per row deleted from m_returning_table (a single table), or
+  /// nullptr.
+  Query_result_returning *m_returning{nullptr};
+  table_map m_returning_table{0};
 
   /// Perform all the immediate deletes for the current row returned by the
   /// join, and buffer row IDs for the non-immediate tables.
