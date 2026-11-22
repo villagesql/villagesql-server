@@ -210,8 +210,6 @@ bool DeleteCurrentRowAndProcessTriggers(
     }
   }
 
-  if (returning != nullptr && returning->send_row(thd)) return true;
-
   if (const int delete_error = table->file->ha_delete_row(table->record[0]);
       delete_error != 0) {
     myf error_flags = MYF(0);
@@ -226,6 +224,10 @@ bool DeleteCurrentRowAndProcessTriggers(
   }
 
   ++*deleted_rows;
+
+  // RETURNING: send the row only once it is deleted (DELETE IGNORE may skip
+  // a row whose delete failed, e.g. on a foreign key error).
+  if (returning != nullptr && returning->send_row(thd)) return true;
 
   if (invoke_after_triggers) {
     if (table->triggers->process_triggers(thd, TRG_EVENT_DELETE,

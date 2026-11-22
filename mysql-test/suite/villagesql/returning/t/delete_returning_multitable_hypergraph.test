@@ -1,0 +1,29 @@
+# Multi-table DELETE ... RETURNING under the hypergraph optimizer (see
+# delete_returning_multitable and delete_returning_multitable_more). Skipped
+# when the server is built without the hypergraph optimizer, which is the
+# case for release builds.
+
+--source include/have_hypergraph.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, d INT, v INT);
+CREATE TABLE t2 (id INT, w INT, KEY (id));
+INSERT INTO t1 VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30), (4, 2, 40);
+INSERT INTO t2 VALUES (1, 0), (2, 0), (2, 1), (4, 0);
+--sorted_result
+DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id WHERE t1.d = 1 RETURNING t1.id, t1.v;
+SELECT * FROM t1 ORDER BY id;
+--echo # single-table DELETE (multi-table executor under hypergraph)
+--sorted_result
+DELETE FROM t1 WHERE d = 2 RETURNING id, v;
+SELECT * FROM t1 ORDER BY id;
+INSERT INTO t1 VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30), (4, 2, 40);
+--sorted_result
+DELETE FROM t1 WHERE id IN (SELECT id FROM t2) RETURNING id;
+SELECT * FROM t1 ORDER BY id;
+DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id RETURNING t1.id INTO JSON @j;
+SELECT @j;
+INSERT INTO t1 VALUES (1, 1, 10), (2, 1, 20);
+DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id RETURNING t1.id INTO JSON @j;
+SELECT JSON_LENGTH(@j) AS n;
+
+DROP TABLE t1, t2;
