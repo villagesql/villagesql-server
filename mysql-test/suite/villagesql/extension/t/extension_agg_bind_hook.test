@@ -1,6 +1,6 @@
 # AggFuncBuilder::bind_and_check_types<Hook>() (SDK): an aggregate VDF can
 # declare a bind hook that sets its return type's parameters. vsql_array's
-# array_agg* now declare their hook with this builder call
+# array_agg* and array_collect now declare their hook with this builder call
 # (before, the extension patched the built descriptor). They take INT/REAL, so
 # no built-in rule could give their ARRAY result parameters: the parameters
 # below can only come from the hook (element type per function,
@@ -19,10 +19,11 @@ BEGIN
   DECLARE v64 vsql_array.ARRAY('type=int64,max_size=1024');
   DECLARE v32 vsql_array.ARRAY('type=int32,max_size=1024');
   DECLARE vd vsql_array.ARRAY('type=double,max_size=1024');
+  DECLARE vc vsql_array.ARRAY('type=int64,max_size=1024');
   SELECT vsql_array.array_agg(x), vsql_array.array_agg_int32(x),
-         vsql_array.array_agg_double(d)
-    INTO v64, v32, vd FROM src;
-  SELECT v64, v32, vd;
+         vsql_array.array_agg_double(d), vsql_array.array_collect(x)
+    INTO v64, v32, vd, vc FROM src;
+  SELECT v64, v32, vd, vc;
 END//
 --echo # Other element type: refused.
 CREATE PROCEDURE p_bind_wrong_type()

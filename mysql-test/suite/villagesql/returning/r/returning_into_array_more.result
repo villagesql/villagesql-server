@@ -1,0 +1,191 @@
+INSTALL EXTENSION vsql_array;
+CREATE TABLE t (id INT PRIMARY KEY, d INT, v BIGINT);
+INSERT INTO t VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30), (4, 2, 40);
+CREATE PROCEDURE p_upd(IN dd INT)
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+DECLARE nv vsql_array.ARRAY('type=int64,max_size=8');
+DECLARE ov vsql_array.ARRAY('type=int64,max_size=8');
+UPDATE t SET v = v + 1 WHERE d = dd ORDER BY id
+RETURNING id, v, OLD_VALUE(v) INTO ids, nv, ov;
+SELECT vsql_array.array_length(ids) AS n, ids, nv, ov;
+END|
+CREATE PROCEDURE p_upd_old_first(IN dd INT)
+BEGIN
+DECLARE ov vsql_array.ARRAY('type=int64,max_size=8');
+DECLARE nv vsql_array.ARRAY('type=int64,max_size=8');
+UPDATE t SET v = v * 10 WHERE d = dd ORDER BY id
+RETURNING OLD_VALUE(v), v INTO ov, nv;
+SELECT ov, nv;
+END|
+CREATE PROCEDURE p_ins()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+DECLARE vs vsql_array.ARRAY('type=int64,max_size=8');
+INSERT INTO t VALUES (5, 3, 50), (6, 3, 60) RETURNING id, v INTO ids, vs;
+SELECT ids, vs;
+END|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTO ids, vs;
+SELECT ids, vs;
+END' at line 5
+CREATE PROCEDURE p_ins_sel()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+INSERT INTO t SELECT id + 100, 9, v FROM t WHERE d = 3 ORDER BY id
+RETURNING id INTO ids;
+SELECT ids;
+END|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTO ids;
+SELECT ids;
+END' at line 5
+CREATE PROCEDURE p_repl()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+DECLARE vs vsql_array.ARRAY('type=int64,max_size=8');
+REPLACE INTO t VALUES (5, 3, 500), (7, 3, 70) RETURNING id, v INTO ids, vs;
+SELECT ids, vs;
+END|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTO ids, vs;
+SELECT ids, vs;
+END' at line 5
+CREATE PROCEDURE p_i32_range()
+BEGIN
+DECLARE vs vsql_array.ARRAY('type=int32,max_size=8');
+DELETE FROM t WHERE d = 4 ORDER BY id RETURNING v INTO vs;
+END|
+CREATE PROCEDURE p_i32_edge()
+BEGIN
+DECLARE vs vsql_array.ARRAY('type=int32,max_size=8');
+DELETE FROM t WHERE d = 5 ORDER BY id RETURNING v INTO vs;
+SELECT vs;
+END|
+CREATE PROCEDURE p_double()
+BEGIN
+DECLARE vs vsql_array.ARRAY('type=double,max_size=8');
+DELETE FROM t WHERE d = 1 ORDER BY id RETURNING v INTO vs;
+END|
+CREATE PROCEDURE p_more_cols()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+DELETE FROM t WHERE d = 1 ORDER BY id RETURNING id, v INTO ids;
+END|
+CREATE PROCEDURE p_more_targets()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+DECLARE vs vsql_array.ARRAY('type=int64,max_size=8');
+DELETE FROM t WHERE d = 1 ORDER BY id RETURNING id INTO ids, vs;
+END|
+CREATE PROCEDURE p_twice()
+BEGIN
+DECLARE i INT DEFAULT 0;
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+WHILE i < 2 DO
+DELETE FROM t WHERE d = 6 + i ORDER BY id RETURNING id INTO ids;
+SELECT i, ids;
+SET i = i + 1;
+END WHILE;
+END|
+CREATE PROCEDURE p_dyn()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+PREPARE s FROM 'DELETE FROM t WHERE d = 8 ORDER BY id RETURNING id INTO ids';
+END|
+CREATE PROCEDURE p_rollback()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+START TRANSACTION;
+DELETE FROM t WHERE d = 1 ORDER BY id RETURNING id INTO ids;
+ROLLBACK;
+SELECT ids;
+SELECT id, d, v FROM t WHERE d = 1 ORDER BY id;
+END|
+# UPDATE ... RETURNING new value and OLD_VALUE into arrays.
+CALL p_upd(1);
+n	ids	nv	ov
+2	[1,2]	[11,21]	[10,20]
+# Same, called again (second execution of the same statement).
+CALL p_upd(1);
+n	ids	nv	ov
+2	[1,2]	[12,22]	[11,21]
+# OLD_VALUE first in the list.
+CALL p_upd_old_first(2);
+ov	nv
+[30,40]	[300,400]
+SELECT * FROM t ORDER BY id;
+id	d	v
+1	1	12
+2	1	22
+3	2	300
+4	2	400
+# INSERT/REPLACE ... RETURNING ... INTO is not in the grammar (only
+# DELETE and UPDATE take INTO): the three procedures above
+# (INSERT VALUES, INSERT SELECT, REPLACE into arrays) fail to parse.
+SELECT COUNT(*) FROM information_schema.routines
+WHERE routine_schema = 'test' AND routine_name IN ('p_ins', 'p_ins_sel', 'p_repl');
+COUNT(*)
+0
+# int32 array: value above INT32_MAX is an error, DELETE rolled back.
+INSERT INTO t VALUES (10, 4, 2147483647), (11, 4, 2147483648);
+CALL p_i32_range();
+ERROR HY000: VDF error in function 'array_collect': array_collect: value out of range for int32
+SELECT id, v FROM t WHERE d = 4 ORDER BY id;
+id	v
+10	2147483647
+11	2147483648
+# int32 array: value below INT32_MIN is an error, DELETE rolled back.
+UPDATE t SET v = -2147483649 WHERE id = 11;
+CALL p_i32_range();
+ERROR HY000: VDF error in function 'array_collect': array_collect: value out of range for int32
+SELECT id, v FROM t WHERE d = 4 ORDER BY id;
+id	v
+10	2147483647
+11	-2147483649
+# int32 array: INT32_MIN and INT32_MAX fit.
+INSERT INTO t VALUES (12, 5, -2147483648), (13, 5, 2147483647);
+CALL p_i32_edge();
+vs
+[-2147483648,2147483647]
+# type=double target: error, DELETE rolled back.
+CALL p_double();
+ERROR HY000: VDF error in function 'array_collect': array_collect: a type=double ARRAY target is not supported (values are collected as integers)
+SELECT COUNT(*) FROM t WHERE d = 1;
+COUNT(*)
+2
+# More RETURNING columns than targets.
+CALL p_more_cols();
+ERROR 21000: The used SELECT statements have a different number of columns
+# More targets than RETURNING columns.
+CALL p_more_targets();
+ERROR 21000: The used SELECT statements have a different number of columns
+SELECT COUNT(*) FROM t WHERE d = 1;
+COUNT(*)
+2
+# Same statement executed twice in one CALL (second run: empty array).
+INSERT INTO t VALUES (20, 6, 1), (21, 6, 2);
+CALL p_twice();
+i	ids
+0	[20,21]
+i	ids
+1	[]
+# Dynamic SQL cannot name a procedure variable as INTO target.
+CALL p_dyn();
+ERROR 42000: Undeclared variable: ids
+# ROLLBACK after a successful collect: array kept, rows back.
+CALL p_rollback();
+ids
+[1,2]
+id	d	v
+1	1	12
+2	1	22
+DROP PROCEDURE p_upd;
+DROP PROCEDURE p_upd_old_first;
+DROP PROCEDURE p_i32_range;
+DROP PROCEDURE p_i32_edge;
+DROP PROCEDURE p_double;
+DROP PROCEDURE p_more_cols;
+DROP PROCEDURE p_more_targets;
+DROP PROCEDURE p_twice;
+DROP PROCEDURE p_dyn;
+DROP PROCEDURE p_rollback;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_array;

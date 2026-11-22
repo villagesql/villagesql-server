@@ -905,6 +905,84 @@ void array_agg_result(const ArrayAggState &s,
   out.set_length(static_cast<size_t>(kHeaderBytes) + s.values.size() * width);
 }
 
+// ---------------------------------------------------------------------------
+// array_collect: the type's collect aggregate (RETURNING ... INTO an ARRAY
+// variable). Registered as the ARRAY type's collect_aggregate, so the server
+// runs it once per RETURNING column with the result typed as the target
+// variable. It differs from array_agg on purpose:
+//   - a NULL input is an error, not skipped: skipping would shift the
+//     positions of one column against the others (arr_a[i] must belong to the
+//     same row as arr_b[i]);
+//   - no rows gives the empty array '[]', not NULL;
+//   - the element type and max_size come from the result type (the target),
+//     and every value is range-checked against that element type.
+// Inputs arrive as INT, so only int32/int64 targets are supported; a double
+// target is an error (use INTO JSON for non-integer columns).
+// ---------------------------------------------------------------------------
+
+struct ArrayCollectState {
+  ArrayAggState agg;
+  bool saw_null = false;
+};
+
+void array_collect_clear(ArrayCollectState &s) { s = ArrayCollectState(); }
+
+void array_collect_accumulate(ArrayCollectState &s, vsql::IntArg x) {
+  if (x.is_null()) {
+    s.saw_null = true;
+    return;
+  }
+  array_agg_accumulate_int64(s.agg, x);
+}
+
+void array_collect_result(const ArrayCollectState &s,
+                          vsql::CustomResultWith<ArrayParams> out) {
+  const ArrayElem elem = out.params().elem;
+  const int64_t max_size = out.params().max_size;
+  char msg[VEF_MAX_ERROR_LEN];
+  if (s.saw_null) {
+    out.error("array_collect: NULL value; an ARRAY cannot hold NULL elements");
+    return;
+  }
+  if (elem == ArrayElem::kDouble) {
+    out.error(
+        "array_collect: a type=double ARRAY target is not supported (values "
+        "are collected as integers)");
+    return;
+  }
+  if (s.agg.overflow || static_cast<int64_t>(s.agg.values.size()) > max_size) {
+    snprintf(msg, sizeof(msg),
+             "array_collect: more than max_size (%lld) values",
+             static_cast<long long>(max_size));
+    out.error(msg);
+    return;
+  }
+  if (elem == ArrayElem::kInt32) {
+    for (const ElemValue &v : s.agg.values) {
+      if (v.i < std::numeric_limits<int32_t>::min() ||
+          v.i > std::numeric_limits<int32_t>::max()) {
+        snprintf(msg, sizeof(msg), "array_collect: value out of range for %s",
+                 elem_name(elem));
+        out.error(msg);
+        return;
+      }
+    }
+  }
+  const size_t width = static_cast<size_t>(elem_width(elem));
+  auto buf = out.buffer();
+  if (buf.size() <
+      static_cast<size_t>(kHeaderBytes) + s.agg.values.size() * width) {
+    out.error("array_collect: output buffer too small");
+    return;
+  }
+  buf[0] = static_cast<unsigned char>(elem);
+  for (size_t i = 0; i < s.agg.values.size(); i++) {
+    store_elem(buf.data() + kHeaderBytes + i * width, elem, s.agg.values[i]);
+  }
+  out.set_length(static_cast<size_t>(kHeaderBytes) +
+                 s.agg.values.size() * width);
+}
+
 // Decides the result type of an array_agg variant: the element type is fixed
 // per function (the SQL argument is INT or REAL, which cannot tell INT from
 // BIGINT), and max_size is kAggMaxSize. Without this hook the built-in rule
@@ -922,6 +1000,8 @@ void array_agg_bind(vsql::BindArgs /*args*/, vsql::BindResult out) {
 // ---------------------------------------------------------------------------
 
 static constexpr const char kArrayTypeName[] = "ARRAY";
+// Name of the ARRAY type's collect aggregate (see array_collect above).
+static constexpr const char kArrayCollectAggName[] = "array_collect";
 
 constexpr auto ARRAY =
     vsql::make_type<kArrayTypeName>()
@@ -935,6 +1015,7 @@ constexpr auto ARRAY =
         .to_string<&array_to_string>()
         .compare<&array_compare>()
         .intrinsic_default_str("[]")
+        .collect_aggregate(kArrayCollectAggName)
         .build();
 
 using namespace vsql;
@@ -1008,4 +1089,15 @@ VEF_GENERATE_ENTRY_POINTS(
                   .clear<&array_agg_clear>()
                   .accumulate<&array_agg_accumulate_double>()
                   .bind_and_check_types<&array_agg_bind<ArrayElem::kDouble>>()
+                  .build())
+        // Called from SQL it returns ARRAY('type=int64,max_size=1024') like
+        // array_agg; as the collect aggregate the server types its result as
+        // the INTO target variable instead.
+        .func(make_aggregate_func<ArrayCollectState, &array_collect_result>(
+                kArrayCollectAggName)
+                  .returns(ARRAY)
+                  .param(INT)
+                  .clear<&array_collect_clear>()
+                  .accumulate<&array_collect_accumulate>()
+                  .bind_and_check_types<&array_agg_bind<ArrayElem::kInt64>>()
                   .build()))

@@ -57,6 +57,17 @@ class vdf_handler {
   void clear();
   void accumulate(bool *null_value);
 
+  // Replace the return TypeContext captured by fix_fields() (for example with
+  // the TypeContext of the variable the result is assigned to, so the VDF sees
+  // the target's parameters), growing the result buffer to fit it.
+  bool set_return_type_context(const villagesql::TypeContext *tc);
+
+  // For a caller that runs fix_fields() on this handler again at every
+  // execution itself (the RETURNING ... INTO collectors): fix_fields() then
+  // does not mark the statement to be prepared again (see
+  // MarkVdfStatementForReprepare). Call before fix_fields().
+  void set_resolved_at_each_execution() { m_mark_reprepare = false; }
+
   // Value accessors - called by udf_handler when is_vdf() is true
   double val_real(bool *null_value);
   longlong val_int(bool *null_value);
@@ -84,6 +95,7 @@ class vdf_handler {
   // True once fix_fields has run prerun, or the function has none. False only
   // when fix_fields deferred prerun, at a first PREPARE.
   bool m_prerun_ran{false};
+  bool m_mark_reprepare{true};
   const villagesql::TypeContext *m_return_type_context{nullptr};
 
   // Marshal arguments into m_invalues array based on declared parameter types.

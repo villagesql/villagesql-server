@@ -34,6 +34,7 @@
 #include "sql/auth/auth_common.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
+#include "sql/item_strfunc.h"
 #include "sql/item_json_func.h"
 #include "sql/parse_tree_nodes.h"
 #include "sql/protocol.h"
@@ -44,7 +45,95 @@
 #include "sql/sql_error.h"
 #include "sql/sql_insert.h"
 #include "sql/sql_lex.h"
+#include "sql/sql_udf.h"
 #include "sql/table.h"
+#include "villagesql/schema/descriptor/type_context.h"
+#include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/sql/func_lookup.h"
+#include "villagesql/vdf/vdf_handler.h"
+
+// One collect aggregate (the target type's collect_aggregate VDF) for a
+// RETURNING ... INTO <collect-type variable> target. It is not an Item_sum:
+// it is driven directly by Query_result_returning (clear, accumulate per
+// returned row, evaluate once at the end) and never takes part in grouping.
+// Its result TypeContext is the target variable's, so the VDF sees the
+// target's parameters (e.g. element type and max_size of an ARRAY).
+class Item_returning_collect final : public Item_str_func {
+ public:
+  Item_returning_collect(Item *arg, udf_func *udf)
+      : Item_str_func(arg), m_udf(udf), m_vdf(udf) {}
+
+  const char *func_name() const override { return m_udf->name.str; }
+
+  bool resolve_type(THD *) override {
+    set_data_type(MYSQL_TYPE_VARCHAR);
+    collation.set(&my_charset_bin);
+    return false;
+  }
+
+  // Bind the VDF to the RETURNING item, then override its result TypeContext
+  // with the target variable's.
+  bool setup(THD *thd, const villagesql::TypeContext *target_tc) {
+    if (resolve_type(thd)) return true;
+    fixed = true;
+    // A collector is set up again at every execution, so its VDF does not
+    // make a stored routine parse the statement again each time.
+    m_vdf.set_resolved_at_each_execution();
+    if (m_vdf.fix_fields(thd, this, arg_count, args, &m_arg_buffer))
+      return true;
+    set_type_context(nullptr);
+    set_type_context(target_tc);
+    if (m_vdf.set_return_type_context(target_tc)) return true;
+    m_active = true;
+    m_vdf.clear();
+    return false;
+  }
+
+  bool accumulate(THD *thd) {
+    bool is_null = false;
+    m_vdf.accumulate(&is_null);
+    return thd->is_error();
+  }
+
+  // Run the aggregate's result function once and keep the value; val_str()
+  // then returns it to the variable assignment.
+  bool evaluate(THD *thd) {
+    String *res = m_vdf.val_str(&m_value, &m_save, m_udf->name.str,
+                                &my_charset_bin);
+    if (thd->is_error()) return true;
+    if (res == nullptr) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "a NULL result from a collect aggregate in RETURNING ... INTO");
+      return true;
+    }
+    if (res != &m_value && m_value.copy(*res)) return true;
+    null_value = false;
+    m_evaluated = true;
+    return false;
+  }
+
+  String *val_str(String *) override {
+    assert(m_evaluated);
+    null_value = !m_evaluated;
+    return m_evaluated ? &m_value : nullptr;
+  }
+
+  void cleanup() override {
+    if (m_active) m_vdf.cleanup();
+    m_active = false;
+    m_evaluated = false;
+    Item_str_func::cleanup();
+  }
+
+ private:
+  udf_func *m_udf;
+  villagesql::vdf::vdf_handler m_vdf;
+  String m_arg_buffer;
+  String m_value;
+  String m_save;
+  bool m_active{false};
+  bool m_evaluated{false};
+};
 
 bool prepare_returning_fields(THD *thd, Query_block *query_block,
                               mem_root_deque<Item *> *returning_fields,
@@ -107,6 +196,7 @@ void Query_result_returning::set_into(PT_returning_into *into,
 
 void Query_result_returning::cleanup() {
   Query_result_send::cleanup();
+  reset_collect();
   m_into_rows = 0;
   m_into_array.reset();
   m_into_table_checked = false;
@@ -205,7 +295,19 @@ bool Query_result_returning::send_metadata(THD *thd) {
 }
 
 bool Query_result_returning::send_count_eof(THD *thd, longlong row_count) {
+  if (into_scalar() && decide_into_collect(thd)) return true;
+  if (into_collect()) {
+    // Zero rows still assigns: each aggregate's result for no input (an empty
+    // ARRAY for vsql_array).
+    m_into_rows = 0;
+    const bool error = assign_collected(thd);
+    reset_collect();
+    if (error || thd->is_error()) return true;
+    my_ok(thd, row_count);
+    return false;
+  }
   if (into_scalar()) {
+    m_into_mode_decided = false;
     // Same contract as SELECT ... INTO v1, v2: no row is a NOT FOUND warning
     // (it triggers a CONTINUE/EXIT HANDLER FOR NOT FOUND); the variables keep
     // their previous values.
@@ -322,7 +424,102 @@ bool Query_result_returning::assign_scalars(THD *thd) {
   return thd->is_error();
 }
 
+bool Query_result_returning::decide_into_collect(THD *thd) {
+  if (m_into_mode_decided) return false;
+  m_into_mode_decided = true;
+  const uint n = m_into_vars->elements;
+  const villagesql::TypeContext **tcs =
+      thd->mem_root->ArrayAlloc<const villagesql::TypeContext *>(n);
+  if (tcs == nullptr) return true; /* purecov: inspected */
+  uint n_collect = 0;
+  uint i = 0;
+  List_iterator_fast<PT_select_var> var_li(*m_into_vars);
+  for (PT_select_var *mv; (mv = var_li++) != nullptr;) {
+    tcs[i] = nullptr;
+    if (mv->is_local() && thd->sp_runtime_ctx != nullptr) {
+      const villagesql::TypeContext *tc =
+          thd->sp_runtime_ctx->get_item(mv->get_offset())->get_type_context();
+      if (tc != nullptr && tc->descriptor() != nullptr &&
+          !tc->descriptor()->collect_aggregate_name().empty()) {
+        tcs[i] = tc;
+        ++n_collect;
+      }
+    }
+    ++i;
+  }
+  if (n_collect == 0) return false;  // plain scalar INTO
+  if (n_collect != n) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "mixing collect-type (e.g. ARRAY) and other variables as "
+             "RETURNING ... INTO targets");
+    return true;
+  }
+
+  Item_returning_collect **collectors =
+      thd->mem_root->ArrayAlloc<Item_returning_collect *>(n);
+  if (collectors == nullptr) return true; /* purecov: inspected */
+  for (uint k = 0; k < n; ++k) collectors[k] = nullptr;
+  m_collectors = collectors;
+  i = 0;
+  for (Item *item : VisibleFields(*m_fields)) {
+    if (i >= n) break;
+    const villagesql::TypeContext *tc = tcs[i];
+    const std::string &agg = tc->descriptor()->collect_aggregate_name();
+    // The reference taken by find_func() lives until thd->mem_root (this
+    // execution) is cleared.
+    const villagesql::FuncDescriptor *fd =
+        villagesql::find_func(tc->extension_name(), agg, *thd->mem_root);
+    udf_func *udf = fd != nullptr
+                        ? villagesql::make_udf_func_from_vdf(fd, *thd->mem_root)
+                        : nullptr;
+    if (udf == nullptr) {
+      my_printf_error(ER_UDF_ERROR,
+                      "collect aggregate '%s.%s' of type '%s' is not available",
+                      MYF(0), tc->extension_name().c_str(), agg.c_str(),
+                      tc->type_name().c_str());
+      return true;
+    }
+    collectors[i] = new (thd->mem_root) Item_returning_collect(item, udf);
+    if (collectors[i] == nullptr) return true; /* purecov: inspected */
+    if (collectors[i]->setup(thd, tc)) return true;
+    ++i;
+  }
+  return false;
+}
+
+bool Query_result_returning::assign_collected(THD *thd) {
+  const uint n = m_into_vars->elements;
+  // Evaluate everything first: procedure variables are not transactional, so
+  // on any error (NULL value, overflow, range) no target is changed.
+  for (uint i = 0; i < n; ++i) {
+    if (m_collectors[i]->evaluate(thd)) return true;
+  }
+  uint i = 0;
+  List_iterator_fast<PT_select_var> var_li(*m_into_vars);
+  for (PT_select_var *mv; (mv = var_li++) != nullptr;) {
+    Item *value = m_collectors[i++];
+    if (thd->sp_runtime_ctx->set_variable(thd, false, mv->get_offset(),
+                                          &value))
+      return true;
+  }
+  return thd->is_error();
+}
+
+void Query_result_returning::reset_collect() {
+  // The collectors live on the execution mem_root and are on thd->free_list,
+  // so their cleanup() (which runs the VDF's postrun) is done by the normal
+  // end-of-statement item cleanup; only forget them here.
+  m_collectors = nullptr;
+  m_into_mode_decided = false;
+}
+
 bool Query_result_returning::append_row(THD *thd) {
+  if (into_scalar() && decide_into_collect(thd)) return true;
+  if (into_collect()) {
+    for (uint i = 0; i < m_into_vars->elements; ++i)
+      if (m_collectors[i]->accumulate(thd)) return true;
+    return false;
+  }
   if (into_scalar()) return assign_scalars(thd);
   if (into_table()) return write_into_table(thd);
   const bool target_is_text = !m_into->is_local();

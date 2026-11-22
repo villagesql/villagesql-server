@@ -1,0 +1,60 @@
+# RETURNING ... INTO <ARRAY variable>: the type's collect aggregate
+# (vsql_array.array_collect) is registered in the statement's used custom
+# routines at parse time, like any VDF call, so the statement takes the same
+# metadata lock on the extension while it runs. UNINSTALL EXTENSION and the
+# binlog behave as for any routine using the extension.
+--source include/have_log_bin.inc
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_array;
+CREATE TABLE t (id INT PRIMARY KEY, v INT) ENGINE=InnoDB;
+INSERT INTO t VALUES (1,10),(2,20),(3,30);
+delimiter //;
+CREATE PROCEDURE p_ret(IN lo INT)
+BEGIN
+  DECLARE ids vsql_array.ARRAY(1024);
+  DELETE FROM t WHERE id >= lo RETURNING id INTO ids;
+  SELECT ids;
+END//
+delimiter ;//
+
+--echo # While the DELETE ... INTO waits for a row lock, it holds a metadata
+--echo # lock on the extension (from the registered collect aggregate).
+connect (con1, localhost, root,,);
+START TRANSACTION;
+SELECT id FROM t WHERE id = 3 FOR UPDATE;
+connection default;
+--send CALL p_ret(3)
+connection con1;
+let $wait_condition= SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = 'updating' AND info LIKE 'DELETE FROM t%';
+--source include/wait_condition.inc
+SELECT object_type, object_schema, object_name, lock_type, lock_status
+FROM performance_schema.metadata_locks
+WHERE owner_thread_id <> PS_CURRENT_THREAD_ID()
+  AND object_type NOT IN ('TABLE', 'SCHEMA', 'BACKUP LOCK', 'GLOBAL', 'COMMIT')
+ORDER BY object_type, object_name, lock_type;
+--echo # UNINSTALL is refused (the procedure uses the type).
+--error ER_VILLAGESQL_GENERIC_ERROR,3219
+UNINSTALL EXTENSION vsql_array;
+ROLLBACK;
+connection default;
+--reap
+disconnect con1;
+--source include/wait_until_count_sessions.inc
+
+--echo # Cached procedure: called again, UNINSTALL still refused.
+CALL p_ret(2);
+--error ER_VILLAGESQL_GENERIC_ERROR,3219
+UNINSTALL EXTENSION vsql_array;
+SELECT * FROM t ORDER BY id;
+
+--echo # Binlog: only the DML row events, nothing about the aggregate.
+--let $binlog_start= query_get_value(SHOW BINARY LOG STATUS, Position, 1)
+CALL p_ret(1);
+--source include/rpl/deprecated/show_binlog_events.inc
+
+--echo # After the procedure is gone, UNINSTALL works.
+DROP PROCEDURE p_ret;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_array;

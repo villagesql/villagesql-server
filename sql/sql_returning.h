@@ -34,6 +34,7 @@
 #include "sql/sql_list.h"
 
 class Item;
+class Item_returning_collect;
 class PT_returning_into;
 class PT_select_var;
 class Query_block;
@@ -116,6 +117,20 @@ class Query_result_returning final : public Query_result_send {
   bool append_row(THD *thd);
   bool assign_scalars(THD *thd);
 
+  // INTO v1, v2 where every target is an SP-local variable of a custom type
+  // that declares a collect aggregate (TypeDescriptor::collect_aggregate_name,
+  // e.g. an ARRAY type): every returned row is accumulated into one aggregate
+  // per target, and the results are assigned once, after the last row.
+  // Decided once per execution, on the first row or at termination. Returns
+  // true (error reported) for a mix of collect and scalar targets, or when
+  // the collect aggregate can't be set up.
+  bool decide_into_collect(THD *thd);
+  bool into_collect() const { return m_collectors != nullptr; }
+  // Evaluate every collect aggregate, then (only if all succeeded) assign the
+  // results to the target variables.
+  bool assign_collected(THD *thd);
+  void reset_collect();
+
   // Assign m_into_array to the INTO target variable (SP-local or @user_var).
   bool assign_into(THD *thd);
 
@@ -143,6 +158,11 @@ class Query_result_returning final : public Query_result_send {
   // null (and is materialized as an empty array on assignment) when no row
   // matched.
   Json_array_ptr m_into_array;
+  // INTO collect-type variables: true once decide_into_collect() ran in the
+  // current execution; m_collectors holds one aggregate per target (nullptr
+  // for plain scalar targets).
+  bool m_into_mode_decided{false};
+  Item_returning_collect **m_collectors{nullptr};
 };
 
 // Resolve the RETURNING select-list of query_block and allocate a

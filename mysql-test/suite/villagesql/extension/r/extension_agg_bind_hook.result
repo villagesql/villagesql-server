@@ -7,10 +7,11 @@ BEGIN
 DECLARE v64 vsql_array.ARRAY('type=int64,max_size=1024');
 DECLARE v32 vsql_array.ARRAY('type=int32,max_size=1024');
 DECLARE vd vsql_array.ARRAY('type=double,max_size=1024');
+DECLARE vc vsql_array.ARRAY('type=int64,max_size=1024');
 SELECT vsql_array.array_agg(x), vsql_array.array_agg_int32(x),
-vsql_array.array_agg_double(d)
-INTO v64, v32, vd FROM src;
-SELECT v64, v32, vd;
+vsql_array.array_agg_double(d), vsql_array.array_collect(x)
+INTO v64, v32, vd, vc FROM src;
+SELECT v64, v32, vd, vc;
 END//
 # Other element type: refused.
 CREATE PROCEDURE p_bind_wrong_type()
@@ -25,8 +26,8 @@ DECLARE v vsql_array.ARRAY('type=double,max_size=1023');
 SELECT vsql_array.array_agg_double(d) INTO v FROM src;
 END//
 CALL p_bind();
-v64	v32	vd
-[10,20]	[10,20]	[1.5,2.5]
+v64	v32	vd	vc
+[10,20]	[10,20]	[1.5,2.5]	[10,20]
 CALL p_bind_wrong_type();
 ERROR HY000: Incorrect ARRAY value: cannot implicitly cast string expression. Use explicit conversion for column 'v' at row 1
 CALL p_bind_wrong_size();
