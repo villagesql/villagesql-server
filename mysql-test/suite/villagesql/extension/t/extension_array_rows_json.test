@@ -1,0 +1,107 @@
+# vsql_array example extension: array_rows_json2 / array_rows_json3.
+#
+# They zip two or three ARRAY values position by position into a JSON array
+# of rows, '[[a1,b1,c1],[a2,b2,c2],...]', so one call hands the arrays to
+# JSON_TABLE as a table (instead of one array_get per element and column).
+# NULL if any argument is NULL; an error if the arrays differ in length.
+
+INSTALL EXTENSION vsql_array;
+
+CREATE TABLE t (id INT PRIMARY KEY,
+                a vsql_array.ARRAY('type=int32,max_size=15'),
+                b vsql_array.ARRAY('type=int32,max_size=15'),
+                c vsql_array.ARRAY('type=int32,max_size=15'),
+                d vsql_array.ARRAY('type=double,max_size=15'));
+INSERT INTO t VALUES
+  (1, '[10,20,30]', '[1,2,3]', '[-7,8,300]', '[1.5,-0.25,4]'),
+  (2, '[]', '[]', '[]', '[]'),
+  (3, '[5]', '[6]', NULL, '[7]'),
+  (4, '[1,2]', '[1]', '[1,2]', '[1,2]');
+
+--echo #
+--echo # The JSON text: rows in element order; the empty array gives '[]';
+--echo # NULL if any argument is NULL.
+--echo #
+SELECT id, vsql_array.array_rows_json2(a, b) AS j2,
+       vsql_array.array_rows_json3(a, b, c) AS j3
+FROM t WHERE id <= 3 ORDER BY id;
+SELECT JSON_VALID(vsql_array.array_rows_json3(a, b, c)) AS valid FROM t WHERE id = 1;
+
+--echo #
+--echo # The arguments of one call must have the same type parameters (a server
+--echo # rule for arguments of one custom type): a double array beside int32
+--echo # arrays is refused when the statement is prepared.
+--echo #
+--error 3219
+SELECT vsql_array.array_rows_json3(a, c, d) FROM t WHERE id = 1;
+
+--echo #
+--echo # Arrays of different lengths are an error.
+--echo #
+--error ER_UDF_ERROR
+SELECT vsql_array.array_rows_json2(a, b) FROM t WHERE id = 4;
+--error ER_UDF_ERROR
+SELECT vsql_array.array_rows_json3(a, c, b) FROM t WHERE id = 4;
+
+--echo #
+--echo # As a table: JSON_TABLE over the result, joined and aggregated.
+--echo #
+SELECT t.id, r.n, r.x, r.y, r.z
+FROM t, JSON_TABLE(vsql_array.array_rows_json3(t.a, t.b, t.c), '$[*]'
+       COLUMNS (n FOR ORDINALITY, x INT PATH '$[0]', y INT PATH '$[1]',
+                z BIGINT PATH '$[2]')) r
+WHERE t.id <= 2 ORDER BY t.id, r.n;
+
+--echo #
+--echo # In a stored procedure, from ARRAY variables: the same rows as one
+--echo # array_get per element, and usable as the source of an UPDATE and of
+--echo # an INSERT ... SELECT.
+--echo #
+CREATE TABLE stock (i INT, w INT, qty INT, PRIMARY KEY (w, i));
+INSERT INTO stock VALUES (10, 1, 100), (20, 2, 100), (30, 3, 100), (40, 1, 100);
+CREATE TABLE line (n INT PRIMARY KEY, i INT, w INT, q INT);
+delimiter //;
+CREATE PROCEDURE p(cnt INT)
+BEGIN
+  DECLARE l_i vsql_array.ARRAY('type=int32,max_size=15');
+  DECLARE l_w vsql_array.ARRAY('type=int32,max_size=15');
+  DECLARE l_q vsql_array.ARRAY('type=int32,max_size=15');
+  DECLARE k INT DEFAULT 1;
+  WHILE k <= cnt DO
+    SET l_i = vsql_array.array_append(l_i, k * 10);
+    SET l_w = vsql_array.array_append(l_w, k);
+    SET l_q = vsql_array.array_append(l_q, k + 4);
+    SET k = k + 1;
+  END WHILE;
+  SELECT vsql_array.array_rows_json3(l_i, l_w, l_q) AS doc;
+  SELECT r.n, r.i = vsql_array.array_get(l_i, r.n) AS same_i,
+         r.w = vsql_array.array_get(l_w, r.n) AS same_w,
+         r.q = vsql_array.array_get(l_q, r.n) AS same_q
+  FROM JSON_TABLE(vsql_array.array_rows_json3(l_i, l_w, l_q), '$[*]'
+         COLUMNS (n FOR ORDINALITY, i INT PATH '$[0]', w INT PATH '$[1]',
+                  q INT PATH '$[2]')) r ORDER BY r.n;
+  UPDATE stock s
+  JOIN JSON_TABLE(vsql_array.array_rows_json3(l_i, l_w, l_q), '$[*]'
+         COLUMNS (n FOR ORDINALITY, i INT PATH '$[0]', w INT PATH '$[1]',
+                  q INT PATH '$[2]')) ol
+    ON s.i = ol.i AND s.w = ol.w
+  SET s.qty = s.qty - ol.q;
+  INSERT INTO line
+  SELECT ol.n, ol.i, ol.w, ol.q
+  FROM JSON_TABLE(vsql_array.array_rows_json3(l_i, l_w, l_q), '$[*]'
+         COLUMNS (n FOR ORDINALITY, i INT PATH '$[0]', w INT PATH '$[1]',
+                  q INT PATH '$[2]')) ol;
+END//
+delimiter ;//
+CALL p(3);
+SELECT * FROM stock ORDER BY w, i;
+SELECT * FROM line ORDER BY n;
+--echo # A second call re-executes the same statements with new array values.
+DELETE FROM line;
+CALL p(2);
+SELECT * FROM stock ORDER BY w, i;
+SELECT * FROM line ORDER BY n;
+
+DROP PROCEDURE p;
+DROP TABLE t, stock, line;
+UNINSTALL EXTENSION vsql_array;

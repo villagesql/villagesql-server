@@ -1,0 +1,129 @@
+INSTALL EXTENSION vsql_array;
+CREATE TABLE t (id INT PRIMARY KEY,
+a vsql_array.ARRAY('type=int32,max_size=15'),
+b vsql_array.ARRAY('type=int32,max_size=15'),
+c vsql_array.ARRAY('type=int32,max_size=15'),
+d vsql_array.ARRAY('type=double,max_size=15'));
+INSERT INTO t VALUES
+(1, '[10,20,30]', '[1,2,3]', '[-7,8,300]', '[1.5,-0.25,4]'),
+(2, '[]', '[]', '[]', '[]'),
+(3, '[5]', '[6]', NULL, '[7]'),
+(4, '[1,2]', '[1]', '[1,2]', '[1,2]');
+#
+# The JSON text: rows in element order; the empty array gives '[]';
+# NULL if any argument is NULL.
+#
+SELECT id, vsql_array.array_rows_json2(a, b) AS j2,
+vsql_array.array_rows_json3(a, b, c) AS j3
+FROM t WHERE id <= 3 ORDER BY id;
+id	j2	j3
+1	[[10,1],[20,2],[30,3]]	[[10,1,-7],[20,2,8],[30,3,300]]
+2	[]	[]
+3	[[5,6]]	NULL
+SELECT JSON_VALID(vsql_array.array_rows_json3(a, b, c)) AS valid FROM t WHERE id = 1;
+valid
+1
+#
+# The arguments of one call must have the same type parameters (a server
+# rule for arguments of one custom type): a double array beside int32
+# arrays is refused when the statement is prepared.
+#
+SELECT vsql_array.array_rows_json3(a, c, d) FROM t WHERE id = 1;
+ERROR HY000: Cannot initialize function 'array_rows_json3': conflicting type parameters for vsql_array.ARRAY in arguments 1 and 3
+#
+# Arrays of different lengths are an error.
+#
+SELECT vsql_array.array_rows_json2(a, b) FROM t WHERE id = 4;
+ERROR HY000: VDF error in function 'array_rows_json2': array_rows_json: the arrays differ in length
+SELECT vsql_array.array_rows_json3(a, c, b) FROM t WHERE id = 4;
+ERROR HY000: VDF error in function 'array_rows_json3': array_rows_json: the arrays differ in length
+#
+# As a table: JSON_TABLE over the result, joined and aggregated.
+#
+SELECT t.id, r.n, r.x, r.y, r.z
+FROM t, JSON_TABLE(vsql_array.array_rows_json3(t.a, t.b, t.c), '$[*]'
+       COLUMNS (n FOR ORDINALITY, x INT PATH '$[0]', y INT PATH '$[1]',
+z BIGINT PATH '$[2]')) r
+WHERE t.id <= 2 ORDER BY t.id, r.n;
+id	n	x	y	z
+1	1	10	1	-7
+1	2	20	2	8
+1	3	30	3	300
+#
+# In a stored procedure, from ARRAY variables: the same rows as one
+# array_get per element, and usable as the source of an UPDATE and of
+# an INSERT ... SELECT.
+#
+CREATE TABLE stock (i INT, w INT, qty INT, PRIMARY KEY (w, i));
+INSERT INTO stock VALUES (10, 1, 100), (20, 2, 100), (30, 3, 100), (40, 1, 100);
+CREATE TABLE line (n INT PRIMARY KEY, i INT, w INT, q INT);
+CREATE PROCEDURE p(cnt INT)
+BEGIN
+DECLARE l_i vsql_array.ARRAY('type=int32,max_size=15');
+DECLARE l_w vsql_array.ARRAY('type=int32,max_size=15');
+DECLARE l_q vsql_array.ARRAY('type=int32,max_size=15');
+DECLARE k INT DEFAULT 1;
+WHILE k <= cnt DO
+SET l_i = vsql_array.array_append(l_i, k * 10);
+SET l_w = vsql_array.array_append(l_w, k);
+SET l_q = vsql_array.array_append(l_q, k + 4);
+SET k = k + 1;
+END WHILE;
+SELECT vsql_array.array_rows_json3(l_i, l_w, l_q) AS doc;
+SELECT r.n, r.i = vsql_array.array_get(l_i, r.n) AS same_i,
+r.w = vsql_array.array_get(l_w, r.n) AS same_w,
+r.q = vsql_array.array_get(l_q, r.n) AS same_q
+FROM JSON_TABLE(vsql_array.array_rows_json3(l_i, l_w, l_q), '$[*]'
+         COLUMNS (n FOR ORDINALITY, i INT PATH '$[0]', w INT PATH '$[1]',
+q INT PATH '$[2]')) r ORDER BY r.n;
+UPDATE stock s
+JOIN JSON_TABLE(vsql_array.array_rows_json3(l_i, l_w, l_q), '$[*]'
+         COLUMNS (n FOR ORDINALITY, i INT PATH '$[0]', w INT PATH '$[1]',
+q INT PATH '$[2]')) ol
+ON s.i = ol.i AND s.w = ol.w
+SET s.qty = s.qty - ol.q;
+INSERT INTO line
+SELECT ol.n, ol.i, ol.w, ol.q
+FROM JSON_TABLE(vsql_array.array_rows_json3(l_i, l_w, l_q), '$[*]'
+         COLUMNS (n FOR ORDINALITY, i INT PATH '$[0]', w INT PATH '$[1]',
+q INT PATH '$[2]')) ol;
+END//
+CALL p(3);
+doc
+[[10,1,5],[20,2,6],[30,3,7]]
+n	same_i	same_w	same_q
+1	1	1	1
+2	1	1	1
+3	1	1	1
+SELECT * FROM stock ORDER BY w, i;
+i	w	qty
+10	1	95
+40	1	100
+20	2	94
+30	3	93
+SELECT * FROM line ORDER BY n;
+n	i	w	q
+1	10	1	5
+2	20	2	6
+3	30	3	7
+# A second call re-executes the same statements with new array values.
+DELETE FROM line;
+CALL p(2);
+doc
+[[10,1,5],[20,2,6]]
+n	same_i	same_w	same_q
+1	1	1	1
+2	1	1	1
+SELECT * FROM stock ORDER BY w, i;
+i	w	qty
+10	1	90
+40	1	100
+20	2	88
+30	3	93
+SELECT * FROM line ORDER BY n;
+n	i	w	q
+1	10	1	5
+2	20	2	6
+DROP PROCEDURE p;
+DROP TABLE t, stock, line;
+UNINSTALL EXTENSION vsql_array;
