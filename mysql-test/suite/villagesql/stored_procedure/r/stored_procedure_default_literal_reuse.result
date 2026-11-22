@@ -1,0 +1,88 @@
+INSTALL EXTENSION vsql_complex;
+INSTALL EXTENSION vsql_array;
+#
+# Stored procedure, COMPLEX variable with a DEFAULT literal.
+#
+CREATE PROCEDURE p_c()
+BEGIN
+DECLARE c COMPLEX DEFAULT '(1.5,2.5)';
+SELECT c;
+END//
+CALL p_c();
+c
+(1.5,2.5)
+CALL p_c();
+c
+(1.5,2.5)
+CALL p_c();
+c
+(1.5,2.5)
+CALL p_c();
+c
+(1.5,2.5)
+CALL p_c();
+c
+(1.5,2.5)
+#
+# Stored procedure, ARRAY variable with a DEFAULT literal, modified.
+#
+CREATE PROCEDURE p_a()
+BEGIN
+DECLARE a vsql_array.ARRAY('type=int32,max_size=16') DEFAULT '[1,2]';
+SET a = vsql_array.array_append(a, 3);
+SELECT a, vsql_array.array_length(a) AS len;
+END//
+CALL p_a();
+a	len
+[1,2,3]	3
+CALL p_a();
+a	len
+[1,2,3]	3
+CALL p_a();
+a	len
+[1,2,3]	3
+CALL p_a();
+a	len
+[1,2,3]	3
+#
+# Stored function, called once per row.
+#
+CREATE FUNCTION f_c(n INT) RETURNS INT DETERMINISTIC
+BEGIN
+DECLARE c COMPLEX DEFAULT '(3.0,4.0)';
+RETURN n;
+END//
+CREATE TABLE t_n (n INT PRIMARY KEY);
+INSERT INTO t_n VALUES (1), (2), (3), (4);
+SELECT n, f_c(n) AS r FROM t_n ORDER BY n;
+n	r
+1	1
+2	2
+3	3
+4	4
+DROP TABLE t_n;
+#
+# Prepared INSERT of a literal into a custom column, FLUSH TABLES between
+# executions.
+#
+CREATE TABLE t_c (id INT AUTO_INCREMENT PRIMARY KEY, c COMPLEX);
+PREPARE s FROM 'INSERT INTO t_c (c) VALUES (''(5.5,6.5)'')';
+EXECUTE s;
+FLUSH TABLES;
+EXECUTE s;
+FLUSH TABLES;
+EXECUTE s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT id, c FROM t_c ORDER BY id;
+id	c
+1	(5.5,6.5)
+2	(5.5,6.5)
+3	(5.5,6.5)
+4	(5.5,6.5)
+DROP TABLE t_c;
+DROP PROCEDURE p_c;
+DROP PROCEDURE p_a;
+DROP FUNCTION f_c;
+UNINSTALL EXTENSION vsql_array;
+UNINSTALL EXTENSION vsql_complex;
