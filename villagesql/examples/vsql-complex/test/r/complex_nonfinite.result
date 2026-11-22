@@ -1,0 +1,74 @@
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX, KEY k_c (c));
+# Text with an infinite or NaN part, or a part out of range
+INSERT INTO t VALUES (1, '(nan,3)');
+ERROR HY000: Incorrect COMPLEX value: '(nan,3)' for column 'c' at row 1
+INSERT INTO t VALUES (1, '(3,inf)');
+ERROR HY000: Incorrect COMPLEX value: '(3,inf)' for column 'c' at row 1
+INSERT INTO t VALUES (1, '(-inf,0)');
+ERROR HY000: Incorrect COMPLEX value: '(-inf,0)' for column 'c' at row 1
+INSERT INTO t VALUES (1, '(1e400,0)');
+ERROR HY000: Incorrect COMPLEX value: '(1e400,0)' for column 'c' at row 1
+SELECT COMPLEX::from_string('(nan,3)') AS from_nan;
+from_nan
+NULL
+Warnings:
+Warning	3200	VDF error in function 'COMPLEX::from_string': failed to encode '(nan,3)'
+# The largest and smallest finite parts are fine
+INSERT INTO t VALUES (1, '(1.7976931348623157e308,-1.7976931348623157e308)');
+INSERT INTO t VALUES (2, '(4.9e-324,0)');
+SELECT id, c FROM t ORDER BY id;
+id	c
+1	(1.7976931348623157e+308,-1.7976931348623157e+308)
+2	(5e-324,0)
+DELETE FROM t;
+# Arithmetic whose result is out of range
+SELECT vsql_complex.complex_add('(1.7e308,0)', '(1.7e308,0)');
+ERROR HY000: VDF error in function 'complex_add': COMPLEX value is out of range
+SELECT vsql_complex.complex_subtract('(0,-1.7e308)', '(0,1.7e308)');
+ERROR HY000: VDF error in function 'complex_subtract': COMPLEX value is out of range
+SELECT vsql_complex.complex_multiply('(1e200,1e200)', '(1e200,1e200)');
+ERROR HY000: VDF error in function 'complex_multiply': COMPLEX value is out of range
+SELECT vsql_complex.complex_divide('(1e300,0)', '(1e-10,0)');
+ERROR HY000: VDF error in function 'complex_divide': COMPLEX value is out of range
+# Division by zero still gives NULL with a warning
+SELECT vsql_complex.complex_divide('(1,1)', '(0,0)');
+vsql_complex.complex_divide('(1,1)', '(0,0)')
+NULL
+Warnings:
+Warning	3200	VDF error in function 'complex_divide': division by 0
+# complex_abs does not overflow for large parts
+SELECT vsql_complex.complex_abs('(3e200,4e200)') BETWEEN 4.999e200 AND 5.001e200 AS near_5e200;
+near_5e200
+1
+SELECT vsql_complex.complex_abs('(3,4)');
+vsql_complex.complex_abs('(3,4)')
+5
+SELECT vsql_complex.complex_abs('(1.7e308,1.7e308)');
+ERROR HY000: VDF error in function 'complex_abs': DOUBLE value is out of range
+# complex_sum whose total is out of range
+INSERT INTO t VALUES (1, '(1.7e308,0)'), (2, '(1.7e308,0)');
+SELECT vsql_complex.complex_sum(c) FROM t;
+ERROR HY000: VDF error in function 'complex_sum': COMPLEX value is out of range
+DELETE FROM t;
+# Squaring again and again, as pstress did, stops at the overflow and
+# leaves the table and its index consistent
+INSERT INTO t VALUES (1, '(1e100,0)'), (2, '(3,4)'), (3, '(5,0)');
+UPDATE t SET c = vsql_complex.complex_multiply(c, c) WHERE id = 1;
+UPDATE t SET c = vsql_complex.complex_multiply(c, c) WHERE id = 1;
+ERROR HY000: VDF error in function 'complex_multiply': COMPLEX value is out of range
+SELECT id, c FROM t ORDER BY id;
+id	c
+1	(1e+200,0)
+2	(3,4)
+3	(5,0)
+DELETE FROM t WHERE id = 1;
+SELECT id, c FROM t FORCE INDEX (k_c) ORDER BY id;
+id	c
+2	(3,4)
+3	(5,0)
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_complex;

@@ -1,0 +1,69 @@
+# A COMPLEX value is always finite, as MySQL's DOUBLE is: text with an
+# infinite or NaN part is not a COMPLEX value, and arithmetic whose result
+# has an infinite or NaN part fails with an out of range error.
+#
+# Found by pstress: repeated complex_multiply(c, c) on an indexed COMPLEX
+# column overflowed to infinity and then gave a NaN real part (inf - inf).
+# complex_compare has no order for NaN, and a later DELETE asserted in
+# row_upd_sec_index_entry_low ("Record in index `k_c` ... was not found on
+# update").
+
+INSTALL EXTENSION vsql_complex;
+
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX, KEY k_c (c));
+
+--echo # Text with an infinite or NaN part, or a part out of range
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (1, '(nan,3)');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (1, '(3,inf)');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (1, '(-inf,0)');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t VALUES (1, '(1e400,0)');
+SELECT COMPLEX::from_string('(nan,3)') AS from_nan;
+
+--echo # The largest and smallest finite parts are fine
+INSERT INTO t VALUES (1, '(1.7976931348623157e308,-1.7976931348623157e308)');
+INSERT INTO t VALUES (2, '(4.9e-324,0)');
+SELECT id, c FROM t ORDER BY id;
+DELETE FROM t;
+
+--echo # Arithmetic whose result is out of range
+--error ER_UDF_ERROR
+SELECT vsql_complex.complex_add('(1.7e308,0)', '(1.7e308,0)');
+--error ER_UDF_ERROR
+SELECT vsql_complex.complex_subtract('(0,-1.7e308)', '(0,1.7e308)');
+--error ER_UDF_ERROR
+SELECT vsql_complex.complex_multiply('(1e200,1e200)', '(1e200,1e200)');
+--error ER_UDF_ERROR
+SELECT vsql_complex.complex_divide('(1e300,0)', '(1e-10,0)');
+
+--echo # Division by zero still gives NULL with a warning
+SELECT vsql_complex.complex_divide('(1,1)', '(0,0)');
+
+--echo # complex_abs does not overflow for large parts
+SELECT vsql_complex.complex_abs('(3e200,4e200)') BETWEEN 4.999e200 AND 5.001e200 AS near_5e200;
+SELECT vsql_complex.complex_abs('(3,4)');
+--error ER_UDF_ERROR
+SELECT vsql_complex.complex_abs('(1.7e308,1.7e308)');
+
+--echo # complex_sum whose total is out of range
+INSERT INTO t VALUES (1, '(1.7e308,0)'), (2, '(1.7e308,0)');
+--error ER_UDF_ERROR
+SELECT vsql_complex.complex_sum(c) FROM t;
+DELETE FROM t;
+
+--echo # Squaring again and again, as pstress did, stops at the overflow and
+--echo # leaves the table and its index consistent
+INSERT INTO t VALUES (1, '(1e100,0)'), (2, '(3,4)'), (3, '(5,0)');
+UPDATE t SET c = vsql_complex.complex_multiply(c, c) WHERE id = 1;
+--error ER_UDF_ERROR
+UPDATE t SET c = vsql_complex.complex_multiply(c, c) WHERE id = 1;
+SELECT id, c FROM t ORDER BY id;
+DELETE FROM t WHERE id = 1;
+SELECT id, c FROM t FORCE INDEX (k_c) ORDER BY id;
+CHECK TABLE t;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_complex;
