@@ -51,6 +51,7 @@ constexpr vef_type_t to_vef_type(const char *name) {
   if (sv == "STRING") return vef_type_t{VEF_TYPE_STRING, nullptr};
   if (sv == "INT") return vef_type_t{VEF_TYPE_INT, nullptr};
   if (sv == "REAL") return vef_type_t{VEF_TYPE_REAL, nullptr};
+  if (sv == "BINARY") return vef_type_t{VEF_TYPE_BINARY, nullptr};
   return vef_type_t{VEF_TYPE_CUSTOM, name};
 }
 
@@ -120,6 +121,8 @@ struct is_result_wrapper<RealResult> : std::true_type {};
 template <>
 struct is_result_wrapper<StringResult> : std::true_type {};
 template <>
+struct is_result_wrapper<BinaryResult> : std::true_type {};
+template <>
 struct is_result_wrapper<CustomResult> : std::true_type {};
 template <typename P>
 struct is_result_wrapper<CustomResultWith<P>> : std::true_type {};
@@ -133,6 +136,8 @@ template <>
 struct is_arg_wrapper<RealArg> : std::true_type {};
 template <>
 struct is_arg_wrapper<StringArg> : std::true_type {};
+template <>
+struct is_arg_wrapper<BinaryArg> : std::true_type {};
 template <>
 struct is_arg_wrapper<CustomArg> : std::true_type {};
 template <typename P>
@@ -153,6 +158,10 @@ struct wrapper_vef_type<StringArg> {
   static constexpr vef_type_id id = VEF_TYPE_STRING;
 };
 template <>
+struct wrapper_vef_type<BinaryArg> {
+  static constexpr vef_type_id id = VEF_TYPE_BINARY;
+};
+template <>
 struct wrapper_vef_type<CustomArg> {
   static constexpr vef_type_id id = VEF_TYPE_CUSTOM;
 };
@@ -171,6 +180,10 @@ struct wrapper_vef_type<RealResult> {
 template <>
 struct wrapper_vef_type<StringResult> {
   static constexpr vef_type_id id = VEF_TYPE_STRING;
+};
+template <>
+struct wrapper_vef_type<BinaryResult> {
+  static constexpr vef_type_id id = VEF_TYPE_BINARY;
 };
 template <>
 struct wrapper_vef_type<CustomResult> {
@@ -332,7 +345,16 @@ struct TypeOpParamsType<void (*)(MaybeParams<P> &, std::string_view,
   using type = P;
 };
 template <typename P>
+struct TypeOpParamsType<void (*)(MaybeParams<P> &, Span<const unsigned char>,
+                                 CustomResult)> {
+  using type = P;
+};
+template <typename P>
 struct TypeOpParamsType<void (*)(CustomArgWith<P>, StringResult)> {
+  using type = P;
+};
+template <typename P>
+struct TypeOpParamsType<void (*)(CustomArgWith<P>, BinaryResult)> {
   using type = P;
 };
 template <typename P>
@@ -403,9 +425,9 @@ struct AggResultWithOutputWrapper {
 // Used by FuncBuilder::prerun/postrun when the user's hook is typed.
 
 template <auto Hook>
-void typed_prerun_wrapper(vef_context_t *, vef_prerun_args_t *args,
+void typed_prerun_wrapper(vef_context_t *ctx, vef_prerun_args_t *args,
                           vef_prerun_result_t *result) {
-  Hook(PrerunArgs(args), PrerunResult(result));
+  Hook(PrerunArgs(args, ctx->protocol), PrerunResult(result));
 }
 
 template <auto Hook>
@@ -515,8 +537,8 @@ struct VarArgsWrapper {
                 "vsql .varargs(): first parameter must be vsql::VarArgs");
   static_assert(is_result_wrapper<ResultParam>::value,
                 "vsql .varargs(): second parameter must be a result wrapper "
-                "(IntResult, RealResult, StringResult, CustomResult, or "
-                "CustomResultWith<P>)");
+                "(IntResult, RealResult, StringResult, BinaryResult, "
+                "CustomResult, or CustomResultWith<P>)");
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -678,8 +700,42 @@ inline void set_default_encode_failure(vef_vdf_result_t *result,
            static_cast<int>(display_len), arg.str_value, ellipsis);
 }
 
-// TypeEncodeVdfWrapper: wraps TypeEncodeFunc into a VDF.
-// VDF signature: (STRING) -> CUSTOM(type).
+// The binary form's counterpart: the bytes are not quotable text, so the
+// default warning gives their length instead.
+inline void set_default_binary_encode_failure(vef_vdf_result_t *result,
+                                              const vef_invalue_t &arg) {
+  result->type = VEF_RESULT_WARNING;
+  snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to encode %zu bytes",
+           arg.binary_len);
+}
+
+// The input an encode function is given: the text form (std::string_view, a
+// STRING argument) or the binary form (Span<const unsigned char>, a BINARY
+// argument).
+template <typename In>
+In encode_input(const vef_invalue_t &arg) {
+  if constexpr (std::is_same_v<In, Span<const unsigned char>>) {
+    return {arg.binary_value, arg.binary_len};
+  } else {
+    static_assert(std::is_same_v<In, std::string_view>,
+                  "encode input must be std::string_view or "
+                  "Span<const unsigned char>");
+    return {arg.str_value, arg.str_len};
+  }
+}
+
+template <typename In>
+void set_default_encode_failure_for(vef_vdf_result_t *result,
+                                    const vef_invalue_t &arg) {
+  if constexpr (std::is_same_v<In, Span<const unsigned char>>) {
+    set_default_binary_encode_failure(result, arg);
+  } else {
+    set_default_encode_failure(result, arg);
+  }
+}
+
+// TypeEncodeVdfWrapper: wraps TypeEncodeFunc or TypeEncodeBinaryFunc into a
+// VDF. VDF signature: (STRING) -> CUSTOM(type), or (BINARY) -> CUSTOM(type).
 //
 // Pre-sets the result to VEF_RESULT_WARNING with a default
 // "failed to encode '<input>'" message; the extension can override by calling
@@ -687,6 +743,9 @@ inline void set_default_encode_failure(vef_vdf_result_t *result,
 // return without such a call surfaces the default warning.
 template <auto Func>
 struct TypeEncodeVdfWrapper {
+  using In =
+      std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t arg = get_invalue(ctx, args, 0);
@@ -694,36 +753,38 @@ struct TypeEncodeVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    set_default_encode_failure(result, arg);
-    VDF_EXCEPTIONS_TRY {
-      Func({arg.str_value, arg.str_len}, CustomResult(result));
-    }
+    set_default_encode_failure_for<In>(result, arg);
+    VDF_EXCEPTIONS_TRY { Func(encode_input<In>(arg), CustomResult(result)); }
     VDF_EXCEPTIONS_CATCH(result);
   }
 };
 
 // Pre-fills result->type / result->error_msg with a default "failed to
-// decode value" ERROR. The decode wrappers call this before
-// invoking the extension's to_string so that an extension that early-returns
+// decode value" ERROR. The decode wrappers call this before invoking the
+// extension's to_string or to_binary so that an extension that early-returns
 // without setting an outcome still surfaces a useful error.
 //
-// TODO(villagesql-beta): tighten the contract so every to_string explicitly
-// sets an outcome (set_length / set / set_null / warning / error) on every
-// path, then drop this synthesis and treat the silent-return case as an SDK
-// bug. Mirrors the same TODO on set_default_encode_failure.
+// TODO(villagesql-beta): tighten the contract so every to_string and to_binary
+// explicitly sets an outcome (set_length / set / set_null / warning / error)
+// on every path, then drop this synthesis and treat the silent-return case as
+// an SDK bug. Mirrors the same TODO on set_default_encode_failure.
 inline void set_default_decode_failure(vef_vdf_result_t *result) {
   result->type = VEF_RESULT_ERROR;
   snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to decode value");
 }
 
-// TypeDecodeVdfWrapper: wraps TypeDecodeFunc into a VDF.
-// VDF signature: (CUSTOM(type)) -> STRING.
+// TypeDecodeVdfWrapper: wraps TypeDecodeFunc or TypeDecodeBinaryFunc into a
+// VDF. VDF signature: (CUSTOM(type)) -> STRING, or (CUSTOM(type)) -> BINARY.
 //
 // Pre-sets the result to VEF_RESULT_ERROR with a default "failed to decode
 // value" message; the extension can override by calling out.set_length /
 // out.set / out.set_null / out.warning / out.error.
 template <auto Func>
 struct TypeDecodeVdfWrapper {
+  // StringResult for to_string, BinaryResult for to_binary.
+  using Out =
+      std::tuple_element_t<1, typename FuncParamTypes<decltype(Func)>::type>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t arg = get_invalue(ctx, args, 0);
@@ -732,7 +793,7 @@ struct TypeDecodeVdfWrapper {
       return;
     }
     set_default_decode_failure(result);
-    VDF_EXCEPTIONS_TRY { Func(CustomArg(&arg), StringResult(result)); }
+    VDF_EXCEPTIONS_TRY { Func(CustomArg(&arg), Out(result)); }
     VDF_EXCEPTIONS_CATCH(result);
   }
 };
@@ -780,7 +841,8 @@ struct TypeHashVdfWrapper {
 
 template <auto Func>
 struct TypeEncodeWithCacheVdfWrapper {
-  // Func signature: void(MaybeParams<P>&, string_view, CustomResult).
+  // Func signature: void(MaybeParams<P>&, In, CustomResult), where In is
+  // std::string_view or Span<const unsigned char>.
   // Recover P from the first argument's MaybeParams<P>.
   using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
@@ -791,6 +853,8 @@ struct TypeEncodeWithCacheVdfWrapper {
     using type = P_;
   };
   using P = typename ExtractP<FirstArgStripped>::type;
+  using In =
+      std::tuple_element_t<1, typename FuncParamTypes<decltype(Func)>::type>;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -820,8 +884,8 @@ struct TypeEncodeWithCacheVdfWrapper {
         maybe_params =
             MaybeParams<P>(type_params_cache_for<P>().get(result->type_params));
       }
-      set_default_encode_failure(result, arg);
-      Func(maybe_params, {arg.str_value, arg.str_len}, CustomResult(result));
+      set_default_encode_failure_for<In>(result, arg);
+      Func(maybe_params, encode_input<In>(arg), CustomResult(result));
     }
     VDF_EXCEPTIONS_CATCH(result);
 
@@ -861,6 +925,9 @@ struct TypeDecodeWithCacheVdfWrapper {
   using FirstArgStripped = std::remove_cv_t<std::remove_reference_t<
       std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
   using P = typename ExtractDchParamsType<FirstArgStripped>::type;
+  // StringResult for to_string, BinaryResult for to_binary.
+  using Out =
+      std::tuple_element_t<1, typename FuncParamTypes<decltype(Func)>::type>;
 
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
@@ -871,7 +938,7 @@ struct TypeDecodeWithCacheVdfWrapper {
         return;
       }
       set_default_decode_failure(result);
-      Func(CustomArgWith<P>(&arg), StringResult(result));
+      Func(CustomArgWith<P>(&arg), Out(result));
     }
     VDF_EXCEPTIONS_CATCH(result);
   }
@@ -1224,10 +1291,20 @@ struct StaticFuncDesc {
   }
   // Varargs reads args->values (protocol-3 pointer-array layout) without a
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
-  // bind_and_check_types exists from VEF_PROTOCOL_4.
+  // bind_and_check_types and VEF_TYPE_BINARY exist from VEF_PROTOCOL_5.
   constexpr vef_protocol_t required_protocol() const {
-    if (max_result_length_ > 0 || bind_ != nullptr) return VEF_PROTOCOL_4;
+    if (max_result_length_ > 0 || bind_ != nullptr || uses_binary()) {
+      return VEF_PROTOCOL_5;
+    }
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
+  }
+  constexpr bool uses_binary() const {
+    if (return_type_.id == VEF_TYPE_BINARY) return true;
+    if (is_varargs_) return false;
+    for (size_t i = 0; i < NumParams; i++) {
+      if (params_[i].id == VEF_TYPE_BINARY) return true;
+    }
+    return false;
   }
   constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr size_t max_result_length() const { return max_result_length_; }

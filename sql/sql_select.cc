@@ -2979,13 +2979,13 @@ void QEP_TAB::push_index_cond(const JOIN_TAB *join_tab, uint keyno,
   /*
     Fields of other non-const tables aren't allowed in following cases:
        type is:
-        (JT_ALL | JT_INDEX_SCAN | JT_RANGE | JT_INDEX_MERGE)
+        (JT_ALL | JT_INDEX_SCAN | JT_RANGE | JT_INDEX_MERGE | JT_KNN_SCAN)
        and BNL is used.
     and allowed otherwise.
   */
   const bool other_tbls_ok =
       !((type() == JT_ALL || type() == JT_INDEX_SCAN || type() == JT_RANGE ||
-         type() == JT_INDEX_MERGE) &&
+         type() == JT_INDEX_MERGE || type() == JT_KNN_SCAN) &&
         join_tab->use_join_cache() == JOIN_CACHE::ALG_BNL);
 
   /*
@@ -3374,6 +3374,7 @@ bool make_join_readinfo(JOIN *join, uint no_jbuf_after) {
         qep_tab->using_dynamic_range = (tab->use_quick == QS_DYNAMIC_RANGE);
         [[fallthrough]];
       case JT_INDEX_SCAN:
+      case JT_KNN_SCAN:
         if (tab->position()->filter_effect != COND_FILTER_STALE_NO_CONST &&
             !tab->sj_mat_exec()) {
           /*
@@ -3446,12 +3447,6 @@ bool make_join_readinfo(JOIN *join, uint no_jbuf_after) {
           table->set_keyread(true);
           table->covering_keys.set_bit(tab->ft_func()->key);
         }
-        break;
-      case JT_INDEX_DISTANCE:
-        // VillageSQL: KNN custom-index distance scan. Like JT_FT, it is a
-        // specialized access method driven by its own iterator (via
-        // QEP_TAB::access_path()); no keyread, index-condition pushdown, or
-        // generic scan-statistics setup applies here.
         break;
       default:
         DBUG_PRINT("error", ("Table type %d found",

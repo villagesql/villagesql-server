@@ -155,19 +155,20 @@ void ba_len(IntResult out) { out.set(static_cast<long long>(kBytearrayLen)); }
 // Demonstrates .varargs() on the func builder paired with a prerun that
 // validates argument types and sizes the result buffer.
 //
-// Prerun: validate that all arguments are BYTEARRAY (or NULL literals,
-// which appear as VEF_TYPE_STRING in the prerun arg-type array) and ask
+// Prerun: validate that all arguments are BYTEARRAY or constant NULLs and ask
 // the server to allocate arg_count * kBytearrayLen bytes of result buffer.
 void ba_concat_all_prerun(vsql::PrerunArgs args, vsql::PrerunResult out) {
   if (args.size() == 0) {
     out.error("ba_concat_all requires at least one argument");
     return;
   }
+  // TODO(villagesql-production): size the buffer from each argument's actual
+  // custom type size; vef_type_t does not carry it yet.
   for (size_t i = 0; i < args.size(); i++) {
     auto t = args.type_at(i);
-    if (!t.is_custom() && !t.is_str()) {
+    if (!t.is_custom() && !args.is_const_null(i)) {
       out.error("ba_concat_all: argument " + std::to_string(i) +
-                " must be BYTEARRAY");
+                " must be either BYTEARRAY or NULL");
       return;
     }
   }
@@ -178,16 +179,18 @@ void ba_concat_all(VarArgs args, StringResult out) {
   auto dst = out.buffer();
   size_t off = 0;
   for (auto a : args) {
-    // Prerun accepts VEF_TYPE_STRING so NULL literals (which arrive typed as
-    // STRING) pass type-check, but it cannot distinguish a NULL literal from
-    // a non-NULL string literal like 'abc'. Treat any non-custom argument
-    // here as NULL so we never call as_custom() on a STRING value.
+    // Prerun admits only BYTEARRAY and constant NULLs; a NULL literal arrives
+    // as a NULL STRING, so check is_custom() before calling as_custom().
     if (a.is_null() || !a.is_custom()) {
       out.set_null();
       return;
     }
     auto bytes = a.as_custom();
-    memcpy(dst.data() + off, bytes.data(), bytes.size());
+    // When it doesn't fit, keep counting: the server grows the buffer to
+    // the reported length and re-invokes.
+    if (off + bytes.size() <= dst.size()) {
+      memcpy(dst.data() + off, bytes.data(), bytes.size());
+    }
     off += bytes.size();
   }
   out.set_length(off);

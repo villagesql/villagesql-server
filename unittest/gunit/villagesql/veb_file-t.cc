@@ -330,6 +330,69 @@ TEST_F(CheckVefRegistrationTest, CustomParamWithoutTypeNameIsError) {
   EXPECT_NE(error.find("CUSTOM"), std::string::npos) << error;
 }
 
+// VEF_TYPE_BINARY exists from VEF_PROTOCOL_5; a descriptor declaring an older
+// protocol cannot use it.
+TEST_F(CheckVefRegistrationTest, BinaryParamBeforeProtocol5IsError) {
+  const vef_type_t params[] = {{VEF_TYPE_BINARY, nullptr}};
+  vef_signature_t sig = {1, params, {VEF_TYPE_INT, nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.protocol = VEF_PROTOCOL_3;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+
+  std::string error;
+  EXPECT_TRUE(check_vef_registration(&reg, error));
+  EXPECT_NE(error.find("param 1"), std::string::npos) << error;
+  EXPECT_NE(error.find("type id 4"), std::string::npos) << error;
+}
+
+// A call is marshalled at the registration's protocol, so a descriptor
+// declaring VEF_PROTOCOL_5 under an older registration cannot use BINARY
+// either.
+TEST_F(CheckVefRegistrationTest,
+       BinaryParamBeforeProtocol5RegistrationIsError) {
+  const vef_type_t params[] = {{VEF_TYPE_BINARY, nullptr}};
+  vef_signature_t sig = {1, params, {VEF_TYPE_INT, nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.protocol = VEF_PROTOCOL_5;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+  ASSERT_EQ(reg.protocol, VEF_PROTOCOL_3);
+
+  std::string error;
+  EXPECT_TRUE(check_vef_registration(&reg, error));
+  EXPECT_NE(error.find("param 1"), std::string::npos) << error;
+  EXPECT_NE(error.find("type id 4"), std::string::npos) << error;
+}
+
+TEST_F(CheckVefRegistrationTest, BinaryAtProtocol5IsWellFormed) {
+  const vef_type_t params[] = {{VEF_TYPE_BINARY, nullptr}};
+  vef_signature_t sig = {1, params, {VEF_TYPE_BINARY, nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.protocol = VEF_PROTOCOL_5;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+  reg.protocol = VEF_PROTOCOL_5;
+
+  std::string error;
+  EXPECT_FALSE(check_vef_registration(&reg, error)) << error;
+}
+
+TEST_F(CheckVefRegistrationTest, UnknownReturnTypeIdIsError) {
+  vef_signature_t sig = {0, nullptr, {static_cast<vef_type_id>(99), nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+
+  std::string error;
+  EXPECT_TRUE(check_vef_registration(&reg, error));
+  EXPECT_NE(error.find("type id 99"), std::string::npos) << error;
+}
+
 TEST_F(CheckVefRegistrationTest, CustomReturnTypeWithoutTypeNameIsError) {
   vef_signature_t sig = {0, nullptr, {VEF_TYPE_CUSTOM, nullptr}};
   vef_func_desc_t desc = g_func_desc;
@@ -379,13 +442,37 @@ TEST_F(CheckVefRegistrationTest, ProtocolV1FuncDescriptorIsWellFormed) {
 // in debug.
 TEST_F(CheckVefRegistrationTest, FuncDescriptorAboveRegistrationProtocol) {
   vef_func_desc_t desc = g_func_desc;
-  desc.protocol = VEF_PROTOCOL_4;
+  desc.protocol = VEF_PROTOCOL_5;
   vef_func_desc_t *slot = nullptr;
   vef_registration_t reg = with_one_func(&desc, &slot);
 
   std::string error;
   EXPECT_FALSE(check_vef_registration(&reg, error));
   EXPECT_TRUE(error.empty());
+}
+
+// A descriptor declaring VEF_PROTOCOL_1 under a VEF_PROTOCOL_5 registration
+// cannot use BINARY: it would be called with the protocol-1 argument layout,
+// which has no binary value.
+TEST_F(CheckVefRegistrationTest,
+       BinaryParamInProtocol1DescriptorUnderProtocol5RegistrationIsError) {
+  const vef_type_t params[] = {{VEF_TYPE_BINARY, nullptr}};
+  vef_signature_t sig = {1, params, {VEF_TYPE_INT, nullptr}};
+  vef_func_desc_t desc = g_func_desc;
+  desc.protocol = VEF_PROTOCOL_1;
+  desc.signature = &sig;
+  vef_func_desc_t *slot = nullptr;
+  vef_registration_t reg = with_one_func(&desc, &slot);
+  reg.protocol = VEF_PROTOCOL_5;
+
+  std::string error;
+#ifdef NDEBUG
+  EXPECT_TRUE(check_vef_registration(&reg, error));
+  EXPECT_NE(error.find("below the registration's"), std::string::npos) << error;
+#else
+  EXPECT_DEATH_IF_SUPPORTED(check_vef_registration(&reg, error),
+                            "registration->protocol");
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -436,7 +523,7 @@ TEST_F(CheckVefRegistrationTest, NegativeMaxDecodeBufferLengthIsError) {
 // so the registration check must not judge it either way.
 TEST_F(CheckVefRegistrationTest, PersistedLengthIsNotJudgedHere) {
   vef_type_desc_t desc = g_type_desc;
-  desc.persisted_length = 0;  // a v4 variable-length type declares no footprint
+  desc.persisted_length = 0;  // a v5 variable-length type declares no footprint
   vef_type_desc_t *slot = nullptr;
   vef_registration_t reg = with_one_type(&desc, &slot);
 

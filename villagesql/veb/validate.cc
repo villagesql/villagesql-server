@@ -64,6 +64,8 @@ static Item_result vef_type_to_item_result(const vef_type_t &type) {
     case VEF_TYPE_CUSTOM:
       // Custom types are passed as binary strings
       return STRING_RESULT;
+    case VEF_TYPE_BINARY:
+      return STRING_RESULT;
     default:
       return STRING_RESULT;
   }
@@ -105,17 +107,20 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       // separately. That is needed regardless, since the version component is
       // not validated either).
 
-      bool is_v4 = td->protocol >= VEF_PROTOCOL_4 &&
-                   ext_reg.negotiated_protocol >= VEF_PROTOCOL_4;
-      bool is_v3 = !is_v4 && (td->protocol >= VEF_PROTOCOL_3 &&
+      bool is_v5 = td->protocol >= VEF_PROTOCOL_5 &&
+                   ext_reg.negotiated_protocol >= VEF_PROTOCOL_5;
+      bool is_v3 = !is_v5 && (td->protocol >= VEF_PROTOCOL_3 &&
                               ext_reg.negotiated_protocol >= VEF_PROTOCOL_3);
       std::optional<TypeDescriptor> maybe_descriptor =
-          is_v4 ? build_type_descriptor_v4(td, *reg, type_name, extension_name,
-                                           extension_version)
+          is_v5 ? build_type_descriptor_v5(td, *reg, type_name, extension_name,
+                                           extension_version,
+                                           ext_reg.negotiated_protocol)
           : is_v3 ? build_type_descriptor_v3(td, *reg, type_name,
-                                             extension_name, extension_version)
+                                             extension_name, extension_version,
+                                             ext_reg.negotiated_protocol)
                   : build_type_descriptor_v1(td, type_name, extension_name,
-                                             extension_version);
+                                             extension_version,
+                                             ext_reg.negotiated_protocol);
       if (!maybe_descriptor.has_value()) {
         error_out = "type '" + type_name + "' failed validation";
         return std::nullopt;
@@ -126,11 +131,8 @@ std::optional<ValidatedRegistration> parse_extension_registration(
       // declare max_persisted_length, and a parameterized type's resolved
       // persisted_length is checked against it at DDL time, so bounding the
       // declared values bounds every parameterization.
-      // TODO(villagesql-general): address lingering issues for variable_length:
-      // 1. Incorrect log message for transitions from fixed -> variable and
-      //    variable -> fixed.
-      // 2. Variable length -> Variable length should be rejected if the new
-      //    length is smaller.
+      // A version update will reject a change in a type's length in
+      // check_retained_types_storage_length().
       const int64_t declared_length =
           std::max(maybe_descriptor->persisted_length(),
                    maybe_descriptor->max_persisted_length());
@@ -146,7 +148,7 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         return std::nullopt;
       }
 
-      if ((is_v4 || is_v3) && td->intrinsic_default_vdf_name != nullptr)
+      if ((is_v5 || is_v3) && td->intrinsic_default_vdf_name != nullptr)
         intrinsic_default_vdf_names.insert(td->intrinsic_default_vdf_name);
 
       result.types.push_back(std::move(*maybe_descriptor));
@@ -266,7 +268,7 @@ std::optional<ValidatedRegistration> parse_extension_registration(
   // A name that resolves to no function has already failed validation in the
   // type builder, so each name here matches exactly one entry.
   for (FuncDescriptor &func : result.funcs) {
-    if (intrinsic_default_vdf_names.count(func.function_name()) > 0) {
+    if (intrinsic_default_vdf_names.contains(func.function_name())) {
       func.set_not_callable_from_sql();
     }
   }
@@ -280,7 +282,7 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
   ValidatedPreviewCapabilities result;
   const vef_registration_t *reg = ext_reg.registration;
 
-  if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_2 ||
+  if (reg == nullptr || ext_reg.negotiated_protocol < VEF_PROTOCOL_3 ||
       reg->required_capability_count == 0) {
     return result;
   }
@@ -372,7 +374,7 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
 
       auto parse_bindings =
           [&](uint32_t count, const vef_index_profile_fn_binding_t *arr,
-              const char *kind,
+              const char *kind, bool is_helper,
               std::vector<vef_index_profile_fn_binding_t> &out) -> bool {
         out.reserve(count);
         for (unsigned int k = 0; k < count; k++) {
@@ -431,6 +433,26 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
                     error_out.c_str());
             return true;
           }
+          // TODO(villagesql-indexing): Support RESTRICT profile functions.
+          if (!is_helper && fn.kind == VEF_INDEX_PROFILE_FN_KIND_RESTRICT) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name +
+                        "' has kind RESTRICT, which is not yet implemented";
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
+          const bool kind_valid =
+              is_helper ? fn.kind == VEF_INDEX_PROFILE_FN_KIND_INVALID
+                        : fn.kind == VEF_INDEX_PROFILE_FN_KIND_ORDER;
+          if (!kind_valid) {
+            error_out = std::string("index profile '") + profile.name +
+                        "': " + kind + " '" + fn.name + "' has invalid kind " +
+                        std::to_string(fn.kind);
+            LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                    error_out.c_str());
+            return true;
+          }
           out.push_back(fn);
         }
         return false;
@@ -438,12 +460,12 @@ std::optional<ValidatedPreviewCapabilities> parse_preview_capabilities(
 
       std::vector<vef_index_profile_fn_binding_t> functions;
       if (parse_bindings(profile.function_count, profile.functions, "function",
-                         functions)) {
+                         false, functions)) {
         return std::nullopt;
       }
 
       std::vector<vef_index_profile_fn_binding_t> helpers;
-      if (parse_bindings(profile.helper_count, profile.helpers, "helper",
+      if (parse_bindings(profile.helper_count, profile.helpers, "helper", true,
                          helpers)) {
         return std::nullopt;
       }

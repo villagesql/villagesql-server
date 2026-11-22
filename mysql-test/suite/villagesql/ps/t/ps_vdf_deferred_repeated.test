@@ -1,0 +1,294 @@
+# A prepared statement whose first PREPARE deferred a check to EXECUTE, run
+# many times. Such a statement is prepared again at every EXECUTE, also after
+# an EXECUTE whose reprepare failed, and each EXECUTE takes the params of the
+# values bound to it: of another dimension, NULL, or a result type whose
+# params change. Also: generated columns and CHECK constraints calling a VDF,
+# fixed when the table is opened by a PREPARE, and the balance of prerun and
+# postrun when a reprepare fails after prerun ran.
+#
+# Each case prints how many times the statement was prepared again over its
+# EXECUTEs (Com_stmt_reprepare).
+
+--source include/no_ps_protocol.inc
+
+--let $extension_name = vdf_postrun_leak
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/vdf_postrun_leak.cc
+--source include/villagesql/create_extension_sdk.inc
+
+INSTALL EXTENSION vsql_tvector;
+INSTALL EXTENSION vdf_postrun_leak;
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[4,5,6]');
+
+--echo #
+--echo # A comparison with from_string(?): good, bad, good, no match
+--echo #
+
+PREPARE s FROM 'SELECT id FROM t WHERE v = TVECTOR::from_string(?)';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+SET @v = '[1,2]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[4,5,6]';
+EXECUTE s USING @v;
+SET @v = '[9,9,9]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # UNION ALL with a column: good, bad, good
+--echo #
+
+PREPARE s FROM 'SELECT TVECTOR::to_string(u) AS u FROM
+                  (SELECT v AS u FROM t WHERE id = 1
+                   UNION ALL SELECT TVECTOR::from_string(?)) d';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[7,8,9]';
+EXECUTE s USING @v;
+SET @v = '[7,8]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[1,1,1]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A derived table: each EXECUTE takes its own dimension
+--echo #
+
+PREPARE s FROM 'SELECT TVECTOR::to_string(d.x) AS d
+                FROM (SELECT TVECTOR::from_string(?) AS x) d';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,2,3,4]';
+EXECUTE s USING @v;
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+SET @v = '[1,2,3,4,5,6]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # CASE with a column and from_string(?): good, bad, good
+--echo #
+
+PREPARE s FROM 'SELECT id, TVECTOR::to_string(CASE WHEN id = 1 THEN v
+                                ELSE TVECTOR::from_string(?) END) AS c
+                FROM t ORDER BY id';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[0,0,0]';
+EXECUTE s USING @v;
+SET @v = '[0,0]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[9,9,9]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A hook's result compared with a column: good, bad, good
+--echo #
+
+PREPARE s FROM 'SELECT id FROM t WHERE v = tvector_concat(
+                  TVECTOR::from_string(''[1]''), TVECTOR::from_string(?))';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[2,3]';
+EXECUTE s USING @v;
+SET @v = '[2,3,4]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[5,6]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A hook given a bare ?: good, bad, good
+--echo #
+
+PREPARE s FROM 'SELECT tvector_dim(?) AS d';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+SET @v = 'not a vector';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[1,2,3,4,5]';
+EXECUTE s USING @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # NULL bound to a ? whose value gives the params, next to the same
+--echo # call with a NULL literal, then a value again
+--echo #
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT tvector_dim(NULL) AS d;
+PREPARE s FROM 'SELECT tvector_dim(?) AS d';
+SET @v = NULL;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[1,2,3]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id FROM t WHERE v = TVECTOR::from_string(NULL);
+PREPARE s FROM 'SELECT id FROM t WHERE v = TVECTOR::from_string(?)';
+SET @v = NULL;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[4,5,6]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::to_string(d.x) AS d FROM (SELECT TVECTOR::from_string(NULL) AS x) d;
+PREPARE s FROM 'SELECT TVECTOR::to_string(d.x) AS d
+                FROM (SELECT TVECTOR::from_string(?) AS x) d';
+SET @v = NULL;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v;
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+DEALLOCATE PREPARE s;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT TVECTOR::to_string(tvector_concat(TVECTOR::from_string('[1,2]'),
+                                         TVECTOR::from_string(NULL))) AS c;
+PREPARE s FROM 'SELECT TVECTOR::to_string(tvector_concat(
+                  TVECTOR::from_string(?), TVECTOR::from_string(?))) AS c';
+SET @v = '[1,2]', @w = NULL;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @v, @w;
+SET @w = '[3]';
+EXECUTE s USING @v, @w;
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A result of a custom type whose params change between EXECUTEs: the
+--echo # column metadata follows the values
+--echo #
+
+PREPARE s FROM 'SELECT tvector_concat(TVECTOR::from_string(?),
+                                      TVECTOR::from_string(?)) AS c';
+--enable_metadata
+SET @v = '[1]', @w = '[2]';
+EXECUTE s USING @v, @w;
+SET @v = '[1,2,3]', @w = '[4,5]';
+EXECUTE s USING @v, @w;
+--disable_metadata
+DEALLOCATE PREPARE s;
+
+PREPARE s FROM 'SELECT TVECTOR::from_string(?) AS v';
+--enable_metadata
+SET @v = '[1,2]';
+EXECUTE s USING @v;
+SET @v = '[1,2,3,4,5]';
+EXECUTE s USING @v;
+--disable_metadata
+DEALLOCATE PREPARE s;
+
+--echo #
+--echo # A generated column and a CHECK constraint calling VDFs, fixed when the
+--echo # table is first opened, by a PREPARE
+--echo #
+
+CREATE TABLE tg (id INT PRIMARY KEY, v TVECTOR(3),
+                 d INT AS (tvector_dim(v)),
+                 m DOUBLE AS (tvector_max_element(v)) STORED,
+                 CHECK (tvector_max_element(v) < 10));
+FLUSH TABLES;
+PREPARE s FROM 'INSERT INTO tg (id, v) VALUES (?, ?)';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @id = 1, @v = '[1,2,3]';
+EXECUTE s USING @id, @v;
+SET @id = 2, @v = '[4,5,6]';
+EXECUTE s USING @id, @v;
+SET @id = 3, @v = '[1,2,30]';
+--error ER_CHECK_CONSTRAINT_VIOLATED
+EXECUTE s USING @id, @v;
+SET @id = 4, @v = '[1,2]';
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE s USING @id, @v;
+SET @id = 5, @v = '[7,8,9]';
+EXECUTE s USING @id, @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+SELECT id, TVECTOR::to_string(v) AS v, d, m FROM tg ORDER BY id;
+
+FLUSH TABLES;
+PREPARE s FROM 'UPDATE tg SET v = ? WHERE id = ?';
+SET @v = '[0,0,1]', @id = 1;
+EXECUTE s USING @v, @id;
+SET @v = '[0,0,99]', @id = 2;
+--error ER_CHECK_CONSTRAINT_VIOLATED
+EXECUTE s USING @v, @id;
+SET @v = '[0,2,0]', @id = 2;
+EXECUTE s USING @v, @id;
+DEALLOCATE PREPARE s;
+SELECT id, TVECTOR::to_string(v) AS v, d, m FROM tg ORDER BY id;
+DROP TABLE tg;
+
+--echo #
+--echo # prerun and postrun stay balanced when a reprepare fails after a VDF's
+--echo # prerun ran: hooked_probe(?) is resolved before the WHERE that fails
+--echo #
+
+--let $counts = SELECT vdf_postrun_leak.prerun_count() - vdf_postrun_leak.postrun_count() AS unbalanced, vdf_postrun_leak.live_state_count() AS live
+
+--echo # Baseline
+--eval $counts
+PREPARE s FROM 'SELECT id, vdf_postrun_leak.hooked_probe(?) AS r FROM t
+                WHERE v = TVECTOR::from_string(?) ORDER BY id';
+--let $before = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+SET @a = 'a', @v = '[1,2,3]';
+EXECUTE s USING @a, @v;
+SET @a = 'b', @v = '[1,2]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE s USING @a, @v;
+--echo # After the failed EXECUTE
+--eval $counts
+SET @a = 'c', @v = '[4,5,6]';
+EXECUTE s USING @a, @v;
+--let $after = query_get_value(SHOW SESSION STATUS LIKE 'Com_stmt_reprepare', Value, 1)
+--disable_query_log
+--eval SELECT $after - $before AS reprepares
+--enable_query_log
+DEALLOCATE PREPARE s;
+--echo # After DEALLOCATE: every prerun has had its postrun
+--eval $counts
+
+SET @v = NULL, @w = NULL, @a = NULL, @id = NULL;
+DROP TABLE t;
+UNINSTALL EXTENSION vdf_postrun_leak;
+UNINSTALL EXTENSION vsql_tvector;

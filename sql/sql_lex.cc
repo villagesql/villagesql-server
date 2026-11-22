@@ -3697,6 +3697,8 @@ void Query_tables_list::reset_query_tables_list(bool init) {
   query_tables = nullptr;
   query_tables_last = &query_tables;
   query_tables_own_last = nullptr;
+  // VillageSQL: no system tables staged.
+  villagesql_staged_tables = nullptr;
   if (init) {
     /*
       We delay real initialization of hash (and therefore related

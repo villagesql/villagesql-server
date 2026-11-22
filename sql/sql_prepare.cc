@@ -182,6 +182,7 @@ When one supplies long data for a placeholder:
 #include "sql_string.h"
 #include "string_with_len.h"
 #include "villagesql/types/util.h"
+#include "villagesql/vdf/vdf_handler.h"
 #include "violite.h"
 
 namespace resourcegroups {
@@ -2455,6 +2456,11 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
   error |= thd->is_error();
 
   if (orig_param_array != nullptr) copy_parameter_types(orig_param_array);
+  // VillageSQL: for a statement that calls a VDF, lend the bound values to the
+  // new parameters until prepare() returns; reprepare() then moves them with
+  // swap_parameter_array().
+  const villagesql::vdf::PsParamValueLoan ps_param_value_loan(
+      m_arena.item_list(), m_param_array, orig_param_array, m_param_count);
   /*
    The only case where we should have items in the thd->item_list is
    after stmt->set_params_from_vars(), which may in some cases create
@@ -2886,6 +2892,14 @@ bool Prepared_statement::execute_loop(THD *thd, String *expanded_query,
   // statement for a secondary engine.
   bool general_log_temporarily_disabled = false;
 
+  // VillageSQL: a failed reprepare below returns before the end of this
+  // function, so reset the parameters there too. Otherwise a NULL bound now
+  // stays NULL for the value bound at the next EXECUTE.
+  // TODO(villagesql-rebase): drop on rebase, verbatim 9.7 has it (the
+  // execute_loop rewrite of Bug#36625773 resets the parameters on every path).
+  auto reset_params_guard =
+      create_scope_guard([this] { reset_stmt_parameters(this); });
+
   // Reprepare statement unconditionally if it contains UDF references
   if (m_lex->has_udf() && reprepare(thd)) {
     return true;
@@ -3015,6 +3029,8 @@ reexecute:
     if (!error) /* Success */
       goto reexecute;
   }
+  // TODO(villagesql-rebase): drop on rebase with reset_params_guard above.
+  reset_params_guard.release();
   reset_stmt_parameters(this);
   m_first_execution = false;
 
@@ -3132,6 +3148,11 @@ bool Prepared_statement::reprepare(THD *thd) {
     mysql_change_db(thd, to_lex_cstring(saved_cur_db_name), true);
 
   if (prepare_error) return true;
+
+  // VillageSQL: a VDF check deferred at the first PREPARE runs here with the
+  // values bound, so this prepare does not mark the statement again. It still
+  // depends on the values, so keep it prepared again at each EXECUTE.
+  if (copy.m_lex->has_udf()) m_lex->set_has_udf();
 
   if (validate_metadata(thd, &copy)) return true;
 

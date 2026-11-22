@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "scope_guard.h"
 #include "sql/bootstrap.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/mysqld.h"
@@ -36,6 +37,7 @@
 #include "string_with_len.h"
 #include "villagesql/include/build_info.h"
 #include "villagesql/include/error.h"
+#include "villagesql/include/metrics.h"
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
@@ -240,12 +242,14 @@ static bool do_init_extension_infrastructure(THD *thd) {
   const dd::cache::Dictionary_client::Auto_releaser scope_releaser(
       thd->dd_client());
 
-  if (SchemaManager::init(thd)) {
+  // Roll back on any failure below, including the commit.
+  auto rollback_guard = create_scope_guard([thd] {
     trans_rollback_stmt(thd);
     // Full rollback in case we have THD::transaction_rollback_request.
     trans_rollback(thd);
-    return true;
-  }
+  });
+
+  if (SchemaManager::init(thd)) return true;
 
   // Repair the sys view metadata that installing the VillageSQL
   // INFORMATION_SCHEMA overrides rewrote. Best effort by design: it logs its
@@ -258,12 +262,15 @@ static bool do_init_extension_infrastructure(THD *thd) {
   // This validates manifests and cleans up orphaned expansion directories
   if (villagesql::veb::load_installed_extensions(thd)) {
     LogVSQL(ERROR_LEVEL, "Extension loading failed");
-    trans_rollback_stmt(thd);
-    trans_rollback(thd);
     return true;
   }
 
-  return trans_commit_stmt(thd) || trans_commit(thd);
+  if (trans_commit_stmt(thd) || trans_commit(thd)) {
+    return true;
+  }
+
+  rollback_guard.release();
+  return false;
 }
 
 }  // namespace
@@ -292,6 +299,11 @@ bool init_extension_infrastructure() {
   }
 
   villagesql::services::register_builtin_capabilities();
+
+  // Register status variables before the bootstrap thread below loads
+  // installed extensions, so load events are tracked. Failure here is
+  // non-fatal but unlikely (bad_alloc or bootstrap failure).
+  (void)villagesql::metrics::register_status_variables();
 
   // We need a temporary THD during boot
   // The initialization code may update table settings, in order to avoid
@@ -440,6 +452,7 @@ void destroy_extension_state() {
 
   vclient.destroy();
   SchemaManager::deinit();
+  villagesql::metrics::unregister_status_variables();
   LogVSQL(INFORMATION_LEVEL,
           "VillageSQL extension infrastructure deinitialized");
 }

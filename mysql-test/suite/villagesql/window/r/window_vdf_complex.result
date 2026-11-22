@@ -1,0 +1,48 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, 1, '(3,4)'), (2, 1, '(-1,2)'), (3, 1, NULL),
+(4, 2, '(0,-5)'), (5, 2, '(6,8)');
+SELECT id,
+LAG(vsql_complex.complex_add(val, '(1,1)')) OVER (ORDER BY id) AS lag_add,
+FIRST_VALUE(vsql_complex.complex_conjugate(val))
+OVER (PARTITION BY grp ORDER BY id) AS fv_conj
+FROM t1 ORDER BY id;
+id	lag_add	fv_conj
+1	NULL	(3,-4)
+2	(4,5)	(3,-4)
+3	(0,3)	(3,-4)
+4	NULL	(0,5)
+5	(1,-4)	(0,5)
+SELECT id, grp,
+SUM(vsql_complex.complex_real(val)) OVER (PARTITION BY grp) AS sum_re,
+MAX(vsql_complex.complex_abs(val)) OVER (PARTITION BY grp) AS max_abs,
+AVG(vsql_complex.complex_imag(val)) OVER (ORDER BY id
+ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS avg_im
+FROM t1 ORDER BY id;
+id	grp	sum_re	max_abs	avg_im
+1	1	2	5	4
+2	1	2	5	3
+3	1	2	5	2
+4	2	6	10	-5
+5	2	6	10	1.5
+SELECT id,
+LAG(val, 1, vsql_complex.COMPLEX::from_string('(9,9)')) OVER (ORDER BY id)
+AS lag_d
+FROM t1 ORDER BY id;
+id	lag_d
+1	(9,9)
+2	(3,4)
+3	(-1,2)
+4	NULL
+5	(0,-5)
+SELECT id,
+vsql_complex.complex_real(LAG(val) OVER (ORDER BY id)) AS re_lag,
+vsql_complex.complex_add(val, LEAD(val) OVER (ORDER BY id)) AS add_lead
+FROM t1 ORDER BY id;
+id	re_lag	add_lead
+1	NULL	(2,6)
+2	3	NULL
+3	-1	NULL
+4	NULL	(6,3)
+5	0	NULL
+DROP TABLE t1;

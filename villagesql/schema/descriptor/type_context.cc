@@ -51,6 +51,8 @@ TypeContext::TypeContext(const TypeContextKey &key,
     compare_op_.emplace(descriptor_->compare_fn(), key_.parameters());
   if (descriptor_->hash_fn().has_value())
     hash_op_.emplace(*descriptor_->hash_fn(), key_.parameters());
+  if (descriptor_->from_binary_fn().has_value())
+    from_binary_op_.emplace(*descriptor_->from_binary_fn(), key_.parameters());
 
   resolve_cached_values();
 }
@@ -220,11 +222,10 @@ void TypeContext::resolve_cached_values() {
           if (initial.has_error()) continue;
           ResolvedTypeParams tmp = {};
           char rerr[VEF_MAX_ERROR_LEN] = {0};
-          std::string canonical = result;
           if (descriptor_->resolve_params_fn()->invoke(initial.str(), &tmp,
-                                                       rerr, &canonical))
+                                                       rerr, &result))
             continue;
-          TypeParameters candidate = TypeParameters::from_raw(canonical);
+          TypeParameters candidate = TypeParameters::from_raw(result);
           if (!candidate.has_error() && candidate == key_.parameters()) {
             qualified_name_ += "(";
             qualified_name_ += std::to_string(n);

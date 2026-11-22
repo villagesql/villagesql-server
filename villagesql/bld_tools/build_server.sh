@@ -25,6 +25,13 @@
 #       Leaving it unset is what preserves the default -dev label, so an unset
 #       variable must not turn into an empty -D flag. This is the same
 #       set-versus-unset distinction build_info.sh makes.
+#
+# On macOS, ccache is used whenever it is installed. The macOS runners are
+# persistent machines whose workspace is wiped before every job, so a
+# machine-local cache is what carries compile work from one job to the next.
+# Linux runners are ephemeral VMs; their workflows wire up ccache themselves,
+# backed by the GitHub Actions cache. Where the macOS cache lives and how big
+# it may grow is the runner's configuration (CCACHE_DIR, CCACHE_MAXSIZE).
 
 set -euo pipefail
 
@@ -33,6 +40,7 @@ TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$TOOLS_DIR/discover_build_env.sh"
 
 EXTRA_FLAGS="${CMAKE_EXTRA_FLAGS:-}"
+USE_CCACHE=0
 
 OS="$(discover_build_env)"
 case "$OS" in
@@ -40,6 +48,10 @@ case "$OS" in
         # Pin openssl@3: Homebrew retargeted the unversioned `openssl`
         # alias to openssl@4, which MySQL 8.4 does not build against.
         EXTRA_FLAGS="$EXTRA_FLAGS -DWITH_SSL=$(brew --prefix openssl@3)"
+        if command -v ccache >/dev/null 2>&1; then
+            EXTRA_FLAGS="$EXTRA_FLAGS -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+            USE_CCACHE=1
+        fi
         ;;
 esac
 
@@ -51,4 +63,16 @@ EXTRA_FLAGS="${EXTRA_FLAGS# }"
 echo "==> Building for $OS; extra cmake flags: ${EXTRA_FLAGS:-(none)}" >&2
 
 export CMAKE_EXTRA_FLAGS="$EXTRA_FLAGS"
-"$TOOLS_DIR/build_ci.sh"
+
+# Zero the statistics first so the numbers printed afterwards describe this
+# build alone, and print them even when the build fails.
+if (( USE_CCACHE )); then
+    ccache --zero-stats
+fi
+rc=0
+"$TOOLS_DIR/build_ci.sh" || rc=$?
+if (( USE_CCACHE )); then
+    echo "==> ccache statistics for this build:" >&2
+    ccache --show-stats
+fi
+exit "$rc"

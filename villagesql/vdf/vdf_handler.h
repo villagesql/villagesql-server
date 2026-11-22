@@ -22,6 +22,7 @@
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
 class Item;
+class Item_param;
 class Item_result_field;
 class String;
 class THD;
@@ -75,12 +76,20 @@ class vdf_handler {
   vef_invalue_t **m_invalues_ptrs{nullptr};
   char *m_result_buffer{nullptr};
   size_t m_result_buffer_size{0};
+  // The result buffer as fix_fields left it, allocated with the statement.
+  char *m_resolved_result_buffer{nullptr};
+  size_t m_resolved_result_buffer_size{0};
   char *m_error_msg{nullptr};
   bool m_active{false};
+  // True once fix_fields has run prerun, or the function has none. False only
+  // when fix_fields deferred prerun, at a first PREPARE.
+  bool m_prerun_ran{false};
   const villagesql::TypeContext *m_return_type_context{nullptr};
 
-  // Marshal arguments into m_invalues array based on declared parameter types
-  void marshal_args();
+  // Marshal arguments into m_invalues array based on declared parameter types.
+  // Returns true if an argument could not be converted; the error is already
+  // reported.
+  bool marshal_args();
 
   // Helper for VDF functions that return numeric types (double or longlong)
   // Returns true on success with value in out_value, false otherwise
@@ -96,6 +105,33 @@ class vdf_handler {
   // trigger a fresh allocation each time. No-op if already large enough.
   // Returns true on allocation failure.
   bool MaybeResizeBuffer(size_t needed);
+
+  // Call the VDF's postrun function, if any, and clear user_data.
+  void RunPostrun();
+};
+
+// A statement that calls a VDF can be prepared again at EXECUTE. Preparing
+// again makes new `?` objects, and MySQL moves the bound values into them
+// (swap_parameter_array) only after the statement is resolved. But resolving
+// already needs them: a VDF deduces a custom type's params from a string, e.g.
+// TVECTOR::from_string(?), and prerun gets each `?`'s value as a constant.
+// So for a statement that calls a VDF, this lends the values to the new `?`
+// objects while it lives, and gives them back when destroyed, before MySQL
+// moves them. Lending swaps buffers, so nothing is copied, and the code that
+// runs meanwhile only reads the values. Does nothing when `from` is nullptr,
+// i.e. at a first PREPARE.
+class PsParamValueLoan {
+ public:
+  PsParamValueLoan(Item *item_list, Item_param **to, Item_param **from,
+                   uint count);
+  ~PsParamValueLoan();
+  PsParamValueLoan(const PsParamValueLoan &) = delete;
+  PsParamValueLoan &operator=(const PsParamValueLoan &) = delete;
+
+ private:
+  Item_param **m_to{nullptr};
+  Item_param **m_from{nullptr};
+  uint m_count{0};
 };
 
 }  // namespace vdf

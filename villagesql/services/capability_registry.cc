@@ -204,7 +204,7 @@ void register_builtin_capabilities() {
   // with MySQL; on_depopulate unregisters them on extension unload.
   register_capability(VEF_PREVIEW_SYS_VAR_NAME,
                       {.vtable = preview_sys_var_vtable(),
-                       .vtable_hash = "ver-1",
+                       .vtable_hash = "ver-2",
                        .capability_config_hash = "ver-1",
                        .on_populate = on_populate_sys_var,
                        .on_depopulate = on_depopulate_sys_var});
@@ -260,8 +260,7 @@ bool populate_capabilities(const PopulateContext &ctx,
     }
     // Distinguish "name unknown" from "name known but no version matches"
     // so the diagnostic points at the right thing.
-    auto it = g_registry.find(req.name);
-    if (it == g_registry.end()) {
+    if (!g_registry.contains(req.name)) {
       error_message =
           std::string("required capability not registered: ") + req.name;
       return true;

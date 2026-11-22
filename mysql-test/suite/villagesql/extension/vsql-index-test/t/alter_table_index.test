@@ -1,6 +1,5 @@
 # Test ALTER TABLE ADD INDEX ... USING EXTENDED ... syntax paths
 # A failed ADD INDEX leaves the table and its existing indexes intact.
-# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
 
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;

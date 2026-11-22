@@ -1,0 +1,4 @@
+INSTALL EXTENSION vsql_test_only;
+SELECT vsql_test_only.PVEC::from_binary(0x0102030405) AS v;
+ERROR HY000: error encountered during PVEC::from_binary inference: failed to encode 5 bytes
+UNINSTALL EXTENSION vsql_test_only;

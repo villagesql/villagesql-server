@@ -202,8 +202,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "villagesql/custom_index.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/util.h"
-#include "villagesql/services/capability_registry.h"
-#include "villagesql/sql/custom_index_handle.h"
 #else
 #include <typelib.h>
 #include "buf0types.h"
@@ -2283,19 +2281,10 @@ int convert_error_code_to_mysql(dberr_t error, uint32_t flags, THD *thd) {
       return HA_ERR_UNSUPPORTED;
     case DB_VILLAGESQL_ERROR:
       if (thd) {
-        // VillageSQL: surface the specific reason to the client when the
-        // failing code set one on the trx (via trx_set_detailed_error);
-        // otherwise fall back to the generic message that points at the server
-        // error log.
-        trx_t *const err_trx = thd_to_trx(thd);
-        if (err_trx != nullptr && *err_trx->detailed_error != 0) {
-          villagesql_error("%s", MYF(0), err_trx->detailed_error);
-        } else {
-          villagesql_error(
-              "InnoDB: Custom type operation failed. See server"
-              " error log for details.",
-              MYF(0));
-        }
+        villagesql_error(
+            "InnoDB: Custom type operation failed. See server"
+            " error log for details.",
+            MYF(0));
       }
       return HA_ERR_GENERIC;
   }
@@ -3178,6 +3167,9 @@ void ha_innobase::reset_template(void) {
   m_prebuilt->read_just_key = 0;
   m_prebuilt->in_fts_query = false;
   m_prebuilt->m_end_range = false;
+  m_prebuilt->m_knn_query = false;
+  m_prebuilt->m_knn_limit_is_exact = true;
+  m_prebuilt->m_knn_limit = 0;
 
   /* Reset index condition pushdown state. */
   if (m_prebuilt->idx_cond) {
@@ -6660,14 +6652,9 @@ ulong ha_innobase::index_flags(uint key, uint, bool) const {
     return (0);
   }
 
-  /* Report no access flags for a custom (USING EXTENDED) index, so the
-  optimizer does not build a range, ref, ordered-scan, or index-only access path
-  over it.
-  TODO(villagesql-indexing): the ABI has no way for a custom index to declare
-  which of these operations it supports, so we report none; return the
-  operations the index actually supports once the ABI can express them. */
-  if (table_share->key_info[key].custom_index_context != nullptr) {
-    return (0);
+  auto *custom_context = table_share->key_info[key].custom_index_context;
+  if (custom_context != nullptr) {
+    return villagesql::innodb::Custom_index::flags(custom_context);
   }
 
   ulong flags = HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER | HA_READ_RANGE |
@@ -6971,6 +6958,15 @@ bool innobase_match_index_columns(const KEY *key_info,
         !(key_part->key_part_flag & HA_REVERSE_SORT)) {
       /* Column Type mismatches */
       return false;
+    }
+
+    const dict_col_t *col = innodb_idx_fld->col;
+    if (col->stored_by_extn()) {
+      if (!col->custom_column->matches_mysql_type(key_part->field)) {
+        return false;
+      }
+      innodb_idx_fld++;
+      continue;
     }
 
     if (col_type != mtype) {
@@ -8723,6 +8719,10 @@ void ha_innobase::build_template(bool whole_row) {
   index = whole_row ? clust_index : m_prebuilt->index;
 
   m_prebuilt->need_to_access_clustered = (index == clust_index);
+  using villagesql::innodb::Custom_index;
+  if (Custom_index::needs_clustered_access(index, m_prebuilt)) {
+    m_prebuilt->need_to_access_clustered = true;
+  }
 
   /* Either m_prebuilt->index should be a secondary index, or it
   should be the clustered index. */
@@ -9875,11 +9875,6 @@ static dberr_t calc_row_difference(
         // Note that an extended column is updated.
         uvect->update_extended = true;
 
-        // The input buffer is set to nullptr. This is safe because the buffer
-        // is only accessed for DATA_INT.
-        auto *dtype = dfield_get_type(&ufield->old_val);
-        ut_a(dtype->mtype != DATA_INT);
-
         if (o_len != UNIV_SQL_NULL) {
           std::ignore = row_mysql_store_col_in_innobase_format(
               &ufield->old_val, nullptr, true, old_mysql_row_col, col_pack_len,
@@ -10385,7 +10380,44 @@ int ha_innobase::index_init(uint keynr, /*!< in: key (index) number */
 {
   DBUG_TRACE;
 
-  return change_active_index(keynr);
+  using villagesql::innodb::Custom_index;
+
+  int error = change_active_index(keynr);
+  if (error != 0) {
+    return error;
+  }
+
+  // A KNN-capable custom index should use  knn_index_init() instead.
+  ut_ad(!Custom_index::is_knn(m_prebuilt->index));
+
+  if (Custom_index::is_knn(m_prebuilt->index)) {
+    villagesql_error(
+        "InnoDB: Incorrect handler method index_init() called for KNN scan.",
+        MYF(0));
+    return ER_VILLAGESQL_GENERIC_ERROR;
+  }
+
+  return 0;
+}
+
+int ha_innobase::knn_index_init(uint keynr, const uchar *key, uint length,
+                                ha_rows limit, bool limit_is_exact) {
+  DBUG_TRACE;
+
+  int error = change_active_index(keynr);
+  if (error != 0) {
+    return error;
+  }
+
+  row_sel_convert_mysql_key_to_innobase(
+      m_prebuilt->search_tuple, m_prebuilt->srch_key_val1,
+      m_prebuilt->srch_key_val_len, m_prebuilt->index, key, length);
+
+  m_prebuilt->m_knn_query = true;
+  m_prebuilt->set_knn_limit(
+      limit, limit_is_exact && m_prebuilt->select_lock_type == LOCK_NONE);
+
+  return 0;
 }
 
 /** Currently does nothing.
@@ -10578,7 +10610,7 @@ int ha_innobase::index_read(
         m_prebuilt->srch_key_val_len, index, key_ptr, key_len);
 
     assert(m_prebuilt->search_tuple->n_fields > 0);
-  } else {
+  } else if (!m_prebuilt->is_knn_query()) {
     /* We position the cursor to the last or the first entry
     in the index */
 
@@ -10748,107 +10780,6 @@ dict_index_t *ha_innobase::innobase_get_index(
   return index;
 }
 
-bool ha_innobase::get_custom_index_handle(uint keynr,
-                                          villagesql::CustomIndexHandle *out) {
-  // Clear first, so *out is fully null after any early return -- the function's
-  // correctness does not depend on the caller pre-zeroing the handle.
-  *out = {};
-  dict_index_t *index = innobase_get_index(keynr);
-  if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index) ||
-      index->custom_index == nullptr) {
-    return true;
-  }
-  villagesql::innodb::Custom_index *ci = index->custom_index;
-  out->index_ctx = ci->index_ctx();
-  out->storage_ctx = ci->storage_ctx();
-  out->intf = &ci->interface();
-  return false;
-}
-
-bool ha_innobase::custom_index_pkey_to_row(
-    uint keynr, const Custom_index_pkey_part *pkey_parts,
-    uint32_t num_pkey_parts, uchar *buf, bool *row_not_found, char *error_msg,
-    uint error_msg_len) {
-  if (row_not_found != nullptr) *row_not_found = false;
-  dict_index_t *index = innobase_get_index(keynr);
-  if (index == nullptr || !villagesql::innodb::Custom_index::is_custom(index)) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_pkey_to_row: keynr %u is not a custom index", keynr);
-    return true;
-  }
-  if (pkey_parts == nullptr || num_pkey_parts == 0) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_pkey_to_row: empty primary key");
-    return true;
-  }
-
-  ut_a(m_prebuilt->trx == thd_to_trx(ha_thd()));
-
-  // Position the prebuilt read on the clustered index and (re)build the row
-  // template so row_search_mvcc materializes the full MySQL row into buf.
-  if (change_active_index(MAX_KEY)) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_pkey_to_row: failed to select clustered index");
-    return true;
-  }
-  dict_index_t *clust = m_prebuilt->index;
-
-  if (m_prebuilt->mysql_template == nullptr || m_prebuilt->sql_stat_start) {
-    build_template(false);
-  }
-
-  // Build the clustered search tuple directly from the native PK bytes the
-  // index returned. As in index_read()'s snapshot path we do NOT call
-  // row_sel_convert_mysql_key_to_innobase: each part is already in InnoDB
-  // clustered-storage format, so it goes straight into the matching clustered
-  // key field. The parts are the clustered index's unique key
-  // (dict_index_t::n_uniq fields), or the hidden DB_ROW_ID for a PK-less table.
-  if (num_pkey_parts != dict_index_get_n_unique(clust)) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_pkey_to_row: got %u primary key parts, clustered "
-             "index has %lu",
-             num_pkey_parts,
-             static_cast<unsigned long>(dict_index_get_n_unique(clust)));
-    return true;
-  }
-  dtuple_t *search_tuple = m_prebuilt->search_tuple;
-  dict_index_copy_types(search_tuple, clust, clust->n_fields);
-  dtuple_set_n_fields(search_tuple, num_pkey_parts);
-  for (uint32_t i = 0; i < num_pkey_parts; i++) {
-    dfield_t *dfield = dtuple_get_nth_field(search_tuple, i);
-    dfield_set_data(dfield, pkey_parts[i].data, pkey_parts[i].length);
-  }
-
-  // Exact clustered lookup into buf.
-  m_prebuilt->m_mysql_handler = this;
-  dberr_t ret = innobase_srv_conc_enter_innodb(m_prebuilt);
-  if (ret == DB_SUCCESS) {
-    ret = row_search_mvcc(buf, PAGE_CUR_GE, m_prebuilt, ROW_SEL_EXACT, 0);
-    innobase_srv_conc_exit_innodb(m_prebuilt);
-  }
-
-  if (ret == DB_RECORD_NOT_FOUND) {
-    // The key resolved, but the row is not visible to this transaction's read
-    // view -- e.g. a KNN hit on a concurrently-inserted, uncommitted row (the
-    // HNSW graph is not yet MVCC-filtered, so the scan can surface such nodes).
-    // Expected MVCC outcome, NOT a hard error: signal not-found so the caller
-    // skips this hit and fetches the next candidate.
-    if (row_not_found != nullptr) {
-      *row_not_found = true;
-      return false;
-    }
-    // Caller does not distinguish -- fall through to the error path.
-  }
-
-  if (ret != DB_SUCCESS) {
-    snprintf(error_msg, error_msg_len,
-             "custom_index_pkey_to_row: clustered lookup failed (err %d)",
-             static_cast<int>(ret));
-    return true;
-  }
-  return false;
-}
-
 /** Changes the active index of a handle.
  @return 0 or error code */
 int ha_innobase::change_active_index(
@@ -10877,27 +10808,6 @@ int ha_innobase::change_active_index(
     log_errlog(WARNING_LEVEL, ER_INNODB_ACTIVE_INDEX_CHANGE_FAILED, keynr);
     m_prebuilt->index_usable = false;
     return 1;
-  }
-
-  /* A custom index (USING EXTENDED) has no InnoDB B-tree: its data lives in the
-  extension's own storage, so its root-page number is FIL_NULL. It can only be
-  read through the custom KNN distance scan access path plus the extension's
-  scan callbacks, never a normal handler index scan. If a normal scan opens it,
-  btr_cur_open_at_index_side reads a FIL_NULL root page and asserts. That can
-  happen whenever the optimizer picks an ordinary index scan or a filesort over
-  this index instead of the custom distance scan. Detect that case -- a custom
-  index whose B-tree root is absent -- and refuse the scan with a clear message
-  rather than asserting deep in the B-tree code. */
-  if (villagesql::innodb::Custom_index::is_custom(m_prebuilt->index) &&
-      m_prebuilt->index->page == FIL_NULL) {
-    push_warning_printf(m_user_thd, Sql_condition::SL_WARNING,
-                        ER_UNSUPPORTED_EXTENSION,
-                        "Custom index '%s' cannot be scanned directly; it can "
-                        "only serve a nearest-neighbour distance ordering "
-                        "(ORDER BY <distance>(col, const) LIMIT k).",
-                        m_prebuilt->index->name());
-    m_prebuilt->index_usable = false;
-    return HA_ERR_WRONG_COMMAND;
   }
 
   m_prebuilt->index_usable = m_prebuilt->index->is_usable(m_prebuilt->trx);
@@ -17231,16 +17141,6 @@ ha_rows ha_innobase::records_in_range(
     n_rows = HA_POS_ERROR;
     goto func_exit;
   }
-  /* A custom index (USING EXTENDED) has no InnoDB B-tree to range-scan. Report
-  the range as un-estimatable so the optimizer never chooses it for an ordinary
-  index scan -- which would otherwise reach change_active_index /
-  btr_cur_open_at_index_side on a FIL_NULL root page. The custom KNN distance
-  scan is costed separately, through its own access path. */
-  if (villagesql::innodb::Custom_index::is_custom(index) &&
-      index->page == FIL_NULL) {
-    n_rows = HA_POS_ERROR;
-    goto func_exit;
-  }
   if (index->is_corrupted()) {
     n_rows = HA_ERR_INDEX_CORRUPT;
     goto func_exit;
@@ -17874,6 +17774,7 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
   ut_a(ib_table->stat_initialized);
 
   const dict_index_t *pk = UT_LIST_GET_FIRST(ib_table->indexes);
+  using villagesql::innodb::Custom_index;
 
   for (uint i = 0; i < table->s->keys; i++) {
     ulong j;
@@ -17898,7 +17799,9 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
     Thus, we can't calculate pct_cached below because we need
     dict_index_t::stat_n_leaf_pages for that. See
     dict_stats_should_ignore_index(). */
-    if ((key->flags & HA_FULLTEXT) || (key->flags & HA_SPATIAL)) {
+    if ((key->flags & HA_FULLTEXT) || (key->flags & HA_SPATIAL) ||
+        Custom_index::is_custom(index)) {
+      // TODO(villagesql-indexing): Add statistics for custom indexes.
       pct_cached = IN_MEMORY_ESTIMATE_UNKNOWN;
     } else {
       pct_cached = index_pct_cached(index);
@@ -17911,7 +17814,7 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
     }
 
     if (flag & HA_STATUS_CONST) {
-      if (!key->supports_records_per_key()) {
+      if (!key->supports_records_per_key() || Custom_index::is_custom(index)) {
         continue;
       }
 

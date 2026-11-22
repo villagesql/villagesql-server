@@ -80,7 +80,7 @@
 #include "sql/table.h"
 #include "sql/visible_fields.h"
 #include "template_utils.h"
-#include "villagesql/sql/custom_index_knn_scan.h"
+#include "villagesql/sql/knn_iterator.h"
 
 using pack_rows::TableCollection;
 using std::all_of;
@@ -225,6 +225,8 @@ TABLE *GetBasicTable(const AccessPath *path) {
       return path->index_scan().table;
     case AccessPath::INDEX_DISTANCE_SCAN:
       return path->index_distance_scan().table;
+    case AccessPath::INDEX_KNN_SCAN:
+      return path->index_knn_scan().table;
     case AccessPath::REF:
       return path->ref().table;
     case AccessPath::REF_OR_NULL:
@@ -343,6 +345,7 @@ bool ShouldEnableBatchMode(AccessPath *path) {
     case AccessPath::TABLE_SCAN:
     case AccessPath::INDEX_SCAN:
     case AccessPath::INDEX_DISTANCE_SCAN:
+    case AccessPath::INDEX_KNN_SCAN:
     case AccessPath::REF:
     case AccessPath::REF_OR_NULL:
     case AccessPath::PUSHED_JOIN_REF:
@@ -552,22 +555,17 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
       }
       case AccessPath::INDEX_DISTANCE_SCAN: {
         const auto &param = path->index_distance_scan();
-        // VillageSQL: custom-index KNN distance scan. The two variants are
-        // mutually exclusive: the custom variant sets custom_scan_spec and
-        // leaves range null; the spatial variant sets range and leaves
-        // custom_scan_spec null. The spatial iterator dereferences range
-        // unconditionally, so custom_scan_spec is the discriminator that keeps
-        // the null range away from it.
-        assert((param.custom_scan_spec != nullptr) != (param.range != nullptr));
-        if (param.custom_scan_spec != nullptr) {
-          iterator = villagesql::CreateCustomKnnDistanceIterator(
-              thd, mem_root, param.table, param.idx, param.custom_scan_spec,
-              path->num_output_rows(), examined_rows);
-          break;
-        }
         iterator = NewIterator<IndexDistanceScanIterator>(
             thd, mem_root, param.table, param.idx, param.range,
             path->num_output_rows(), examined_rows);
+        break;
+      }
+      case AccessPath::INDEX_KNN_SCAN: {
+        const auto &param = path->index_knn_scan();
+        iterator = NewIterator<villagesql::IndexKnnScanIterator>(
+            thd, mem_root, param.table, param.idx, param.query_point,
+            param.limit, param.limit_is_exact, path->num_output_rows(),
+            examined_rows);
         break;
       }
       case AccessPath::REF: {

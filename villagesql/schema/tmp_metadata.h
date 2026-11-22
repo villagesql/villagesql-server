@@ -57,7 +57,7 @@ class TmpMetadata {
     const std::string &prefix_str = prefix.str();
 
     for (auto it = m_columns.begin(); it != m_columns.end();) {
-      if (it->first.compare(0, prefix_str.length(), prefix_str) == 0) {
+      if (it->first.starts_with(prefix_str)) {
         it = m_columns.erase(it);
       } else {
         ++it;

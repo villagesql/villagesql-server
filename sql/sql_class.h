@@ -1010,11 +1010,11 @@ class THD : public MDL_context_owner,
   std::unordered_map<std::string, const villagesql::TypeContext *>
       villagesql_alter_custom_fields;
   // VillageSQL: The real (db, table) of the table being rebuilt by the current
-  // ALTER TABLE, so MaybeInjectCustomIndex can resolve the #sql-xxx rebuild
-  // table's custom indexes against the victionary under the real name (the
-  // #sql-xxx name matches nothing there). Set by SetAlterTargetForCustomIndexes
-  // in mysql_alter_table, cleared by AlterGuard alongside
-  // villagesql_alter_custom_fields.
+  // ALTER TABLE, as named once the ALTER completes, so MaybeInjectCustomIndex
+  // can resolve the #sql-xxx rebuild table's custom indexes against the
+  // victionary under the real name (the #sql-xxx name matches nothing there).
+  // Set by SetAlterTargetForCustomIndexes in mysql_alter_table, cleared by
+  // AlterGuard alongside villagesql_alter_custom_fields.
   std::string villagesql_alter_target_db;
   std::string villagesql_alter_target_table;
 

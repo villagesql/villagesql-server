@@ -40,6 +40,14 @@ class Item_func_match;
 class store_key;
 struct POSITION;
 
+// KNN query parameters
+struct KnnScanInfo {
+  Item *query_point;
+  ha_rows limit;
+  // True if limit is an exact KNN row count needed by the query.
+  bool limit_is_exact;
+};
+
 /**
    This represents the index of a JOIN_TAB/QEP_TAB in an array. "plan_idx":
    "Plan Table Index". It is signed, because:
@@ -232,12 +240,10 @@ enum join_type {
   */
   JT_INDEX_MERGE,
   /*
-    VillageSQL: nearest-neighbor (KNN) ordered scan of a custom index that
-    satisfies ORDER BY <distance>(col, const) LIMIT k. Rows are produced in
-    ascending-distance order by the extension's index. Appended last so the
-    positional join_type_str[] mapping for existing values is unchanged.
+    KNN scan on a VillageSQL custom index, ordering rows by distance from a
+    query point instead of by key value.
   */
-  JT_INDEX_DISTANCE
+  JT_KNN_SCAN
 };
 
 /// Holds members common to JOIN_TAB and QEP_TAB.
@@ -263,6 +269,7 @@ class QEP_shared {
         prefix_tables_map(0),
         added_tables_map(0),
         m_ft_func(nullptr),
+        m_knn_scan_info(nullptr),
         m_skip_records_in_range(false) {}
 
   /*
@@ -304,9 +311,6 @@ class QEP_shared {
   void set_type(enum join_type t) { m_type = t; }
   Item *condition() const { return m_condition; }
   void set_condition(Item *c) { m_condition = c; }
-  // VillageSQL: see m_knn_query_item.
-  Item *knn_query_item() const { return m_knn_query_item; }
-  void set_knn_query_item(Item *i) { m_knn_query_item = i; }
   bool condition_is_pushed_to_sort() const {
     return m_condition_is_pushed_to_sort;
   }
@@ -322,6 +326,8 @@ class QEP_shared {
   table_map added_tables() const { return added_tables_map; }
   Item_func_match *ft_func() const { return m_ft_func; }
   void set_ft_func(Item_func_match *f) { m_ft_func = f; }
+  const KnnScanInfo *knn_scan_info() const { return m_knn_scan_info; }
+  void set_knn_scan_info(const KnnScanInfo *info) { m_knn_scan_info = info; }
 
   // More elaborate functions:
 
@@ -429,13 +435,6 @@ class QEP_shared {
   */
   Item *m_condition;
 
-  // VillageSQL: for a JT_INDEX_DISTANCE table, the constant query vector Item
-  // of the ORDER BY distance function, captured at plan time and consumed by
-  // the distance-scan builder. Holding it here keeps it independent of the
-  // ORDER BY list, which later optimizer phases may transform. nullptr
-  // otherwise.
-  Item *m_knn_query_item{nullptr};
-
   /**
     Whether the condition in m_condition is evaluated in front of a sort,
     so that it does not need to be evaluated again (unless it is outer to
@@ -484,6 +483,10 @@ class QEP_shared {
 
   /** FT function */
   Item_func_match *m_ft_func;
+
+  /// Set when type() is a KNN index scan; carries the query point and
+  /// row limit through to execution. Owned by the query's mem_root.
+  const KnnScanInfo *m_knn_scan_info;
 
   /**
     Set if index dive can be skipped for this query.
@@ -543,9 +546,6 @@ class QEP_shared_owner {
   void set_type(enum join_type t) { return m_qs->set_type(t); }
   Item *condition() const { return m_qs->condition(); }
   void set_condition(Item *to) { return m_qs->set_condition(to); }
-  // VillageSQL: see QEP_shared::m_knn_query_item.
-  Item *knn_query_item() const { return m_qs->knn_query_item(); }
-  void set_knn_query_item(Item *i) { return m_qs->set_knn_query_item(i); }
   bool condition_is_pushed_to_sort() const {
     return m_qs->condition_is_pushed_to_sort();
   }
@@ -561,6 +561,10 @@ class QEP_shared_owner {
   table_map added_tables() const { return m_qs->added_tables(); }
   Item_func_match *ft_func() const { return m_qs->ft_func(); }
   void set_ft_func(Item_func_match *f) { return m_qs->set_ft_func(f); }
+  const KnnScanInfo *knn_scan_info() const { return m_qs->knn_scan_info(); }
+  void set_knn_scan_info(const KnnScanInfo *info) {
+    return m_qs->set_knn_scan_info(info);
+  }
   void set_prefix_tables(table_map prefix_tables, table_map prev_tables) {
     return m_qs->set_prefix_tables(prefix_tables, prev_tables);
   }

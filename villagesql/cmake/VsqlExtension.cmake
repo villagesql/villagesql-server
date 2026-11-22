@@ -13,6 +13,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
+# CMake 4.5 added CMP0225, which passes CMAKE_INSTALL_PREFIX to an external
+# project's default configure command. The extension subprojects below never
+# install (INSTALL_COMMAND ""), so the setting has no effect on them; opt in
+# to the NEW behavior so newer CMake stops warning once per extension.
+if(POLICY CMP0225)
+  cmake_policy(SET CMP0225 NEW)
+endif()
+
 # vsql_add_extension(
 #   DIR_NAME       <subdir name under SOURCE_BASE>
 #   EXT_TARGET     <CMake ExternalProject target name>

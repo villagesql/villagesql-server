@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -96,7 +97,8 @@ static const char *json_extra_tags[ET_total] = {
     "table_function",                      // ET_TABLE_FUNCTION
     "skip_records_in_range_due_to_force",  // ET_SKIP_RECORDS_IN_RANGE
     "using_secondary_engine",              // ET_USING_SECONDARY_ENGINE
-    "rematerialize"                        // ET_REMATERIALIZE
+    "rematerialize",                       // ET_REMATERIALIZE
+    "using_knn_scan"                       // ET_USING_KNN_SCAN
 };
 
 // JSON key names

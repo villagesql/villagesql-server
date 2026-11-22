@@ -22,8 +22,9 @@
 //   ext_index_wide_blob   - externally-stored type, 4096-byte persisted field
 //   ext_index             - custom index type over it
 //   ext_index_default     - default index profile
-//   ext_index_fn,
-//   ext_index_helper_fn   - stub index functions the profile binds
+//   ext_index_fn          - stub SQL VDF bound via with_function()
+//   ext_index_helper_fn   - stub internal-only index function bound via
+//                           with_helper()
 
 #include <villagesql/preview/index_builder.h>
 #include <villagesql/preview/storage_api.h>
@@ -361,9 +362,12 @@ static bool ext_index_position(Index::Cursor /*cursor*/, Index::CursorOp /*op*/,
 
 static bool ext_index_fetch(Index::Cursor /*cursor*/,
                             IndexScanKey::KeyPartRef * /*key_ref*/,
+                            IndexScanKey::KeyPartRef * /*key_column_refs*/,
                             IndexScanKey::KeyPartData * /*key_columns*/,
                             IndexScanKey::KeyPartData * /*pkey_columns*/,
-                            char * /*err*/, uint32_t /*err_len*/) {
+                            Segment::TrxRef * /*trx_ref*/,
+                            bool * /*delete_mark*/, char * /*err*/,
+                            uint32_t /*err_len*/) {
   return false;
 }
 
@@ -464,29 +468,34 @@ static constexpr auto EXT_INDEX =
         .build();
 // clang-format on
 
-static const auto EXT_INDEX_FN =
-    make_index_function<&ext_index_fn_impl>(kExtIndexFunc1)
+// EXT_INDEX_FN is a normal SQL VDF: registered as a callable SQL function via
+// .func() below, and the SAME object bound into the profile via
+// with_function<EXT_INDEX_FN>() so the optimizer can recognize calls to it as
+// index-scan-eligible.
+static constexpr auto EXT_INDEX_FN =
+    vsql::make_func<&ext_index_fn_impl>(kExtIndexFunc1)
         .returns(vsql::REAL)
         .param(WIDE_BLOB)
         .param(WIDE_BLOB)
         .deterministic()
         .build();
 
-static const auto EXT_INDEX_HELPER_FN =
+static constexpr auto EXT_INDEX_HELPER_FN =
     make_index_function<&ext_index_helper_fn_impl>(kExtIndexFunc2)
         .returns(vsql::REAL)
         .param(WIDE_BLOB)
         .deterministic()
         .build();
 
-static const auto EXT_INDEX_PROFILE = make_index_profile(kExtIndexProfile)
-                                          .for_type(kWideBlobTypeName)
-                                          .using_index(kExtIndex)
-                                          .with_function(1, EXT_INDEX_FN)
-                                          .with_helper(1, EXT_INDEX_HELPER_FN)
-                                          .ordering(Index::Ordering::ASC)
-                                          .default_for_type(true)
-                                          .build();
+static const auto EXT_INDEX_PROFILE =
+    make_index_profile(kExtIndexProfile)
+        .for_type(kWideBlobTypeName)
+        .using_index(kExtIndex)
+        .with_function<EXT_INDEX_FN>(1, FunctionKind::Order)
+        .with_helper<EXT_INDEX_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .default_for_type(true)
+        .build();
 
 // ============================================================================
 // Extension entry point
@@ -502,6 +511,7 @@ static auto INDEX_PROFILE =
         EXT_INDEX_PROFILE);
 
 VEF_GENERATE_ENTRY_POINTS(vsql::make_extension()
+                              .func(EXT_INDEX_FN)
                               .with(STORAGE)
                               .with(COLUMN_STORE)
                               .with(INDEX_TYPE)

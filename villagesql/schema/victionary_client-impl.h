@@ -129,7 +129,7 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
 
   // Get uncommitted operations for this THD
   auto thd_it = m_uncommitted.find(thd);
-  if (thd_it == m_uncommitted.end() || thd_it->second.elements == 0) {
+  if (thd_it == m_uncommitted.end() || thd_it->second.empty()) {
     return false;  // No operations to write
   }
 
@@ -157,18 +157,17 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
   sys_table->use_all_columns();
 
   // Apply each pending operation to the table in order
-  for (PendingOperation<EntryType> *op = thd_it->second.first; op;
-       op = op->next) {
-    switch (op->op_type) {
+  for (PendingOperation<EntryType> &op : thd_it->second) {
+    switch (op.op_type) {
       case OperationType::INSERT:
         // Prepare record for write (sets defaults)
         restore_record(sys_table, s->default_values);
 
         // Use TableTraits to populate the row fields and insert
         if (should_assert_if_true(TableTraits<EntryType>::write_to_table(
-                *sys_table, *op->entry))) {
+                *sys_table, *op.entry))) {
           LogVSQL(ERROR_LEVEL, "Error inserting into %s.%s for key %s",
-                  schema_name, table_name, op->entry->key().str().c_str());
+                  schema_name, table_name, op.entry->key().str().c_str());
           return true;
         }
         break;
@@ -176,10 +175,10 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
       case OperationType::UPDATE:
         // Use TableTraits to update the row
         if (should_assert_if_true(TableTraits<EntryType>::update_in_table(
-                *sys_table, *op->entry, op->key))) {
+                *sys_table, *op.entry, op.key))) {
           LogVSQL(ERROR_LEVEL, "Error updating %s.%s from key %s to %s",
-                  schema_name, table_name, op->entry->key().str().c_str(),
-                  op->key.str().c_str());
+                  schema_name, table_name, op.entry->key().str().c_str(),
+                  op.key.str().c_str());
           return true;
         }
         break;
@@ -187,11 +186,11 @@ bool SystemTableMap<EntryType, Mode>::write_uncommitted_to_table(
       case OperationType::DELETE: {
         // For DELETE, we only have the key, not the full entry.
         // Create a temporary entry from the key for delete_from_table.
-        EntryType temp_entry(op->key);
+        EntryType temp_entry(op.key);
         if (should_assert_if_true(TableTraits<EntryType>::delete_from_table(
                 *sys_table, temp_entry))) {
           LogVSQL(ERROR_LEVEL, "Error deleting from %s.%s for key %s",
-                  schema_name, table_name, op->key.str().c_str());
+                  schema_name, table_name, op.key.str().c_str());
           return true;
         }
         break;

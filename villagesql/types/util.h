@@ -26,20 +26,24 @@
 #include "lex_string.h"
 #include "my_inttypes.h"
 #include "sql/dd/string_type.h"
+#include "sql/enum_query_type.h"
 #include "sql/field.h"
 #include "sql/sql_array.h"
 #include "sql_string.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
-class Alter_info;
 class Create_field;
 class Field;
+struct handlerton;
+struct HA_CREATE_INFO;
 class Item;
 class Item_func;
+class Item_param;
 enum class enum_sp_type;
 class KEY;
 class KEY_CREATE_INFO;
+class KEY_PART_INFO;
 struct MEM_ROOT;
 struct ORDER;
 class sp_pcontext;
@@ -72,17 +76,12 @@ extern bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field);
 // share.mem_root) and sets custom_index_profile on each KEY_PART_INFO from
 // the per-column IndexColumnEntry profile bindings.
 // Only operates on committed entries (existing tables opened from DD).
+// With use_alter_target, or for an ALTER TABLE rebuild (#sql-xxx) table, the
+// key is resolved under the ALTER's target name set by
+// SetAlterTargetForCustomIndexes instead of the share's name.
 // Returns true on error, false on success (including when not a custom index).
-extern bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo);
-
-// True if the ALTER changes the primary key of a table that has a custom
-// (USING EXTENDED) index -- its column set, order, or any column's definition.
-// old_table is the table being altered; new_key_info/new_key_count are the
-// prepared keys for the new table and alter_info describes the column changes.
-extern bool alter_changes_pk_of_custom_indexed_table(const TABLE *old_table,
-                                                     Alter_info *alter_info,
-                                                     const KEY *new_key_info,
-                                                     uint new_key_count);
+extern bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo,
+                                   bool use_alter_target = false);
 
 // Injects custom TypeContexts into SP variable fields for a stored procedure
 // by looking up villagesql.custom_sp_params. Restores custom type information
@@ -126,14 +125,19 @@ extern bool AcquireOrCreateTypeContext(const TypeDescriptor *descriptor,
                                        MEM_ROOT &mem_root,
                                        const TypeContext *&result);
 
-// Pre-populate session-local temporary metadata from Create_field list so that
+// Verify that the storage engine is InnoDB; otherwise, report an error naming
+// the operation ("create table", "alter table").
+// Returns false on success and true on error.
+extern bool EnsureEngineIsInnodb(const handlerton *hton, const char *operation);
+
+// Pre-populate session-local temporary metadata from the create list so that
 // MaybeInjectCustomType can inject type contexts during open_table_from_share
 // (which calls unpack_value_generator before AnnotateCustomColumnsInTmpTable
 // runs). Must be called before open_table_uncached for temporary tables.
 // Returns true on error (e.g. extension uninstalled concurrently).
 extern bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
                                          const char *table_name,
-                                         List<Create_field> &create_fields,
+                                         Alter_info *alter_info,
                                          const HA_CREATE_INFO *create_info);
 
 // Copy custom type contexts from Create_field list to corresponding Fields in
@@ -151,16 +155,17 @@ extern void RemoveTmpTableMetadata(THD *thd, const std::string &db,
 extern void RemoveTmpTableMetadata(THD *thd, TABLE *table);
 
 // Populate thd->villagesql_alter_custom_fields with pointers to custom-typed
-// Create_fields from create_list. Called from create_table_impl after
-// mysql_prepare_alter_table has finalized the create_list.
-extern void PrepareAlterCustomFields(THD *thd,
-                                     const List<Create_field> &create_list);
+// Create_fields from alter_info->create_list. Called from create_table_impl
+// after mysql_prepare_alter_table has finalized the create_list.
+extern bool PrepareAlterCustomFields(THD *thd, const Alter_info *alter_info,
+                                     const HA_CREATE_INFO *create_info);
 
-// Stash old_table's real (db, table) on the THD so MaybeInjectCustomIndex can
-// resolve the #sql-xxx rebuild table's custom indexes against the victionary
-// under the real name. Called from mysql_alter_table before the rebuild table
-// is opened.
-extern void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table);
+// Stash the (db, table) name the altered table carries once the ALTER
+// completes on the THD, so MaybeInjectCustomIndex can resolve the #sql-xxx
+// rebuild table's custom indexes against the victionary under that name.
+// Called from mysql_alter_table before the rebuild table is opened.
+extern void SetAlterTargetForCustomIndexes(THD *thd, const char *db,
+                                           const char *table_name);
 
 // Carry a custom (USING EXTENDED) index's type and extension names from the old
 // key's IndexContext onto key_create_info, so key_create_info.is_custom_index()
@@ -169,6 +174,15 @@ extern void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table);
 // my_error raised), false on success.
 extern bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
                                             KEY_CREATE_INFO *key_create_info);
+
+// Carry a custom index key part's profile name and extension from the old key
+// part onto out_profile and out_profile_extension (copied onto thd->mem_root),
+// so the rebuilt key part keeps its profile instead of falling back to the
+// default one. Leaves both empty when key_part has no profile. Returns true on
+// error, false on success.
+extern bool MaybeCarryCustomKeyPartProfileForRebuild(
+    THD *thd, const KEY_PART_INFO *key_part, LEX_CSTRING *out_profile,
+    LEX_CSTRING *out_profile_extension);
 
 // Clear thd->villagesql_alter_custom_fields and the alter target name stash.
 extern void ClearAlterCustomContext(THD *thd);
@@ -206,10 +220,12 @@ enum class EncodeStatus {
 };
 
 // Encodes a string for storage in a custom type field, with error reporting.
-// The TypeContext and field name are taken from the field itself. Returns the
-// encoded String*, or nullptr with status saying why. On kBadValue a warning
-// has been pushed, so the caller only has to decide whether to promote it to
-// an error.
+// A string in the binary charset is the type's binary form, and an error for a
+// type without an encode from it; any other is its text form, converted to
+// utf8mb4. The TypeContext and field name are taken from the field itself.
+// Returns the encoded String*, or nullptr with status saying why. On kBadValue
+// a warning has been pushed, so the caller only has to decide whether to
+// promote it to an error.
 extern String *EncodeStringForField(Field *field, const String &from,
                                     EncodeStatus &status);
 
@@ -260,9 +276,14 @@ inline std::optional<size_t> TryComputeHash(const T &obj, const uchar *data,
 // Inject custom type context into a string Item and encode it for comparison
 // This is used to "poison" string literals with custom type information when
 // they are compared against custom type columns (e.g., WHERE col = '(1,2)')
-// Only affects STRING_ITEM types without existing type context
+// Only affects STRING_ITEM and HEX_BIN_ITEM types without existing type context
 // Returns false on success, true on error (my_error already called if needed)
 extern bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc);
+
+// Append the text form of a value encoded by InjectAndEncodeCustomType, quoted
+// and escaped so the printed query parses back to the same value.
+extern void PrintEncodedLiteral(const TypeContext &tc, const String &encoded,
+                                enum_query_type query_type, String *out);
 
 // Template version that works with both Item and Field types
 // Both Item and Field have has_type_context() and get_type_context() methods
@@ -390,23 +411,63 @@ extern FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to);
 extern type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
                                                            Field *to_field);
 
-// Encode and store a string value into a custom type field.
-// Returns appropriate type_conversion_status for the result.
+// Encode and store a string value into a custom type field, from its binary
+// form or its text form as EncodeByForm() decides. Returns appropriate
+// type_conversion_status for the result.
 extern type_conversion_status EncodeAndStoreStringToCustomField(
-    const String &str_value, Field *field);
+    const String &value, Field *field);
 
-// Encode a string value for a custom type item (e.g. Item_param), reporting
-// errors appropriately. The TypeContext and item name are taken from the item
+// Encode and store a string value into a custom type field during EXECUTE,
+// reading the parameter's bytes in the charset they arrived in. Returns
+// appropriate type_conversion_status for the result.
+extern type_conversion_status ParamEncodeAndStoreCustomField(
+    const Item_param *param, const String &str_value, Field *field);
+
+// Encode a string value for a custom type parameter, reporting errors
+// appropriately. The TypeContext and item name are taken from the parameter
 // itself. Returns encoded String* on success, nullptr on error (with error
 // reported). Sets null_value to true on error.
-extern String *EncodeStringForCustomParam(Item *item, const String &str_value,
+extern String *EncodeStringForCustomParam(Item_param *param,
+                                          const String &str_value,
                                           bool &null_value);
+
+// Called when a procedure hands an OUT or INOUT parameter back through a `?`.
+// If the procedure's variable has a custom type, the `?` gets that type too.
+//   thd      - the session; the `?` keeps the type until its statement ends.
+//   param    - the `?`.
+//   proc_var - the procedure's variable.
+//   text_cs  - the charset of the variable's value as text. The text is
+//              already stored in the `?`, but marked as binary, and the `?`
+//              needs the real charset to encode the text with the type.
+// Returns true on error.
+extern bool MaybeSetOutParamCustomType(THD *thd, Item_param *param,
+                                       Item *proc_var,
+                                       const CHARSET_INFO *text_cs);
+
+// Called when a `?` is reset after EXECUTE. Clears the type that
+// MaybeSetOutParamCustomType gave to an OUT or INOUT `?`, so the next
+// EXECUTE binds a new value to a `?` with no type.
+extern void MaybeClearOutParamTypeContext(Item_param *param);
 
 // Store intrinsic default value for a NOT NULL custom field receiving NULL via
 // INSERT/UPDATE IGNORE or LOAD DATA IGNORE.
 // Returns TYPE_OK on success. On failure (no intrinsic default registered),
 // sets a user-visible error and returns TYPE_ERR_BAD_VALUE.
 extern type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field);
+
+// Handle an encode that produced no value, for a caller that stores into a
+// field and returns a type_conversion_status. Writes the field so a row kept
+// under IGNORE or in non-strict mode can still be read back, and returns the
+// status for the caller to propagate.
+//
+// kNull and kBadValue are treated differently. kNull is a value the encode
+// chose, so the field takes SQL NULL and a NOT NULL column is reported as it
+// would be for an explicit NULL. kBadValue is input the encode could not
+// parse, so the field takes the type's intrinsic default whatever the
+// column's nullability, as a built-in stores 0 or '' for the same.
+extern type_conversion_status HandleFailedEncode(Field *field,
+                                                 EncodeStatus status,
+                                                 bool no_conversions);
 
 // Encode and store a string value into a custom type field during LOAD DATA /
 // LOAD XML, applying strict/non-strict/IGNORE semantics. Returns true on error.
@@ -440,6 +501,20 @@ extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 // TypeContext, otherwise derived from its SQL result type.
 extern vef_type_id InferArgTypeId(const Item *item);
 
+// The charset of a VDF value of type `id`: utf8mb4 for STRING, the text a VDF
+// reads and returns, and binary, the bytes unconverted, for any other type.
+extern const CHARSET_INFO *VdfValueCharset(vef_type_id id);
+
+// Read arg as a VDF parameter of type `id` reads it: converted to utf8mb4 for
+// STRING, the bytes as they are for any other type. Unlike eval_string_arg(),
+// this never relabels arg's own value. Returns nullptr for NULL or on error,
+// as eval_string_arg() does.
+extern String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer);
+
+// True if `item` is, or contains, a prepared-statement parameter that has no
+// value yet (usually at PREPARE).
+extern bool HasPSParamWithoutValue(Item *item);
+
 // Validate VDF arguments against function signature and convert string
 // constants to custom types where appropriate. Applies type disambiguation
 // rules to the arguments (args of the same custom type share params) to resolve
@@ -448,13 +523,30 @@ extern vef_type_id InferArgTypeId(const Item *item);
 // return type (inferred from args via the rule that the return parameters are
 // the same as those matching arguements of the same abstract type).
 // When a bind_and_check_types hook is provided, that hook replaces the
-// otherwise automatically applied type disambiguation rules. Returns false on
-// success, true on error.
+// otherwise automatically applied type disambiguation rules. Sets
+// *out_bind_hook_postponed when the bind hook could not be run yet (see
+// DeferUntilReprepare); the call is then left unchecked and the
+// return params unknown. Returns false on success, true on error.
 extern bool ValidateAndConvertVDFArguments(
     THD *thd, const char *func_name, std::string_view extension_name,
     uint arg_count, Item **args, const vef_signature_t *signature,
     TypeParameters *out_return_params,
-    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx);
+    const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
+    bool *out_bind_hook_postponed);
+
+// For a check that cannot be made yet. Returns true at the first PREPARE of a
+// statement: it has no values for its `?` markers, so custom type params that
+// depend on one, e.g. those of TVECTOR::from_string(?), are unknown. It then
+// marks the statement to be prepared again at every EXECUTE, with the values
+// bound, so the check runs then; the caller accepts the unknown params and
+// leaves the check. Returns false otherwise, and the check must be made now.
+//
+// A statement calling a VDF is prepared once and reused by every EXECUTE
+// unless something marks it with MarkVdfStatementForReprepare.
+extern bool DeferUntilReprepare(THD *thd);
+
+// Marks the statement being prepared to be prepared again at every EXECUTE.
+extern void MarkVdfStatementForReprepare(THD *thd);
 
 // Set the return type_context on a VDF result Item if it returns a custom type.
 // If return_params is non-null, uses those params instead of empty ones.

@@ -46,6 +46,7 @@
 #include "sql/table.h"
 #include "sql_string.h"
 #include "villagesql/include/error.h"
+#include "villagesql/include/metrics.h"
 #include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
@@ -73,7 +74,7 @@
 namespace villagesql {
 namespace veb {
 
-const vef_protocol_t vef_server_protocol_version = VEF_PROTOCOL_4;
+const vef_protocol_t vef_server_protocol_version = VEF_PROTOCOL_CURRENT;
 
 static std::string get_expansion_cache_base_path() {
   char path_buf[FN_REFLEN];
@@ -214,7 +215,7 @@ static constexpr const char *kStagingPrefix = ".tmp.";
 // True when an entry name begins with the staging prefix, marking it as
 // expansion scratch rather than a completed {sha256} expansion.
 static bool is_staging_dir_name(const std::string &entry_name) {
-  return entry_name.rfind(kStagingPrefix, 0) == 0;
+  return entry_name.starts_with(kStagingPrefix);
 }
 
 // Path of the staging directory used to build {name_dir}/{sha256}.
@@ -336,9 +337,7 @@ bool find_veb_version(const std::string &name, std::string &version) {
     }
 
     if (filename.size() > prefix.size() + suffix.size() &&
-        filename.rfind(prefix, 0) == 0 &&
-        filename.compare(filename.size() - suffix.size(), suffix.size(),
-                         suffix) == 0) {
+        filename.starts_with(prefix) && filename.ends_with(suffix)) {
       found_versions.push_back(filename.substr(
           prefix.size(), filename.size() - prefix.size() - suffix.size()));
     }
@@ -913,6 +912,11 @@ bool expand_veb_to_directory(const std::string &name,
     villagesql_error("VEB for '%s' contains no usable 'lib/%s.so'", MYF(0),
                      name.c_str(), name.c_str());
     return true;
+  }
+
+  // If a stale expansion was found, it has been repaired. Count it now.
+  if (stale_expansion) {
+    metrics::g_veb_cache_repaired.fetch_add(1, std::memory_order_relaxed);
   }
 
   LogVSQL(INFORMATION_LEVEL, "Successfully expanded '%s' to %s", name.c_str(),
@@ -1771,8 +1775,7 @@ void cleanup_orphaned_expansion_directories(
     }
 
     // If extension is not installed, remove entire {name}/ directory
-    if (installed_extensions.find(extension_name) ==
-        installed_extensions.end()) {
+    if (!installed_extensions.contains(extension_name)) {
       LogVSQL(INFORMATION_LEVEL, "Removing orphaned expansion directory: %s",
               name_dir_path.c_str());
 
@@ -1825,10 +1828,28 @@ static T lookup_symbol(void *handle, const char *symbol_name,
   return reinterpret_cast<T>(sym);
 }
 
+// Whether a function called at `protocol` may use type id `id`. An id the
+// server does not know is never valid; BINARY needs VEF_PROTOCOL_5.
+static bool is_known_type_id(vef_type_id id, vef_protocol_t protocol) {
+  switch (id) {
+    case VEF_TYPE_STRING:
+    case VEF_TYPE_REAL:
+    case VEF_TYPE_INT:
+    case VEF_TYPE_CUSTOM:
+      return true;
+    case VEF_TYPE_BINARY:
+      return protocol >= VEF_PROTOCOL_5;
+  }
+  return false;
+}
+
 // Contents of one function descriptor. Reads only protocol-1 fields, so it is
 // safe for a descriptor declaring any protocol version. `index` names the slot
-// for descriptors that have no usable name of their own.
+// for descriptors that have no usable name of their own. `protocol` is the
+// registration's: a call is marshalled at the protocol negotiated from it, not
+// at the descriptor's own, which may be higher.
 static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
+                            vef_protocol_t protocol,
                             std::string &error_message) {
   if (f->name == nullptr) {
     error_message =
@@ -1856,6 +1877,13 @@ static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
       return true;
     }
     for (unsigned int i = 0; i < sig->param_count; i++) {
+      if (!is_known_type_id(sig->params[i].id, protocol)) {
+        error_message = std::string("VDF '") + f->name + "' param " +
+                        std::to_string(i + 1) + " has type id " +
+                        std::to_string(sig->params[i].id) +
+                        ", which its protocol does not define";
+        return true;
+      }
       if (sig->params[i].id == VEF_TYPE_CUSTOM &&
           sig->params[i].custom_type == nullptr) {
         error_message = std::string("VDF '") + f->name + "' param " +
@@ -1864,6 +1892,12 @@ static bool check_func_desc(const vef_func_desc_t *f, unsigned int index,
         return true;
       }
     }
+  }
+  if (!is_known_type_id(sig->return_type.id, protocol)) {
+    error_message = std::string("VDF '") + f->name + "' returns type id " +
+                    std::to_string(sig->return_type.id) +
+                    ", which its protocol does not define";
+    return true;
   }
   if (sig->return_type.id == VEF_TYPE_CUSTOM &&
       sig->return_type.custom_type == nullptr) {
@@ -1907,7 +1941,7 @@ bool check_vef_registration(const vef_registration_t *registration,
   }
   // The SDK rejects a half-registered pair at compile time; an extension that
   // arrives with one anyway was not built by it.
-  if (registration->protocol >= VEF_PROTOCOL_4 &&
+  if (registration->protocol >= VEF_PROTOCOL_5 &&
       (registration->on_init == nullptr) !=
           (registration->on_deinit == nullptr)) {
     error_message =
@@ -1952,7 +1986,9 @@ bool check_vef_registration(const vef_registration_t *registration,
           std::to_string(static_cast<unsigned>(registration->protocol));
       return true;
     }
-    if (check_func_desc(registration->funcs[i], i, error_message)) return true;
+    if (check_func_desc(registration->funcs[i], i, registration->protocol,
+                        error_message))
+      return true;
   }
   // Check registration type members.
   if (registration->type_count > 0 && registration->types == nullptr) {
@@ -2107,7 +2143,7 @@ std::unordered_set<const vef_registration_t *> g_load_hook_done;
 // built against an older SDK has no such member for us to read, so the
 // protocol gates the field rather than the value.
 bool has_lifecycle_hooks(const vef_registration_t *reg) {
-  return reg != nullptr && reg->protocol >= VEF_PROTOCOL_4;
+  return reg != nullptr && reg->protocol >= VEF_PROTOCOL_5;
 }
 
 }  // namespace

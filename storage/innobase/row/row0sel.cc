@@ -74,6 +74,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "ut0new.h"
 #include "villagesql/custom_column.h"
+#include "villagesql/custom_index.h"
 
 #include "my_dbug.h"
 
@@ -2323,7 +2324,14 @@ void row_sel_convert_mysql_key_to_innobase(dtuple_t *tuple, byte *buf,
     }
 
     /* Calculate data length and data field total length */
-    if (DATA_LARGE_MTYPE(type) || DATA_GEOMETRY_MTYPE(type)) {
+    if (dfield_get_type(dfield)->extended_storage) {
+      using villagesql::innodb::Custom_column;
+
+      data_len = Custom_column::get_mysql_true_varchar_length(
+          field->col, field->prefix_len);
+      data_field_len = data_offset + data_len;
+
+    } else if (DATA_LARGE_MTYPE(type) || DATA_GEOMETRY_MTYPE(type)) {
       /* For R-tree index, data length should be the
       total size of the wkb data.*/
       if (dict_index_is_spatial(index)) {
@@ -2451,7 +2459,7 @@ void row_sel_convert_mysql_key_to_innobase(dtuple_t *tuple, byte *buf,
 }
 
 /** Stores the row id to the prebuilt struct. */
-static void row_sel_store_row_id_to_prebuilt(
+void row_sel_store_row_id_to_prebuilt(
     row_prebuilt_t *prebuilt,  /*!< in/out: prebuilt */
     const rec_t *index_rec,    /*!< in: record */
     const dict_index_t *index, /*!< in: index of the record */
@@ -2527,6 +2535,20 @@ void row_sel_field_store_in_mysql_format_func(
   UNIV_MEM_ASSERT_W(dest, mysql_col_len);
   UNIV_MEM_INVALID(dest, mysql_col_len);
 
+  if (column != nullptr && column->stored_by_extn()) {
+    ut_ad(templ->mysql_type == DATA_MYSQL_TRUE_VARCHAR);
+    using villagesql::innodb::Custom_column;
+    dberr_t err = Custom_column::store_mysql_true_varchar(
+        index->table, column, dest, mysql_col_len, templ->mysql_length_bytes,
+        data, len);
+    if (err != DB_SUCCESS) {
+      ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: Custom column fetch failed";
+      // TODO(villagesql-indexing): surface this failure to the caller.
+    }
+    return;
+  }
+
   switch (templ->type) {
     const byte *field_end;
     byte *pad;
@@ -2563,12 +2585,8 @@ void row_sel_field_store_in_mysql_format_func(
         length of the data to the first byte or the first
         two bytes of dest. */
 
-        // For extended storage, len holds the reference length.
-        ulint data_length =
-            (column && column->stored_by_extn()) ? column->len : len;
-
-        dest = row_mysql_store_true_var_len(dest, data_length,
-                                            templ->mysql_length_bytes);
+        dest =
+            row_mysql_store_true_var_len(dest, len, templ->mysql_length_bytes);
         ut_a(mysql_col_len >= templ->mysql_length_bytes);
         ulint dest_len = mysql_col_len - templ->mysql_length_bytes;
 
@@ -2576,20 +2594,6 @@ void row_sel_field_store_in_mysql_format_func(
         buffer uninitialized. */
         ut_a(dest_len >= len);
         memcpy(dest, data, len);
-
-        if (column && column->stored_by_extn()) {
-          dest += len;
-          dest_len -= len;
-          // We have copied the reference stored in the table. Now, fetch
-          // and append actual column data from extended storage.
-          using villagesql::innodb::Custom_column;
-          dberr_t err = Custom_column::fetch(index->table, column, dest,
-                                             dest_len, data, len);
-          if (err != DB_SUCCESS) {
-            ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
-                << "InnoDB: Custom column fetch failed";
-          }
-        }
         break;
       }
 
@@ -4030,6 +4034,12 @@ dberr_t row_search_no_mvcc(byte *buf, page_cur_mode_t mode,
     moves_up = false;
   }
 
+  using villagesql::innodb::Custom_index;
+  if (Custom_index::is_custom(prebuilt->index)) {
+    return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
+                                    /*range_lock=*/false, moves_up,
+                                    /*is_mvcc=*/false);
+  }
   /* Step-2: Open or Restore the cursor.
   If search key is specified, cursor is open using the key else
   cursor is open to return all the records. */
@@ -4868,6 +4878,14 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     prebuilt->sql_stat_start = false;
   }
 
+  using villagesql::innodb::Custom_index;
+  if (Custom_index::is_custom(prebuilt->index)) {
+    ut_ad(!index->is_clustered());
+    mtr_commit(&mtr);
+    return Custom_index::row_search(buf, mode, prebuilt, match_mode, direction,
+                                    set_also_gap_locks, moves_up,
+                                    /*is_mvcc=*/true);
+  }
   /* Open or restore index cursor position */
 
   if (UNIV_LIKELY(direction != 0)) {

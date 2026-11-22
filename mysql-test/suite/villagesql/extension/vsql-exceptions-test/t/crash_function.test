@@ -11,7 +11,7 @@ INSTALL EXTENSION vsql_exceptions_test;
 #
 # 1. exception from simple function
 #
---error 3200
+--error ER_UDF_ERROR
 SELECT vsql_exceptions_test.exception_add(10, 20);
 
 #
@@ -28,7 +28,7 @@ INSERT INTO exceptions_ints VALUES (7);
 
 # libc++ (macOS) and libstdc++ (Linux) word this what() string differently.
 --replace_result bad_optional_access "bad optional access"
---error 3200
+--error ER_UDF_ERROR
 SELECT vsql_exceptions_test.exception_sum(bad_data) FROM exceptions_ints;
 
 #
@@ -39,7 +39,7 @@ SELECT vsql_exceptions_test.exception_clear(bad_data) FROM exceptions_ints;
 #
 # 4. exception from accumulator constructor
 #
---error 1123
+--error ER_CANT_INITIALIZE_UDF
 SELECT vsql_exceptions_test.exception_constr(bad_data) FROM exceptions_ints;
 
 #

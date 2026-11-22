@@ -16,6 +16,7 @@
 
 #include "villagesql/types/util.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cinttypes>
 #include <map>
@@ -39,9 +40,12 @@
 #include "sql/item_func.h"
 #include "sql/item_sum.h"
 #include "sql/key.h"
+#include "sql/key_spec.h"
 #include "sql/parse_tree_column_attrs.h"
 #include "sql/sp_pcontext.h"
+#include "sql/sql_alter.h"
 #include "sql/sql_class.h"
+#include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_show.h"  // append_identifier
 #include "sql/sql_udf.h"
@@ -76,8 +80,7 @@ namespace villagesql {
 static bool is_alter_rebuild_table(const TABLE_SHARE &share) {
   return share.tmp_table == INTERNAL_TMP_TABLE &&
          share.table_name.str != nullptr &&
-         strncmp(share.table_name.str, tmp_file_prefix,
-                 tmp_file_prefix_length) == 0;
+         std::string_view(share.table_name.str).starts_with(tmp_file_prefix);
 }
 
 static const char *ER_INCOMPARABLE_TYPES =
@@ -219,7 +222,8 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   return CheckFieldLengthMatchesType(field, tc);
 }
 
-bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
+bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo,
+                            bool use_alter_target) {
   if (should_assert_if_null(thd)) {
     LogVSQL(ERROR_LEVEL, "thd is null in MaybeInjectCustomIndex");
     return true;
@@ -238,13 +242,16 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
   std::string index_name(keyinfo->name);
 
   // An ALTER TABLE rebuild opens the table under a #sql-xxx name that matches
-  // nothing in the victionary. Resolve against the real target table instead;
-  // its entries (unchanged ones committed, added/redefined ones staged
-  // uncommitted) are all keyed under the real name and visible to get() below.
+  // nothing in the victionary, and an in-place ALTER's keys (use_alter_target)
+  // come with the old name, which a RENAME has moved the entries away from.
+  // Resolve against the real target table instead;
+  // its entries (unchanged ones committed, or staged under the new name when
+  // the ALTER renames the table; added/redefined ones staged uncommitted) are
+  // all keyed under the real name and visible to get() below.
   // TODO(villagesql-general): investigate a cleaner way to bridge the #sql-xxx
   // temp name, e.g. staging the rebuild table's victionary entries uncommitted
   // and unstaging them before commit, as explored for custom-type ALTER.
-  if (is_alter_rebuild_table(share) &&
+  if ((use_alter_target || is_alter_rebuild_table(share)) &&
       !thd->villagesql_alter_target_table.empty()) {
     db_name = thd->villagesql_alter_target_db;
     table_name = thd->villagesql_alter_target_table;
@@ -332,78 +339,6 @@ bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo) {
     keyinfo->key_part[pos].custom_index_profile = profile_desc;
   }
 
-  return false;
-}
-
-namespace {
-
-// The new table's column at index idx, from the ALTER's create list (matches
-// the KEY_PART_INFO::fieldnr numbering used for the prepared keys).
-const Create_field *new_field_at(Alter_info *alter_info, uint idx) {
-  List_iterator_fast<Create_field> it(alter_info->create_list);
-  const Create_field *field = nullptr;
-  for (uint i = 0; (field = it++) != nullptr && i < idx; i++);
-  return field;
-}
-
-// The new table's primary key, or nullptr if it has none.
-const KEY *find_new_primary_key(const KEY *key_info, uint key_count) {
-  for (uint i = 0; i < key_count; i++) {
-    if (key_info[i].name != nullptr &&
-        my_strcasecmp(system_charset_info, key_info[i].name, "PRIMARY") == 0) {
-      return &key_info[i];
-    }
-  }
-  return nullptr;
-}
-
-}  // namespace
-
-bool alter_changes_pk_of_custom_indexed_table(const TABLE *old_table,
-                                              Alter_info *alter_info,
-                                              const KEY *new_key_info,
-                                              uint new_key_count) {
-  // The table must actually have a custom index.
-  bool has_custom_index = false;
-  for (uint i = 0; i < old_table->s->keys; i++) {
-    if (old_table->key_info[i].custom_index_context != nullptr) {
-      has_custom_index = true;
-      break;
-    }
-  }
-  if (!has_custom_index) {
-    return false;
-  }
-
-  const KEY *old_pk = (old_table->s->primary_key < old_table->s->keys)
-                          ? &old_table->key_info[old_table->s->primary_key]
-                          : nullptr;
-  const KEY *new_pk = find_new_primary_key(new_key_info, new_key_count);
-  const uint old_count = old_pk != nullptr ? old_pk->user_defined_key_parts : 0;
-  const uint new_count = new_pk != nullptr ? new_pk->user_defined_key_parts : 0;
-
-  // A changed column count (including gaining or losing the primary key) is a
-  // change.
-  if (old_count != new_count) {
-    return true;
-  }
-
-  // Compare the primary key's columns in order: a column is changed if it is a
-  // different column (by name) or its definition changed (Field::is_equal, the
-  // same test ALTER uses to decide a column type/length change). The old key's
-  // fields are bound; the new key's are resolved from the ALTER's create list
-  // (its KEY_PART_INFO::field pointers are not bound at this point).
-  for (uint i = 0; i < new_count; i++) {
-    const Field *old_field = old_pk->key_part[i].field;
-    const Create_field *new_field =
-        new_field_at(alter_info, new_pk->key_part[i].fieldnr);
-    if (old_field == nullptr || new_field == nullptr ||
-        my_strcasecmp(system_charset_info, old_field->field_name,
-                      new_field->field_name) != 0 ||
-        old_field->is_equal(new_field) != IS_EQUAL_YES) {
-      return true;
-    }
-  }
   return false;
 }
 
@@ -651,33 +586,149 @@ static TypeEncoder *GetTypeEncoderFor(Item *item) {
   return encoder;
 }
 
-// Encode from for item's custom type. Returns the encoded String*, or nullptr
-// with status saying why.
-static String *EncodeForItem(Item *item, const String &from,
-                             EncodeStatus &status) {
-  TypeEncoder *encoder = GetTypeEncoderFor(item);
+// Put from into utf8mb4 for a type's encode, which parses text and so
+// needs to know which charset the bytes are in. Returns from itself when it
+// is already utf8mb4, the usual case since that is the default connection
+// charset, and otherwise converts it into *converted and returns that.
+// Converting does not decide validity: the type still accepts or rejects the
+// value.
+//
+// Returns nullptr with status set on failure: kOom (my_error already called),
+// or kBadValue when from is not valid in its own charset. For kBadValue,
+// *converted holds what the conversion made of it, to quote in the error.
+static const String *ConvertToUtf8mb4(const String &from, String *converted,
+                                      EncodeStatus &status) {
+  // Already utf8mb4 under any collation, which is the usual case. The encode
+  // reads the bytes as text and never consults the collation, so only the
+  // character set has to match, and every utf8mb4 collation shares one
+  // handler. Asked before needs_conversion(), which compares character sets
+  // by name and so reaches a strcmp for any collation other than the
+  // utf8mb4_bin converted to.
+  if (from.charset()->cset == my_charset_utf8mb4_bin.cset) return &from;
+  if (!from.needs_conversion(&my_charset_utf8mb4_bin)) return &from;
+  uint errors = 0;
+  if (converted->copy(from.ptr(), from.length(), from.charset(),
+                      &my_charset_utf8mb4_bin, &errors)) {
+    status = EncodeStatus::kOom;  // my_error already called
+    return nullptr;
+  }
+  if (errors != 0) {
+    // Malformed in the charset it claims to be; nothing valid to parse.
+    status = EncodeStatus::kBadValue;
+    return nullptr;
+  }
+  return converted;
+}
+
+// Whether from is a value's binary form: bytes in the binary charset. A value
+// in any other charset is its text form.
+static bool IsBinaryForm(const String &from) {
+  return from.charset() == &my_charset_bin;
+}
+
+// Whether tc's type reads a value's binary form apart from its text form. A
+// type from an extension built before VEF_PROTOCOL_5 cannot declare an encode
+// from its binary form, so such a value still goes to its encode from text, as
+// its bytes, as it did before.
+static bool ReadsBinaryForm(const TypeContext &tc) {
+  return tc.descriptor()->extension_protocol() >= VEF_PROTOCOL_5;
+}
+
+// Raise the error for a value's binary form given to a type that has no encode
+// from it. The bytes are not read as text instead, so that a type adding a
+// binary form never changes what existing input means.
+static void ReportNoBinaryForm(const TypeContext &tc) {
+  villagesql_error(
+      "Type '%s' has no binary form; pass the value as a character string",
+      MYF(0), tc.qualified_name().c_str());
+}
+
+// How an error message shows a value: its binary form as the hex literal that
+// writes it, so it cannot be mistaken for text; any other value as MySQL shows
+// a string. As in MySQL's own messages, a long value shows only its start.
+static ErrConvString ErrValue(const String &value) {
+  if (!IsBinaryForm(value)) return ErrConvString(&value);
+  constexpr size_t kMaxBytes = 16;
+  char hex[2 + kMaxBytes * 2 + 4] = "0x";
+  const size_t len = std::min<size_t>(value.length(), kMaxBytes);
+  size_t n = 2 + bin_to_hex_str(hex + 2, sizeof(hex) - 2, value.ptr(), len);
+  if (len < value.length()) n += snprintf(hex + n, sizeof(hex) - n, "...");
+  return ErrConvString(hex, n);
+}
+
+// Encode from for owner's custom type, an Item or a Field: the binary form
+// (IsBinaryForm()) with the type's encode from it when the type reads that form
+// (ReadsBinaryForm()), any other value converted to utf8mb4 first. Returns
+// the encoded String*, or nullptr with status saying why, and outcome how the
+// encode itself ended. *given is set to the value the type was given, held in
+// from or *converted, so an error message can quote the value as the user
+// wrote it.
+template <typename Owner>
+static String *EncodeByForm(Owner *owner, const String &from, String *converted,
+                            const String **given, EncodeOutcome &outcome,
+                            EncodeStatus &status) {
+  *given = &from;
+  TypeEncoder *encoder = GetTypeEncoderFor(owner);
   if (encoder == nullptr) {
     status = EncodeStatus::kOom;  // my_error already called
     return nullptr;
   }
-  EncodeOutcome outcome;
-  String *encoded = encoder->encode(from, outcome);
+  String *encoded;
+  if (IsBinaryForm(from) && ReadsBinaryForm(*owner->get_type_context())) {
+    if (!encoder->has_binary_encode()) {
+      ReportNoBinaryForm(*owner->get_type_context());
+      status = EncodeStatus::kErrorRaised;
+      return nullptr;
+    }
+    encoded = encoder->encode_binary(from, outcome);
+  } else {
+    const String *value = ConvertToUtf8mb4(from, converted, status);
+    if (value == nullptr) {
+      if (status == EncodeStatus::kBadValue) *given = converted;
+      return nullptr;
+    }
+    *given = value;
+    encoded = encoder->encode(*value, outcome);
+  }
   if (encoded == nullptr) status = EncodeStatus::kBadValue;
   return encoded;
+}
+
+// Encode from for item's custom type, as EncodeByForm() does.
+static String *EncodeForItem(Item *item, const String &from, String *converted,
+                             const String **given, EncodeStatus &status) {
+  EncodeOutcome outcome;
+  return EncodeByForm(item, from, converted, given, outcome, status);
+}
+
+// Push the warning for a value the type would not accept. Consistent with
+// MySQL built-in types: the caller decides whether to promote it to an error.
+// 'value' is what the converter was given, so the message names what the user
+// wrote rather than the bytes their charset encoded it as.
+static void ReportBadCustomFieldValue(const Field *field, const String &value) {
+  const TypeContext *tc = field->get_type_context();
+  THD *thd = current_thd;
+  const ErrConvString errmsg = ErrValue(value);
+  const Diagnostics_area *da = thd->get_stmt_da();
+  push_warning_printf(
+      thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+      ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD), tc->type_name().c_str(),
+      errmsg.ptr(), field->field_name, da->current_row_for_condition());
 }
 
 String *EncodeStringForField(Field *field, const String &from,
                              EncodeStatus &status) {
   assert(field->has_type_context());
 
-  TypeEncoder *encoder = GetTypeEncoderFor(field);
-  if (encoder == nullptr) {
-    status = EncodeStatus::kOom;  // my_error already called
+  EncodeOutcome outcome;
+  String converted;
+  const String *given = nullptr;
+  String *encoded =
+      EncodeByForm(field, from, &converted, &given, outcome, status);
+  if (encoded != nullptr) return encoded;
+  if (status == EncodeStatus::kOom || status == EncodeStatus::kErrorRaised) {
     return nullptr;
   }
-  EncodeOutcome outcome;
-  String *encoded = encoder->encode(from, outcome);
-  if (encoded != nullptr) return encoded;
 
   // set_null() states a value rather than reporting a bad one.
   if (outcome.is_null()) {
@@ -692,19 +743,13 @@ String *EncodeStringForField(Field *field, const String &from,
     return nullptr;
   }
 
-  const TypeContext *tc = field->get_type_context();
-  THD *thd = current_thd;
   // Encoding failed - invalid value for custom type
   // Always push a warning (consistent with MySQL built-in types)
   // Caller decides whether to also promote to error
   // TODO(villagesql-general): an extension's own warning() message is dropped
-  // here; only the standard 1366 reaches the user.
-  const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
-  const Diagnostics_area *da = thd->get_stmt_da();
-  push_warning_printf(
-      thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-      ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD), tc->type_name().c_str(),
-      errmsg.ptr(), field->field_name, da->current_row_for_condition());
+  // here; only the standard ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366) reaches
+  // the user.
+  ReportBadCustomFieldValue(field, *given);
   status = EncodeStatus::kBadValue;
   return nullptr;
 }
@@ -781,6 +826,8 @@ static void ReportDecodeError(DecodeResult result, const char *column_name,
   LogVSQL(WARNING_LEVEL, "%s '%s' of type '%s' at row %llu (value: %s): %s",
           label, column_name, type_name, static_cast<unsigned long long>(row),
           value_prefix.ptr(), decoder_error_msg);
+  // TODO(villagesql-general): say the decode failed instead of "Invalid value
+  // ... check server log for details".
   villagesql_error(
       "%s '%s' of type '%s' at row %llu: check server log for details", MYF(0),
       label, column_name, type_name, static_cast<unsigned long long>(row));
@@ -900,32 +947,53 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
   // Set the type context
   item->set_type_context(const_cast<TypeContext *>(&tc));
 
-  // The rest of the function is for strings only, since we may need to
-  // re-encode it to the custom type's representation.
-  if (item->type() != Item::STRING_ITEM) return false;
+  // The rest of the function is for string, hex and bit literals only, since
+  // we may need to re-encode them to the custom type's representation.
+  if (item->type() != Item::STRING_ITEM && item->type() != Item::HEX_BIN_ITEM)
+    return false;
 
-  // Encode the string value
-  Item_string *str_item = down_cast<Item_string *>(item);
+  // Encode the literal's value
+  auto *literal = down_cast<Item_basic_constant *>(item);
   String tmp_buf;
-  String *str_val = str_item->val_str(&tmp_buf);
+  String *str_val = literal->val_str(&tmp_buf);
   if (str_val == nullptr) {
     return false;  // NULL value, nothing to encode
   }
 
   EncodeStatus status = EncodeStatus::kBadValue;
-  String *encoded = EncodeForItem(item, *str_val, status);
+  String converted;
+  const String *given = nullptr;
+  String *encoded = EncodeForItem(item, *str_val, &converted, &given, status);
   if (encoded == nullptr) {
     if (status == EncodeStatus::kBadValue) {
-      const ErrConvString errmsg(str_val->ptr(), str_val->length(),
-                                 str_item->collation.collation);
+      const ErrConvString errmsg = ErrValue(*given);
       my_error(ER_WRONG_VALUE, MYF(0), tc.type_name().c_str(), errmsg.ptr());
     }
     return true;
   }
 
-  // Replace the string value with the encoded value
-  str_item->set_str_value(encoded);
+  // Replace the literal's value with the encoded value
+  literal->set_str_value(encoded);
   return false;
+}
+
+void PrintEncodedLiteral(const TypeContext &tc, const String &encoded,
+                         enum_query_type query_type, String *out) {
+  out->append('\'');
+  String decoded;
+  if (DecodeStringUncached(tc, encoded, &decoded)) {
+    //  TODO(villagesql-general): Make this error observable.
+    out->append("<error decoding value>");
+  } else if (query_type & QT_TO_SYSTEM_CHARSET) {
+    // Escaped and converted as Item_string::print does for a literal without
+    // an introducer.
+    convert_and_print(&decoded, out, system_charset_info);
+  } else if (query_type & QT_TO_ARGUMENT_CHARSET) {
+    convert_and_print(&decoded, out, out->charset());
+  } else {
+    decoded.print(out);
+  }
+  out->append('\'');
 }
 
 int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
@@ -952,6 +1020,38 @@ std::optional<size_t> TryComputeHash(const TypeContext &tc, const uchar *data,
   return hash_op->invoke(data, len);
 }
 
+// LEX::has_udf() is what makes Prepared_statement::execute_loop prepare a
+// statement again at every EXECUTE. A classic UDF sets it while parsing; a VDF
+// sets it through here only when the statement needs it.
+void MarkVdfStatementForReprepare(THD *thd) { thd->lex->set_has_udf(); }
+
+bool DeferUntilReprepare(THD *thd) {
+  if (!thd->stmt_arena->is_stmt_prepare() || thd->stmt_arena->is_repreparing)
+    return false;
+  MarkVdfStatementForReprepare(thd);
+  return true;
+}
+
+// At the first PREPARE we might not yet know all the type params of the custom
+// types in the statement. That's OK: they are resolved at EXECUTE, when the
+// statement is prepared again with the bound values. So at the first PREPARE,
+// when one side's params are unknown, it is enough that the base types
+// match. E.g. in `WHERE v = TVECTOR::from_string(?)`, with `v` a
+// TVECTOR(3) column, the right side is a TVECTOR with unknown params until
+// EXECUTE. It is accepted at PREPARE, and at EXECUTE a value of another
+// dimension, e.g. '[1,2]', is rejected.
+// Params can also be unknown without a ?, e.g. TVECTOR::from_string(s) with a
+// column s. Accepting those at PREPARE too is deliberate: EXECUTE prepares the
+// statement again and rejects them there, with the same error as without a
+// prepared statement.
+static bool CompatibleWhileResolving(const TypeContext &a,
+                                     const TypeContext &b) {
+  if (a.is_compatible_with(b)) return true;
+  return (a.is_unknown() || b.is_unknown()) &&
+         a.key().descriptor_key() == b.key().descriptor_key() &&
+         DeferUntilReprepare(current_thd);
+}
+
 bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
   const TypeContext *accumulator_tc = accumulator->get_type_context();
   const TypeContext *item_tc = item->get_type_context();
@@ -976,7 +1076,7 @@ bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
                      MYF(0));
     return true;
   } else if (accumulator_tc != nullptr && item_tc != nullptr &&
-             !accumulator_tc->is_compatible_with(*item_tc)) {
+             !CompatibleWhileResolving(*accumulator_tc, *item_tc)) {
     // Both have custom types but they're incompatible
     villagesql_error(
         "Cannot use UNION with different custom types '%s' and '%s'", MYF(0),
@@ -1001,7 +1101,7 @@ bool MaybeValidateAndCastCustomTypeComparison(Item &left, Item &right,
 
   // Case 1: Both sides have custom types
   if (lhs_tc != nullptr && rhs_tc != nullptr) {
-    if (!lhs_tc->is_compatible_with(*rhs_tc)) {
+    if (!CompatibleWhileResolving(*lhs_tc, *rhs_tc)) {
       villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
                        lhs_tc->qualified_name().c_str(),
                        rhs_tc->qualified_name().c_str(), operation_name);
@@ -1074,6 +1174,9 @@ bool CanStoreInCustomField(const Item *item, const Field *field) {
   // function validate the actual format
   switch (item->type()) {
     case Item::STRING_ITEM:
+    // A hex or bit literal is a binary string;
+    // Item_hex_string::save_in_field_inner encodes it.
+    case Item::HEX_BIN_ITEM:
     case Item::NULL_ITEM:
     case Item::DEFAULT_VALUE_ITEM:
       return true;
@@ -1189,19 +1292,31 @@ bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
   return true;  // Error
 }
 
-void CopyCustomToCustomField(const Field *from, Field *to) {
+// Returns true, without writing to `to`, if `to` is not a VARCHAR field.
+static bool CopyCustomToCustomField(const Field *from, Field *to) {
   // Both fields have the same custom type. Copy binary data directly.
   // Handle potential length_bytes differences (VARCHAR(255) vs VARCHAR(65535)).
   // Note: from->data_length() decodes the length and from->data_ptr() returns
   // a pointer to the data (skipping the length prefix). But to->field_ptr()
   // returns the start of the field including the length prefix area, so we must
   // manually encode the length prefix.
-  // TODO(villagesql-blob): needs update for blob implementation.
   assert(from->get_type_context()->is_compatible_with(*to->get_type_context()));
   assert(from->get_type_context()->descriptor()->implementation_type() ==
          MYSQL_TYPE_VARCHAR);
   assert(to->get_type_context()->descriptor()->implementation_type() ==
          MYSQL_TYPE_VARCHAR);
+  // A custom value is only ever copied into a VARCHAR field. Any other field,
+  // e.g. a BLOB in an internal temp table, has a different layout and would be
+  // corrupted by the writes below.
+  // TODO(villagesql-blob): handle BLOB fields once custom types can use blobs
+  // as their underlying storage.
+  if (should_assert_if_true(to->real_type() != MYSQL_TYPE_VARCHAR)) {
+    LogVSQL(ERROR_LEVEL,
+            "Cannot copy custom type %s value into field '%s' of type %d",
+            to->get_type_context()->type_name().c_str(), to->field_name,
+            static_cast<int>(to->real_type()));
+    return true;
+  }
   const size_t data_len = from->data_length();
   const uint32 to_length_bytes =
       down_cast<const Field_varstring *>(to)->get_length_bytes();
@@ -1222,11 +1337,14 @@ void CopyCustomToCustomField(const Field *from, Field *to) {
   assert(data_len <= to->field_length);
   // Copy the binary data
   memcpy(to_ptr + to_length_bytes, from_data, data_len);
+  return false;
 }
 
 static void do_field_custom_to_custom(Copy_field *, const Field *from,
                                       Field *to) {
-  CopyCustomToCustomField(from, to);
+  if (CopyCustomToCustomField(from, to)) {
+    villagesql_check_error_log();
+  }
 }
 
 static void do_field_custom_to_string(Copy_field *, const Field *from,
@@ -1270,8 +1388,31 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
         thd->get_stmt_da()->current_row_for_condition());
     return false;
   }
-  CopyCustomToCustomField(from, to);
+  if (CopyCustomToCustomField(from, to)) {
+    villagesql_check_error_log();
+  }
   return false;
+}
+
+type_conversion_status HandleFailedEncode(Field *field, EncodeStatus status,
+                                          bool no_conversions) {
+  switch (status) {
+    case EncodeStatus::kNull:
+      return set_field_to_null_with_conversions(field, no_conversions);
+    case EncodeStatus::kOom:
+      return TYPE_ERR_OOM;
+    case EncodeStatus::kErrorRaised:
+      return TYPE_ERR_BAD_VALUE;
+    case EncodeStatus::kBadValue:
+      break;
+  }
+  // A warning for the bad value is already pushed. Store the type's intrinsic
+  // default so the row reads back if it survives, as a built-in stores 0 or ''
+  // for a value it cannot parse; nullability does not enter into it. A failure
+  // here has reported itself, so pass its status on.
+  const type_conversion_status store_stat =
+      StoreCustomFieldIntrinsicDefault(field);
+  return store_stat != TYPE_OK ? store_stat : TYPE_ERR_BAD_VALUE;
 }
 
 type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
@@ -1288,52 +1429,58 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
   EncodeStatus status = EncodeStatus::kBadValue;
   String *encoded = EncodeStringForField(to_field, *str, status);
   if (encoded == nullptr) {
-    switch (status) {
-      case EncodeStatus::kNull:
-        return set_field_to_null_with_conversions(to_field, false);
-      case EncodeStatus::kOom:
-        return TYPE_ERR_OOM;
-      case EncodeStatus::kErrorRaised:
-      case EncodeStatus::kBadValue:
-        return TYPE_ERR_BAD_VALUE;
-    }
+    return HandleFailedEncode(to_field, status, false);
   }
 
   to_field->set_notnull();
   return to_field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
 }
 
-type_conversion_status EncodeAndStoreStringToCustomField(
-    const String &str_value, Field *field) {
+// The charset a parameter's bytes are in. set_str() labels them binary, and
+// convert_value() relabels them (converting if needed) only for a
+// string-typed parameter. Bytes still labelled binary are in the charset they
+// arrived in, collation_source(). A custom type's encode reads them as text,
+// so it needs that charset.
+static const String ParamValueInItsCharset(const Item_param *param,
+                                           const String &str_value) {
+  const CHARSET_INFO *cs = str_value.charset() == &my_charset_bin
+                               ? param->collation_source()
+                               : str_value.charset();
+  return String(str_value.ptr(), str_value.length(), cs);
+}
+
+type_conversion_status EncodeAndStoreStringToCustomField(const String &value,
+                                                         Field *field) {
   EncodeStatus status = EncodeStatus::kBadValue;
-  String *encoded = EncodeStringForField(field, str_value, status);
+  String *encoded = EncodeStringForField(field, value, status);
   if (encoded == nullptr) {
-    switch (status) {
-      case EncodeStatus::kNull:
-        return set_field_to_null_with_conversions(field, false);
-      case EncodeStatus::kOom:
-        return TYPE_ERR_OOM;
-      case EncodeStatus::kErrorRaised:
-      case EncodeStatus::kBadValue:
-        return TYPE_ERR_BAD_VALUE;
-    }
+    return HandleFailedEncode(field, status, false);
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
 }
 
-String *EncodeStringForCustomParam(Item *item, const String &str_value,
+type_conversion_status ParamEncodeAndStoreCustomField(const Item_param *param,
+                                                      const String &str_value,
+                                                      Field *field) {
+  return EncodeAndStoreStringToCustomField(
+      ParamValueInItsCharset(param, str_value), field);
+}
+
+String *EncodeStringForCustomParam(Item_param *param, const String &str_value,
                                    bool &null_value) {
+  const String value = ParamValueInItsCharset(param, str_value);
   EncodeStatus status = EncodeStatus::kBadValue;
-  String *encoded = EncodeForItem(item, str_value, status);
+  String converted;
+  const String *given = nullptr;
+  String *encoded = EncodeForItem(param, value, &converted, &given, status);
   if (encoded == nullptr) {
     if (status == EncodeStatus::kBadValue) {
       // Invalid value for custom type
-      const TypeContext *tc = item->get_type_context();
-      const ErrConvString errmsg(str_value.ptr(), str_value.length(),
-                                 str_value.charset());
+      const TypeContext *tc = param->get_type_context();
+      const ErrConvString errmsg = ErrValue(*given);
       villagesql_error("Incorrect %s value: '%s' for parameter '%s'", MYF(0),
                        tc->qualified_name().c_str(), errmsg.ptr(),
-                       item->item_name.ptr());
+                       param->item_name.ptr());
     }
     // kErrorRaised has already raised its own diagnostic.
     // Signal "no string" to val_str() the usual way.
@@ -1341,6 +1488,44 @@ String *EncodeStringForCustomParam(Item *item, const String &str_value,
     return nullptr;
   }
   return encoded;
+}
+
+bool MaybeSetOutParamCustomType(THD *thd, Item_param *param, Item *proc_var,
+                                const CHARSET_INFO *text_cs) {
+  const TypeContext *tc = proc_var->get_type_context();
+  if (tc == nullptr) return false;
+
+  // set_str() labelled the text binary, and collation_source() reflects what
+  // the user variable held before the CALL (not set if it was not a string),
+  // so put the text's real charset back for the encode in val_str().
+  // TODO(villagesql-general): with the binary protocol (C API), OUT params go
+  // to the client through Protocol_binary::send_parameters(), and the ? now
+  // has the custom type. Check with a binary-protocol client test whether the
+  // client gets the text or the encoded bytes.
+  param->str_value_ptr.set_charset(text_cs);
+  param->collation.set(text_cs, DERIVATION_COERCIBLE);
+
+  // The procedure's own reference to the type ends with the procedure, so
+  // take one that lasts until the end of the statement.
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_read_lock();
+  const TypeContext *held =
+      vclient.type_contexts().acquire(tc->key(), *thd->mem_root);
+  if (held == nullptr) {
+    if (!thd->is_error()) {
+      villagesql_error("Type '%s' is not available", MYF(0),
+                       tc->qualified_name().c_str());
+    }
+    return true;
+  }
+  param->set_type_context(held);
+  return false;
+}
+
+void MaybeClearOutParamTypeContext(Item_param *param) {
+  // Only a CALL's OUT or INOUT `?` has the info, and its type comes only from
+  // MaybeSetOutParamCustomType.
+  if (param->get_out_param_info() != nullptr) param->set_type_context(nullptr);
 }
 
 type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
@@ -1377,13 +1562,18 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
   }
   switch (status) {
     case EncodeStatus::kNull:
-      // Mirror a literal \N in the input: mark the field NULL and leave the
-      // NOT NULL decision to the row-level check once the row is complete,
-      // which reports ER_WARN_NULL_TO_NOTNULL. Storing a value here instead
-      // would satisfy that check and let a NOT NULL column through.
-      if (!field->is_nullable() && thd->lex->is_ignore()) {
-        // IGNORE keeps the row, so give it the type's intrinsic default
-        // rather than zero bytes, as the \N path does.
+      // Mirror a literal \N in the input: mark the field NULL so the
+      // row-level check reports ER_WARN_NULL_TO_NOTNULL once the row is
+      // complete. Storing a value here instead would satisfy that check and
+      // let a NOT NULL column through.
+      //
+      // Report it here instead when that check will not: under IGNORE, which
+      // keeps the row whatever the check finds, and when the field is not
+      // tmp-nullable. LOAD XML arrives that way, since it runs no row-level
+      // check and marks nothing tmp-nullable.
+      if (!field->is_nullable() &&
+          (thd->lex->is_ignore() || !field->is_tmp_nullable())) {
+        // Warn and default the column, as the row-level check would have.
         if (StoreCustomFieldIntrinsicDefault(field) != TYPE_OK) return true;
         field->set_warning(Sql_condition::SL_WARNING, ER_WARN_NULL_TO_NOTNULL,
                            1);
@@ -1395,27 +1585,23 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
     case EncodeStatus::kErrorRaised:
       return true;
     case EncodeStatus::kBadValue:
-      break;  // handled below: whether this fails the row depends on the mode
+      break;
   }
-  if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
-    // EncodeStringForField already pushed a warning; promote to error
-    my_error(ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, MYF(0),
-             field->get_type_context()->type_name().c_str(),
-             ErrConvString(&input_str).ptr(), field->field_name,
-             thd->get_stmt_da()->current_row_for_condition());
-    return true;
-  }
-  // EncodeStringForField already pushed a warning. Store the intrinsic default,
-  // mirroring MySQL built-in behavior of storing 0, '', etc. for bad values in
-  // IGNORE or non-strict mode.
+  // EncodeStringForField pushed ER_TRUNCATED_WRONG_VALUE_FOR_FIELD as a
+  // warning. In strict mode the statement's Strict_error_handler raised it as
+  // an error, so the row fails here.
+  if (thd->is_error()) return true;
+  // Otherwise the row survives, so store the intrinsic default, mirroring the
+  // 0 or '' a built-in stores for a bad value.
   return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
 }
 
 bool CanImplicitlyCastToCustom(const Item *item) {
   if (item->has_type_context()) return false;
 
-  // Allow string and null literals
-  if (item->type() == Item::STRING_ITEM || item->type() == Item::NULL_ITEM) {
+  // Allow string, hex or bit, and null literals
+  if (item->type() == Item::STRING_ITEM || item->type() == Item::HEX_BIN_ITEM ||
+      item->type() == Item::NULL_ITEM) {
     return true;
   }
 
@@ -1449,7 +1635,7 @@ static bool AllArgsCompatible(Item_func *func) {
   for (uint i = 1; any_tc && i < func->arg_count; i++) {
     auto *tc = func->get_arg(i)->get_type_context();
     if (!tc) continue;  // not yet custom-typed, skip
-    if (!any_tc->is_compatible_with(*tc)) {
+    if (!CompatibleWhileResolving(*any_tc, *tc)) {
       villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
                        any_tc->qualified_name().c_str(),
                        tc->qualified_name().c_str(), func->func_name());
@@ -1506,9 +1692,10 @@ static bool CaseArgsCompatible(Item_func *func) {
       villagesql_error(ER_INCOMPARABLE_TYPES, MYF(0), func->func_name());
       return false;
     }
-    if (!tc0->is_compatible_with(*tc1)) {
-      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0), tc0->type_name().c_str(),
-                       tc1->type_name().c_str());
+    if (!CompatibleWhileResolving(*tc0, *tc1)) {
+      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0),
+                       tc0->qualified_name().c_str(),
+                       tc1->qualified_name().c_str());
       return false;
     }
   }
@@ -1641,12 +1828,47 @@ static bool insert_tmp_metadata_for_thd(THD *thd, const ColumnKey &key,
   return false;
 }
 
-bool PrepareTmpTableCustomColumns(
-    THD *thd, const char *db, const char *table_name,
-    List<Create_field> &create_fields,
-    [[maybe_unused]] const HA_CREATE_INFO *create_info) {
+bool EnsureEngineIsInnodb(const handlerton *hton, const char *operation) {
+  assert(hton);
+  if (hton && hton->db_type != DB_TYPE_INNODB) {
+    villagesql_error(
+        "Custom types are only supported with InnoDB storage engine. "
+        "Cannot %s with %s storage engine.",
+        MYF(0), operation, ha_resolve_storage_engine_name(hton));
+    return true;
+  }
+  return false;
+}
+
+// Check that the tmp table is InnoDB if any column or index is custom-typed.
+static bool EnsureInnodbEngineForTmpTable(const HA_CREATE_INFO *create_info,
+                                          const Alter_info *alter_info,
+                                          const char *operation) {
   assert(create_info->options & HA_LEX_CREATE_TMP_TABLE);
-  List_iterator_fast<Create_field> it(create_fields);
+
+  bool has_custom = false;
+  for (const Create_field &cdef : alter_info->create_list) {
+    if (cdef.custom_type_context != nullptr) {
+      has_custom = true;
+      break;
+    }
+  }
+  for (const Key_spec *key : alter_info->key_list) {
+    if (has_custom) break;
+    has_custom = key->key_create_info.is_custom_index();
+  }
+
+  return has_custom && EnsureEngineIsInnodb(create_info->db_type, operation);
+}
+
+bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
+                                  const char *table_name,
+                                  Alter_info *alter_info,
+                                  const HA_CREATE_INFO *create_info) {
+  assert(create_info->options & HA_LEX_CREATE_TMP_TABLE);
+  if (EnsureInnodbEngineForTmpTable(create_info, alter_info, "create table"))
+    return true;
+  List_iterator_fast<Create_field> it(alter_info->create_list);
   Create_field *cdef;
   while ((cdef = it++) != nullptr) {
     if (cdef->custom_type_context == nullptr) continue;
@@ -1684,24 +1906,31 @@ void RemoveTmpTableMetadata(THD *thd, TABLE *table) {
   RemoveTmpTableMetadata(thd, table->s->db.str, table->s->table_name.str);
 }
 
-void PrepareAlterCustomFields(THD *thd, const List<Create_field> &create_list) {
+bool PrepareAlterCustomFields(THD *thd, const Alter_info *alter_info,
+                              const HA_CREATE_INFO *create_info) {
   thd->villagesql_alter_custom_fields.clear();
-  for (const Create_field &cdef : create_list) {
+
+  if ((create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
+      EnsureInnodbEngineForTmpTable(create_info, alter_info, "alter table"))
+    return true;
+
+  for (const Create_field &cdef : alter_info->create_list) {
     if (cdef.custom_type_context != nullptr)
       thd->villagesql_alter_custom_fields.emplace(cdef.field_name,
                                                   cdef.custom_type_context);
   }
+  return false;
 }
 
-void SetAlterTargetForCustomIndexes(THD *thd, const TABLE *old_table) {
-  if (should_assert_if_null(thd) || should_assert_if_null(old_table)) {
+void SetAlterTargetForCustomIndexes(THD *thd, const char *db,
+                                    const char *table_name) {
+  if (should_assert_if_null(thd) || should_assert_if_null(db) ||
+      should_assert_if_null(table_name)) {
     LogVSQL(ERROR_LEVEL, "null argument in SetAlterTargetForCustomIndexes");
     return;
   }
-  thd->villagesql_alter_target_db.assign(old_table->s->db.str,
-                                         old_table->s->db.length);
-  thd->villagesql_alter_target_table.assign(old_table->s->table_name.str,
-                                            old_table->s->table_name.length);
+  thd->villagesql_alter_target_db.assign(db);
+  thd->villagesql_alter_target_table.assign(table_name);
 }
 
 bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
@@ -1728,6 +1957,27 @@ bool MaybeCarryCustomIndexForRebuild(THD *thd, const KEY *key_info,
   // rebuilt key keeps its type and extension but not custom_index_params, so a
   // CREATE TABLE ... LIKE of a custom index loses its WITH clause (the ALTER
   // rebuild path is unaffected, as it does not re-register the index).
+  return false;
+}
+
+bool MaybeCarryCustomKeyPartProfileForRebuild(
+    THD *thd, const KEY_PART_INFO *key_part, LEX_CSTRING *out_profile,
+    LEX_CSTRING *out_profile_extension) {
+  *out_profile = {nullptr, 0};
+  *out_profile_extension = {nullptr, 0};
+  const IndexProfileDescriptor *profile = key_part->custom_index_profile;
+  if (profile == nullptr) return false;
+
+  const std::string &name = profile->profile_name();
+  const std::string &ext = profile->extension_name();
+  char *name_copy = strmake_root(thd->mem_root, name.c_str(), name.length());
+  char *ext_copy = strmake_root(thd->mem_root, ext.c_str(), ext.length());
+  if (name_copy == nullptr || ext_copy == nullptr) {
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), name.length() + ext.length());
+    return true;
+  }
+  *out_profile = {name_copy, name.length()};
+  *out_profile_extension = {ext_copy, ext.length()};
   return false;
 }
 
@@ -1905,8 +2155,10 @@ static bool ConvertVDFArguments(
           return true;
         }
         args[i]->set_type_context(resolved_tc);
-      } else {
-        // Neither the hook nor the built-in rules could supply params.
+      } else if (!DeferUntilReprepare(thd)) {
+        // Neither the hook nor the built-in rules could supply params. At a
+        // first PREPARE they may depend on a parameter value, so don't error
+        // out just yet.
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -1916,15 +2168,16 @@ static bool ConvertVDFArguments(
       continue;
     }
 
-    // Case 3: Arg is a constant string, or a prepared-statement parameter —
-    // implicit conversion.
+    // Case 3: Arg is a constant string, hex or bit literal, or a
+    // prepared-statement parameter — implicit conversion.
     //
     // A parameter has no value here, so only its type context is set:
-    // InjectAndEncodeCustomType encodes a constant string in place and leaves
+    // InjectAndEncodeCustomType encodes a constant literal in place and leaves
     // any other Item alone, and Item_param::val_str encodes whatever value
     // each EXECUTE supplies.
     if (args[i]->type() == Item::PARAM_ITEM ||
-        (args[i]->type() == Item::STRING_ITEM &&
+        ((args[i]->type() == Item::STRING_ITEM ||
+          args[i]->type() == Item::HEX_BIN_ITEM) &&
          args[i]->const_for_execution())) {
       // Take the params from whichever source is in play -- the hook's answer
       // for this argument, or the answer shared across arguments of its type
@@ -1956,8 +2209,14 @@ static bool ConvertVDFArguments(
       }
 
       // If the resolved type is still unknown (parameterized type, no known
-      // params from other args), error.
+      // params from other args), error, unless the params may depend on a
+      // parameter value at a first PREPARE. The argument is then left as it is
+      // until the statement is prepared again. The params are not always
+      // unknown because of a ?, e.g. with TVECTOR::from_string(s) and a column
+      // s. Skipping the error for those too is deliberate: EXECUTE prepares the
+      // statement again and reports the error there.
       if (type_ctx->is_unknown()) {
+        if (DeferUntilReprepare(thd)) continue;
         villagesql_error(
             "Cannot initialize function '%s': cannot determine type parameters "
             "for %s in argument %u",
@@ -2004,13 +2263,26 @@ static void InferVDFReturnParams(
 // Buffer for one canonical "k=v,k=v" params string.
 static constexpr size_t kBindParamsBufLen = VEF_MAX_TYPE_PARAMS_STRING_LEN;
 
+bool HasPSParamWithoutValue(Item *item) {
+  return WalkItem(item, enum_walk::SUBQUERY_PREFIX, [](Item *sub) {
+    return sub->type() == Item::PARAM_ITEM &&
+           down_cast<Item_param *>(sub)->param_state() == Item_param::NO_VALUE;
+  });
+}
+
 // Invokes a function's bind_and_check_types hook.
 // Fills out_arg_params[i] for each argument the hook resolved (left empty where
 // it had nothing to say) and *out_return_params for the return type. Returns
 // true on error (error already raised).
+//
+// declared_params is the signature's parameter types, or nullptr for a varargs
+// call, which has none and reads each argument as its own type. It decides
+// only how a constant string argument is read; each argument's type is what
+// the caller passed.
 static bool CallBindTypesHook(
     const vef_bind_types_func_t bind_and_check, vef_context_t &ctx,
     const char *func_name, uint arg_count, Item **args,
+    const vef_type_t *declared_params,
     std::vector<TypeParameters> *out_arg_params,
     TypeParameters *out_return_params,
     std::vector<std::string> *out_arg_type_names = nullptr) {
@@ -2046,9 +2318,22 @@ static bool CallBindTypesHook(
       arg_types[i].id = InferArgTypeId(args[i]);
       arg_types[i].custom_type = nullptr;
     }
-    // Provide constant string values where available
-    if (args[i]->const_for_execution() && arg_types[i].id == VEF_TYPE_STRING) {
-      String *v = args[i]->val_str(&const_store[i]);
+    // Provide constant string values where available, in the charset of the
+    // parameter they are passed to: utf8mb4 for a STRING parameter, the bytes
+    // unconverted for any other. A bare ? is read only when it holds a string
+    // (see PsParamValueLoan). A ? with no value, possibly nested,
+    // is not expected here: ValidateAndConvertVDFArguments postpones the hook.
+    const bool bare_param_without_string =
+        args[i]->type() == Item::PARAM_ITEM &&
+        down_cast<Item_param *>(args[i])->param_state() !=
+            Item_param::STRING_VALUE;
+    if (args[i]->const_for_execution() && !bare_param_without_string &&
+        !should_assert_if_true(HasPSParamWithoutValue(args[i])) &&
+        arg_types[i].id == VEF_TYPE_STRING) {
+      const vef_type_id param_id =
+          declared_params != nullptr ? declared_params[i].id : arg_types[i].id;
+      String *v = ReadVdfValue(param_id, args[i], &const_store[i]);
+      if (v == nullptr && !args[i]->null_value) return true;
       if (v != nullptr && !args[i]->null_value) {
         const_values[i] = const_cast<char *>(v->ptr());
         const_lengths[i] = v->length();
@@ -2123,7 +2408,7 @@ static bool CallBindTypesHook(
   }
   if (out_return.actual_len > 0 && out_return_params != nullptr) {
     *out_return_params = TypeParameters::from_raw(
-        std::string(return_buf, out_return.actual_len));
+        std::string_view(return_buf, out_return.actual_len));
     const std::string validation_error = out_return_params->validation_error();
     if (!validation_error.empty()) {
       villagesql_error("Invalid inferred return parameters: %s", MYF(0),
@@ -2142,7 +2427,7 @@ static bool CallBindTypesHook(
     }
     if (out_args[i].actual_len > 0) {
       (*out_arg_params)[i] = TypeParameters::from_raw(
-          std::string(out_args[i].buf, out_args[i].actual_len));
+          std::string_view(out_args[i].buf, out_args[i].actual_len));
       const std::string validation_error =
           (*out_arg_params)[i].validation_error();
       if (!validation_error.empty()) {
@@ -2178,6 +2463,37 @@ vef_type_id InferArgTypeId(const Item *item) {
     default:
       return VEF_TYPE_STRING;
   }
+}
+
+const CHARSET_INFO *VdfValueCharset(vef_type_id id) {
+  return id == VEF_TYPE_STRING ? &my_charset_utf8mb4_bin : &my_charset_bin;
+}
+
+String *ReadVdfValue(vef_type_id id, Item *arg, String *buffer) {
+  // eval_string_arg() labels a value it does not convert with the charset
+  // asked for, and that value can be a constant's own: reading a text literal
+  // as binary would leave the literal labelled binary for everything after.
+  if (id != VEF_TYPE_STRING) return arg->val_str(buffer);
+  const CHARSET_INFO *to_cs = VdfValueCharset(id);
+  // In any other charset, eval_string_arg() either converts the value into
+  // buffer or returns it with at most its collation changed to utf8mb4_bin;
+  // only a binary value would be relabelled to another charset.
+  if (arg->collation.collation != &my_charset_bin) {
+    return eval_string_arg(to_cs, arg, buffer);
+  }
+  // The same steps for a binary value, with the relabelled value copied into
+  // buffer. It is read into local, not buffer, because a value such as
+  // SUBSTRING()'s can be a view into the buffer it is given, which the copy
+  // would overwrite.
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> local(nullptr, 0, &my_charset_bin);
+  String *res = arg->val_str(&local);
+  if (res == nullptr) return nullptr;
+  if (!res->is_valid_string(to_cs)) {
+    report_conversion_error(to_cs, res->ptr(), res->length(), res->charset());
+    return nullptr;
+  }
+  if (buffer->copy(res->ptr(), res->length(), to_cs)) return nullptr;
+  return buffer;
 }
 
 // Turns a varargs hook's answers into the expected-type array the two passes
@@ -2226,15 +2542,41 @@ static bool BuildVarargsExpectedTypes(
   return false;
 }
 
+// Returns true if any argument is of a custom type whose params are unknown.
+// They are not always unknown because of a ?, e.g. TVECTOR::from_string(s)
+// with a column s. Postponing the hook for those too is deliberate: EXECUTE
+// prepares the statement again, and the error is reported there.
+static bool UnknownCustomTypeParamsPresent(uint arg_count, Item **args) {
+  for (uint i = 0; i < arg_count; i++) {
+    const TypeContext *tc = args[i]->get_type_context();
+    if (tc != nullptr && tc->is_unknown()) return true;
+  }
+  return false;
+}
+
 bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     std::string_view extension_name,
                                     uint arg_count, Item **args,
                                     const vef_signature_t *signature,
                                     TypeParameters *out_return_params,
                                     const vef_bind_types_func_t bind_and_check,
-                                    vef_context_t &ctx) {
+                                    vef_context_t &ctx,
+                                    bool *out_bind_hook_postponed) {
   const bool has_bind_hook = nullptr != bind_and_check;
   const bool varargs = signature->param_count == VEF_PARAM_VARARGS;
+  *out_bind_hook_postponed = false;
+
+  // At a first PREPARE an argument may have a ? with no value yet, passed
+  // directly or inside an expression like CONCAT(?, ''), or be of a custom
+  // type whose params depend on one. The bind_and_check_types hook (and pass
+  // 2) then waits until the statement is prepared again at EXECUTE with the
+  // values bound, so that it judges the call with them. fix_fields defers
+  // prerun on the same condition for a ?.
+  const bool postpone_bind_hook =
+      has_bind_hook &&
+      (std::any_of(args, args + arg_count, HasPSParamWithoutValue) ||
+       UnknownCustomTypeParamsPresent(arg_count, args)) &&
+      DeferUntilReprepare(thd);
 
   // Varargs without a hook: skip both arg-count and per-arg type validation.
   // The function's prerun hook is responsible for inspecting arg_count and
@@ -2253,10 +2595,14 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
   if (varargs) {
     // Varargs runs the hook first, because there is no signature to check
     // arguments against and the hook supplies what signature->params would
-    // have.
+    // have. Postponing the hook thus postpones every check.
+    if (postpone_bind_hook) {
+      *out_bind_hook_postponed = true;
+      return false;
+    }
     std::vector<std::string> hook_arg_type_names(arg_count);
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params,
+                          nullptr, &hook_arg_params, out_return_params,
                           &hook_arg_type_names)) {
       return true;
     }
@@ -2303,6 +2649,11 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     return true;
   }
 
+  if (postpone_bind_hook) {
+    *out_bind_hook_postponed = true;
+    return false;
+  }
+
   // Fixed arity runs the hook here. The hook sits between the passes:
   // it sees what pass 1 resolved, and the params it decides are what
   // pass 2 applies.
@@ -2310,7 +2661,8 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // The type-name argument is left at its default: a fixed-arity signature
     // already declares every argument's type, so the hook has nothing to name.
     if (CallBindTypesHook(bind_and_check, ctx, func_name, arg_count, args,
-                          &hook_arg_params, out_return_params)) {
+                          signature->params, &hook_arg_params,
+                          out_return_params)) {
       return true;
     }
   }

@@ -48,11 +48,19 @@ typedef uint32_t vef_index_cap_t;
 // Supports scanning in descending key order.
 #define VEF_INDEX_CAP_REVERSE_SCAN ((vef_index_cap_t)1u << 2)
 // Index scan returns results in key order, allowing the optimizer to satisfy
-// ORDER BY on the index columns without a separate sort step.
+// ORDER BY on the index columns without a separate sort step. NULL entries are
+// not stored in the index, so the optimizer does not use it for ORDER BY on a
+// nullable column.
 #define VEF_INDEX_CAP_ORDER_BY ((vef_index_cap_t)1u << 3)
 // Supports index scan for K nearest neighbours.
 // ORDER BY distance_function(index_column, reference_key) LIMIT K;
+// KNN does not depend on VEF_INDEX_CAP_ORDER_BY and is used on nullable
+// columns too: rows with a NULL value are not in the index and are not
+// returned by the KNN scan.
 #define VEF_INDEX_CAP_KNN ((vef_index_cap_t)1u << 4)
+// Index scan may return approximate results (e.g. approximate nearest
+// neighbour search); results may omit or misorder some matching rows.
+#define VEF_INDEX_CAP_APPROXIMATE ((vef_index_cap_t)1u << 5)
 
 // Physical storage properties (used by InnoDB).
 // Every index entry must carry a back-reference to the data it indexes so the
@@ -84,6 +92,9 @@ typedef uint32_t vef_index_storage_t;
 // Opaque index descriptor reference from MySQL/InnoDB
 typedef void *vef_index_ref_t;
 
+// InnoDB ReadView reference for MVCC
+typedef const void *vef_readview_ref_t;
+
 // Naming convention for function pointer typedefs in this header:
 //   _fn      - callback provided by the server and called by the extension
 //   _func_t  - function provided by the extension and called by the server
@@ -101,13 +112,25 @@ typedef uint32_t (*vef_index_max_key_len_fn)(vef_index_ref_t index_ref,
 // least the column's maximum key length as reported by
 // vef_index_max_key_len_fn. The server copies the stored value into that
 // buffer and sets col_data->length to the value length.
+// If trx_ref is not NULL, the server sets *trx_ref to the transaction
+// reference of the value read. A locking read, which has no read view, needs it
+// to identify the transaction that last wrote the entry.
+// If delete_mark is not NULL, the server sets *delete_mark to whether the
+// stored value is marked as deleted. A locking read needs it for the same
+// reason.
 // The server reads the value under a mini-transaction of its own, so the
 // extension must not call this while holding page latches in a mini-transaction
 // it started.
 // Returns false on success, true on error (writes to error_msg).
 typedef bool (*vef_index_col_ref_to_data_fn)(
     vef_index_ref_t index_ref, uint32_t key_pos, vef_storage_col_ref_t col_ref,
-    vef_storage_col_data_t *col_data, char *error_msg, uint32_t error_msg_len);
+    vef_storage_col_data_t *col_data, vef_storage_trx_ref_t *trx_ref,
+    bool *delete_mark, char *error_msg, uint32_t error_msg_len);
+
+// Check whether the index key column at key_pos is sorted in descending order.
+// key_pos is the 0-based index key column.
+typedef bool (*vef_index_key_is_desc_fn)(vef_index_ref_t index_ref,
+                                         uint32_t key_pos);
 
 // Derive a stable column reference from column data.
 // key_pos is the 0-based index key column col_data holds a value of; its column
@@ -122,18 +145,6 @@ typedef bool (*vef_index_col_data_to_ref_fn)(vef_index_ref_t index_ref,
                                              vef_storage_col_ref_t *col_ref,
                                              char *error_msg,
                                              uint32_t error_msg_len);
-
-// Report the registered name of the function bound to a profile helper, so the
-// extension can resolve a native fast-path ONCE (at index open) instead of
-// dispatching through helper_fn per call. Writes the name the extension gave to
-// make_index_function (for the profile bound to key column key_pos, at helper
-// fn_id) into name_buf, NUL-terminated and truncated to name_buf_len. This lets
-// a hot inner loop (e.g. HNSW distance) map the metric to a native function
-// pointer and skip the per-call VDF marshalling. Returns false on success, true
-// on error / no such binding (writes to error_msg).
-typedef bool (*vef_index_helper_fn_name_fn)(
-    vef_index_ref_t index_ref, uint32_t key_pos, uint32_t fn_id, char *name_buf,
-    uint32_t name_buf_len, char *error_msg, uint32_t error_msg_len);
 
 // Call a helper function from the index profile by its registered ID.
 // An index profile is declared by the extension when registering an index type.
@@ -150,6 +161,11 @@ typedef void (*vef_index_profile_fn)(vef_index_ref_t index_ref,
                                      const void *const *args, uint32_t nargs,
                                      void *result);
 
+// Check whether a transaction's changes are visible under a read view.
+typedef bool (*vef_index_trx_is_visible_fn)(vef_index_ref_t index_ref,
+                                            vef_readview_ref_t read_view,
+                                            vef_storage_trx_ref_t trx_ref);
+
 // Index context passed by the server to every extension function. The pointer
 // remains valid for the lifetime of the loaded index storage; the extension
 // may cache it inside its storage or cursor state.
@@ -165,6 +181,9 @@ typedef struct {
 
   // Number of primary key columns
   uint32_t num_primary_key_columns;
+
+  // 1 if custom index is unique, 0 otherwise.
+  uint8_t is_unique;
 
   // Index profile function call interface. Always non-NULL.
   vef_index_profile_fn profile_fn;
@@ -183,109 +202,64 @@ typedef struct {
   // VEF_INDEX_STORAGE_HAS_COLUMN_REF is set in storage_props; otherwise NULL.
   vef_index_col_data_to_ref_fn col_data_to_ref_fn;
 
+  // Check if a transaction is visible under a read view. Always non-NULL.
+  vef_index_trx_is_visible_fn trx_is_visible_fn;
+
+  // Check if an index key column is descending. Always non-NULL.
+  vef_index_key_is_desc_fn key_is_desc_fn;
+
   // Pointer to the options struct filled by parse() at CREATE INDEX time.
   // Valid only during the create() call; NULL for all other calls and when
   // the index type declared no options.
   const void *options;
 
-  // Report the registered name of a profile helper's bound function, so the
-  // extension can bind a native fast-path once instead of dispatching per call.
-  // Always non-NULL. Appended at the end so an older reader sees an unchanged
-  // prefix.
-  vef_index_helper_fn_name_fn helper_fn_name_fn;
-
 } vef_index_ctx_t;
 
-// Index scan type. Determines the structure of the keys array in
-// vef_index_scan_desc_t:
-//
-//   POINT: Exact-match lookup. The keys array contains exactly one entry of
-//          type BEGIN with include_key=true and key_columns != NULL. The
-//          extension must match only entries equal to that key value.
-//
-//   RANGE: Range scan. The keys array contains a BEGIN entry (lower bound) and
-//          an END entry (upper bound) in any order. Either may be unbounded
-//          (key_columns == NULL). include_key on each entry controls whether
-//          the bound is inclusive or exclusive.
-//
-//   KNN:   K nearest neighbour scan. The keys array contains exactly one entry
-//          of type KNN_QUERY carrying the query vector. limit in the descriptor
-//          specifies K.
-typedef uint32_t vef_index_scan_type_t;
-#define VEF_INDEX_SCAN_TYPE_POINT ((vef_index_scan_type_t)0)
-#define VEF_INDEX_SCAN_TYPE_RANGE ((vef_index_scan_type_t)1)
-#define VEF_INDEX_SCAN_TYPE_KNN ((vef_index_scan_type_t)2)
-
-// Index scan key type.
-// BEGIN and END are value-space bounds, not traversal-order positions.
-// BEGIN is always the lower value bound; END is always the upper value bound.
-// The `reverse` field in vef_index_scan_desc_t controls traversal direction
-// within those fixed bounds: a reverse scan starts at the END bound and
-// advances toward BEGIN using PREV. The extension must account for `reverse`
-// when positioning the cursor in scan_begin, but the meaning of BEGIN/END
-// does not change.
-typedef uint32_t vef_index_scan_key_type_t;
-#define VEF_INDEX_SCAN_KEY_TYPE_BEGIN ((vef_index_scan_key_type_t)0)
-#define VEF_INDEX_SCAN_KEY_TYPE_END ((vef_index_scan_key_type_t)1)
-#define VEF_INDEX_SCAN_KEY_TYPE_KNN_QUERY ((vef_index_scan_key_type_t)2)
-
+// Scan key used to define an index scan. The profile function determines the
+// semantics of the key and how its key columns are interpreted by the
+// extension.
 typedef struct {
-  // Version for future extensibility
+  // Version for future extensibility.
   uint32_t version;
 
-  // Key type determines which fields below are meaningful:
-  //   BEGIN / END:  range bound (lower / upper value bound respectively)
-  //   KNN_QUERY:    the query vector to find K nearest neighbours of
-  vef_index_scan_key_type_t type;
+  // Identifies the profile function that defines the semantics of this scan
+  // key. The profile function is defined by the index profile.
+  uint32_t profile_function_id;
 
   // Number of key columns.
-  // For BEGIN/END: may be a prefix of the full index key.
-  // For KNN_QUERY: number of columns in the query vector; must not be 0.
   uint32_t num_key_columns;
 
-  // Key data for each column.
-  // For BEGIN/END: NULL means unbounded on that side:
-  //   BEGIN with key_columns == NULL -> no lower value bound (-INF)
-  //   END with key_columns == NULL   -> no upper value bound (+INF)
-  //   These semantics are value-space and do not change with `reverse`: a
-  //   reverse scan with a NULL END key still starts at +INF and advances
-  //   downward. When NULL, num_key_columns must be 0 and include_key is
-  //   ignored.
-  // For KNN_QUERY: must not be NULL.
+  // Key data for each column. The interpretation of the key columns is
+  // determined by the profile function.
   vef_storage_col_data_t *key_columns;
-
-  // Whether the range bound is inclusive. Applies to BEGIN/END only.
-  // true -> GE (BEGIN) or LE (END); false -> GT (BEGIN) or LT (END).
-  // Ignored for KNN_QUERY and when key_columns is NULL.
-  uint8_t include_key;
 
 } vef_index_scan_key_t;
 
 // Index scan descriptor.
 typedef struct {
-  // Version for future extensibility
+  // Version for future extensibility.
   uint32_t version;
 
-  // Scan type: point lookup, range scan, or KNN. The server sets this so the
-  // extension can dispatch without inspecting the key array.
-  vef_index_scan_type_t scan_type;
-
-  // Scan direction. false = ascending (BEGIN -> END), true = descending
-  // (END -> BEGIN). Does not change the value-space meaning of BEGIN/END keys.
-  // Ignored for VEF_INDEX_SCAN_TYPE_KNN.
+  // Scan direction. false = ascending, true = descending.
   uint8_t reverse;
 
+  // 1 if the limit is exact, 0 if more rows may be needed.
+  uint8_t limit_is_exact;
+
   // Maximum number of rows the server will read from this scan; 0 means
-  // unlimited. For VEF_INDEX_SCAN_TYPE_KNN this is K. For other scan types
-  // it signals that the server will call scan_end after at most limit rows,
-  // which the extension may use to optimize internal structures (e.g. avoid
-  // materializing more results than needed).
+  // unlimited.
   uint32_t limit;
 
-  // Number of keys in the keys array.
+  // Number of scan keys.
   uint32_t num_keys;
-  // Array of num_keys scan keys describing the bounds or query for this scan.
+
+  // Array of scan keys describing the scan. The semantics of each key are
+  // determined by its profile function.
   vef_index_scan_key_t *keys;
+
+  // MVCC read view the scan must be consistent with. It remains valid during
+  // the entire duration of the scan.
+  vef_readview_ref_t readview;
 
 } vef_index_scan_desc_t;
 
@@ -474,20 +448,33 @@ typedef bool (*vef_type_index_scan_position_func_t)(
 //                  set. Follows the same stability guarantees as the key_ref
 //                  output of insert: stable across mini-transactions and
 //                  transactions until the entry is physically removed by purge.
+//   key_column_refs - Caller-allocated array of index_ctx->num_key_columns
+//                  vef_storage_col_ref_t values. The extension fills this
+//                  array, instead of key_columns, when
+//                  VEF_INDEX_STORAGE_HAS_COLUMN_REF is set in storage_props.
 //   key_columns  - Caller-allocated array of index_ctx->num_key_columns
 //                  vef_storage_col_data_t structs; the extension sets each
-//                  data pointer and length to the key data at this position
+//                  data pointer and length to the key data at this position.
+//                  Filled only when VEF_INDEX_STORAGE_HAS_COLUMN_REF is not
+//                  set.
 //   pkey_columns - Caller-allocated array of
 //                  index_ctx->num_primary_key_columns vef_storage_col_data_t
 //                  structs; the extension sets each data pointer and length
 //                  to the primary key data for the current row
+//   trx_ref      - Output: transaction that last wrote this entry. Set only
+//                  when the scan has no read view (locking read); a scan with
+//                  a read view filters entries by visibility itself.
+//   delete_mark  - Output: true if the entry is marked as deleted. Set only
+//                  when the scan has no read view (locking read), like
+//                  trx_ref.
 //   error_msg    - Output: error description on failure
 //   error_msg_len - length of error message buffer
 // Returns false on success, true on error (writes to error_msg).
 typedef bool (*vef_type_index_scan_fetch_func_t)(
     vef_index_cursor_ref_t cursor, vef_storage_col_ref_t *key_ref,
-    vef_storage_col_data_t *key_columns, vef_storage_col_data_t *pkey_columns,
-    char *error_msg, uint32_t error_msg_len);
+    vef_storage_col_ref_t *key_column_refs, vef_storage_col_data_t *key_columns,
+    vef_storage_col_data_t *pkey_columns, vef_storage_trx_ref_t *trx_ref,
+    bool *delete_mark, char *error_msg, uint32_t error_msg_len);
 
 // Save the current cursor position before the active mini-transaction commits.
 // The server calls this when it is about to commit the mini-transaction the
@@ -645,9 +632,10 @@ typedef struct {
 // ===========================================================================
 //
 // Registers index profiles. Each profile binds a custom type to an index type
-// and declares the helper functions (distance, compare, etc.) used by the
-// index storage implementation. The server registers those functions as SQL
-// VDFs automatically when the profile is loaded.
+// and declares the function and helper bindings (distance, compare, etc.)
+// used by the index storage implementation. The SQL functions referenced by
+// the profile must be VDFs that are eligible for index scans.
+
 //
 // Pass a vef_preview_index_profile_ext_desc_t as
 // vef_required_capability_t.capability_config when requiring this capability.
@@ -665,14 +653,27 @@ typedef struct {
 // whose signature.param_count exceeds this at load time.
 #define VEF_INDEX_PROFILE_FN_MAX_ARGS 8
 
+// Kind of an index profile function.
+//   INVALID:  not a valid kind for a profile function. Helpers must use it.
+//   RESTRICT: the function acts as a filter condition on the indexed rows.
+//   ORDER:    the function defines an ordering of the indexed rows.
+// Profile functions must be RESTRICT or ORDER. Helpers must be INVALID. The
+// server rejects registrations that violate this.
+typedef uint32_t vef_index_profile_fn_kind_t;
+#define VEF_INDEX_PROFILE_FN_KIND_INVALID ((vef_index_profile_fn_kind_t)0)
+#define VEF_INDEX_PROFILE_FN_KIND_RESTRICT ((vef_index_profile_fn_kind_t)1)
+#define VEF_INDEX_PROFILE_FN_KIND_ORDER ((vef_index_profile_fn_kind_t)2)
+
 // One function binding within an index profile.
 // fn_id is the identifier used by the index storage implementation when it
-// calls vef_index_profile_fn in the index context. The remaining fields carry
+// calls vef_index_profile_fn in the index context. kind classifies a profile
+// function as a restriction or an ordering. The remaining fields carry
 // the VDF metadata the server uses to register the function as a SQL function.
 typedef struct {
   // Minimum VEF protocol version required to call vdf.
   vef_protocol_t protocol;
   uint32_t fn_id;
+  vef_index_profile_fn_kind_t kind;
   const char *name;
   vef_vdf_func_t vdf;
   vef_signature_t signature;

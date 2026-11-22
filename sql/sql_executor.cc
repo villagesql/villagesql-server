@@ -113,7 +113,6 @@
 #include "sql/window.h"
 #include "template_utils.h"
 #include "thr_lock.h"
-#include "villagesql/sql/custom_index_knn_optimizer_classic.h"
 #include "villagesql/types/util.h"
 
 using std::any_of;
@@ -3840,16 +3839,15 @@ AccessPath *QEP_TAB::access_path() {
                                     m_reversed_access,
                                     /*count_examined_rows=*/true);
       break;
-    case JT_INDEX_DISTANCE:
-      // VillageSQL: KNN ordered scan of a custom index (ORDER BY <distance>
-      // LIMIT k). The query vector and index were chosen at recognition and
-      // carried on the plan (set_knn_query_item / set_index); the LIMIT is read
-      // from the query block (get_limit) rather than JOIN::m_select_limit,
-      // matching the recognition hook (TrySkipSortWithCustomKnnIndex).
-      path = villagesql::BuildCustomKnnDistanceAccessPath(
-          join()->thd, table(), index(), knn_query_item(),
-          join()->query_block->get_limit(join()->thd));
+    case JT_KNN_SCAN: {
+      auto *knn_scan_info = this->knn_scan_info();
+      assert(knn_scan_info != nullptr);
+      path = NewIndexKnnScanAccessPath(
+          join()->thd, table(), index(), knn_scan_info->query_point,
+          knn_scan_info->limit, knn_scan_info->limit_is_exact,
+          /*count_examined_rows=*/true);
       break;
+    }
     case JT_ALL:
     case JT_RANGE:
     case JT_INDEX_MERGE:

@@ -1,0 +1,72 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector,
+INDEX i_a (a) USING EXTENDED(dummy_index_hnsw));
+PREPARE other FROM 'SELECT COUNT(*) AS n, MAX(LENGTH(table_name)) AS l FROM information_schema.tables WHERE table_schema = ''mysql''';
+PREPARE s FROM 'RENAME TABLE t1 TO t2';
+PREPARE s_back FROM 'RENAME TABLE t2 TO t1';
+EXECUTE s;
+EXECUTE other;
+EXECUTE s_back;
+EXECUTE s;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t2	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t2	i_a	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+EXECUTE s_back;
+PREPARE r FROM 'ALTER TABLE t1 RENAME INDEX i_a TO i_r';
+PREPARE r_back FROM 'ALTER TABLE t1 RENAME INDEX i_r TO i_a';
+EXECUTE r;
+EXECUTE other;
+EXECUTE r_back;
+EXECUTE r;
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_r	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_r	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+EXECUTE r_back;
+EXECUTE s; EXECUTE s_back; EXECUTE r; DEALLOCATE PREPARE r|
+EXECUTE r_back; EXECUTE s; DEALLOCATE PREPARE s_back|
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t2	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t2	i_a	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_a` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+RENAME TABLE t2 TO t1;
+CREATE PROCEDURE p_rename()
+BEGIN
+RENAME TABLE t1 TO t2;
+ALTER TABLE t2 RENAME INDEX i_a TO i_r;
+RENAME TABLE t2 TO t1;
+ALTER TABLE t1 RENAME INDEX i_r TO i_a;
+END|
+CALL p_rename();
+CALL p_rename();
+CALL p_rename();
+db_name	table_name	index_name	extension_name	extension_version	index_type_name	index_type_parameters
+test	t1	i_a	vsql_index_test	0.0.1	dummy_index_hnsw	{}
+table_name	index_name	key_position	column_name	extension_name	extension_version	profile_name
+t1	i_a	0	a	vsql_index_test	0.0.1	dummy_profile_hnsw_l2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i_a` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP PROCEDURE p_rename;
+DEALLOCATE PREPARE s;
+DEALLOCATE PREPARE r_back;
+DEALLOCATE PREPARE other;
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

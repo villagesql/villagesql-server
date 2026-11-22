@@ -33,6 +33,11 @@ INSERT INTO t1 VALUES
   (4, 40, 'B'),
   (5, 50, 'B');
 
+# STRING aggregate results have the same collation and precedence as scalar results.
+SELECT CHARSET(agg_vdf_ext.vdf_concat(category)) AS result_charset,
+       COLLATION(agg_vdf_ext.vdf_concat(category)) AS result_collation,
+       COERCIBILITY(agg_vdf_ext.vdf_concat(category)) AS coercibility FROM t1;
+
 # Basic aggregate with GROUP BY
 SELECT category, agg_vdf_ext.vdf_sum(val) AS total
 FROM t1

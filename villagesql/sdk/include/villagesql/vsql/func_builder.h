@@ -89,6 +89,8 @@ namespace func_builder {
 constexpr const char *STRING = "STRING";
 constexpr const char *INT = "INT";
 constexpr const char *REAL = "REAL";
+// Requires VEF_PROTOCOL_5.
+constexpr const char *BINARY = "BINARY";
 
 namespace detail {
 
@@ -99,7 +101,8 @@ namespace detail {
 // that evaluation is ill-formed and the function name is the compiler's
 // diagnostic. (If a builder is instead used at runtime, the bad path fails to
 // link, for the same absence of a definition.)
-[[noreturn]] void max_result_length_is_only_valid_for_a_STRING_return_type();
+[[noreturn]] void
+max_result_length_is_only_valid_for_a_STRING_or_BINARY_return_type();
 [[noreturn]] void call_returns_before_max_result_length();
 
 }  // namespace detail
@@ -121,6 +124,17 @@ template <typename P>
 using TypeEncodeWithParamsFunc = void (*)(MaybeParams<P> &,
                                           std::string_view from, CustomResult);
 
+// Encode from the binary form: raw bytes -> custom binary. Reports its outcome
+// the same way as TypeEncodeFunc.
+using TypeEncodeBinaryFunc = void (*)(Span<const unsigned char> from,
+                                      CustomResult out);
+// Parameterized variant: as TypeEncodeWithParamsFunc, the params are known
+// when encoding into a column and must be inferred from the bytes otherwise.
+template <typename P>
+using TypeEncodeBinaryWithParamsFunc = void (*)(MaybeParams<P> &,
+                                                Span<const unsigned char> from,
+                                                CustomResult);
+
 // Decode: custom -> string. The function reports its outcome by calling
 // out.set_length(n), out.set(sv), out.set_null(), out.warning(msg), or
 // out.error(msg). If none is called then the result falls back to a default
@@ -130,6 +144,14 @@ using TypeDecodeFunc = void (*)(CustomArg in, StringResult out);
 template <typename P>
 using TypeDecodeWithParamsFunc = void (*)(CustomArgWith<P> in,
                                           StringResult out);
+
+// Decode to the binary form: custom -> raw bytes, the inverse of
+// TypeEncodeBinaryFunc. Reports its outcome the same way as TypeDecodeFunc.
+using TypeDecodeBinaryFunc = void (*)(CustomArg in, BinaryResult out);
+// Parameterized variant: params come from the CustomArgWith<P> input.
+template <typename P>
+using TypeDecodeBinaryWithParamsFunc = void (*)(CustomArgWith<P> in,
+                                                BinaryResult out);
 
 // Compare: returns <0, 0, or >0.
 using TypeCompareFunc = int (*)(CustomArg a, CustomArg b);
@@ -260,22 +282,24 @@ class FuncBuilder {
     return *this;
   }
 
-  // Declare the maximum length of the STRING result, in characters, so the
-  // result column is sized to hold the full value when materialized. A
-  // STRING-returning VDF that does not declare this falls back to the argument
-  // width (a large result then truncates when materialized). Values above
-  // VEF_MAX_RESULT_LENGTH are capped by the server. Bumps the required protocol
-  // to VEF_PROTOCOL_4.
+  // Declare the maximum length of the STRING result, in characters, or of the
+  // BINARY result, in bytes, so the result column is sized to hold the full
+  // value when materialized. A STRING- or BINARY-returning VDF that does not
+  // declare this falls back to the argument width (a large result then
+  // truncates when materialized). Values above VEF_MAX_RESULT_LENGTH are capped
+  // by the server. Bumps the required protocol to VEF_PROTOCOL_5.
   //
-  // Only valid for a STRING return type. Call .returns(STRING) before this so
-  // the return type is known here: a non-STRING return (or an undeclared one)
-  // is rejected at build time rather than silently ignored.
+  // Only valid for a STRING or BINARY return type. Call .returns(...) before
+  // this so the return type is known here: any other return (or an undeclared
+  // one) is rejected at build time rather than silently ignored.
   constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &max_result_length(
       size_t n) {
     if (return_type_ == nullptr) {
       detail::call_returns_before_max_result_length();
-    } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
-      detail::max_result_length_is_only_valid_for_a_STRING_return_type();
+    } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING &&
+               detail::to_vef_type(return_type_).id != VEF_TYPE_BINARY) {
+      detail::
+          max_result_length_is_only_valid_for_a_STRING_or_BINARY_return_type();
     }
     max_result_length_ = n;
     return *this;
@@ -290,9 +314,12 @@ class FuncBuilder {
     return *this;
   }
 
-  // Install a type binding/checking hook. Called once at resolution time,
-  // before any row is read, to work out the return type's parameters -- and,
-  // where needed, individual arguments' -- when the built-in rules cannot.
+  // Install a type binding/checking hook. Called at resolution time, before
+  // any row is read, to work out the return type's parameters (and, where
+  // needed, individual arguments' parameters) when the built-in rules cannot.
+  // In a prepared statement it runs at every EXECUTE, and is not called at
+  // PREPARE when an argument has a ? with no value yet, or a custom type
+  // whose params are not known yet; see vsql/bind_check_types.h.
   //
   // Use it when the relationship between argument and return parameters is
   // something the defaults cannot express (e.g. pvec_concat(PVEC(M), PVEC(N))
@@ -413,12 +440,12 @@ class FuncBuilder {
           std::tuple_size_v<AllParams> != NumParams + 1 || Shape::args_ok,
           "make_func: every C++ function parameter before the result "
           "must be a typed argument such as IntArg, RealArg, StringArg, "
-          "CustomArg, or CustomArgWith<P>");
+          "BinaryArg, CustomArg, or CustomArgWith<P>");
       static_assert(
           std::tuple_size_v<AllParams> != NumParams + 1 || Shape::result_ok,
           "make_func: final C++ function parameter must be a typed "
           "result such as IntResult, RealResult, StringResult, "
-          "CustomResult, or CustomResultWith<P>");
+          "BinaryResult, CustomResult, or CustomResultWith<P>");
       if constexpr (std::tuple_size_v<AllParams> == NumParams + 1 &&
                     Shape::args_ok && Shape::result_ok) {
         using UniquePTuple =
@@ -519,22 +546,24 @@ class AggFuncBuilder {
     return *this;
   }
 
-  // Declare the maximum length of the STRING result, in characters, so the
-  // result column is sized to hold the full value when materialized. An
-  // aggregate returning STRING that does not declare this falls back to the
-  // argument width (a large result then truncates when materialized). Values
-  // above VEF_MAX_RESULT_LENGTH are capped by the server. Bumps the required
-  // protocol to VEF_PROTOCOL_4.
+  // Declare the maximum length of the STRING result, in characters, or of the
+  // BINARY result, in bytes, so the result column is sized to hold the full
+  // value when materialized. An aggregate returning STRING or BINARY that does
+  // not declare this falls back to the argument width (a large result then
+  // truncates when materialized). Values above VEF_MAX_RESULT_LENGTH are capped
+  // by the server. Bumps the required protocol to VEF_PROTOCOL_5.
   //
-  // Only valid for a STRING return type. Call .returns(STRING) before this so
-  // the return type is known here: a non-STRING return (or an undeclared one)
-  // is rejected at build time rather than silently ignored.
+  // Only valid for a STRING or BINARY return type. Call .returns(...) before
+  // this so the return type is known here: any other return (or an undeclared
+  // one) is rejected at build time rather than silently ignored.
   constexpr AggFuncBuilder<State, Func, NumParams, HasClear, HasAccumulate> &
   max_result_length(size_t n) {
     if (return_type_ == nullptr) {
       detail::call_returns_before_max_result_length();
-    } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING) {
-      detail::max_result_length_is_only_valid_for_a_STRING_return_type();
+    } else if (detail::to_vef_type(return_type_).id != VEF_TYPE_STRING &&
+               detail::to_vef_type(return_type_).id != VEF_TYPE_BINARY) {
+      detail::
+          max_result_length_is_only_valid_for_a_STRING_or_BINARY_return_type();
     }
     max_result_length_ = n;
     return *this;
@@ -696,8 +725,8 @@ class AggFuncBuilder {
 //   void my_result(const State &s, TypedResult out)  // produce final value
 //
 // The result function must be void(const State&, TypedResult) where
-// TypedResult is one of IntResult, RealResult, StringResult, CustomResult, or
-// CustomResultWith<P>. Use out.set_null() to return SQL NULL.
+// TypedResult is one of IntResult, RealResult, StringResult, BinaryResult,
+// CustomResult, or CustomResultWith<P>. Use out.set_null() to return SQL NULL.
 //
 // How it works:
 //   - prerun/postrun are auto-generated: prerun allocates State via
@@ -765,7 +794,8 @@ constexpr AggFuncBuilder<State, Func, 0> make_aggregate_func(const char *name) {
           detail::is_agg_result_for_state<State, AllParams>::value,
       "make_aggregate_func: result function must be "
       "void(const State&, TypedResult) where TypedResult is IntResult, "
-      "RealResult, StringResult, CustomResult, or CustomResultWith<P>");
+      "RealResult, StringResult, BinaryResult, CustomResult, or "
+      "CustomResultWith<P>");
   AggFuncBuilder<State, Func, 0> builder;
   builder.name_ = name;
   return builder;
@@ -815,6 +845,34 @@ constexpr detail::StaticFuncDesc<1> make_type_encode(const char *name,
   return detail::StaticFuncDesc<1>(name, meta);
 }
 
+// make_type_encode_binary<&fn>("name", TYPE) — (BINARY) -> CUSTOM(type).
+//
+// Accepts two signatures:
+//   TypeEncodeBinaryFunc              (non-parameterized)
+//   TypeEncodeBinaryWithParamsFunc<P> (parameterized)
+template <auto Func>
+constexpr detail::StaticFuncDesc<1> make_type_encode_binary(
+    const char *name, const char *type_name) {
+  using F = decltype(Func);
+  detail::FuncWithMetadata meta{};
+  if constexpr (std::is_same_v<F, TypeEncodeBinaryFunc>) {
+    meta.f = &detail::TypeEncodeVdfWrapper<Func>::invoke;
+  } else {
+    using P = typename detail::TypeEncodeWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeEncodeBinaryWithParamsFunc<P>>,
+                  "make_type_encode_binary: function must match either "
+                  "TypeEncodeBinaryFunc or TypeEncodeBinaryWithParamsFunc<P>.");
+    meta.f = &detail::TypeEncodeWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
+  }
+  meta.return_type = detail::to_vef_type(type_name);
+  meta.param_types[0] = detail::to_vef_type(BINARY);
+  meta.num_params = 1;
+  meta.buffer_size = 0;
+  meta.deterministic = true;
+  return detail::StaticFuncDesc<1>(name, meta);
+}
+
 // make_type_decode<&fn>("name", TYPE) — (CUSTOM(type)) -> STRING.
 //
 // Accepts two signatures:
@@ -836,6 +894,34 @@ constexpr detail::StaticFuncDesc<1> make_type_decode(const char *name,
     meta.check_params_cache_bound = &is_params_cache_bound<P>;
   }
   meta.return_type = detail::to_vef_type(STRING);
+  meta.param_types[0] = detail::to_vef_type(type_name);
+  meta.num_params = 1;
+  meta.buffer_size = 0;
+  meta.deterministic = true;
+  return detail::StaticFuncDesc<1>(name, meta);
+}
+
+// make_type_decode_binary<&fn>("name", TYPE) — (CUSTOM(type)) -> BINARY.
+//
+// Accepts two signatures:
+//   TypeDecodeBinaryFunc              (non-parameterized)
+//   TypeDecodeBinaryWithParamsFunc<P> (parameterized)
+template <auto Func>
+constexpr detail::StaticFuncDesc<1> make_type_decode_binary(
+    const char *name, const char *type_name) {
+  using F = decltype(Func);
+  detail::FuncWithMetadata meta{};
+  if constexpr (std::is_same_v<F, TypeDecodeBinaryFunc>) {
+    meta.f = &detail::TypeDecodeVdfWrapper<Func>::invoke;
+  } else {
+    using P = typename detail::TypeDecodeWithCacheVdfWrapper<Func>::P;
+    static_assert(std::is_same_v<F, TypeDecodeBinaryWithParamsFunc<P>>,
+                  "make_type_decode_binary: function must match either "
+                  "TypeDecodeBinaryFunc or TypeDecodeBinaryWithParamsFunc<P>.");
+    meta.f = &detail::TypeDecodeWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound = &is_params_cache_bound<P>;
+  }
+  meta.return_type = detail::to_vef_type(BINARY);
   meta.param_types[0] = detail::to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;

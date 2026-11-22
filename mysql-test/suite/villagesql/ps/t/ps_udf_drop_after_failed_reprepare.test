@@ -1,0 +1,40 @@
+# A prepared statement that calls a UDF is reprepared at every EXECUTE.
+# When that reprepare fails, the UDF must still be gone after DEALLOCATE
+# and DROP FUNCTION.
+
+--source include/have_udf.inc
+
+--let $udf_row = SELECT udf_name, udf_usage_count FROM performance_schema.user_defined_functions WHERE udf_name = 'myfunc_int'
+
+CREATE TABLE t (id INT PRIMARY KEY, c INT);
+INSERT INTO t VALUES (1, 1);
+
+--echo #
+--echo # Without a failed EXECUTE
+--echo #
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE FUNCTION myfunc_int RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
+PREPARE s FROM 'SELECT myfunc_int(1) AS u FROM t WHERE c = 1';
+EXECUTE s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+DROP FUNCTION myfunc_int;
+--echo # Expect no row
+--eval $udf_row
+
+--echo #
+--echo # With a failed EXECUTE
+--echo #
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE FUNCTION myfunc_int RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
+PREPARE s FROM 'SELECT myfunc_int(1) AS u FROM t WHERE c = 1';
+EXECUTE s;
+ALTER TABLE t DROP COLUMN c;
+--error ER_BAD_FIELD_ERROR
+EXECUTE s;
+DEALLOCATE PREPARE s;
+DROP FUNCTION myfunc_int;
+--echo # Expect no row
+--eval $udf_row
+
+DROP TABLE t;

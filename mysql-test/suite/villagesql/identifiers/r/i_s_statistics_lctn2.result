@@ -1,6 +1,5 @@
 SET PERSIST vsql_allow_preview_extensions = ON;
 INSTALL EXTENSION vsql_index_test;
-SET SESSION debug='+d,villagesql_custom_index_proceed';
 CREATE DATABASE MixedDb;
 USE MixedDb;
 CREATE TABLE MixedTab (
@@ -42,7 +41,6 @@ mixedtab	1	MixedIdx	1	a	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
 mixedtab	1	MixedIdx2	1	b	A	#	#	#	#	DUMMY_INDEX_HNSW			YES	NULL
 # --- Cleanup ---
 DROP DATABASE MixedDb;
-SET SESSION debug='-d,villagesql_custom_index_proceed';
 UNINSTALL EXTENSION vsql_index_test;
 SET PERSIST vsql_allow_preview_extensions = OFF;
 RESET PERSIST vsql_allow_preview_extensions;

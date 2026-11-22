@@ -238,21 +238,21 @@ TEST_F(ValidateExtensionRegistrationTest,
 TEST_F(ValidateExtensionRegistrationTest,
        MaxPersistedLengthAboveDeclaredLengthCap) {
   vef_type_desc_t td = make_v1_type("MYVARTYPE");
-  td.protocol = VEF_PROTOCOL_4;
+  td.protocol = VEF_PROTOCOL_5;
   td.variable_length = true;
   td.persisted_length = 0;  // variable-length types must not fix a footprint
   td.max_persisted_length = kExpectedMaxDeclaredLength + 1;
   vef_type_desc_t *types[] = {&td};
 
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_4;
+  reg.protocol = VEF_PROTOCOL_5;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_4), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_5), "my_ext", "1.0.0", error);
 
   EXPECT_FALSE(result.has_value());
   EXPECT_NE(error.find("MYVARTYPE"), std::string::npos);
@@ -540,64 +540,89 @@ TEST_F(ValidateExtensionRegistrationTest, V2TypeBadVdfName) {
   }
 }
 
-// A v2 type registration using valid VDF names succeeds end-to-end.
-TEST_F(ValidateExtensionRegistrationTest, V2TypeValidVdfNames) {
-  vef_type_desc_t td = {};
-  td.protocol = VEF_PROTOCOL_3;
-  td.name = "MYTYPE";
-  td.persisted_length = 16;
-  td.max_decode_buffer_length = 256;
-  td.encode_vdf_name = "MYTYPE::from_string";
-  td.decode_vdf_name = "MYTYPE::to_string";
-  td.compare_vdf_name = "MYTYPE::compare";
+// Method prefixes follow type-name rules: case folds, accents remain distinct.
+TEST_F(ValidateExtensionRegistrationTest,
+       TypeMethodNamesUseTypeIdentifierRules) {
+  struct TestCase {
+    const char *type_name;
+    const char *prefix;
+    bool valid;
+  };
+  const TestCase cases[] = {
+      {"MYTYPE", "mytype", true}, {"MYTYPE", "", false},
+      {"CAFÉ", "café", true},     {"CAFÉ", "cafe", false},
+      {"CAFÉ", "thé", false},
+  };
+  for (const auto protocol : {VEF_PROTOCOL_3, VEF_PROTOCOL_5}) {
+    for (const auto &tc : cases) {
+      SCOPED_TRACE(protocol);
+      SCOPED_TRACE(tc.prefix);
+      const std::string encode_name = std::string(tc.prefix) + "::from_string";
+      const std::string decode_name = std::string(tc.prefix) + "::to_string";
+      const std::string compare_name = std::string(tc.prefix) + "::compare";
+      vef_type_desc_t td = {};
+      td.protocol = protocol;
+      td.name = tc.type_name;
+      td.persisted_length = 16;
+      td.max_decode_buffer_length = 256;
+      td.encode_vdf_name = encode_name.c_str();
+      td.decode_vdf_name = decode_name.c_str();
+      td.compare_vdf_name = compare_name.c_str();
 
-  vef_type_t str_type = {VEF_TYPE_STRING, nullptr};
-  vef_type_t int_type = {VEF_TYPE_INT, nullptr};
-  vef_type_t custom_mytype = {VEF_TYPE_CUSTOM, "MYTYPE"};
+      vef_type_t str_type = {VEF_TYPE_STRING, nullptr};
+      vef_type_t int_type = {VEF_TYPE_INT, nullptr};
+      vef_type_t custom_mytype = {VEF_TYPE_CUSTOM, tc.type_name};
 
-  vef_type_t encode_params[] = {str_type};
-  vef_signature_t encode_sig = {1, encode_params, custom_mytype};
-  vef_func_desc_t encode_fd = {};
-  encode_fd.protocol = VEF_PROTOCOL_3;
-  encode_fd.name = "MYTYPE::from_string";
-  encode_fd.signature = &encode_sig;
-  encode_fd.vdf = stub_vdf;
+      vef_type_t encode_params[] = {str_type};
+      vef_signature_t encode_sig = {1, encode_params, custom_mytype};
+      vef_func_desc_t encode_fd = {};
+      encode_fd.protocol = protocol;
+      encode_fd.name = encode_name.c_str();
+      encode_fd.signature = &encode_sig;
+      encode_fd.vdf = stub_vdf;
 
-  vef_type_t decode_params[] = {custom_mytype};
-  vef_signature_t decode_sig = {1, decode_params, str_type};
-  vef_func_desc_t decode_fd = {};
-  decode_fd.protocol = VEF_PROTOCOL_3;
-  decode_fd.name = "MYTYPE::to_string";
-  decode_fd.signature = &decode_sig;
-  decode_fd.vdf = stub_vdf;
+      vef_type_t decode_params[] = {custom_mytype};
+      vef_signature_t decode_sig = {1, decode_params, str_type};
+      vef_func_desc_t decode_fd = {};
+      decode_fd.protocol = protocol;
+      decode_fd.name = decode_name.c_str();
+      decode_fd.signature = &decode_sig;
+      decode_fd.vdf = stub_vdf;
 
-  vef_type_t compare_params[] = {custom_mytype, custom_mytype};
-  vef_signature_t compare_sig = {2, compare_params, int_type};
-  vef_func_desc_t compare_fd = {};
-  compare_fd.protocol = VEF_PROTOCOL_3;
-  compare_fd.name = "MYTYPE::compare";
-  compare_fd.signature = &compare_sig;
-  compare_fd.vdf = stub_vdf;
+      vef_type_t compare_params[] = {custom_mytype, custom_mytype};
+      vef_signature_t compare_sig = {2, compare_params, int_type};
+      vef_func_desc_t compare_fd = {};
+      compare_fd.protocol = protocol;
+      compare_fd.name = compare_name.c_str();
+      compare_fd.signature = &compare_sig;
+      compare_fd.vdf = stub_vdf;
 
-  vef_type_desc_t *types[] = {&td};
-  vef_func_desc_t *funcs[] = {&encode_fd, &decode_fd, &compare_fd};
+      vef_type_desc_t *types[] = {&td};
+      vef_func_desc_t *funcs[] = {&encode_fd, &decode_fd, &compare_fd};
 
-  vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_3;
-  reg.deprecated_extension_name = "my_ext";
-  reg.type_count = 1;
-  reg.types = types;
-  reg.func_count = 3;
-  reg.funcs = funcs;
+      vef_registration_t reg = {};
+      reg.protocol = protocol;
+      reg.deprecated_extension_name = "my_ext";
+      reg.type_count = 1;
+      reg.types = types;
+      reg.func_count = 3;
+      reg.funcs = funcs;
 
-  std::string error;
-  auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_3), "my_ext", "1.0.0", error);
+      std::string error;
+      auto result = villagesql::veb::parse_extension_registration(
+          make_ext_reg(&reg, protocol), "my_ext", "1.0.0", error);
 
-  ASSERT_TRUE(result.has_value());
-  EXPECT_TRUE(error.empty());
-  ASSERT_EQ(result->types.size(), 1u);
-  EXPECT_EQ(result->types[0].type_name(), "MYTYPE");
+      if (!tc.valid) {
+        EXPECT_FALSE(result.has_value());
+        continue;
+      }
+      EXPECT_TRUE(result.has_value()) << error;
+      if (!result.has_value()) continue;
+      EXPECT_TRUE(error.empty());
+      ASSERT_EQ(result->types.size(), 1u);
+      EXPECT_EQ(result->types[0].type_name(), tc.type_name);
+    }
+  }
 }
 
 // Stub column storage function pointers — never called during validation.
@@ -970,8 +995,11 @@ static bool stub_idx_scan_position(vef_index_cursor_ref_t,
   return false;
 }
 static bool stub_idx_scan_fetch(vef_index_cursor_ref_t, vef_storage_col_ref_t *,
+                                vef_storage_col_ref_t *,
                                 vef_storage_col_data_t *,
-                                vef_storage_col_data_t *, char *, uint32_t) {
+                                vef_storage_col_data_t *,
+                                vef_storage_trx_ref_t *, bool *, char *,
+                                uint32_t) {
   return false;
 }
 static bool stub_idx_scan_save(vef_index_cursor_ref_t, char *, uint32_t) {
@@ -1030,7 +1058,7 @@ TEST_F(ValidatePreviewCapabilitiesTest, NullRegistrationReturnsEmpty) {
   EXPECT_TRUE(result->index_profiles.empty());
 }
 
-// A protocol older than VEF_PROTOCOL_2 skips parsing entirely.
+// A protocol older than VEF_PROTOCOL_3 skips parsing entirely.
 TEST_F(ValidatePreviewCapabilitiesTest, OldProtocolReturnsEmpty) {
   vef_type_index_intf_t intf = make_index_intf();
   vef_index_type_reg_t entry = {};
@@ -1456,7 +1484,7 @@ TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileNullParamsFails) {
 // every other func in the same extension still is.
 TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultVdfIsNotCallable) {
   vef_type_desc_t td = make_v1_type("MYTYPE");
-  td.protocol = VEF_PROTOCOL_4;
+  td.protocol = VEF_PROTOCOL_5;
   td.intrinsic_default_vdf_name = "my_default";
   vef_type_desc_t *types[] = {&td};
 
@@ -1465,16 +1493,16 @@ TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultVdfIsNotCallable) {
   vef_type_t str_ret = {VEF_TYPE_STRING, nullptr};
   vef_signature_t default_sig = {0, nullptr, str_ret};
   vef_func_desc_t default_fd = make_scalar_func("my_default", &default_sig);
-  default_fd.protocol = VEF_PROTOCOL_4;
+  default_fd.protocol = VEF_PROTOCOL_5;
 
   vef_signature_t other_sig = {0, nullptr, str_ret};
   vef_func_desc_t other_fd = make_scalar_func("my_func", &other_sig);
-  other_fd.protocol = VEF_PROTOCOL_4;
+  other_fd.protocol = VEF_PROTOCOL_5;
 
   vef_func_desc_t *funcs[] = {&default_fd, &other_fd};
 
   vef_registration_t reg = {};
-  reg.protocol = VEF_PROTOCOL_4;
+  reg.protocol = VEF_PROTOCOL_5;
   reg.deprecated_extension_name = "my_ext";
   reg.type_count = 1;
   reg.types = types;
@@ -1483,7 +1511,7 @@ TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultVdfIsNotCallable) {
 
   std::string error;
   auto result = villagesql::veb::parse_extension_registration(
-      make_ext_reg(&reg, VEF_PROTOCOL_4), "my_ext", "1.0.0", error);
+      make_ext_reg(&reg, VEF_PROTOCOL_5), "my_ext", "1.0.0", error);
 
   ASSERT_TRUE(result.has_value()) << error;
   ASSERT_EQ(result->funcs.size(), 2u);
@@ -1521,6 +1549,101 @@ TEST_F(ValidateExtensionRegistrationTest, IntrinsicDefaultNameIgnoredForV1) {
   ASSERT_TRUE(result.has_value()) << error;
   ASSERT_EQ(result->funcs.size(), 1u);
   EXPECT_TRUE(result->funcs[0].is_callable_from_sql());
+}
+
+// Parses an index profile with one function binding of function_kind and one
+// helper binding of helper_kind.
+static std::optional<villagesql::veb::ValidatedPreviewCapabilities>
+parse_profile_with_kinds(vef_index_profile_fn_kind_t function_kind,
+                         vef_index_profile_fn_kind_t helper_kind,
+                         std::string &error) {
+  vef_index_profile_fn_binding_t fn = {};
+  fn.name = "mytype_distance";
+  fn.vdf = stub_vdf;
+  fn.kind = function_kind;
+  fn.signature.return_type.id = VEF_TYPE_REAL;
+
+  vef_index_profile_fn_binding_t helper = {};
+  helper.name = "mytype_helper";
+  helper.vdf = stub_vdf;
+  helper.kind = helper_kind;
+  helper.signature.return_type.id = VEF_TYPE_REAL;
+
+  vef_index_profile_reg_t profile = {};
+  profile.name = "mytype_hnsw";
+  profile.type_name = "MYTYPE";
+  profile.index_type_name = "HNSW";
+  profile.function_count = 1;
+  profile.functions = &fn;
+  profile.helper_count = 1;
+  profile.helpers = &helper;
+
+  vef_preview_index_profile_ext_desc_t ext_desc = {};
+  ext_desc.version = VEF_PREVIEW_INDEX_PROFILE_ABI_VERSION;
+  ext_desc.count = 1;
+  ext_desc.profiles = &profile;
+
+  vef_required_capability_t cap = {};
+  cap.name = VEF_PREVIEW_INDEX_PROFILE_NAME;
+  cap.capability_config = &ext_desc;
+
+  vef_registration_t reg = {};
+  reg.required_capability_count = 1;
+  reg.required_capabilities = &cap;
+
+  villagesql::veb::ExtensionRegistration ext_reg;
+  ext_reg.registration = &reg;
+  ext_reg.negotiated_protocol = VEF_PROTOCOL_3;
+  ext_reg.dlhandle = nullptr;
+  ext_reg.unregister_func = nullptr;
+  return villagesql::veb::parse_preview_capabilities(ext_reg, "my_ext", "1.0.0",
+                                                     error);
+}
+
+// ORDER profile functions with INVALID helpers are accepted.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileValidKindsSucceed) {
+  std::string error;
+  EXPECT_TRUE(parse_profile_with_kinds(VEF_INDEX_PROFILE_FN_KIND_ORDER,
+                                       VEF_INDEX_PROFILE_FN_KIND_INVALID, error)
+                  .has_value())
+      << error;
+}
+
+// RESTRICT profile functions are not yet implemented.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileRestrictFunctionFails) {
+  std::string error;
+  auto result =
+      parse_profile_with_kinds(VEF_INDEX_PROFILE_FN_KIND_RESTRICT,
+                               VEF_INDEX_PROFILE_FN_KIND_INVALID, error);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_NE(error.find("not yet implemented"), std::string::npos);
+}
+
+// A profile function with kind INVALID or an unknown value fails validation.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileInvalidFunctionKindFails) {
+  for (vef_index_profile_fn_kind_t kind :
+       {VEF_INDEX_PROFILE_FN_KIND_INVALID,
+        static_cast<vef_index_profile_fn_kind_t>(99)}) {
+    std::string error;
+    auto result = parse_profile_with_kinds(
+        kind, VEF_INDEX_PROFILE_FN_KIND_INVALID, error);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_NE(error.find("function 'mytype_distance'"), std::string::npos);
+    EXPECT_NE(error.find("invalid kind"), std::string::npos);
+  }
+}
+
+// A helper with a kind other than INVALID fails validation.
+TEST_F(ValidatePreviewCapabilitiesTest, IndexProfileHelperWithKindFails) {
+  for (vef_index_profile_fn_kind_t kind :
+       {VEF_INDEX_PROFILE_FN_KIND_RESTRICT, VEF_INDEX_PROFILE_FN_KIND_ORDER}) {
+    std::string error;
+    auto result =
+        parse_profile_with_kinds(VEF_INDEX_PROFILE_FN_KIND_ORDER, kind, error);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_NE(error.find("helper 'mytype_helper'"), std::string::npos);
+    EXPECT_NE(error.find("invalid kind"), std::string::npos);
+  }
 }
 
 }  // namespace villagesql_unittest

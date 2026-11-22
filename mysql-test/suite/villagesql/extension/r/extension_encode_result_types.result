@@ -39,7 +39,7 @@ SELECT id, val, val IS NULL AS is_null FROM t1 ORDER BY id;
 id	val	is_null
 1	NULL	1
 4	NULL	1
-5	NULL	1
+5	OK default	0
 SET @@session.sql_mode = '';
 INSERT INTO t1 VALUES (7, 'ENCODE_NULL');
 SHOW WARNINGS;
@@ -58,7 +58,7 @@ Error	3219	fault_blob: encode error sentinel
 SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id >= 7 ORDER BY id;
 id	val	is_null
 7	NULL	1
-8	NULL	1
+8	OK default	0
 SET @@session.sql_mode = DEFAULT;
 INSERT INTO t1 VALUES (10, 'OK ten');
 UPDATE t1 SET val = 'ENCODE_NULL' WHERE id = 10;

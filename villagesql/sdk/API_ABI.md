@@ -32,7 +32,8 @@ files in `villagesql/sdk/include/villagesql/*.h` NOT including the subdirectory
 
 - **Fluent builder pattern**: `make_extension()`, `.function()`, `.type()`
 - **Typed argument and result wrappers**: `IntArg`, `RealArg`, `StringArg`,
-  `CustomArg`, `IntResult`, `RealResult`, `StringResult`, `CustomResult`
+  `BinaryArg`, `CustomArg`, `IntResult`, `RealResult`, `StringResult`,
+  `BinaryResult`, `CustomResult`
 - **Automatic protocol awareness**: `VEF_GENERATE_ENTRY_POINTS` sets the max
   protocol the extension will negotiate
 - **Lifecycle hooks**: `.prerun()`, `.postrun()` for per-query setup/teardown
@@ -99,12 +100,12 @@ negotiated_protocol = min(server_max_protocol, extension_max_protocol)
 ```
 
 The `protocol` field is always the **first member** of any versioned descriptor
-struct. When reading fields beyond the protocol-1 baseline, code checks
-`descriptor->protocol >= VEF_PROTOCOL_2` before accessing those fields.
+struct. Code checks for the version that added a field before accessing it:
+`descriptor->protocol >= VEF_PROTOCOL_3` for a field that protocol 3 added.
 
-New protocol versions are strict supersets: a protocol-2 struct contains all
+New protocol versions are strict supersets: a protocol-3 struct contains all
 protocol-1 fields at the same offsets, followed by new fields. This allows a
-server running protocol 2 to safely load an extension that only understands
+server running protocol 3 to safely load an extension that only understands
 protocol 1.
 
 **Structs nested inline** (not accessed through a pointer) require special care
@@ -138,9 +139,9 @@ vsql builder (`vsql/extension_builder.h`, `vsql::ExtensionBuilder`) and the
 legacy builder (`extension_builder.h`,
 `villagesql::extension_builder::ExtensionBuilder`). It is also compiled against
 by the frozen SDK snapshots' test extensions in the ABI source-compatibility
-tests (`mysql-test/suite/villagesql/abi_v1`, `.../abi_v3`), which build an older
-extension's source against the current dev SDK to catch source-level
-regressions.
+tests (`mysql-test/suite/villagesql/abi_v1`, `.../abi_v3`, `.../abi_v5`),
+which build an older extension's source against the current dev SDK to catch
+source-level regressions.
 
 When you add a new member to one builder and reference it from `vef_register_impl`
 (or any other shared registration helper), you must **feature-detect** it rather

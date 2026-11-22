@@ -55,6 +55,8 @@ static const char *type_id_to_str(vef_type_id id) {
       return "INT";
     case VEF_TYPE_CUSTOM:
       return "CUSTOM";
+    case VEF_TYPE_BINARY:
+      return "BINARY";
   }
   return "UNKNOWN";
 }
@@ -132,9 +134,17 @@ static std::string registration_to_json(const vef_registration_t *r) {
     w.Int64(t->persisted_length);
     w.Key("max_decode_buffer_length");
     w.Int64(t->max_decode_buffer_length);
-    if (t->protocol >= VEF_PROTOCOL_4) {
+    if (t->protocol >= VEF_PROTOCOL_5) {
       w.Key("variable_length");
       w.Bool(t->variable_length);
+      if (t->from_binary_vdf_name) {
+        w.Key("from_binary_vdf");
+        w.String(t->from_binary_vdf_name);
+      }
+      if (t->to_binary_vdf_name) {
+        w.Key("to_binary_vdf");
+        w.String(t->to_binary_vdf_name);
+      }
     }
     if (t->protocol >= VEF_PROTOCOL_3) {
       if (t->encode_vdf_name) {

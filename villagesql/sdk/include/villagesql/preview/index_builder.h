@@ -67,7 +67,8 @@
 //               .restore<&hnsw_restore>()
 //               .end<&hnsw_end_scan>()
 //           .global()
-//               .capabilities(Index::Support::KNN)
+//               .capabilities(Index::Support::KNN |
+//                             Index::Support::APPROXIMATE)
 //               .storage_props(Index::Storage::HAS_COLUMN_REF |
 //                              Index::Storage::REF_LOOKUP)
 //               .options<HNSWOptions, &HNSWOptions::parse>()
@@ -116,7 +117,7 @@
 //     bool fetch(Index::Cursor, IndexScanKey::KeyPartRef*,
 //                IndexScanKey::KeyPartData* keys,
 //                IndexScanKey::KeyPartData* pkeys,
-//                char*, uint32_t);
+//                Segment::TrxRef* trx_ref, char*, uint32_t);
 //     bool save(Index::Cursor, char*, uint32_t);
 //     bool restore(Index::Cursor, MtrCtx::Ref, bool*,
 //                  char*, uint32_t);
@@ -132,16 +133,19 @@
 // INDEX FUNCTION
 // --------------
 //
-// Index functions must be deterministic. Build one and store it as static
-// const - it is passed by reference to IndexProfileBuilder::with_function().
+// with_helper() functions are internal to the index implementation (not
+// SQL-callable) and are declared with make_index_function():
 //
-//   static const auto MY_INDEX_FN =
-//       make_index_function<&my_index_fn>("my_index_fn")
+//   static constexpr auto MY_HELPER_FN =
+//       make_index_function<&my_helper_fn>("my_helper_fn")
 //           .returns(vsql::REAL)
 //           .param(MY_TYPE)     // TypeDesc built by vsql::make_type<kMyType>
-//           .param(MY_TYPE)
 //           .deterministic()
 //           .build();
+//
+// with_function() functions ARE SQL-visible: declare them with the normal
+// vsql::make_func() and register that same object with .func() on the
+// extension builder AND with_function() on the profile.
 //
 // INDEX PROFILE
 // -------------
@@ -150,16 +154,27 @@
 // builder-generated execution context.
 //
 // Binds a custom type to an index type and assigns per-profile function IDs.
-// for_type() takes the type name string (the same kMyType constant passed to
-// make_type<kMyType>), not the TypeDesc. with_function() takes an
-// IndexFunctionDesc from make_index_function().build(), not a raw string.
+// for_type() takes the type name string. with_function<Desc>(fn_id, kind)
+// and with_helper<Desc>(fn_id) both take their bound VDF as a template
+// argument. with_function() requires a FunctionKind: Restrict for a filter
+// condition (not yet supported), or Order for a function that defines the row
+// order.
+//
+//   static constexpr auto MY_INDEX_FN =
+//       make_func<&my_index_fn>("my_index_fn")
+//           .returns(vsql::REAL)
+//           .param(MY_TYPE)
+//           .param(MY_TYPE)
+//           .deterministic()
+//           .build();
 //
 //   static const auto MY_PROFILE =
 //       make_index_profile("my_profile")
 //           .for_type(kMyType)                // name string, not the TypeDesc
 //           .using_index(kMyIndex)
-//           .with_function(1, MY_INDEX_FN)    // fn_id 1 -> MY_INDEX_FN
-//           .with_function(2, MY_HELPER_FN)   // fn_id 2 -> MY_HELPER_FN
+//           .with_function<MY_INDEX_FN>(1, FunctionKind::Order)
+//                                             // fn_id 1 -> MY_INDEX_FN
+//           .with_helper<MY_HELPER_FN>(1)     // fn_id 1 -> MY_HELPER_FN
 //           .ordering(Index::Ordering::ASC)
 //           .build();
 //
@@ -175,16 +190,19 @@
 //   // Type descriptor (see vsql.h). kMyType is the name string used below.
 //   constexpr auto MY_TYPE = vsql::make_type<kMyType>()...build();
 //
-//   // Step 1 - index functions (static: addresses must be stable).
-//   static const auto MY_INDEX_FN =
-//       make_index_function<&my_index_fn>("my_index_fn")
+//   // Step 1 - functions (static: addresses must be stable). MY_INDEX_FN is
+//   // SQL-visible: declare it with make_func(), register as SQL function
+//   // by .func() and register as index profile function by .with_function().
+//   // MY_HELPER_FN is internal-only: register by make_index_function().
+//   static constexpr auto MY_INDEX_FN =
+//       make_func<&my_index_fn>("my_index_fn")
 //           .returns(vsql::REAL)
 //           .param(MY_TYPE)
 //           .param(MY_TYPE)
 //           .deterministic()
 //           .build();
 //
-//   static const auto MY_HELPER_FN =
+//   static constexpr auto MY_HELPER_FN =
 //       make_index_function<&my_helper_fn>("my_helper_fn")
 //           .returns(vsql::REAL)
 //           .param(MY_TYPE)
@@ -221,8 +239,8 @@
 //       make_index_profile("my_profile")
 //           .for_type(kMyType)
 //           .using_index(kMyIndex)
-//           .with_function(1, MY_INDEX_FN)
-//           .with_function(2, MY_HELPER_FN)
+//           .with_function<MY_INDEX_FN>(1, FunctionKind::Order)
+//           .with_helper<MY_HELPER_FN>(1)
 //           .ordering(Index::Ordering::ASC)
 //           .build();
 //
@@ -234,13 +252,13 @@
 //   // Step 5 - extension entry point.
 //   VEF_GENERATE_ENTRY_POINTS(
 //       vsql::make_extension()
+//           .func(MY_INDEX_FN)
 //           .with(INDEX_TYPE)
 //           .with(INDEX_PROFILE)
 //           .type(MY_TYPE))
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstdio>
 #include <new>
 #include <type_traits>
@@ -257,33 +275,29 @@ namespace vsql::preview_index_builder {
 
 using Arena = vsql::preview_storage::Arena;
 
+using vsql::preview_storage::Segment;
+
 using vsql::preview_storage::detail::AllocateArenaStorage;
 using vsql::preview_storage::detail::ERROR_MSG_SIZE;
 using vsql::preview_storage::detail::tl_error_msg;
 
-// Represents a scan key used to define an index scan boundary.
+// Describes a key used to define an index scan. The profile function ID
+// determines the semantics of the key columns.
+// This is a temporary view and must not be copied or saved by an extension.
 class IndexScanKey {
  public:
   using KeyPartData = vef_storage_col_data_t;
   using KeyPartRef = vef_storage_col_ref_t;
 
-  enum class Type : vef_index_scan_key_type_t {
-    Begin = VEF_INDEX_SCAN_KEY_TYPE_BEGIN,
-    End = VEF_INDEX_SCAN_KEY_TYPE_END,
-    KnnQuery = VEF_INDEX_SCAN_KEY_TYPE_KNN_QUERY,
-  };
   static constexpr KeyPartRef EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
 
   explicit IndexScanKey(const vef_index_scan_key_t &key) : key_(key) {}
+  IndexScanKey(const IndexScanKey &) = delete;
+  IndexScanKey &operator=(const IndexScanKey &) = delete;
 
-  Type type() const { return static_cast<Type>(key_.type); }
+  uint32_t profile_function_id() const { return key_.profile_function_id; }
   uint32_t num_columns() const { return key_.num_key_columns; }
   bool is_bounded() const { return key_.key_columns != nullptr; }
-  bool include_key() const { return static_cast<bool>(key_.include_key); }
-
-  bool is_begin() const { return type() == Type::Begin; }
-  bool is_end() const { return type() == Type::End; }
-  bool is_knn() const { return type() == Type::KnnQuery; }
 
   const KeyPartData &operator[](uint32_t i) const {
     return key_.key_columns[i];
@@ -293,25 +307,24 @@ class IndexScanKey {
   const vef_index_scan_key_t &key_;
 };
 
-// Describes an index scan, including its type, scan direction, and scan keys.
+// Describes an index scan, including its scan direction and scan keys.
+// This is a temporary view and must not be copied or saved by an extension.
 class IndexScanDesc {
  public:
-  enum class Type : vef_index_scan_type_t {
-    Point = VEF_INDEX_SCAN_TYPE_POINT,
-    Range = VEF_INDEX_SCAN_TYPE_RANGE,
-    Knn = VEF_INDEX_SCAN_TYPE_KNN,
-  };
+  using ReadViewRef = vef_readview_ref_t;
 
   explicit IndexScanDesc(const vef_index_scan_desc_t &desc) : desc_(desc) {}
-
-  Type scan_type() const { return static_cast<Type>(desc_.scan_type); }
-  bool is_point() const { return scan_type() == Type::Point; }
-  bool is_range() const { return scan_type() == Type::Range; }
-  bool is_knn() const { return scan_type() == Type::Knn; }
+  IndexScanDesc(const IndexScanDesc &) = delete;
+  IndexScanDesc &operator=(const IndexScanDesc &) = delete;
 
   bool reverse() const { return static_cast<bool>(desc_.reverse); }
+  bool is_limit_exact() const {
+    return static_cast<bool>(desc_.limit_is_exact);
+  }
   uint32_t limit() const { return desc_.limit; }
   uint32_t num_keys() const { return desc_.num_keys; }
+  ReadViewRef read_view() const { return desc_.readview; }
+  bool needs_trx_ref() const { return read_view() == nullptr; }
 
   IndexScanKey operator[](uint32_t i) const {
     return IndexScanKey{desc_.keys[i]};
@@ -322,7 +335,8 @@ class IndexScanDesc {
 };
 
 // Provides access to the index definition and services required by an
-// extension.
+// extension. This is a copyable handle to an index context that remains
+// valid during the scan. An extension can save it in its cursor handle.
 class Index {
  public:
   using Ref = vef_index_ref_t;
@@ -344,6 +358,7 @@ class Index {
     REVERSE_SCAN = VEF_INDEX_CAP_REVERSE_SCAN,
     ORDER_BY = VEF_INDEX_CAP_ORDER_BY,
     KNN = VEF_INDEX_CAP_KNN,
+    APPROXIMATE = VEF_INDEX_CAP_APPROXIMATE,
   };
 
   // Storage property flags for use with .storage_props(). Can be combined with
@@ -367,25 +382,27 @@ class Index {
     Prev = VEF_INDEX_CURSOR_OP_PREV,
   };
 
-  explicit Index(const vef_index_ctx_t &ctx) : ctx_(ctx) {}
+  explicit Index(const vef_index_ctx_t *ctx) : ctx_(ctx) {}
 
-  uint32_t get_num_key_cols() const { return ctx_.num_key_columns; }
+  bool is_unique() const { return ctx_->is_unique != 0; }
+
+  uint32_t get_num_key_cols() const { return ctx_->num_key_columns; }
 
   uint32_t get_max_col_len(uint32_t key_pos) const {
-    return ctx_.key_len_fn(ctx_.index_ref, key_pos, false);
+    return ctx_->key_len_fn(ctx_->index_ref, key_pos, false);
   }
 
   uint32_t get_primary_num_key_cols() const {
-    return ctx_.num_primary_key_columns;
+    return ctx_->num_primary_key_columns;
   }
 
   uint32_t get_primary_max_col_len(uint32_t key_pos) const {
-    return ctx_.key_len_fn(ctx_.index_ref, key_pos, true);
+    return ctx_->key_len_fn(ctx_->index_ref, key_pos, true);
   }
 
   template <typename T>
   const T *options() const {
-    return static_cast<const T *>(ctx_.options);
+    return static_cast<const T *>(ctx_->options);
   }
 
   // args are the raw column values (persisted format) the profile/helper
@@ -398,8 +415,8 @@ class Index {
     static_assert((std::is_same_v<ColData, vef_storage_col_data_t> && ...),
                   "profile() args must be vef_storage_col_data_t");
     const void *argv[] = {static_cast<const void *>(&args)...};
-    ctx_.profile_fn(ctx_.index_ref, key_pos, fn_id, argv, sizeof...(ColData),
-                    result);
+    ctx_->profile_fn(ctx_->index_ref, key_pos, fn_id, argv, sizeof...(ColData),
+                     result);
   }
 
   template <typename Result, typename... ColData>
@@ -408,46 +425,50 @@ class Index {
     static_assert((std::is_same_v<ColData, vef_storage_col_data_t> && ...),
                   "helper() args must be vef_storage_col_data_t");
     const void *argv[] = {static_cast<const void *>(&args)...};
-    ctx_.helper_fn(ctx_.index_ref, key_pos, fn_id, argv, sizeof...(ColData),
-                   result);
+    ctx_->helper_fn(ctx_->index_ref, key_pos, fn_id, argv, sizeof...(ColData),
+                    result);
   }
 
   // Reads the value key_ref points to for the key column at key_pos. key_data
   // must point at a buffer of key_data->length bytes, at least
   // get_max_col_len(key_pos); on success key_data->length is the value length.
+  // If trx_ref is not nullptr, it is set to the transaction reference of the
+  // value read. If delete_mark is not nullptr, it is set to whether the value
+  // is marked as deleted. A locking read, which has no read view, needs both
+  // (see needs_trx_ref()).
   // Must not be called while holding page latches.
   bool get_key_data(uint32_t key_pos, IndexScanKey::KeyPartRef key_ref,
-                    IndexScanKey::KeyPartData *key_data) const {
-    return ctx_.col_ref_to_data_fn(ctx_.index_ref, key_pos, key_ref, key_data,
-                                   tl_error_msg, ERROR_MSG_SIZE);
+                    IndexScanKey::KeyPartData *key_data,
+                    Segment::TrxRef *trx_ref = nullptr,
+                    bool *delete_mark = nullptr) const {
+    return ctx_->col_ref_to_data_fn(ctx_->index_ref, key_pos, key_ref, key_data,
+                                    trx_ref, delete_mark, tl_error_msg,
+                                    ERROR_MSG_SIZE);
+  }
+
+  // Checks whether the key column at key_pos is sorted in descending order.
+  bool is_key_desc(uint32_t key_pos) const {
+    return ctx_->key_is_desc_fn(ctx_->index_ref, key_pos);
   }
 
   // Derives the column reference for a value of the key column at key_pos that
   // is already in the column store, e.g. a key column handed to insert().
   bool get_key_ref(uint32_t key_pos, IndexScanKey::KeyPartData key_data,
                    IndexScanKey::KeyPartRef *key_ref) const {
-    return ctx_.col_data_to_ref_fn(ctx_.index_ref, key_pos, key_data, key_ref,
-                                   tl_error_msg, ERROR_MSG_SIZE);
-  }
-
-  // Report the registered name of the function bound to helper fn_id for the
-  // profile of key column key_pos. Lets a hot inner loop resolve a native
-  // fast-path once (matching this name against its own registered functions)
-  // instead of dispatching through helper() per call. Writes into name_buf;
-  // returns false on success, true on error (get_error() for details).
-  bool helper_fn_name(uint32_t key_pos, uint32_t fn_id, char *name_buf,
-                      uint32_t name_buf_len) const {
-    // The server populates helper_fn_name_fn unconditionally for every custom
-    // index (init_index_ctx); it is never null on a live index context.
-    assert(ctx_.helper_fn_name_fn != nullptr);
-    return ctx_.helper_fn_name_fn(ctx_.index_ref, key_pos, fn_id, name_buf,
-                                  name_buf_len, tl_error_msg, ERROR_MSG_SIZE);
+    return ctx_->col_data_to_ref_fn(ctx_->index_ref, key_pos, key_data, key_ref,
+                                    tl_error_msg, ERROR_MSG_SIZE);
   }
 
   const char *get_error() const { return tl_error_msg; }
 
+  // Checks whether trx_ref's changes are visible under read_view.
+  bool is_trx_visible(IndexScanDesc::ReadViewRef read_view,
+                      Segment::TrxRef trx_ref) const {
+    return ctx_->trx_is_visible_fn(ctx_->index_ref, read_view, trx_ref);
+  }
+
  private:
-  const vef_index_ctx_t &ctx_;
+  const vef_index_ctx_t *ctx_;
 };
 
 constexpr Index::Support operator|(Index::Support a, Index::Support b) {
@@ -472,7 +493,6 @@ namespace detail {
 // and C++ having compatible calling conventions on all supported platforms.
 
 using vsql::preview_storage::MtrCtx;
-using vsql::preview_storage::Segment;
 using vsql::preview_storage::Space;
 
 // Expected extension function pointer types. Each builder setter
@@ -521,8 +541,10 @@ using ScanPositionFn = bool (*)(Index::Cursor, Index::CursorOp, bool *, char *,
                                 uint32_t);
 
 using ScanFetchFn = bool (*)(Index::Cursor, IndexScanKey::KeyPartRef *,
+                             IndexScanKey::KeyPartRef *,
                              IndexScanKey::KeyPartData *,
-                             IndexScanKey::KeyPartData *, char *, uint32_t);
+                             IndexScanKey::KeyPartData *, Segment::TrxRef *,
+                             bool *, char *, uint32_t);
 
 using ScanSaveFn = bool (*)(Index::Cursor, char *, uint32_t);
 
@@ -554,7 +576,7 @@ struct CreateWrapper {
       return true;
     }
     *storage = reinterpret_cast<vef_storage_ctx_t *>(ctx);
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     bool err = F(ctx, index, space_ref, trx_ref, error_msg, error_msg_len);
     if (err) {
       arena->~Arena();
@@ -571,7 +593,7 @@ struct DropWrapper {
                      char *error_msg, uint32_t error_msg_len) {
     auto *ctx = reinterpret_cast<Index::StorageCtx<Context> *>(storage);
     Arena *arena = &ctx->arena();
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     bool err = F(ctx, index, trx_ref, error_msg, error_msg_len);
     arena->~Arena();
     return err;
@@ -600,7 +622,7 @@ struct LoadWrapper {
       return true;
     }
     *storage = reinterpret_cast<vef_storage_ctx_t *>(ctx);
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     bool err = F(ctx, index, storage_ref, error_msg, error_msg_len);
     if (err) {
       arena->~Arena();
@@ -635,7 +657,7 @@ struct InsertWrapper {
                      vef_storage_col_data_t *pkey_columns,
                      vef_storage_col_ref_t *key_ref, char *error_msg,
                      uint32_t error_msg_len) {
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_columns, pkey_columns, key_ref, error_msg,
              error_msg_len);
@@ -650,7 +672,7 @@ struct MarkDeleteWrapper {
                      vef_storage_col_data_t *key_columns,
                      vef_storage_col_data_t *pkey_columns, bool delete_mark,
                      char *error_msg, uint32_t error_msg_len) {
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_ref, key_columns, pkey_columns, delete_mark,
              error_msg, error_msg_len);
@@ -665,7 +687,7 @@ struct PurgeWrapper {
                      vef_storage_col_data_t *key_columns,
                      vef_storage_col_data_t *pkey_columns, char *error_msg,
                      uint32_t error_msg_len) {
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              trx_ref, key_ref, key_columns, pkey_columns, error_msg,
              error_msg_len);
@@ -679,7 +701,7 @@ struct ScanBeginWrapper {
                      const vef_index_scan_desc_t *scan_desc,
                      vef_index_cursor_ref_t *cursor, bool *eof, char *error_msg,
                      uint32_t error_msg_len) {
-    const Index index{*index_ctx};
+    const Index index{index_ctx};
     const IndexScanDesc desc{*scan_desc};
     return F(reinterpret_cast<Index::StorageCtx<Context> *>(storage), index,
              mctx, desc, cursor, eof, error_msg, error_msg_len);
@@ -699,11 +721,13 @@ template <auto F>
 struct ScanFetchWrapper {
   static bool invoke(vef_index_cursor_ref_t cursor,
                      vef_storage_col_ref_t *key_ref,
+                     vef_storage_col_ref_t *key_column_refs,
                      vef_storage_col_data_t *key_columns,
-                     vef_storage_col_data_t *pkey_columns, char *error_msg,
-                     uint32_t error_msg_len) {
-    return F(cursor, key_ref, key_columns, pkey_columns, error_msg,
-             error_msg_len);
+                     vef_storage_col_data_t *pkey_columns,
+                     vef_storage_trx_ref_t *trx_ref, bool *delete_mark,
+                     char *error_msg, uint32_t error_msg_len) {
+    return F(cursor, key_ref, key_column_refs, key_columns, pkey_columns,
+             trx_ref, delete_mark, error_msg, error_msg_len);
   }
 };
 
@@ -965,9 +989,11 @@ class ScanBuilder {
 
   template <auto F>
   constexpr ScanBuilder<Context, Bits | kFetch> fetch() && {
-    static_assert(std::is_same_v<decltype(F), detail::ScanFetchFn>,
-                  "fetch: expected bool(*)(Index::Cursor, KeyPartRef*, "
-                  "KeyPartData* keys, KeyPartData* pkeys, char*, uint32_t)");
+    static_assert(
+        std::is_same_v<decltype(F), detail::ScanFetchFn>,
+        "fetch: expected bool(*)(Index::Cursor, KeyPartRef*, "
+        "KeyPartRef* key_refs, KeyPartData* keys, KeyPartData* pkeys, "
+        "TrxRef*, bool* delete_mark, char*, uint32_t)");
     intf_.scan_fetch = detail::ScanFetchWrapper<F>::invoke;
     return {name_, intf_};
   }
@@ -1111,12 +1137,12 @@ constexpr IndexTypeRootBuilder<Name, Context> make_index_type() {
 // ===========================================================================
 //
 // Defines how a specific custom type behaves with a given index type. Each
-// .with_function(fn_id, name) call binds a profile function to the fn_id used
-// by the index storage implementation when calling vef_index_profile_fn.
+// .with_function()/.with_helper() call binds a profile function to the fn_id
+// used by the index storage implementation when calling vef_index_profile_fn.
 
-// Descriptor returned by make_index_function().build(). Passing one of these
-// to IndexProfileBuilder::with_function() instead of a raw string enforces
-// that the bound function was declared by the same extension.
+// Internal descriptor for one profile function binding, built by
+// with_function()/with_helper() from whatever func_builder descriptor their
+// template argument names. Extension authors never name this type.
 struct IndexFunctionDesc {
   const char *name;
   vef_protocol_t protocol;
@@ -1127,8 +1153,106 @@ struct IndexFunctionDesc {
   bool is_deterministic;
 };
 
+// Descriptor returned by make_index_function().build(). It wraps the
+// func_builder descriptor in a distinct type so that with_helper() can accept
+// only index helpers and with_function() can accept only make_func()
+// descriptors. It deliberately has no required_protocol(), so it cannot be
+// passed to make_extension().func().
+template <size_t NumParams>
+struct IndexHelperDesc {
+  vsql::func_builder::detail::StaticFuncDesc<NumParams> desc;
+};
+
+namespace detail {
+
+template <typename T>
+inline constexpr bool is_static_func_desc_v = false;
+template <size_t N>
+inline constexpr bool
+    is_static_func_desc_v<vsql::func_builder::detail::StaticFuncDesc<N>> = true;
+
+template <typename T>
+inline constexpr bool is_index_helper_desc_v = false;
+template <size_t N>
+inline constexpr bool is_index_helper_desc_v<IndexHelperDesc<N>> = true;
+
+template <const auto &FuncDesc>
+using DescType = std::remove_cv_t<std::remove_reference_t<decltype(FuncDesc)>>;
+
+template <size_t N>
+constexpr const vsql::func_builder::detail::StaticFuncDesc<N> &UnwrapFuncDesc(
+    const vsql::func_builder::detail::StaticFuncDesc<N> &d) {
+  return d;
+}
+
+template <size_t N>
+constexpr const vsql::func_builder::detail::StaticFuncDesc<N> &UnwrapFuncDesc(
+    const IndexHelperDesc<N> &d) {
+  return d.desc;
+}
+
+// Enforces the norm shared by with_function() and with_helper(): the bound
+// function must be deterministic, stateless, not an aggregate, fixed-arity,
+// have no bind_and_check_types() hook, and return REAL. This holds
+// for both kinds of binding -- index scan implementations might invoke them
+// through the same raw vef_vdf_func_t call, with no prerun()/user_data round
+// trip, and require a REAL result.
+template <const auto &FuncDesc>
+void CheckIndexProfileFuncNorm() {
+  constexpr const auto &d = UnwrapFuncDesc(FuncDesc);
+  static_assert(d.deterministic(),
+                "index profile function/helper must call .deterministic() "
+                "-- the optimizer may cache or reorder index-scan-eligible "
+                "calls");
+  static_assert(d.prerun() == nullptr && d.postrun() == nullptr,
+                "index profile function/helper must not use prerun()/postrun() "
+                "state -- it is invoked with no user_data set up");
+  static_assert(d.clear() == nullptr && d.accumulate() == nullptr,
+                "index profile function/helper must not be an aggregate -- "
+                "use make_func() or make_index_function(), not "
+                "make_aggregate_func()");
+  static_assert(d.num_params() != VEF_PARAM_VARARGS,
+                "varargs VDFs are not supported as index profile functions "
+                "or helpers");
+  static_assert(d.bind() == nullptr,
+                "index profile function/helper must not use "
+                "bind_and_check_types() -- it is invoked directly, without "
+                "the type-binding step");
+  static_assert(d.return_type().id == VEF_TYPE_REAL,
+                "index profile functions and helpers must return REAL");
+}
+
+// Converts a func_builder-produced descriptor (a make_func() StaticFuncDesc or
+// an IndexHelperDesc) into an IndexFunctionDesc. Callers are responsible for
+// running CheckIndexProfileFuncNorm() on the descriptor first.
+template <typename FuncDescT>
+constexpr IndexFunctionDesc ToIndexFunctionDesc(const FuncDescT &desc) {
+  const auto &d = UnwrapFuncDesc(desc);
+  IndexFunctionDesc result{};
+  result.name = d.name();
+  result.protocol = d.required_protocol();
+  result.vdf = d.vdf();
+  result.return_type = d.return_type();
+  result.num_params = d.num_params();
+  for (size_t i = 0; i < d.num_params(); ++i) {
+    result.param_types[i] = d.params()[i];
+  }
+  result.is_deterministic = d.deterministic();
+  return result;
+}
+
+}  // namespace detail
+
+// Kind of an index profile function: a filter condition on the indexed rows
+// (Restrict) or an ordering of them (Order).
+enum class FunctionKind : vef_index_profile_fn_kind_t {
+  Restrict = VEF_INDEX_PROFILE_FN_KIND_RESTRICT,
+  Order = VEF_INDEX_PROFILE_FN_KIND_ORDER,
+};
+
 struct IndexProfileFunctionBinding {
   uint32_t fn_id;
+  vef_index_profile_fn_kind_t kind;
   IndexFunctionDesc function;
 };
 
@@ -1165,7 +1289,7 @@ enum : uint32_t {
 //   make_index_profile("my_hnsw_l2")
 //       .for_type(kMyType)
 //       .using_index(kMyIndex)
-//       .with_function(1, MY_L2_FN)
+//       .with_function<MY_L2_FN>(1, FunctionKind::Order)
 //       .ordering(Index::Ordering::ASC)
 //       .build();
 //
@@ -1207,19 +1331,49 @@ class IndexProfileBuilder {
         std::move(desc_));
   }
 
-  // Bind fn_id to a user-visible SQL function. The optimizer may generate an
-  // index scan plan for calls to this function. fn_ids must be unique within
-  // the functions list.
-  Self &&with_function(uint32_t fn_id, const IndexFunctionDesc &fn) && {
-    desc_.functions.push_back({fn_id, fn});
+  // Bind fn_id to a user-visible SQL function. kind says whether the function
+  // restricts the indexed rows or defines their order. There is no default;
+  // only FunctionKind::Order is currently supported. FuncDesc is a
+  // VDF built with vsql::make_func(...).build(), e.g. `static constexpr auto
+  // MY_FN = make_func<&my_fn>(...).build();`. A descriptor from
+  // make_index_function() is rejected at compile time. See
+  // detail::CheckIndexProfileFuncNorm() for the shape FuncDesc must have;
+  // violating it is a compile error. fn_ids must be unique within the
+  // functions list (checked by the server at registration time, not here).
+  template <const auto &FuncDesc>
+  Self &&with_function(uint32_t fn_id, FunctionKind kind) && {
+    static_assert(
+        detail::is_static_func_desc_v<detail::DescType<FuncDesc>>,
+        "with_function() requires a function built with vsql::make_func(); "
+        "functions built with make_index_function() go in with_helper()");
+    detail::CheckIndexProfileFuncNorm<FuncDesc>();
+    desc_.functions.push_back({fn_id,
+                               static_cast<vef_index_profile_fn_kind_t>(kind),
+                               detail::ToIndexFunctionDesc(FuncDesc)});
     return std::move(*this);
   }
 
   // Bind fn_id to a helper function invoked only by the index implementation
-  // via vef_index_ctx_t.helper_fn. fn_ids are independent of the functions
-  // sequence and must be unique within the helpers list.
-  Self &&with_helper(uint32_t fn_id, const IndexFunctionDesc &fn) && {
-    desc_.helpers.push_back({fn_id, fn});
+  // via vef_index_ctx_t.helper_fn. FuncDesc is declared with
+  // make_index_function(...).build() -- unlike with_function(), helpers are
+  // not SQL-callable. A descriptor from vsql::make_func() is rejected at
+  // compile time. Declare FuncDesc with static storage duration usable in
+  // a constant expression, e.g. `static constexpr auto MY_HELPER_FN =
+  // make_index_function<&my_helper_fn>(...).build();`.
+  //
+  // See detail::CheckIndexProfileFuncNorm() for the shape FuncDesc must have;
+  // violating it is a compile error. fn_ids are independent of the functions
+  // fn_id sequence and must be unique within the helpers list.
+  template <const auto &FuncDesc>
+  Self &&with_helper(uint32_t fn_id) && {
+    static_assert(
+        detail::is_index_helper_desc_v<detail::DescType<FuncDesc>>,
+        "with_helper() requires a function built with make_index_function(); "
+        "SQL-visible functions built with vsql::make_func() go in "
+        "with_function()");
+    detail::CheckIndexProfileFuncNorm<FuncDesc>();
+    desc_.helpers.push_back({fn_id, VEF_INDEX_PROFILE_FN_KIND_INVALID,
+                             detail::ToIndexFunctionDesc(FuncDesc)});
     return std::move(*this);
   }
 
@@ -1272,62 +1426,50 @@ inline IndexProfileBuilder<> make_index_profile(const char *name) {
 // ===========================================================================
 // make_index_function
 // ===========================================================================
-//
-// Registers a function for use by index operations (distance, comparison).
-// Index functions extend the VDF builder: make_index_function<&fn>("name")
-// uses the same .returns()/.param()/.deterministic() chain as make_func, and
-// .build() produces an IndexFunctionDesc carrying the full VDF metadata.
-//
-// IndexFuncBuilder<F, N> wraps vsql::func_builder::FuncBuilder<F, N> via
-// containment, shadowing the methods that must preserve the derived type
-// through the chain. No changes to func_builder.h are required.
+// Registers an internal helper function for use by index operations
+// (distance, comparison) via IndexProfileBuilder::with_helper(). SQL-visible
+// functions bound via with_function() do not use this -- they are declared
+// with the normal vsql::make_func() instead (see INDEX PROFILE above). The
+// builder mirrors vsql::make_func() for the options that are valid on an index
+// function; prerun(), postrun(), varargs(), buffer_size() and
+// max_result_length() are not offered because the profile norm forbids or
+// ignores them (see detail::CheckIndexProfileFuncNorm()).
 
-template <auto F, size_t NumParams, uint32_t Bits = 0,
+template <auto F, size_t NumParams,
           vsql::func_builder::ParamMode Mode =
               vsql::func_builder::ParamMode::kUnset>
 class IndexFuncBuilder {
   using Inner = vsql::func_builder::FuncBuilder<F, NumParams, Mode>;
-  static constexpr uint32_t kDeterministic = 1u << 0;
 
  public:
-  explicit IndexFuncBuilder(Inner inner) : inner_(std::move(inner)) {}
+  explicit constexpr IndexFuncBuilder(Inner inner) : inner_(std::move(inner)) {}
 
-  IndexFuncBuilder &returns(const char *t) {
+  constexpr IndexFuncBuilder &returns(const char *t) {
     inner_.returns(t);
     return *this;
   }
 
-  IndexFuncBuilder<F, NumParams + 1, Bits,
-                   vsql::func_builder::ParamMode::kFixed>
+  constexpr IndexFuncBuilder<F, NumParams + 1,
+                             vsql::func_builder::ParamMode::kFixed>
   param(const char *t) const {
-    return IndexFuncBuilder<F, NumParams + 1, Bits,
+    return IndexFuncBuilder<F, NumParams + 1,
                             vsql::func_builder::ParamMode::kFixed>{
         inner_.param(t)};
   }
 
-  IndexFuncBuilder<F, NumParams, Bits | kDeterministic, Mode> deterministic()
-      && {
-    inner_.deterministic(true);
-    return IndexFuncBuilder<F, NumParams, Bits | kDeterministic, Mode>{
-        std::move(inner_)};
+  constexpr IndexFuncBuilder<F, 0, vsql::func_builder::ParamMode::kFixed>
+  no_params() const {
+    return IndexFuncBuilder<F, 0, vsql::func_builder::ParamMode::kFixed>{
+        inner_.no_params()};
   }
 
-  IndexFunctionDesc build() const {
-    static_assert(
-        (Bits & kDeterministic) != 0,
-        "index function: deterministic() must be called before build()");
-    auto d = inner_.build();
-    IndexFunctionDesc result{};
-    result.name = d.name();
-    result.protocol = d.required_protocol();
-    result.vdf = d.vdf();
-    result.return_type = d.return_type();
-    result.num_params = d.num_params();
-    for (size_t i = 0; i < d.num_params(); ++i) {
-      result.param_types[i] = d.params()[i];
-    }
-    result.is_deterministic = d.deterministic();
-    return result;
+  constexpr IndexFuncBuilder &deterministic(bool d = true) {
+    inner_.deterministic(d);
+    return *this;
+  }
+
+  constexpr IndexHelperDesc<NumParams> build() const {
+    return IndexHelperDesc<NumParams>{inner_.build()};
   }
 
  private:
@@ -1335,7 +1477,7 @@ class IndexFuncBuilder {
 };
 
 template <auto F>
-inline IndexFuncBuilder<F, 0> make_index_function(const char *name) {
+constexpr IndexFuncBuilder<F, 0> make_index_function(const char *name) {
   return IndexFuncBuilder<F, 0>{vsql::func_builder::make_func<F>(name)};
 }
 
@@ -1404,8 +1546,9 @@ class IndexTypeCapability
 // ===========================================================================
 //
 // Capability token that registers index profiles. Each profile binds a custom
-// type to an index type and declares its helper functions. The server registers
-// those functions as SQL VDFs automatically when the profile is loaded.
+// type to an index type and declares its function and helper bindings. This
+// only wires fn_id -> function mappings for the index implementation and the
+// optimizer; a with_function() binding needs its VDF registered via .func().
 //
 // Usage:
 //   static const auto MY_PROFILE = make_index_profile("hnsw_l2")...build();
@@ -1451,6 +1594,7 @@ class IndexProfileCapability
             for (const auto &fb : src) {
               vef_index_profile_fn_binding_t b{};
               b.fn_id = fb.fn_id;
+              b.kind = fb.kind;
               b.name = fb.function.name;
               b.protocol = fb.function.protocol;
               b.vdf = fb.function.vdf;

@@ -1,0 +1,67 @@
+# RENAME TABLE and RENAME INDEX of a table with a custom index, run as prepared
+# statements executed several times, several in one query, and in a stored
+# procedure called several times. The index metadata follows each rename.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, a dummy_type_vector,
+  INDEX i_a (a) USING EXTENDED(dummy_index_hnsw));
+
+PREPARE other FROM 'SELECT COUNT(*) AS n, MAX(LENGTH(table_name)) AS l FROM information_schema.tables WHERE table_schema = ''mysql''';
+
+PREPARE s FROM 'RENAME TABLE t1 TO t2';
+PREPARE s_back FROM 'RENAME TABLE t2 TO t1';
+EXECUTE s;
+--disable_result_log
+EXECUTE other;
+--enable_result_log
+EXECUTE s_back;
+EXECUTE s;
+--source include/villagesql/query_custom_indexes.inc
+EXECUTE s_back;
+
+PREPARE r FROM 'ALTER TABLE t1 RENAME INDEX i_a TO i_r';
+PREPARE r_back FROM 'ALTER TABLE t1 RENAME INDEX i_r TO i_a';
+EXECUTE r;
+--disable_result_log
+EXECUTE other;
+--enable_result_log
+EXECUTE r_back;
+EXECUTE r;
+--source include/villagesql/query_custom_indexes.inc
+EXECUTE r_back;
+
+# Several statements sent in one query.
+delimiter |;
+EXECUTE s; EXECUTE s_back; EXECUTE r; DEALLOCATE PREPARE r|
+EXECUTE r_back; EXECUTE s; DEALLOCATE PREPARE s_back|
+delimiter ;|
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t2;
+RENAME TABLE t2 TO t1;
+
+# The same statements in a stored procedure, called several times.
+delimiter |;
+CREATE PROCEDURE p_rename()
+BEGIN
+  RENAME TABLE t1 TO t2;
+  ALTER TABLE t2 RENAME INDEX i_a TO i_r;
+  RENAME TABLE t2 TO t1;
+  ALTER TABLE t1 RENAME INDEX i_r TO i_a;
+END|
+delimiter ;|
+CALL p_rename();
+CALL p_rename();
+CALL p_rename();
+--source include/villagesql/query_custom_indexes.inc
+SHOW CREATE TABLE t1;
+
+DROP PROCEDURE p_rename;
+DEALLOCATE PREPARE s;
+DEALLOCATE PREPARE r_back;
+DEALLOCATE PREPARE other;
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -464,10 +464,19 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
     unique_opt.reset(opt);
     plugin_opt_set_limits(opts, opt);
     if ((flags & PLUGIN_VAR_NOSYSVAR) == 0) {
+      // TODO(villagesql-rebase): key the bookmark by the fully-qualified
+      // name this variable is registered as ("component.var", built above as
+      // com_sys_var_name), not by component_name + "_" + var_name. The
+      // MEMALLOC strdup loop in alloc_and_copy_thd_dynamic_variables()
+      // resolves a bookmark back to its sys_var by that key, so the "_" form
+      // never matched and a component's THD-local string variable never got
+      // a per-session copy -- sessions kept aliasing the global buffer, which
+      // the next SET GLOBAL frees (villagesql#1324). Passing a null plugin
+      // makes both calls use the name verbatim.
       if ((flags & PLUGIN_VAR_THDLOCAL) &&
-          register_var(component_name, var_name, flags)) {
+          register_var(nullptr, com_sys_var_name, flags)) {
         st_bookmark *var;
-        if ((var = find_bookmark(component_name, var_name, flags))) {
+        if ((var = find_bookmark(nullptr, com_sys_var_name, flags))) {
           *(int *)(opt + 1) = offset = var->offset;
         }
       }

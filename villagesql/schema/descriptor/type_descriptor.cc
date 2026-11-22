@@ -31,7 +31,8 @@ TypeDescriptorKey::TypeDescriptorKey(std::string type_name,
                       canonical_extension_name(extension_version_)) {}
 
 TypeDescriptor::TypeDescriptor(
-    TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
+    TypeDescriptorKey key, vef_protocol_t protocol,
+    vef_protocol_t extension_protocol, unsigned char impl_type,
     int64_t persisted_len, int64_t max_unpersisted_len,
     int64_t max_persisted_len, LengthKind length_kind, EncodeFunction encode,
     DecodeFunction decode, CompareFunction compare,
@@ -40,6 +41,7 @@ TypeDescriptor::TypeDescriptor(
     std::optional<ResolveParamsFunction> resolve_params)
     : key_(std::move(key)),
       protocol_(protocol),
+      extension_protocol_(extension_protocol),
       implementation_type_(impl_type),
       persisted_length_(persisted_len),
       max_decode_buffer_length_(max_unpersisted_len),

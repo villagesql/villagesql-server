@@ -17,21 +17,31 @@
 #ifndef STORAGE_INNOBASE_VILLAGESQL_CUSTOM_INDEX_H_
 #define STORAGE_INNOBASE_VILLAGESQL_CUSTOM_INDEX_H_
 
+#include <array>
 #include <memory>
 #include <utility>
 #include <vector>
 
 #include "db0err.h"
+#include "page0types.h"
 #include "trx0types.h"
 
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 
 // Forward declarations
+struct dict_col_t;
 struct dict_index_t;
 struct dict_table_t;
+struct dfield_t;
 struct dtuple_t;
+struct mem_block_info_t;
+typedef mem_block_info_t mem_heap_t;
+struct TABLE_SHARE;
+struct row_prebuilt_t;
+struct mtr_t;
 namespace dd {
 class Index;
+class Table;
 }
 
 namespace villagesql {
@@ -53,8 +63,10 @@ class Custom_index {
   using StorageCtx = vef_storage_ctx_t;
   using StorageRef = vef_storage_ref_t;
   using KeyRef = vef_storage_col_ref_t;
+  using CursorRef = vef_index_cursor_ref_t;
 
   static constexpr uint32_t ERROR_MSG_SIZE = 512;
+  static constexpr uint32_t MAX_EXTRA_FIELDS = 1;
 
   explicit Custom_index(std::shared_ptr<const IndexContext> index_metadata)
       : index_metadata_(std::move(index_metadata)) {}
@@ -66,6 +78,12 @@ class Custom_index {
 
   // Custom index extension interface.
   const vef_type_index_intf_t &interface() const;
+
+  // Maps the VEF_INDEX_CAP_* capabilities declared by meta's index type to the
+  // handler::index_flags() bitmask (HA_READ_*, HA_SUPPORT_KNN) the optimizer
+  // expects. Callable from a KEY's custom_index_context before any
+  // Custom_index instance exists for the index.
+  static ulong flags(const IndexContext *meta);
 
   // Get the index profile for key column type.
   const IndexProfileDescriptor *profile_for_key(uint32_t key_pos) const {
@@ -119,8 +137,33 @@ class Custom_index {
   // state from old_index onto new_index's heap.
   static dberr_t load(dict_index_t *new_index, const dict_index_t *old_index);
 
+  // Loads all custom indexes of a table.
+  static void load_all(dict_table_t *table, const dd::Table *dd_table,
+                       const TABLE_SHARE *ts);
+
   // Returns true if index has Custom_index runtime state.
   static bool is_custom(const dict_index_t *index);
+
+  // Returns true if index is a KNN custom index.
+  static bool is_knn(const dict_index_t *index);
+
+  // Returns true if a scan on index with prebuilt's lock type must also read
+  // the clustered index.
+  static bool needs_clustered_access(const dict_index_t *index,
+                                     const row_prebuilt_t *prebuilt);
+
+  static uint32_t n_extra_fields(const dict_index_t *index);
+
+  static void add_extra_fields(dict_index_t *new_index,
+                               const dict_index_t *index);
+
+  // Returns true if the field at position pos of index is an extra field.
+  static bool is_extra_field(const dict_index_t *index, ulint pos);
+
+  // Initializes dfield if the field at position pos of index is an extra
+  // field. Returns true if it is an extra field and was handled.
+  static bool set_extra_field(const dict_index_t *index, ulint pos,
+                              dfield_t *dfield, mem_heap_t *heap);
 
   // Creates the extension-managed storage for a custom index, invoking the
   // registered index-type create function.
@@ -129,9 +172,18 @@ class Custom_index {
   // Drops the extension-managed storage for a custom index.
   static dberr_t drop(dict_index_t *index, trx_id_t trx_id);
 
-  // Inserts a key into the extension-managed storage for a custom index.
+  // Inserts a key into extension-managed storage for a custom index.
+  // @param[out] is_key_null true if all the key columns of the entry are NULL
   static dberr_t insert(dict_index_t *index, trx_id_t trx_id,
-                        const dtuple_t *entry, bool dup_chk_only);
+                        const dtuple_t *entry, bool dup_chk_only,
+                        bool *is_key_null);
+
+  // Entry point for row_search_mvcc()/row_search_no_mvcc() when the index
+  // being scanned is a custom index.
+  static dberr_t row_search(byte *buf, page_cur_mode_t mode,
+                            row_prebuilt_t *prebuilt, ulint match_mode,
+                            ulint direction, bool range_lock, bool scan_forward,
+                            bool is_mvcc);
 
   // Persists the custom index storage reference into dd::Index se_private_data.
   // Called from dd_write_index() after standard index metadata is written.
@@ -143,6 +195,31 @@ class Custom_index {
   static void free_all(dict_index_t *index);
 
  private:
+  // Loads the extension-managed storage of an attached custom index that has
+  // a storage reference.
+  static dberr_t load_storage(dict_index_t *new_index);
+
+  // Fills the scan descriptor fields that depend on the query: the profile
+  // function of the scan key, and the KNN limit.
+  dberr_t fill_profile(const row_prebuilt_t *prebuilt,
+                       vef_index_scan_desc_t *scan_desc, page_cur_mode_t mode);
+
+  // Opens an extension cursor on the custom index positioned at the first
+  // record of the scan described by search_tuple. On success the cursor is
+  // stored in prebuilt->pcur->custom_cursor, even when eof is true.
+  dberr_t open_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr,
+                      page_cur_mode_t mode, bool reverse, bool *eof,
+                      char *error_msg, uint32_t error_msg_len);
+
+  // Re-attaches the saved extension cursor in prebuilt->pcur->custom_cursor to
+  // the new mini-transaction mtr and repositions it.
+  dberr_t restore_cursor(row_prebuilt_t *prebuilt, mtr_t *mtr, bool *eof,
+                         char *error_msg, uint32_t error_msg_len);
+
+  // Ends the extension cursor in prebuilt->pcur->custom_cursor, if any, and
+  // clears it.
+  void close_cursor(row_prebuilt_t *prebuilt);
+
   std::shared_ptr<const IndexContext> index_metadata_;
   std::vector<std::shared_ptr<const IndexProfileDescriptor>> key_profiles_;
 

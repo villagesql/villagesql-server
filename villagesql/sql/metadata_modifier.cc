@@ -16,6 +16,8 @@
 
 #include "villagesql/sql/metadata_modifier.h"
 
+#include <limits>
+#include <map>
 #include <unordered_set>
 #include <utility>
 
@@ -60,19 +62,6 @@ static constexpr const char *error_uninitialized_victionary =
     "Victionary Client not initialized";
 static constexpr const char *error_uninitialized_session =
     "Uninitialized Session: NULL THD";
-
-bool Metadata_modifier::ensure_engine_is_innodb(const handlerton *hton,
-                                                const char *operation) {
-  assert(hton);
-  if (hton && hton->db_type != DB_TYPE_INNODB) {
-    villagesql_error(
-        "Custom types are only supported with InnoDB storage engine. "
-        "Cannot %s with %s storage engine.",
-        MYF(0), operation, ha_resolve_storage_engine_name(hton));
-    return true;
-  }
-  return false;
-}
 
 bool Metadata_modifier::add_columns(THD *thd [[maybe_unused]],
                                     Table_name db_table,
@@ -455,15 +444,41 @@ bool Metadata_modifier::rename_columns_table(
                                                       new_table, MDL_SHARED));
 
   auto guard = vclient.get_read_lock();
-  auto custom_columns = vclient.GetCustomColumnsForTable(old_db, old_table);
+
+  // The table's columns as the renames already staged here leave them, so
+  // that a RENAME TABLE pair can rename a table an earlier pair of the same
+  // statement produced. A column an earlier rename produced also records the
+  // position of that rename in to_rename_.
+  constexpr size_t not_staged = std::numeric_limits<size_t>::max();
+  const std::string old_prefix = ColumnKeyPrefix(old_db, old_table).str();
+  std::map<std::string, std::pair<const ColumnEntry *, size_t>> custom_columns;
+  for (const ColumnEntry *col :
+       vclient.GetCustomColumnsForTable(old_db, old_table)) {
+    if (col) custom_columns[col->key().str()] = {col, not_staged};
+  }
+  // Each staged rename runs from a committed key to the column's current key,
+  // and they all apply at once. So drop every old key before adding any
+  // current one, since one rename's current key may be another's old key.
+  for (const auto &[_, staged_old_key] : to_rename_)
+    custom_columns.erase(staged_old_key.str());
+  for (size_t i = 0; i < to_rename_.size(); ++i) {
+    const ColumnEntry &staged_entry = to_rename_[i].first;
+    const std::string staged_key = staged_entry.key().str();
+    if (staged_key.starts_with(old_prefix))
+      custom_columns[staged_key] = {&staged_entry, i};
+  }
 
   if (custom_columns.empty()) {
     return false;  // No custom columns to rename.
   }
 
-  for (const ColumnEntry *old_col : custom_columns) {
-    if (!old_col) continue;
-
+  // Built apart from to_rename_, which custom_columns may point into.
+  // Each rename comes with the position of the staged rename it continues.
+  std::vector<std::pair<ColumnEntry, size_t>> continued;
+  std::vector<std::pair<ColumnEntry, ColumnKey>> renames;
+  renames.reserve(custom_columns.size());
+  for (const auto &[_, staged] : custom_columns) {
+    const auto [old_col, staged_pos] = staged;
     // The caller stages its own operation for these, keyed by new_name
     // already. Renaming them here too would race that operation for the row.
     if (skip_columns != nullptr &&
@@ -474,8 +489,110 @@ bool Metadata_modifier::rename_columns_table(
                           old_col->extension_name, old_col->extension_version,
                           old_col->type_name, old_col->type_parameters);
 
-    to_rename_.emplace_back(new_entry, old_col->key());
+    if (staged_pos == not_staged)
+      renames.emplace_back(std::move(new_entry), old_col->key());
+    else
+      continued.emplace_back(std::move(new_entry), staged_pos);
   }
+  // A rename of a column an earlier rename produced replaces that rename's
+  // target, so the row is deleted under the name it has in the table.
+  for (auto &[entry, pos] : continued) to_rename_[pos].first = std::move(entry);
+  for (auto &rename : renames) to_rename_.push_back(std::move(rename));
+
+  return false;
+}
+
+bool Metadata_modifier::rename_indexes_table(
+    THD *thd [[maybe_unused]], Table_name old_name, Table_name new_name,
+    const std::unordered_set<std::string> *skip_indexes,
+    const std::map<std::string, std::string> *index_renames) {
+  if (should_assert_if_null(old_name.first) ||
+      should_assert_if_null(old_name.second) ||
+      should_assert_if_null(new_name.first) ||
+      should_assert_if_null(new_name.second)) {
+    villagesql_error(error_uninitialized_name, MYF(0));
+    return true;
+  }
+
+  const char *old_db = old_name.first;
+  const char *old_table = old_name.second;
+  const char *new_db = new_name.first;
+  const char *new_table = new_name.second;
+
+  if (is_system_schema(old_db)) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+  // We must already have locked the table to make sure that the
+  // table indexes are not altered.
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, old_db,
+                                                      old_table, MDL_SHARED));
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE, new_db,
+                                                      new_table, MDL_SHARED));
+
+  auto guard = vclient.get_read_lock();
+
+  // The table's indexes as the renames already staged here leave them, as in
+  // rename_columns_table(). An index an earlier rename produced also records
+  // the position of that rename in to_rename_indexes_.
+  constexpr size_t not_staged = std::numeric_limits<size_t>::max();
+  const std::string old_prefix = IndexKeyPrefix(old_db, old_table).str();
+  std::map<std::string, std::pair<const IndexEntry *, size_t>> custom_indexes;
+  for (const IndexEntry *entry :
+       vclient.GetCustomIndexesForTable(old_db, old_table)) {
+    if (entry) custom_indexes[entry->key().str()] = {entry, not_staged};
+  }
+  // Each staged rename runs from a committed key to the index's current key,
+  // and they all apply at once. So drop every old key before adding any
+  // current one, since one rename's current key may be another's old key.
+  for (const auto &[_, staged_old_key] : to_rename_indexes_)
+    custom_indexes.erase(staged_old_key.str());
+  for (size_t i = 0; i < to_rename_indexes_.size(); ++i) {
+    const IndexEntry &staged_entry = to_rename_indexes_[i].first;
+    const std::string staged_key = staged_entry.key().str();
+    if (staged_key.starts_with(old_prefix))
+      custom_indexes[staged_key] = {&staged_entry, i};
+  }
+
+  // Built apart from to_rename_indexes_, which custom_indexes may point into.
+  // Each rename comes with the position of the staged rename it continues.
+  std::vector<std::pair<IndexEntry, size_t>> continued;
+  std::vector<std::pair<IndexEntry, IndexKey>> renames;
+  renames.reserve(custom_indexes.size());
+  for (const auto &[_, staged] : custom_indexes) {
+    const auto [old_index, staged_pos] = staged;
+    const std::string old_index_name =
+        canonical_index_name(old_index->index_name());
+    if (skip_indexes != nullptr && skip_indexes->count(old_index_name) > 0)
+      continue;
+
+    std::string new_index_name = old_index->index_name();
+    if (index_renames != nullptr) {
+      auto it = index_renames->find(old_index_name);
+      if (it != index_renames->end()) new_index_name = it->second;
+    }
+    IndexKey new_key(new_db, new_table, new_index_name);
+    // A rename that only changes the case of the index name keeps the key, but
+    // the stored name has to follow it to match the data dictionary.
+    if (new_key.str() == old_index->key().str() &&
+        new_index_name == old_index->index_name())
+      continue;
+
+    // index_id stays, so the index's custom_index_columns rows still apply.
+    IndexEntry new_entry(
+        std::move(new_key), old_index->index_id, old_index->extension_name,
+        old_index->extension_version, old_index->index_type_name,
+        old_index->index_type_parameters);
+    if (staged_pos == not_staged)
+      renames.emplace_back(std::move(new_entry), old_index->key());
+    else
+      continued.emplace_back(std::move(new_entry), staged_pos);
+  }
+  // A rename of an index an earlier rename produced replaces that rename's
+  // target, so the row is deleted under the name it has in the table.
+  for (auto &[entry, pos] : continued)
+    to_rename_indexes_[pos].first = std::move(entry);
+  for (auto &rename : renames) to_rename_indexes_.push_back(std::move(rename));
 
   return false;
 }
@@ -591,7 +708,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   // 2. Handle RENAME COLUMN - update custom_columns entry
   for (const Alter_column *alter : alter_info->alter_list) {
     if (alter->change_type() == Alter_column::Type::RENAME_COLUMN) {
-      if (custom_column_names.count(canonical_column_name(alter->name))) {
+      if (custom_column_names.contains(canonical_column_name(alter->name))) {
         // Find the existing entry to get full metadata
         const ColumnEntry *old_entry_ptr = nullptr;
         for (const ColumnEntry *col : custom_columns) {
@@ -621,7 +738,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
       if (!field.change) continue;
       bool is_custom_type = (field.custom_type_context != nullptr);
       bool was_custom_type =
-          custom_column_names.count(canonical_column_name(field.change));
+          custom_column_names.contains(canonical_column_name(field.change));
 
       if (!was_custom_type && is_custom_type) {
         // Non-custom → custom: not allowed. Use explicit conversion functions.
@@ -658,7 +775,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
     bool is_custom_type = (field.custom_type_context != nullptr);
     bool was_custom_type =
         field.change &&
-        custom_column_names.count(canonical_column_name(field.change));
+        custom_column_names.contains(canonical_column_name(field.change));
 
     if (field.change) {
       // This is MODIFY COLUMN or CHANGE COLUMN
@@ -719,7 +836,7 @@ bool Metadata_modifier::remove_indexes(THD *thd [[maybe_unused]],
   auto guard = vclient.get_read_lock();
   for (const IndexEntry *entry :
        vclient.GetCustomIndexesForTable(db, table_name)) {
-    if (!entry || !dropping.count(canonical_index_name(entry->index_name())))
+    if (!entry || !dropping.contains(canonical_index_name(entry->index_name())))
       continue;
 
     // Queue child column rows for deletion before the parent index row.
@@ -782,7 +899,7 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   // Lambda to add MDL request for an extension (if not already added)
   auto add_mdl_request = [&](const std::string &ext_name) -> bool {
     if (ext_name.empty() ||
-        seen_extensions.count(canonical_extension_name(ext_name))) {
+        seen_extensions.contains(canonical_extension_name(ext_name))) {
       return false;  // Already processed or empty
     }
 
@@ -850,6 +967,13 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   for (const IndexColumnEntry &entry : to_remove_index_columns_) {
     assert(!entry.profile_extension_name.empty());
     if (add_mdl_request(entry.profile_extension_name)) {
+      return true;
+    }
+  }
+
+  for (const auto &[new_entry, old_key] : to_rename_indexes_) {
+    assert(!new_entry.extension_name.empty());
+    if (add_mdl_request(new_entry.extension_name)) {
       return true;
     }
   }
@@ -1010,11 +1134,17 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   }
   to_remove_.clear();
 
-  // 2. Process renames (updates with old key).
+  // 2. Process renames. Each deletes the row under the old name and inserts it
+  // under the new one. All deletes come first, so renames that swap or chain
+  // names in one statement never insert a name another row still holds.
+  for (const auto &[new_entry, old_key] : to_rename_) {
+    if (vclient.columns().MarkForDeletion(*thd, old_key)) {
+      return true;
+    }
+  }
   for (auto &[new_entry, old_key] : to_rename_) {
-    if (vclient.columns().MarkForUpdate(*thd, std::move(new_entry),
-                                        std::move(old_key))) {
-      return true;  // Error marking for update
+    if (vclient.columns().MarkForInsertion(*thd, std::move(new_entry))) {
+      return true;
     }
     marked_column = true;
   }
@@ -1047,6 +1177,23 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
   }
   to_remove_indexes_.clear();
 
+  // 5b. Process custom index renames. Each deletes the row under the old name
+  // and inserts it under the new one with the same index_id. All deletes come
+  // first, so renames that swap or chain names in one statement never insert
+  // a name another row still holds.
+  for (const auto &[new_entry, old_key] : to_rename_indexes_) {
+    if (vclient.custom_indexes().MarkForDeletion(*thd, old_key)) {
+      return true;
+    }
+  }
+  for (auto &[new_entry, old_key] : to_rename_indexes_) {
+    if (vclient.custom_indexes().MarkForInsertion(*thd, std::move(new_entry))) {
+      return true;
+    }
+    marked_index = true;
+  }
+  to_rename_indexes_.clear();
+
   // 6. Process custom index additions. custom_indexes must be staged before
   // custom_index_columns so the parent row exists when child rows reference it.
   for (IndexEntry &entry : to_add_indexes_) {
@@ -1073,14 +1220,38 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
 // Append a villagesql system table to thd->lex->query_tables and return the
 // new Table_ref. The table is only staged here: Metadata_modifier::store()
 // finds it again by walking query_tables, and locks every staged table in the
-// single lock_tables() call a statement is allowed.
+// single lock_tables() call a statement is allowed. UnlinkStagedSystemTables()
+// removes it again at the end of the statement.
 static Table_ref *stage_system_table(THD *thd, const char *table_name) {
   Table_ref *tref =
       new (thd->mem_root) Table_ref(SchemaManager::VILLAGESQL_SCHEMA_NAME,
                                     table_name, TL_WRITE, MDL_SHARED_WRITE);
   if (!tref) return nullptr;  // MEM_ROOT already set ER_OUT_OF_RESOURCES
-  thd->lex->add_to_query_tables(tref);
+  LEX *lex = thd->lex;
+  lex->add_to_query_tables(tref);
+  if (lex->villagesql_staged_tables == nullptr) {
+    lex->villagesql_staged_tables = tref;
+  }
   return tref;
+}
+
+void UnlinkStagedSystemTables(LEX *lex) {
+  Table_ref *first = lex->villagesql_staged_tables;
+  if (first == nullptr) return;
+  // prev_global, not the list's end at staging time: a statement can link a
+  // table in front of the staged ones, as CREATE TABLE ... SELECT does with
+  // the table it creates.
+  Table_ref **link = first->prev_global;
+#ifndef NDEBUG
+  // Nothing may be linked after the staged tables, such as prelocked tables.
+  for (Table_ref *tl = first; tl != nullptr; tl = tl->next_global) {
+    assert(is_villagesql_schema(tl->db));
+    assert(lex->query_tables_own_last != &tl->next_global);
+  }
+#endif
+  *link = nullptr;
+  lex->query_tables_last = link;
+  lex->villagesql_staged_tables = nullptr;
 }
 
 // Open the chain of staged system tables starting at `first` without locking
@@ -1089,7 +1260,14 @@ static bool open_staged_system_tables(THD *thd, Table_ref *first, uint flags,
                                       uint *opened) {
   DML_prelocking_strategy strategy;
   uint counter = 0;
-  if (open_tables(thd, &first, &counter, flags, &strategy)) {
+  // A prepared statement records the versions of the tables it names, and a
+  // statement such as CREATE TABLE asks to be prepared again when a table it
+  // opens has none recorded. The system tables are not the statement's own,
+  // and each execution stages them anew, so they must not ask.
+  thd->push_reprepare_observer(nullptr);
+  const bool open_failed = open_tables(thd, &first, &counter, flags, &strategy);
+  thd->pop_reprepare_observer();
+  if (open_failed) {
     villagesql_error("Cannot open VillageSQL system tables", MYF(0));
     return true;
   }
@@ -1202,7 +1380,7 @@ bool Metadata_modifier::process_create(THD *thd,
 
   // Check storage engine if custom columns or indexes were added.
   if (custom_modifier.has_entries() &&
-      ensure_engine_is_innodb(create_info->db_type, "create table")) {
+      EnsureEngineIsInnodb(create_info->db_type, "create table")) {
     return true;
   }
 
@@ -1236,12 +1414,40 @@ bool Metadata_modifier::process_alter(THD *thd,
 
   const char *db = table_list->db;
   const char *table_name = table_list->table_name;
-  if (custom_modifier.add_indexes(thd, db, table_name, alter_info)) {
+
+  // The names the table carries once this ALTER completes. Indexes it adds are
+  // filed under them and the ones it keeps move to them; the ones it drops are
+  // deleted under the old names, as in alter_columns().
+  const bool renaming_table = (alter_info->flags & Alter_info::ALTER_RENAME) &&
+                              alter_info->new_table_name.str != nullptr;
+  const char *new_db = (renaming_table && alter_info->new_db_name.str)
+                           ? alter_info->new_db_name.str
+                           : db;
+  const char *new_table_name =
+      renaming_table ? alter_info->new_table_name.str : table_name;
+
+  if (custom_modifier.add_indexes(thd, new_db, new_table_name, alter_info)) {
     return true;
   }
 
   if (custom_modifier.remove_indexes(thd, db, table_name, alter_info)) {
     return true;
+  }
+
+  std::map<std::string, std::string> index_renames;
+  for (const Alter_rename_key *rename_key : alter_info->alter_rename_key_list)
+    index_renames[canonical_index_name(rename_key->old_name)] =
+        rename_key->new_name;
+
+  if (renaming_table || !index_renames.empty()) {
+    std::unordered_set<std::string> dropped_indexes;
+    for (const IndexEntry &entry : custom_modifier.to_remove_indexes_)
+      dropped_indexes.insert(canonical_index_name(entry.index_name()));
+    if (custom_modifier.rename_indexes_table(
+            thd, {db, table_name}, {new_db, new_table_name}, &dropped_indexes,
+            &index_renames)) {
+      return true;
+    }
   }
 
   // Reject any ALTER that combines custom column changes with an engine change.
@@ -1270,7 +1476,7 @@ bool Metadata_modifier::process_alter(THD *thd,
   }
   // The target engine must be InnoDB when custom columns are involved.
   if ((current_has_custom || adding_custom) &&
-      ensure_engine_is_innodb(target_engine, "alter table")) {
+      EnsureEngineIsInnodb(target_engine, "alter table")) {
     return true;
   }
 
@@ -1308,6 +1514,10 @@ bool Metadata_modifier::process_rename(THD *thd, Table_ref *table_list) {
     Table_name new_table = {new_ref->db, new_ref->table_name};
 
     if (custom_modifier.rename_columns_table(thd, old_table, new_table)) {
+      return true;
+    }
+
+    if (custom_modifier.rename_indexes_table(thd, old_table, new_table)) {
       return true;
     }
   }

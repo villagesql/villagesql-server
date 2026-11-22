@@ -15,6 +15,7 @@ span lines. Pipe through `jq .` to read it.
 | `json_docker.sh`     | The Docker images published, as an array of objects.           |
 | `json_build_matrix.sh` | The build-server matrix, one row per platform.                |
 | `json_test_extensions.sh` | The extension tests, one row per (platform, extension, abi). |
+| `json_override_extensions.sh` | Extension test rows from stdin, with a server ref's overrides applied. |
 
 Each script's header comment documents its arguments and environment
 variables, and is the source of truth for them.

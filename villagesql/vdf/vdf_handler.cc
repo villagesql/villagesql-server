@@ -15,19 +15,24 @@
 
 #include "villagesql/vdf/vdf_handler.h"
 
+#include <algorithm>
 #include <type_traits>
+#include <vector>
 
 #include "lex_string.h"
 #include "my_sys.h"
 #include "mysql/strings/m_ctype.h"
+#include "scope_guard.h"
 #include "sql/current_thd.h"
 #include "sql/derror.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
+#include "sql/item_sum.h"
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
 #include "sql/sql_udf.h"
 #include "sql_string.h"
+#include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/types/from_string_inference.h"
 #include "villagesql/types/util.h"
@@ -37,11 +42,19 @@ namespace vdf {
 
 // Returns true when `arg` is an input the from_string-inference path can
 // safely pre-execute at fix_fields time: a constant-for-execution Item whose
-// val_str() has no side effects. Today this covers string literals and
-// read-only user variables (e.g. @v after `SET @v = '[...]'`).
+// val_str() has no side effects. Today this covers string literals, read-only
+// user variables (e.g. @v after `SET @v = '[...]'`) and prepared-statement
+// parameters holding a string. A parameter has no value at PREPARE, but a
+// statement inferring from one is prepared again at every EXECUTE with the
+// values bound (see PsParamValueLoan). If the parameter is
+// STRING_VALUE there, we can infer the params from it.
 static bool is_inferrable_string_const(Item *arg) {
   if (!arg->const_for_execution()) return false;
   if (arg->type() == Item::STRING_ITEM) return true;
+  if (arg->type() == Item::PARAM_ITEM) {
+    return down_cast<Item_param *>(arg)->param_state() ==
+           Item_param::STRING_VALUE;
+  }
   if (arg->type() == Item::FUNC_ITEM &&
       down_cast<Item_func *>(arg)->functype() == Item_func::GUSERVAR_FUNC) {
     return true;
@@ -49,9 +62,37 @@ static bool is_inferrable_string_const(Item *arg) {
   return false;
 }
 
-// Default result-buffer size for STRING/CUSTOM returns when the extension does
-// not declare its own buffer_size. Most JSON/text results fit in 1 KiB, so
-// this avoids a reallocation in the common case.
+// The type an argument for a parameter of type `id` is read as. A STRING
+// argument is utf8mb4 from VEF_PROTOCOL_5. An extension negotiated at an older
+// protocol was built before that, and gets the value's bytes as they are.
+static vef_type_id ArgReadType(vef_type_id id, vef_protocol_t protocol) {
+  if (id == VEF_TYPE_STRING && protocol < VEF_PROTOCOL_5)
+    return VEF_TYPE_BINARY;
+  return id;
+}
+
+// Returns true if prerun gets arg's value as a constant. These are the same
+// arguments a UDF's init reads as constant (udf_handler::call_init_func()),
+// without subqueries. When an argument has a ?, prerun waits for EXECUTE (see
+// defer_prerun in fix_fields). By then the ? has its value, and the value does
+// not change during that execution, so it is treated as a constant too (see
+// PsParamValueLoan).
+static bool IsPrerunConstArg(Item *arg) {
+  if (HasPSParamWithoutValue(arg)) return false;
+  if (arg->type() == Item::PARAM_ITEM) return true;
+  return arg->const_for_execution() && !arg->has_subquery();
+}
+
+template <typename InvalueType>
+static bool marshal_args_typed(const vef_signature_t *sig,
+                               vef_protocol_t protocol, uint value_count,
+                               Item **args, String *buffers,
+                               InvalueType *invalues,
+                               const bool *args_to_marshal = nullptr);
+
+// Default result-buffer size for STRING/BINARY/CUSTOM returns when the
+// extension does not declare its own buffer_size. Most JSON/text results fit in
+// 1 KiB, so this avoids a reallocation in the common case.
 static constexpr size_t kDefaultResultBufferSize = 1024;
 
 // Result-buffer growth quantum. Reallocations round up to a multiple of this
@@ -85,9 +126,8 @@ bool vdf_handler::MaybeResizeBuffer(size_t needed) {
   return false;
 }
 
-bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
-                             uint arg_count, Item **arguments,
-                             String *buffers) {
+bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
+                             Item **arguments, String *buffers) {
   m_args = arguments;
   m_buffers = buffers;
   m_arg_count = arg_count;
@@ -122,10 +162,11 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   if (!m_error_msg) return true;
   m_error_msg[0] = '\0';
 
-  // Allocate result buffer only for types that need it (STRING/CUSTOM)
+  // Allocate result buffer only for types that need it (STRING/BINARY/CUSTOM)
   const vef_type_id return_type =
       m_udf->vdf_func_desc->signature->return_type.id;
-  if (return_type == VEF_TYPE_STRING || return_type == VEF_TYPE_CUSTOM) {
+  if (return_type == VEF_TYPE_STRING || return_type == VEF_TYPE_BINARY ||
+      return_type == VEF_TYPE_CUSTOM) {
     size_t needed = m_udf->vdf_func_desc->buffer_size > 0
                         ? m_udf->vdf_func_desc->buffer_size
                         : kDefaultResultBufferSize;
@@ -163,44 +204,87 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
   // params and returned params instead.
   const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
   const vef_bind_types_func_t bind_and_check =
-      m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_4
+      m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_5
           ? m_udf->vdf_func_desc->bind_and_check_types
           : nullptr;
   villagesql::TypeParameters return_params;
+
+  // In a prepared statement, a call is resolved here once, at PREPARE, and
+  // every EXECUTE reuses it, unless the statement is marked to be prepared
+  // again at each EXECUTE. Prerun and postrun keep per-execution state, so they
+  // need that, and so does a bind_and_check_types hook, which may read a
+  // constant argument's value (a ? or a user variable) that the next EXECUTE
+  // changes. A check deferred to EXECUTE marks it too (DeferUntilReprepare).
+  // The extension cannot be uninstalled while a prepared statement holds one
+  // of its VDFs, so a call resolved once stays valid.
+  if (m_udf->vdf_func_desc->prerun || m_udf->vdf_func_desc->postrun ||
+      bind_and_check != nullptr) {
+    villagesql::MarkVdfStatementForReprepare(thd);
+  }
+
+  // A postponed call waits for the statement to be prepared again with its
+  // parameter values: inference and prerun are skipped too, and the return
+  // type is set below with its params unknown.
+  bool postponed = false;
   if (signature != nullptr &&
       villagesql::ValidateAndConvertVDFArguments(
           thd, m_udf->name.str, to_string_view(m_udf->extension_name),
           arg_count, m_args, signature, &return_params, bind_and_check,
-          m_context)) {
+          m_context, &postponed)) {
     return true;
   }
 
-  // Constant-string from_string inference.
+  // Constant inference.
   //
   // If the return type's params are still unknown after type disambiguation
-  // rules and the call matches `<TYPE>::from_string(<string-const>)` with a
-  // deterministic VDF, we pre-execute the encode VDF here to learn the params
-  // from the input string. The SDK wrapper writes the inferred canonical
+  // rules and the call is a deterministic one-argument VDF returning a
+  // parameterized type on a constant, such as
+  // `<TYPE>::from_string(<string-const>)` or
+  // `<TYPE>::from_binary(<binary-const>)`, we pre-execute the VDF here to learn
+  // the params from the constant. The SDK wrapper writes the inferred canonical
   // params back through vef_inferred_type_params_t; we bind them to
   // return_params so SetVDFReturnTypeContext below populates the outer call's
   // return TypeContext. The VDF re-runs at row time on the original argument,
   // this time with known params, and encodes normally.
   //
-  // "String const" here covers string literals and user variables — anything
-  // is_inferrable_string_const() accepts.
+  // "String const" here covers string literals, user variables and string
+  // prepared-statement parameters, i.e. anything is_inferrable_string_const()
+  // accepts. Only a STRING or BINARY parameter is pre-executed, with the
+  // constant read as the VDF reads it at row time; a varargs call marshals a
+  // string constant as STRING. A BINARY parameter also takes a hexadecimal or
+  // bit literal.
   // The deterministic flag only exists as of VEF_PROTOCOL_3; older descriptors
   // leave that byte uninitialized, so guard the read on the protocol version.
-  if (signature != nullptr && return_params.empty() &&
+  // A VDF with a prerun is not pre-executed here: this call would run before
+  // its prerun has set up the state the VDF reads (user_data).
+  const vef_type_id param_id =
+      signature != nullptr && signature->param_count == 1
+          ? signature->params[0].id
+          : VEF_TYPE_STRING;
+  if (!postponed && signature != nullptr && return_params.empty() &&
       signature->return_type.id == VEF_TYPE_CUSTOM &&
       m_udf->vdf_func_desc->protocol >= VEF_PROTOCOL_3 &&
-      m_udf->vdf_func_desc->deterministic && arg_count == 1 &&
-      is_inferrable_string_const(arguments[0])) {
+      m_udf->vdf_func_desc->deterministic &&
+      m_udf->vdf_func_desc->prerun == nullptr && arg_count == 1 &&
+      (param_id == VEF_TYPE_STRING || param_id == VEF_TYPE_BINARY) &&
+      (is_inferrable_string_const(arguments[0]) ||
+       (param_id == VEF_TYPE_BINARY &&
+        arguments[0]->type() == Item::HEX_BIN_ITEM &&
+        arguments[0]->const_for_execution()))) {
     TypeInferenceSnapshot snap;
     if (!LookupTypeForInference(to_string_view(m_udf->extension_name),
                                 signature->return_type.custom_type, &snap) &&
         snap.is_parameterized && snap.max_persisted_length > 0) {
+      // The params come from the argument's value. Only a literal keeps that
+      // value from one EXECUTE to the next.
+      if (arguments[0]->type() != Item::STRING_ITEM &&
+          arguments[0]->type() != Item::HEX_BIN_ITEM) {
+        villagesql::MarkVdfStatementForReprepare(thd);
+      }
       String tmp;
-      String *val = arguments[0]->val_str(&tmp);
+      String *val = ReadVdfValue(ArgReadType(param_id, m_udf->vdf_protocol),
+                                 arguments[0], &tmp);
+      if (val == nullptr && thd->is_error()) return true;
       if (val != nullptr && !arguments[0]->null_value) {
         TypeParameters inferred;
         // We will discard the encoded bytes when we infer the parameters so as
@@ -210,13 +294,13 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
         // The cost of this simpler code execution flow is a single call to the
         // encode function.
         std::string encoded_bytes;
-        if (!villagesql::InferFromStringConstant(
-                thd, snap.max_persisted_length, m_udf->vdf_func_desc,
+        if (!villagesql::InferFromConstant(
+                thd, snap.max_persisted_length, m_udf->vdf_func_desc, param_id,
                 std::string_view(val->ptr(), val->length()), &inferred,
                 &encoded_bytes)) {
           return_params = std::move(inferred);
         } else if (current_thd->is_error()) {
-          // InferFromStringConstant surfaced a real error (malformed literal,
+          // InferFromConstant surfaced a real error (malformed literal,
           // wrapper bug, etc.).
           return true;
         }
@@ -228,12 +312,35 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     }
   }
 
-  // Call prerun if present
-  if (m_udf->vdf_func_desc->prerun) {
+  // Steps after prerun can still fail. The caller then drops this handler
+  // without calling cleanup(), so run postrun here to free prerun's state. A
+  // failed prerun does not get a postrun; it must clean up after itself.
+  bool prerun_completed = false;
+  auto postrun_guard = create_scope_guard([&] {
+    if (prerun_completed) RunPostrun();
+  });
+
+  // Call prerun if present, except at PREPARE when an argument has a ? with no
+  // value. Such a ? looks like a STRING to prerun, so its checks cannot work
+  // yet. We defer prerun until EXECUTE, when the ? has the type of the value
+  // bound to it. udf_handler::fix_fields defers a UDF's init at PREPARE when
+  // any argument is not constant, e.g. a column. We defer only for an argument
+  // with a ?, because a column's type is known at PREPARE and prerun can check
+  // it there. A call whose bind hook is postponed defers prerun too. A VDF
+  // without prerun has nothing to defer, so a ? alone does not make its
+  // statement prepare again at EXECUTE.
+  const bool defer_prerun =
+      postponed ||
+      (m_udf->vdf_func_desc->prerun != nullptr &&
+       std::any_of(
+           m_args, m_args + arg_count,
+           [](Item *arg) { return villagesql::HasPSParamWithoutValue(arg); }) &&
+       villagesql::DeferUntilReprepare(thd));
+  if (m_udf->vdf_func_desc->prerun && !defer_prerun) {
     vef_prerun_args_t prerun_args{};
     prerun_args.arg_count = arg_count;
-    prerun_args.const_values = nullptr;
-    prerun_args.const_lengths = nullptr;
+    prerun_args.deprecated_const_values = nullptr;
+    prerun_args.deprecated_const_lengths = nullptr;
 
     // Populate arg_types from Item types
     vef_type_t *arg_types = nullptr;
@@ -254,6 +361,34 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
     }
     prerun_args.arg_types = arg_types;
 
+    // From VEF_PROTOCOL_5, prerun sees each constant argument's value,
+    // marshalled as the VDF will receive it. As a UDF's init does, this
+    // evaluates the constant once more than the rows do.
+    std::vector<String> const_buffers;
+    if (m_udf->vdf_protocol >= VEF_PROTOCOL_5 && signature != nullptr &&
+        arg_count > 0) {
+      auto *is_const =
+          pointer_cast<bool *>((*THR_MALLOC)->Alloc(sizeof(bool) * arg_count));
+      auto *const_invalues = pointer_cast<vef_invalue_t *>(
+          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t) * arg_count));
+      auto *const_args = pointer_cast<const vef_invalue_t **>(
+          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t *) * arg_count));
+      if (!is_const || !const_invalues || !const_args) return true;
+      for (uint i = 0; i < arg_count; i++) {
+        is_const[i] = IsPrerunConstArg(m_args[i]);
+      }
+      const_buffers.resize(arg_count);
+      if (marshal_args_typed(signature, m_udf->vdf_protocol, arg_count, m_args,
+                             const_buffers.data(), const_invalues, is_const) ||
+          thd->is_error()) {
+        return true;
+      }
+      for (uint i = 0; i < arg_count; i++) {
+        const_args[i] = is_const[i] ? &const_invalues[i] : nullptr;
+      }
+      prerun_args.const_args = const_args;
+    }
+
     char error_msg[VEF_MAX_ERROR_LEN] = {0};
     vef_prerun_result_t prerun_result{};
     prerun_result.type = VEF_RESULT_VALUE;
@@ -272,8 +407,14 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
 
     // Store user_data for subsequent calls
     m_vdf_args.user_data = prerun_result.user_data;
+    prerun_completed = true;
 
-    // Handle buffer size request
+    // Handle buffer size request. The vdf_fail_after_prerun debug point forces
+    // a failure here so tests can check that postrun still runs.
+    DBUG_EXECUTE_IF("vdf_fail_after_prerun", {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    });
     if (MaybeResizeBuffer(prerun_result.result_buffer_size)) return true;
   }
 
@@ -285,6 +426,17 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
                                         to_string_view(m_udf->extension_name),
                                         signature, func, &return_params);
     m_return_type_context = func->get_type_context();
+
+    // A result whose params are still unknown at the first PREPARE may take
+    // them from the value of a ? at EXECUTE, e.g. from_string(?), so the
+    // statement must be prepared again with the value bound.
+    if (m_return_type_context != nullptr &&
+        m_return_type_context->is_unknown() &&
+        std::any_of(m_args, m_args + arg_count, [](Item *arg) {
+          return villagesql::HasPSParamWithoutValue(arg);
+        })) {
+      villagesql::DeferUntilReprepare(thd);
+    }
 
     // CUSTOM-returning VDFs (e.g. the type's from_string / encode VDF) emit
     // output that fits the resolved return type's field. For a
@@ -303,19 +455,39 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]], Item_result_field *func,
           MaybeResizeBuffer(static_cast<size_t>(buffer_len))) {
         return true;
       }
+
+      // The item's declared width came from resolve_type(), which ran before
+      // this function and so sized the result from the widest argument: the
+      // only measure available before the return type was settled. Now that it
+      // is settled, set the width to what the type says.
+      if (buffer_len > 0 &&
+          static_cast<uint32>(buffer_len) != func->max_length) {
+        func->max_length = static_cast<uint32>(buffer_len);
+      }
     }
   }
 
-  m_active = true;
+  m_resolved_result_buffer = m_result_buffer;
+  m_resolved_result_buffer_size = m_result_buffer_size;
+
+  // cleanup() runs postrun only if prerun had its turn here.
+  m_active = !defer_prerun;
+  m_prerun_ran = !defer_prerun;
+  postrun_guard.release();
   return false;
 }
 
 void vdf_handler::clear() {
+  // See marshal_args().
+  if (should_assert_if_false(m_prerun_ran)) return;
   m_udf->vdf_func_desc->clear(&m_context, &m_vdf_args);
 }
 
 void vdf_handler::accumulate(bool *null_value) {
-  marshal_args();
+  if (marshal_args()) {
+    *null_value = true;
+    return;
+  }
   vef_vdf_result_t result{};
   result.type = VEF_RESULT_VALUE;
   m_error_msg[0] = '\0';
@@ -345,21 +517,34 @@ void vdf_handler::accumulate(bool *null_value) {
 }
 
 void vdf_handler::cleanup() {
-  // Call postrun if VDF was active and postrun exists
-  if (m_active && m_udf->vdf_func_desc->postrun) {
-    vef_postrun_args_t postrun_args{};
-    postrun_args.user_data = m_vdf_args.user_data;
-    vef_postrun_result_t postrun_result{};
-    m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
-  }
+  if (m_active) RunPostrun();
   m_active = false;
+  // A buffer grown at row time is freed with the execution's memory, and a
+  // prepared statement or stored routine runs this handler again.
+  m_result_buffer = m_resolved_result_buffer;
+  m_result_buffer_size = m_resolved_result_buffer_size;
 }
 
+void vdf_handler::RunPostrun() {
+  if (m_udf->vdf_func_desc->postrun == nullptr) return;
+  vef_postrun_args_t postrun_args{};
+  postrun_args.user_data = m_vdf_args.user_data;
+  vef_postrun_result_t postrun_result{};
+  m_udf->vdf_func_desc->postrun(&m_context, &postrun_args, &postrun_result);
+  m_vdf_args.user_data = nullptr;
+}
+
+// Returns true if an argument could not be converted for the VDF; the error is
+// already reported. If args_to_marshal is given, only the arguments it marks
+// are marshalled, and the others are left as they are.
 template <typename InvalueType>
-static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
+static bool marshal_args_typed(const vef_signature_t *sig,
+                               vef_protocol_t protocol, uint value_count,
                                Item **args, String *buffers,
-                               InvalueType *invalues) {
+                               InvalueType *invalues,
+                               const bool *args_to_marshal) {
   for (unsigned int i = 0; i < value_count; i++) {
+    if (args_to_marshal != nullptr && !args_to_marshal[i]) continue;
     Item *arg_item = args[i];
     vef_type_id param_type;
     if (sig->params != nullptr && i < sig->param_count) {
@@ -386,7 +571,12 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
         break;
       }
       case VEF_TYPE_STRING: {
-        String *arg_str = arg_item->val_str(&buffers[i]);
+        // From VEF_PROTOCOL_5 a STRING argument is utf8mb4 text: converted
+        // from any other charset, and a binary one must already be valid
+        // utf8mb4.
+        String *arg_str = villagesql::ReadVdfValue(
+            ArgReadType(VEF_TYPE_STRING, protocol), arg_item, &buffers[i]);
+        if (arg_str == nullptr && !arg_item->null_value) return true;
         if (arg_item->null_value || arg_str == nullptr) {
           invalues[i].is_null = true;
           invalues[i].str_value = nullptr;
@@ -395,6 +585,30 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
           invalues[i].is_null = false;
           invalues[i].str_value = arg_str->ptr();
           invalues[i].str_len = arg_str->length();
+        }
+        break;
+      }
+      case VEF_TYPE_BINARY: {
+        // BINARY needs VEF_PROTOCOL_5, so it never uses the v1 layout, which
+        // has no field for it.
+        if constexpr (!std::is_same_v<InvalueType, vef_invalue_v1_t>) {
+          // A BINARY argument is the bytes as they are, never converted.
+          String *arg_str =
+              villagesql::ReadVdfValue(VEF_TYPE_BINARY, arg_item, &buffers[i]);
+          if (arg_str == nullptr && !arg_item->null_value) return true;
+          if (arg_item->null_value || arg_str == nullptr) {
+            invalues[i].is_null = true;
+            invalues[i].binary_value = nullptr;
+            invalues[i].binary_len = 0;
+          } else {
+            invalues[i].is_null = false;
+            invalues[i].binary_value =
+                reinterpret_cast<const unsigned char *>(arg_str->ptr());
+            invalues[i].binary_len = arg_str->length();
+          }
+        } else {
+          assert(false);
+          invalues[i].is_null = true;
         }
         break;
       }
@@ -427,22 +641,33 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
       }
     }
   }
+  return false;
 }
 
-void vdf_handler::marshal_args() {
+bool vdf_handler::marshal_args() {
+  // Prerun must have run. fix_fields defers it only at a first PREPARE, which
+  // marks the statement to be prepared again at every EXECUTE, with a new
+  // handler whose prerun runs.
+  if (should_assert_if_false(m_prerun_ran)) {
+    villagesql_error("internal: function '%s' called before its prerun", MYF(0),
+                     m_udf->name.str);
+    return true;
+  }
   const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
   if (m_udf->vdf_protocol >= VEF_PROTOCOL_3) {
-    marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
-                       m_invalues);
-  } else {
-    marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
-                       m_invalues_v1);
+    return marshal_args_typed(sig, m_udf->vdf_protocol, m_vdf_args.value_count,
+                              m_args, m_buffers, m_invalues);
   }
+  return marshal_args_typed(sig, m_udf->vdf_protocol, m_vdf_args.value_count,
+                            m_args, m_buffers, m_invalues_v1);
 }
 
 template <typename T>
 bool vdf_handler::invoke_numeric(T *out_value, bool *null_value) {
-  marshal_args();
+  if (marshal_args()) {
+    *null_value = true;
+    return false;
+  }
 
   // Set up result structure (numeric types use the union, not the buffer)
   vef_vdf_result_t result{};
@@ -518,7 +743,7 @@ String *vdf_handler::result_string(const char *res, size_t res_length,
 String *vdf_handler::val_str(String *str, String *save_str,
                              const char *func_name,
                              const CHARSET_INFO *charset) {
-  marshal_args();
+  if (marshal_args()) return nullptr;
 
   const vef_type_id return_type =
       m_udf->vdf_func_desc->signature->return_type.id;
@@ -551,6 +776,10 @@ String *vdf_handler::val_str(String *str, String *save_str,
       } else {
         result.type_params = {0, nullptr, nullptr};
       }
+    } else if (return_type == VEF_TYPE_BINARY) {
+      result.binary_buf = reinterpret_cast<unsigned char *>(m_result_buffer);
+      result.max_binary_len = m_result_buffer_size;
+      result.alt_binary_buf = nullptr;
     } else {
       result.str_buf = m_result_buffer;
       result.max_str_len = m_result_buffer_size;
@@ -594,6 +823,10 @@ String *vdf_handler::val_str(String *str, String *save_str,
       if (is_binary) {
         res = result.alt_bin_buf ? reinterpret_cast<char *>(*result.alt_bin_buf)
                                  : reinterpret_cast<char *>(result.bin_buf);
+      } else if (return_type == VEF_TYPE_BINARY) {
+        res = result.alt_binary_buf
+                  ? reinterpret_cast<char *>(*result.alt_binary_buf)
+                  : reinterpret_cast<char *>(result.binary_buf);
       } else {
         res = result.alt_str_buf ? *result.alt_str_buf : result.str_buf;
       }
@@ -614,6 +847,48 @@ String *vdf_handler::val_str(String *str, String *save_str,
       return nullptr;
   }
   return nullptr;
+}
+
+// Returns true if any of the items in `item_list` is a VDF
+// call, scalar or aggregate.
+static bool CallsVdf(Item *item_list) {
+  for (Item *item = item_list; item != nullptr; item = item->next_free) {
+    if (item->type() == Item::FUNC_ITEM &&
+        down_cast<Item_func *>(item)->functype() == Item_func::UDF_FUNC &&
+        down_cast<Item_udf_func *>(item)->is_vdf()) {
+      return true;
+    }
+    if (item->type() == Item::SUM_FUNC_ITEM &&
+        down_cast<Item_sum *>(item)->sum_func() == Item_sum::UDF_SUM_FUNC &&
+        down_cast<Item_udf_sum *>(item)->is_vdf()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+PsParamValueLoan::PsParamValueLoan(Item *item_list, Item_param **to,
+                                   Item_param **from, uint count) {
+  if (from == nullptr || !CallsVdf(item_list)) return;
+  m_to = to;
+  m_from = from;
+  m_count = count;
+  // TODO(villagesql-general): add a binary-protocol client test for a value
+  // sent with mysql_stmt_send_long_data() (LONG_DATA_VALUE), which is lent
+  // like any other.
+  for (uint i = 0; i < m_count; i++) {
+    m_to[i]->set_param_type_and_swap_value(m_from[i]);
+    m_to[i]->sync_clones();
+    m_from[i]->sync_clones();
+  }
+}
+
+PsParamValueLoan::~PsParamValueLoan() {
+  for (uint i = 0; i < m_count; i++) {
+    m_from[i]->set_param_type_and_swap_value(m_to[i]);
+    m_from[i]->sync_clones();
+    m_to[i]->sync_clones();
+  }
 }
 
 }  // namespace vdf

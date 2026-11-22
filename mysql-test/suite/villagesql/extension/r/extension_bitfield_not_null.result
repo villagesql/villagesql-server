@@ -29,6 +29,9 @@ Warnings:
 Warning	1366	Incorrect BITFIELD value: '2' for column 'b' at row 1
 # The defaulted values are valid, zero-length bit fields (not garbage and
 # not NULL): bitfield_length is 0 and they round-trip to the empty string.
+# The two blank b_optional cells differ: row 5 holds the default because
+# its value was bad, row 6 is NULL because the column was omitted and is
+# nullable. Only opt_is_null tells them apart.
 SELECT id, b, b_optional,
 vsql_bitfield_test.bitfield_length(b) AS nbits,
 b IS NULL AS b_is_null,
@@ -37,7 +40,7 @@ FROM bits ORDER BY id;
 id	b	b_optional	nbits	b_is_null	opt_is_null
 1	101	NULL	3	0	1
 2	1111	00	4	0	0
-5		NULL	0	0	1
+5			0	0	0
 6		NULL	0	0	1
 # The intrinsic default round-trips: re-encoding an explicit '' matches
 # the defaulted value under the type's compare.

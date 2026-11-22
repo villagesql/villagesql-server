@@ -413,6 +413,11 @@ byte *row_mysql_store_col_in_innobase_format(
 
   dtype = dfield_get_type(dfield);
 
+  if (dtype->extended_storage) {
+    villagesql::innodb::Custom_column::store_innodb_true_varchar(
+        dfield, row_format_col, mysql_data);
+    return buf;
+  }
   type = dtype->mtype;
 
   if (type == DATA_INT) {
@@ -921,12 +926,18 @@ row_prebuilt_t *row_create_prebuilt(
 
   prebuilt->fts_doc_id_in_read_set = false;
   prebuilt->blob_heap = nullptr;
+  prebuilt->custom_pk_heap = nullptr;
+  prebuilt->custom_offset_heap = nullptr;
 
   prebuilt->no_read_locking = false;
   prebuilt->no_autoinc_locking = false;
 
   prebuilt->m_no_prefetch = false;
   prebuilt->m_read_virtual_key = false;
+
+  prebuilt->m_knn_query = false;
+  prebuilt->m_knn_limit_is_exact = true;
+  prebuilt->m_knn_limit = 0;
 
   return prebuilt;
 }
@@ -970,6 +981,14 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
 
   if (prebuilt->old_vers_heap) {
     mem_heap_free(prebuilt->old_vers_heap);
+  }
+
+  if (prebuilt->custom_pk_heap) {
+    mem_heap_free(prebuilt->custom_pk_heap);
+  }
+
+  if (prebuilt->custom_offset_heap) {
+    mem_heap_free(prebuilt->custom_offset_heap);
   }
 
   if (prebuilt->fetch_cache[0] != nullptr) {
@@ -4010,7 +4029,7 @@ dberr_t row_drop_table_for_mysql(const char *name, trx_t *trx, bool nonatomic,
          err == DB_SUCCESS && index != nullptr; index = index->next()) {
       if (Custom_index::is_custom(index)) {
         err = Custom_index::drop(index, trx->id);
-        continue;
+        if (err != DB_SUCCESS || !index->has_mapping_btree()) continue;
       }
       err = log_ddl->write_free_tree_log(trx, index, true);
     }

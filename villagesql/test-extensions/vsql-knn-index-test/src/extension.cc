@@ -65,6 +65,7 @@
 #include <mutex>
 #include <new>
 #include <shared_mutex>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -360,6 +361,32 @@ static void kvector_to_string(vsql::CustomArg in, vsql::StringResult out) {
   out.set(std::string_view(text, static_cast<size_t>(pos)));
 }
 
+// Binary form: the kVecDim little-endian float32 elements, without the
+// Column::Ref placeholder that only the stored field carries. from_binary
+// writes a zero placeholder, as kvector_from_string does.
+static void kvector_from_binary(vsql::Span<const unsigned char> from,
+                                vsql::CustomResult out) {
+  if (from.size() != kVecBytes) {
+    out.error("kvector: binary form must be " + std::to_string(kVecBytes) +
+              " bytes");
+    return;
+  }
+  vsql::Span<unsigned char> buf = out.buffer();
+  if (buf.size() < kFieldSize) {
+    out.error("kvector: decode buffer too small");
+    return;
+  }
+  memset(buf.data(), 0, kRefSize);
+  memcpy(buf.data() + kRefSize, from.data(), kVecBytes);
+  out.set_length(kFieldSize);
+}
+
+static void kvector_to_binary(vsql::CustomArg in, vsql::BinaryResult out) {
+  auto data = in.value();
+  if (data.size() < kFieldSize) return;
+  out.set({data.data() + kRefSize, kVecBytes});
+}
+
 static int kvector_compare(vsql::CustomArg a, vsql::CustomArg b) {
   // Compare the float payload (skip the ref prefix), like SVECTOR.
   auto va = a.value();
@@ -497,8 +524,11 @@ static bool kvec_purge(IdxCtx * /*ctx*/, const Index & /*index*/,
   return false;
 }
 
-// fn_id the L2 distance helper is registered under (with_helper(1, ...)).
+// fn_id the L2 distance helper is registered under (with_helper<...>(1)).
 static constexpr uint32_t kDistanceHelperFnId = 1;
+// fn_id of the ORDER profile function (with_function<...>(1, Order)); a KNN
+// scan carries it as its key's profile function ID.
+static constexpr uint32_t kDistanceFunctionFnId = 1;
 
 static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
                        const IndexScanDesc &scan_desc, Index::Cursor *cursor,
@@ -507,13 +537,14 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   *eof = true;
   ++g_scan_begin_count;
 
-  if (!scan_desc.is_knn() || scan_desc.num_keys() != 1) {
+  if (scan_desc.num_keys() != 1) {
     snprintf(err, err_len, "kvec_l2: only single-key KNN scans supported");
     return true;
   }
   const IndexScanKey scan_key = scan_desc[0];
-  if (!scan_key.is_knn() || scan_key.num_columns() != 1 ||
-      !scan_key.is_bounded() || scan_key[0].data == nullptr) {
+  if (scan_key.profile_function_id() != kDistanceFunctionFnId ||
+      scan_key.num_columns() != 1 || !scan_key.is_bounded() ||
+      scan_key[0].data == nullptr) {
     snprintf(err, err_len, "kvec_l2: bad KNN query key");
     return true;
   }
@@ -603,9 +634,11 @@ static bool kvec_position(Index::Cursor cursor, Index::CursorOp op, bool *eof,
 }
 
 static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
+                       IndexScanKey::KeyPartRef *key_column_refs,
                        IndexScanKey::KeyPartData * /*key_columns*/,
-                       IndexScanKey::KeyPartData *pkey_columns, char *err,
-                       uint32_t err_len) {
+                       IndexScanKey::KeyPartData *pkey_columns,
+                       Segment::TrxRef * /*trx_ref*/, bool * /*delete_mark*/,
+                       char *err, uint32_t err_len) {
   auto *c = static_cast<KVecCursor *>(cursor);
   if (c->pos >= c->results.size()) {
     snprintf(err, err_len, "kvec_l2: fetch past end of cursor");
@@ -614,12 +647,17 @@ static bool kvec_fetch(Index::Cursor cursor, IndexScanKey::KeyPartRef *key_ref,
   ++g_scan_fetch_count;
   const KVecCursor::Result &res = c->results[c->pos];
   if (key_ref != nullptr) *key_ref = res.ref;
+  // Single key column (kKeyPos): its col_ref is the stored vector reference.
+  if (key_column_refs != nullptr) key_column_refs[kKeyPos] = res.ref;
 
   // The index owns the row identity: return the primary key stored at insert
   // (all parts), so the server resolves the row directly from pkey_columns.
   for (size_t i = 0; i < res.pkey.size(); i++) {
-    pkey_columns[i] = IndexScanKey::KeyPartData{
-        res.pkey[i].data(), static_cast<uint32_t>(res.pkey[i].size())};
+    static const unsigned char kEmpty[] = "";
+    const bool empty = res.pkey[i].empty();
+    pkey_columns[i] =
+        IndexScanKey::KeyPartData{empty ? kEmpty : res.pkey[i].data(),
+                                  static_cast<uint32_t>(res.pkey[i].size())};
   }
   return false;
 }
@@ -670,7 +708,9 @@ constexpr auto KVECTOR = vsql::make_type<kKVectorType>()
                              .persisted_length(kFieldSize)
                              .max_decode_buffer_length(DECODE_BUFFER_SIZE<256>)
                              .from_string<&kvector_from_string>()
+                             .from_binary<&kvector_from_binary>()
                              .to_string<&kvector_to_string>()
+                             .to_binary<&kvector_to_binary>()
                              .compare<&kvector_compare>()
                              .intrinsic_default_str("[0,0,0,0]")
                              .build();
@@ -791,7 +831,18 @@ static void kvec_reset_counters(vsql::IntResult out) {
   out.set(0);
 }
 
-static const auto KVEC_L2_FN =
+// KVEC_L2_FN is a normal SQL VDF: registered via .func() below and bound into
+// the profile with with_function(). KVEC_L2_HELPER_FN is the same function
+// declared as an index helper for with_helper().
+static constexpr auto KVEC_L2_FN =
+    vsql::make_func<&kvec_l2_distance_fn>(kKVecL2Func)
+        .returns(vsql::REAL)
+        .param(KVECTOR)
+        .param(KVECTOR)
+        .deterministic()
+        .build();
+
+static constexpr auto KVEC_L2_HELPER_FN =
     make_index_function<&kvec_l2_distance_fn>(kKVecL2Func)
         .returns(vsql::REAL)
         .param(KVECTOR)
@@ -799,14 +850,15 @@ static const auto KVEC_L2_FN =
         .deterministic()
         .build();
 
-static const auto KVEC_L2_PROFILE = make_index_profile(kKVecProfileL2)
-                                        .for_type(kKVectorType)
-                                        .using_index(kKVecIndexL2)
-                                        .with_function(1, KVEC_L2_FN)
-                                        .with_helper(1, KVEC_L2_FN)
-                                        .ordering(Index::Ordering::ASC)
-                                        .default_for_type(true)
-                                        .build();
+static const auto KVEC_L2_PROFILE =
+    make_index_profile(kKVecProfileL2)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexL2)
+        .with_function<KVEC_L2_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_L2_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .default_for_type(true)
+        .build();
 
 // Cosine metric, bound to the kvec_cos index (NOT kvec_l2). Not
 // default_for_type -- a type may have only one default profile, and L2 owns it.
@@ -825,7 +877,15 @@ static void kvec_cos_distance_fn(vsql::CustomArg a, vsql::CustomArg b,
   out.set(cosine_distance_floats(va.data() + kRefSize, vb.data() + kRefSize));
 }
 
-static const auto KVEC_COS_FN =
+static constexpr auto KVEC_COS_FN =
+    vsql::make_func<&kvec_cos_distance_fn>(kKVecCosFunc)
+        .returns(vsql::REAL)
+        .param(KVECTOR)
+        .param(KVECTOR)
+        .deterministic()
+        .build();
+
+static constexpr auto KVEC_COS_HELPER_FN =
     make_index_function<&kvec_cos_distance_fn>(kKVecCosFunc)
         .returns(vsql::REAL)
         .param(KVECTOR)
@@ -833,13 +893,14 @@ static const auto KVEC_COS_FN =
         .deterministic()
         .build();
 
-static const auto KVEC_COS_PROFILE = make_index_profile(kKVecProfileCos)
-                                         .for_type(kKVectorType)
-                                         .using_index(kKVecIndexCos)
-                                         .with_function(1, KVEC_COS_FN)
-                                         .with_helper(1, KVEC_COS_FN)
-                                         .ordering(Index::Ordering::ASC)
-                                         .build();
+static const auto KVEC_COS_PROFILE =
+    make_index_profile(kKVecProfileCos)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexCos)
+        .with_function<KVEC_COS_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_COS_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .build();
 
 // ============================================================================
 // Extension entry point
@@ -866,18 +927,8 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(KVECTOR)
         // Also register the distance function as a plain SQL VDF so it is
         // callable in the ORDER BY (same fn pointer as the index function).
-        .func(make_func<&kvec_l2_distance_fn>(kKVecL2Func)
-                  .returns(REAL)
-                  .param(KVECTOR)
-                  .param(KVECTOR)
-                  .deterministic()
-                  .build())
-        .func(make_func<&kvec_cos_distance_fn>(kKVecCosFunc)
-                  .returns(REAL)
-                  .param(KVECTOR)
-                  .param(KVECTOR)
-                  .deterministic()
-                  .build())
+        .func(KVEC_L2_FN)
+        .func(KVEC_COS_FN)
         .func(make_func<&kvec_scan_begin_count>("kvec_scan_begin_count")
                   .returns(INT)
                   .no_params()

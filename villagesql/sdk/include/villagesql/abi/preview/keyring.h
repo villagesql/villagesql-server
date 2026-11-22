@@ -49,17 +49,22 @@ extern "C" {
 
 typedef enum {
   VEF_KEYRING_OK = 0,
-  VEF_KEYRING_NOT_FOUND = 1,    // key does not exist
-  VEF_KEYRING_UNAVAILABLE = 2,  // no keyring component is installed
-  VEF_KEYRING_ERROR = 3,        // other error
+  VEF_KEYRING_NOT_FOUND = 1,      // key does not exist
+  VEF_KEYRING_UNAVAILABLE = 2,    // no keyring component is installed
+  VEF_KEYRING_ERROR = 3,          // other error
+  VEF_KEYRING_BUF_TOO_SMALL = 4,  // read buffer too small
 } vef_keyring_result_t;
 
 // Read a secret from the MySQL keyring component.
 //   data_id:  identifier for the secret.
 //   auth_id:  owner of the secret, or NULL for internal keys.
 //   buf:      caller-provided buffer to receive the secret bytes.
-//   buf_len:  size of buf in bytes.
-//   out_len:  set to the actual number of bytes written on success.
+//   buf_len:  size of buf in bytes. buf_len = 0 is valid and queries the size
+//             without copying.
+//   out_len:  on VEF_KEYRING_OK, set to the actual number of bytes written.
+//             on VEF_KEYRING_BUF_TOO_SMALL, set to the required size.
+//             Always populated, allowing callers to retry with the correct
+//             buffer size after VEF_KEYRING_BUF_TOO_SMALL.
 typedef vef_keyring_result_t (*vef_read_keyring_fn)(const char *data_id,
                                                     const char *auth_id,
                                                     unsigned char *buf,

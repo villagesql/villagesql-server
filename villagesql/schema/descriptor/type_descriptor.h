@@ -43,7 +43,7 @@ struct TableTraits;
 //   Variable - decided per value; the backing field is sized to
 //              max_persisted_length().
 // The ABI carries this as the bool vef_type_desc_t::variable_length
-// (VEF_PROTOCOL_4); it is converted at the registration boundary.
+// (VEF_PROTOCOL_5); it is converted at the registration boundary.
 enum class LengthKind { Fixed, Variable };
 
 // Prefix key for querying TypeDescriptors by type name (and optionally
@@ -69,8 +69,7 @@ struct TypeDescriptorKeyPrefix {
   const std::string &str() const { return normalized_prefix_; }
 
   bool matches_key(const std::string &key) const {
-    return key.size() >= normalized_prefix_.size() &&
-           key.compare(0, normalized_prefix_.size(), normalized_prefix_) == 0;
+    return key.starts_with(normalized_prefix_);
   }
 
   const std::string &type_name() const { return type_name_; }
@@ -147,7 +146,8 @@ class TypeDescriptor {
   // Storage is wired in separately via set_storage_intf() after all types
   // and column storage descriptors are loaded.
   TypeDescriptor(
-      TypeDescriptorKey key, vef_protocol_t protocol, unsigned char impl_type,
+      TypeDescriptorKey key, vef_protocol_t protocol,
+      vef_protocol_t extension_protocol, unsigned char impl_type,
       int64_t persisted_len, int64_t max_unpersisted_len,
       int64_t max_persisted_len, LengthKind length_kind, EncodeFunction encode,
       DecodeFunction decode, CompareFunction compare,
@@ -185,6 +185,11 @@ class TypeDescriptor {
   // Protocol version this type was registered with.
   vef_protocol_t protocol() const { return protocol_; }
 
+  // Protocol the type's extension negotiated: the protocol of the SDK it was
+  // built with, capped at the server's. protocol() is lower when the type
+  // uses no feature of a later protocol.
+  vef_protocol_t extension_protocol() const { return extension_protocol_; }
+
   // Type implementation details
   unsigned char implementation_type() const { return implementation_type_; }
   int64_t persisted_length() const { return persisted_length_; }
@@ -196,7 +201,7 @@ class TypeDescriptor {
 
   // How the type's persisted size is determined (fixed footprint vs. decided
   // per value). Set at registration from the protocol-appropriate source: the
-  // variable_length flag for VEF_PROTOCOL_4 types
+  // variable_length flag for VEF_PROTOCOL_5 types
   LengthKind length_kind() const { return length_kind_; }
 
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
@@ -238,6 +243,18 @@ class TypeDescriptor {
   // are not.
   bool is_parameterized() const { return resolve_params_fn_.has_value(); }
 
+  // Returns the encode from the type's binary form, or nullopt if the type
+  // has none.
+  const std::optional<EncodeFunction> &from_binary_fn() const {
+    return from_binary_fn_;
+  }
+
+  // Set the binary-form encode after construction (used during type
+  // registration).
+  void set_from_binary_fn(EncodeFunction fn) {
+    from_binary_fn_ = std::move(fn);
+  }
+
   // Returns the intrinsic default function, or nullopt if not set.
   const std::optional<IntrinsicDefaultFunction> &intrinsic_default_fn() const {
     return intrinsic_default_fn_;
@@ -276,6 +293,7 @@ class TypeDescriptor {
   TypeDescriptorKey key_;
 
   vef_protocol_t protocol_{VEF_PROTOCOL_1};
+  vef_protocol_t extension_protocol_{VEF_PROTOCOL_1};
 
   // Type implementation details
   unsigned char implementation_type_{0};
@@ -289,6 +307,9 @@ class TypeDescriptor {
   std::optional<DecodeFunction> decode_fn_;
   std::optional<CompareFunction> compare_fn_;
   std::optional<HashFunction> hash_fn_;
+
+  // Optional encode from the binary form
+  std::optional<EncodeFunction> from_binary_fn_;
 
   std::optional<IntToParamsFunction> int_to_params_fn_;
   std::optional<ResolveParamsFunction> resolve_params_fn_;

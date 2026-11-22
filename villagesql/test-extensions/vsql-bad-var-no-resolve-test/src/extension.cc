@@ -19,7 +19,7 @@
 // This fixture is built against the frozen stable v3 SDK (see the "v3" ABI
 // selector in test-extensions/CMakeLists.txt), so the type registers at
 // VEF_PROTOCOL_3 -- the v3 type builder does not raise variable-length types to
-// VEF_PROTOCOL_4 the way the current dev SDK does. The server therefore
+// VEF_PROTOCOL_5 the way the current dev SDK does. The server therefore
 // dispatches it to build_type_descriptor_v3, which requires resolve_params for
 // persisted_length == -1 and rejects this extension at INSTALL EXTENSION time.
 // This is the rejection path a real v3-compiled extension would hit; the dev

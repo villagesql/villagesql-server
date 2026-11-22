@@ -1147,19 +1147,31 @@ static unique_ptr<Json_object> SetObjectMembers(
       assert(table.file->pushed_idx_cond == nullptr);
 
       const KEY &key = table.key_info[path->index_distance_scan().idx];
-      // VillageSQL: custom-index KNN distance scan (no QUICK_RANGE to format).
-      if (path->index_distance_scan().custom_scan_spec != nullptr) {
-        description = string("Custom index distance scan on ") + key.name;
-        error |= AddMemberToObject<Json_string>(obj, "access_type",
-                                                "index_distance_scan");
-        error |= AddChildrenFromPushedCondition(table, children);
-        break;
-      }
       error |= SetIndexInfoInObject(&description, "index_distance_scan",
                                     nullptr, table, key, "distance scan",
                                     /*lookup condition*/ "", /*range*/ nullptr,
                                     nullptr, false,
                                     /*push_condition*/ nullptr, obj);
+      error |= AddChildrenFromPushedCondition(table, children);
+      break;
+    }
+    case AccessPath::INDEX_KNN_SCAN: {
+      const TABLE &table = *path->index_knn_scan().table;
+
+      const KEY &key = table.key_info[path->index_knn_scan().idx];
+      const string lookup_condition =
+          string(key.key_part[0].field->field_name) + " <-> " +
+          ItemToString(path->index_knn_scan().query_point);
+      error |= SetIndexInfoInObject(&description, "index_knn_scan", nullptr,
+                                    table, key, "KNN scan", lookup_condition,
+                                    /*range*/ nullptr, nullptr, false,
+                                    table.file->pushed_idx_cond, obj);
+      char buf[64];
+      snprintf(buf, sizeof(buf), ", limit %llu",
+               static_cast<ulonglong>(path->index_knn_scan().limit));
+      description += buf;
+      error |= AddMemberToObject<Json_int>(obj, "limit",
+                                           path->index_knn_scan().limit);
       error |= AddChildrenFromPushedCondition(table, children);
       break;
     }

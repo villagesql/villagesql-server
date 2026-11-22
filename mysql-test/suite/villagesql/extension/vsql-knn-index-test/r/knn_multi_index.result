@@ -31,7 +31,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
 EXPLAIN
 -> Limit: 4 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_l2  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_l2 (v <-> '[1,0,0,0]'), limit 4  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
@@ -49,7 +49,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
 EXPLAIN
 -> Limit: 4 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_cos  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_cos (v <-> '[1,0,0,0]'), limit 4  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
@@ -66,7 +66,7 @@ SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
 EXPLAIN
 -> Limit: 4 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_l2  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_l2 (v <-> '[1,0,0,0]'), limit 4  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
@@ -82,10 +82,9 @@ EXPLAIN FORMAT=tree
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
 EXPLAIN
--> Limit: 4 row(s)
-    -> Sort: vsql_knn_index_test.kvec_cos_distance(t.v,'[1,0,0,0]'), limit input to 4 row(s) per chunk
-        -> Stream results  (cost=COST rows=ROWS)
-            -> Table scan on t  (cost=COST rows=ROWS)
+-> Limit: 4 row(s)  (cost=COST rows=ROWS)
+    -> Sort: vsql_knn_index_test.kvec_cos_distance(t.v,'[1,0,0,0]'), limit input to 4 row(s) per chunk  (cost=COST rows=ROWS)
+        -> Table scan on t  (cost=COST rows=ROWS)
 
 SELECT id FROM t
 ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;

@@ -1,0 +1,229 @@
+# LOAD XML INFILE for a custom type column, across every way a value can fail
+# to arrive, in every mode. The counterpart of
+# load_data/load_data_encode_null_test_only.test, which covers the same matrix
+# for the separated-field reader. Both readers are expected to agree.
+#
+# Four ways a column ends up without a usable value, each a different path:
+#
+#   missing tag    - the row has no <val> element. Handled inside
+#                    read_xml_field; the encoder is never called.
+#   ENCODE_NULL    - the encode calls out.set_null().
+#   ENCODE_WARN    - the encode cannot parse the input.
+#   ENCODE_ERROR   - the encode calls out.error().
+#
+# FAULT_BLOB declares "OK default" as its intrinsic default, so a stored
+# default is visible as itself rather than as zero bytes.
+#
+# This reader runs no row-level NOT NULL check, unlike the separated-field
+# one: a built-in store always leaves a value, so absence of input was the
+# only way a field could end up NULL, and that is handled where it arises.
+# An encode returning SQL NULL is a second way, reported where it arises too.
+
+INSTALL EXTENSION vsql_test_only;
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
+
+--write_file $MYSQLTEST_VARDIR/tmp/xml_missing.xml
+<list>
+  <row><id>1</id><val>OK one</val></row>
+  <row><id>2</id></row>
+  <row><id>3</id><val>OK three</val></row>
+</list>
+EOF
+
+--write_file $MYSQLTEST_VARDIR/tmp/xml_encnull.xml
+<list>
+  <row><id>1</id><val>OK one</val></row>
+  <row><id>2</id><val>ENCODE_NULL</val></row>
+  <row><id>3</id><val>OK three</val></row>
+</list>
+EOF
+
+--write_file $MYSQLTEST_VARDIR/tmp/xml_encwarn.xml
+<list>
+  <row><id>1</id><val>OK one</val></row>
+  <row><id>2</id><val>ENCODE_WARN</val></row>
+  <row><id>3</id><val>OK three</val></row>
+</list>
+EOF
+
+--write_file $MYSQLTEST_VARDIR/tmp/xml_encerror.xml
+<list>
+  <row><id>1</id><val>OK one</val></row>
+  <row><id>2</id><val>ENCODE_ERROR</val></row>
+  <row><id>3</id><val>OK three</val></row>
+</list>
+EOF
+
+let $missing = $MYSQLTEST_VARDIR/tmp/xml_missing.xml;
+let $encnull = $MYSQLTEST_VARDIR/tmp/xml_encnull.xml;
+let $encwarn = $MYSQLTEST_VARDIR/tmp/xml_encwarn.xml;
+let $encerror = $MYSQLTEST_VARDIR/tmp/xml_encerror.xml;
+
+# A missing tag leaves a nullable column SQL NULL.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD XML INFILE '$missing' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t ORDER BY id;
+DROP TABLE t;
+
+# A NOT NULL column rejects it in strict mode, loading nothing.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_WARN_NULL_TO_NOTNULL
+eval LOAD XML INFILE '$missing' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+
+# Non-strict keeps the row with the type's intrinsic default.
+SET @@session.sql_mode = '';
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD XML INFILE '$missing' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT id, val FROM t ORDER BY id;
+DROP TABLE t;
+SET @@session.sql_mode = DEFAULT;
+
+# IGNORE behaves as non-strict does.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD XML INFILE '$missing' IGNORE INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT id, val FROM t ORDER BY id;
+DROP TABLE t;
+
+# set_null() stores SQL NULL in a nullable column.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD XML INFILE '$encnull' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t ORDER BY id;
+DROP TABLE t;
+
+# A NOT NULL column rejects it in strict mode, as a missing tag is.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_WARN_NULL_TO_NOTNULL
+eval LOAD XML INFILE '$encnull' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+
+# Non-strict keeps the row with the intrinsic default.
+SET @@session.sql_mode = '';
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD XML INFILE '$encnull' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT id, val FROM t ORDER BY id;
+DROP TABLE t;
+SET @@session.sql_mode = DEFAULT;
+
+# IGNORE behaves as non-strict does.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD XML INFILE '$encnull' IGNORE INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT id, val FROM t ORDER BY id;
+DROP TABLE t;
+
+# A bad value fails the statement in strict mode.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+eval LOAD XML INFILE '$encwarn' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+
+# Non-strict warns and stores the intrinsic default.
+SET @@session.sql_mode = '';
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD XML INFILE '$encwarn' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT id, val, val IS NULL AS is_null FROM t ORDER BY id;
+DROP TABLE t;
+SET @@session.sql_mode = DEFAULT;
+
+# The same on a NOT NULL column, in strict mode.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+eval LOAD XML INFILE '$encwarn' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+
+# IGNORE keeps the row with the intrinsic default.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD XML INFILE '$encwarn' IGNORE INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT id, val FROM t ORDER BY id;
+DROP TABLE t;
+
+# error() aborts with the extension's own message.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval LOAD XML INFILE '$encerror' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+
+# IGNORE does not downgrade it.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval LOAD XML INFILE '$encerror' IGNORE INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+
+# Nor does non-strict mode.
+SET @@session.sql_mode = '';
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval LOAD XML INFILE '$encerror' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+SET @@session.sql_mode = DEFAULT;
+
+# The same on a NOT NULL column, in each mode.
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval LOAD XML INFILE '$encerror' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+
+SET @@session.sql_mode = '';
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval LOAD XML INFILE '$encerror' INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+SET @@session.sql_mode = DEFAULT;
+
+CREATE TABLE t (id INT PRIMARY KEY, val vsql_test_only.FAULT_BLOB NOT NULL);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+eval LOAD XML INFILE '$encerror' IGNORE INTO TABLE t ROWS IDENTIFIED BY '<row>';
+SHOW WARNINGS;
+SELECT COUNT(*) AS rows_loaded FROM t;
+DROP TABLE t;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/xml_missing.xml
+--remove_file $MYSQLTEST_VARDIR/tmp/xml_encnull.xml
+--remove_file $MYSQLTEST_VARDIR/tmp/xml_encwarn.xml
+--remove_file $MYSQLTEST_VARDIR/tmp/xml_encerror.xml
+UNINSTALL EXTENSION vsql_test_only;

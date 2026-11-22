@@ -14,6 +14,7 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_COMMON_SOURCES
+  metrics.cc
   semver.cc
 )
 

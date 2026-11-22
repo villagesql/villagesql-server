@@ -235,6 +235,7 @@ struct AccessPath {
     SAMPLE_SCAN,
     INDEX_SCAN,
     INDEX_DISTANCE_SCAN,
+    INDEX_KNN_SCAN,
     REF,
     REF_OR_NULL,
     EQ_REF,
@@ -551,6 +552,14 @@ struct AccessPath {
   const auto &index_distance_scan() const {
     assert(type == INDEX_DISTANCE_SCAN);
     return u.index_distance_scan;
+  }
+  auto &index_knn_scan() {
+    assert(type == INDEX_KNN_SCAN);
+    return u.index_knn_scan;
+  }
+  const auto &index_knn_scan() const {
+    assert(type == INDEX_KNN_SCAN);
+    return u.index_knn_scan;
   }
   auto &ref() {
     assert(type == REF);
@@ -950,16 +959,15 @@ struct AccessPath {
       TABLE *table;
       int idx;
       QUICK_RANGE *range;
-      // VillageSQL: a distance scan is either the spatial variant (driven by
-      // `range` above) or a custom-index variant. For the custom variant this
-      // holds an opaque scan spec (owned by thd->mem_root) and `range` is null;
-      // for the spatial variant this is null. A non-null value both selects the
-      // custom iterator and carries its parameters. The concrete spec type
-      // (CustomKnnDistanceScanSpec) lives in
-      // villagesql/sql/custom_index_knn_scan.h.
-      void *custom_scan_spec;
       bool reverse;
     } index_distance_scan;
+    struct {
+      TABLE *table;
+      int idx;
+      Item *query_point;
+      ha_rows limit;
+      bool limit_is_exact;
+    } index_knn_scan;
     struct {
       TABLE *table;
       Index_lookup *ref;
@@ -1359,6 +1367,21 @@ inline AccessPath *NewIndexScanAccessPath(THD *thd, TABLE *table, int idx,
   path->index_scan().idx = idx;
   path->index_scan().use_order = use_order;
   path->index_scan().reverse = reverse;
+  return path;
+}
+
+inline AccessPath *NewIndexKnnScanAccessPath(THD *thd, TABLE *table, int idx,
+                                             Item *query_point, ha_rows limit,
+                                             bool limit_is_exact,
+                                             bool count_examined_rows) {
+  AccessPath *path = new (thd->mem_root) AccessPath;
+  path->type = AccessPath::INDEX_KNN_SCAN;
+  path->count_examined_rows = count_examined_rows;
+  path->index_knn_scan().table = table;
+  path->index_knn_scan().idx = idx;
+  path->index_knn_scan().query_point = query_point;
+  path->index_knn_scan().limit = limit;
+  path->index_knn_scan().limit_is_exact = limit_is_exact;
   return path;
 }
 

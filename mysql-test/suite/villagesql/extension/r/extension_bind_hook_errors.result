@@ -1,0 +1,20 @@
+INSTALL EXTENSION vsql_test_only;
+# The hook asks for return parameters longer than the server's buffer.
+SELECT vsql_test_only.bad_bind_return_overflow(1, 2) AS c;
+ERROR HY000: Cannot initialize function 'bad_bind_return_overflow': bind_and_check_types return params buffer overflow
+# The same for an argument's parameters.
+SELECT vsql_test_only.bad_bind_arg_overflow(1, 2) AS c;
+ERROR HY000: Cannot initialize function 'bad_bind_arg_overflow': bind_and_check_types params buffer overflow for argument 2
+# A type name longer than the server's buffer. No parameters are set,
+# so the name is the only fault.
+SELECT vsql_test_only.bad_bind_name_too_long(1, 2) AS c;
+ERROR HY000: Cannot initialize function 'bad_bind_name_too_long': bind_and_check_types type name too long for argument 2
+# A name that fits but belongs to no type in this extension.
+SELECT vsql_test_only.bad_bind_unknown_type(1, 2) AS c;
+ERROR HY000: Cannot initialize function 'bad_bind_unknown_type': bind_and_check_types named unknown custom type 'NO_SUCH_TYPE_XYZ' for argument 2
+# Parameters for an argument whose type the hook never named. A variadic
+# call has no signature to take the type from, so there is nothing for
+# the parameters to apply to.
+SELECT vsql_test_only.bad_bind_params_no_type(1, 2) AS c;
+ERROR HY000: Cannot initialize function 'bad_bind_params_no_type': bind_and_check_types supplied type parameters for argument 2 without naming its type
+UNINSTALL EXTENSION vsql_test_only;

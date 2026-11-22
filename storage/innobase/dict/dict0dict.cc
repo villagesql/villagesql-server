@@ -125,8 +125,6 @@ extern uint ibuf_debug;
 #include "sync0sync.h"
 #include "trx0undo.h"
 #include "ut0new.h"
-
-#include "villagesql/custom_index.h"
 #endif /* !UNIV_HOTBACKUP */
 
 static_assert(DATA_ROW_ID == 0, "DATA_ROW_ID != 0");
@@ -2238,11 +2236,6 @@ void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
     return;
   }
 
-  // TODO(villagesql-indexing): For custom types with column storage, use the
-  // reference length rather than the value length. We need a complete fix for
-  // accessing the appropriate length for a custom type with associated column
-  // storage.
-
   size_t field_max_size = col->get_max_size();
   size_t field_ext_max_size = DATA_BIG_COL(col) ? 2 : 1;
 
@@ -2642,12 +2635,7 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   if (index->rtr_srs.get() != nullptr)
     new_index->rtr_srs.reset(index->rtr_srs->clone());
 
-  // VillageSQL: custom indexes are responsible for their own key representation
-  // and size constraints; InnoDB does not impose the maximum record-size limit.
-  // The custom-index context lives on the incoming index; new_index is a
-  // freshly built copy that has not been attached yet, so check index here.
-  if (!villagesql::innodb::Custom_index::is_custom(index) &&
-      dict_index_too_big_for_tree(table, new_index)) {
+  if (dict_index_too_big_for_tree(table, new_index)) {
     if (strict) {
       dict_mem_index_free(new_index);
       dict_mem_index_free(index);
@@ -2708,19 +2696,6 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   new_index->page = page_no;
   rw_lock_create(index_tree_rw_lock_key, &new_index->lock, LATCH_ID_INDEX_TREE);
 
-  /* The conditions listed here correspond to the simplest call-path through
-  rec_get_offsets(). If they are met now, we can cache rec offsets and use the
-  cache as long they are met. We assert before using the rec_cache that they are
-  still met, and clear the rec_cache.offsets when they change. */
-  if (dict_table_is_comp(table) && !dict_index_has_virtual(index) &&
-      (!table->has_instant_cols() && !table->has_row_versions()) &&
-      !dict_index_is_spatial(index)) {
-    dict_index_try_cache_rec_offsets(new_index);
-  } else {
-    /* The rules should not prevent caching for intrinsic tables */
-    ut_ad(!table->is_intrinsic());
-  }
-
   // Carry the Custom_index runtime state onto the cache-internal index by
   // re-loading it onto new_index's heap. The prototype's Custom_index is
   // destroyed by dict_mem_index_free(index) at the end of this function.
@@ -2732,6 +2707,19 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
       dict_mem_index_free(index);
       return cerr;
     }
+  }
+
+  /* The conditions listed here correspond to the simplest call-path through
+  rec_get_offsets(). If they are met now, we can cache rec offsets and use the
+  cache as long they are met. We assert before using the rec_cache that they are
+  still met, and clear the rec_cache.offsets when they change. */
+  if (dict_table_is_comp(table) && !dict_index_has_virtual(index) &&
+      (!table->has_instant_cols() && !table->has_row_versions()) &&
+      !dict_index_is_spatial(index)) {
+    dict_index_try_cache_rec_offsets(new_index);
+  } else {
+    /* The rules should not prevent caching for intrinsic tables */
+    ut_ad(!table->is_intrinsic());
   }
 
   dict_sys_mutex_enter();
@@ -3357,10 +3345,12 @@ static dict_index_t *dict_index_build_internal_non_clust(
   ut_ad(clust_index->is_clustered());
   ut_ad(!dict_index_is_ibuf(clust_index));
 
+  using villagesql::innodb::Custom_index;
   /* Create a new index */
   new_index = dict_mem_index_create(table->name.m_name, index->name,
                                     index->space, index->type,
-                                    index->n_fields + 1 + clust_index->n_uniq);
+                                    index->n_fields + 1 + clust_index->n_uniq +
+                                        Custom_index::n_extra_fields(index));
 
   /* Copy other relevant data from the old index
   struct to the new struct: it inherits the values */
@@ -3416,6 +3406,8 @@ static dict_index_t *dict_index_build_internal_non_clust(
   } else {
     new_index->n_uniq = new_index->n_def;
   }
+
+  Custom_index::add_extra_fields(new_index, index);
 
   /* Set the n_fields value in new_index to the actual defined
   number of fields */

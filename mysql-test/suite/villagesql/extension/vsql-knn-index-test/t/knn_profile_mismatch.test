@@ -9,6 +9,7 @@
 # to kvec_cos). Otherwise a cosine query would be answered in L2 order --
 # silently wrong.
 #
+
 INSTALL EXTENSION vsql_knn_index_test;
 
 # Reset the static scan/insert counters so their absolute values are

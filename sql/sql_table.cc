@@ -8771,6 +8771,11 @@ static bool prepare_blob_field(THD *thd, Create_field *sql_field,
     /* Convert long VARCHAR columns to TEXT or BLOB */
     char warn_buff[MYSQL_ERRMSG_SIZE];
 
+    // VillageSQL: install time caps a custom type's size below the blob
+    // threshold, so a custom type column never reaches this conversion.
+    // TODO(villagesql-blob): revisit once custom types can be stored as blobs.
+    assert(sql_field->custom_type_context == nullptr);
+
     if (sql_field->constant_default || thd->is_strict_mode()) {
       my_error(ER_TOO_BIG_FIELDLENGTH, MYF(0), sql_field->field_name,
                static_cast<ulong>(MAX_FIELD_VARCHARLENGTH /
@@ -9210,14 +9215,22 @@ static bool create_table_impl(
   if (prepare_error) return true;
 
   // VillageSQL: Pre-populate session metadata so MaybeInjectCustomType can
-  // inject type contexts during open_table_from_share.
+  // inject type contexts during open_table_from_share. The metadata of a user
+  // temporary table is removed again if its creation fails.
+  bool remove_tmp_metadata = false;
+  auto tmp_metadata_guard = create_scope_guard([&]() {
+    if (remove_tmp_metadata)
+      villagesql::RemoveTmpTableMetadata(thd, db, table_name);
+  });
   if (internal_tmp_table) {
     // ALTER TABLE rebuild table (#sql-xxx).
-    villagesql::PrepareAlterCustomFields(thd, alter_info->create_list);
+    if (villagesql::PrepareAlterCustomFields(thd, alter_info, create_info))
+      return true;
   } else if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
     // User facing temporary table.
-    if (villagesql::PrepareTmpTableCustomColumns(
-            thd, db, table_name, alter_info->create_list, create_info))
+    remove_tmp_metadata = true;
+    if (villagesql::PrepareTmpTableCustomColumns(thd, db, table_name,
+                                                 alter_info, create_info))
       return true;
   }
 
@@ -9306,6 +9319,7 @@ static bool create_table_impl(
     thd->server_status |= SERVER_STATUS_IN_TRANS;
   }
   if (table_created) *table_created = true;
+  tmp_metadata_guard.release();
   return false;
 }
 
@@ -15316,19 +15330,30 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
       // only known case where the difference matters is in case of indexes on
       // geometry columns and typed arrays, which can't have explicit ordering.
       // Therefore, in such cases we pass ORDER_NOT_RELEVANT.
+      // VillageSQL: a custom index key part also gets ORDER_NOT_RELEVANT unless
+      // it is DESC, so a key part defined without a direction is not rebuilt
+      // with an explicit ASC. Without ordering, index profile decides the
+      // order.
       const enum_order order =
           key_part->key_part_flag & HA_REVERSE_SORT
               ? ORDER_DESC
               : ((key_part->field->type() == MYSQL_TYPE_GEOMETRY ||
-                  key_part->field->is_array())
+                  key_part->field->is_array() ||
+                  key_part->custom_index_profile != nullptr)
                      ? ORDER_NOT_RELEVANT
                      : ORDER_ASC);
       if (key_part->field->is_field_for_functional_index()) {
         key_parts.push_back(new (thd->mem_root) Key_part_spec(
             cfield->field_name, key_part->field->gcol_info->expr_item, order));
       } else {
+        // VillageSQL: keep a custom index key part's profile
+        LEX_CSTRING profile, profile_extension;
+        if (villagesql::MaybeCarryCustomKeyPartProfileForRebuild(
+                thd, key_part, &profile, &profile_extension))
+          return true;
         key_parts.push_back(new (thd->mem_root) Key_part_spec(
-            to_lex_cstring(cfield->field_name), key_part_length, order));
+            to_lex_cstring(cfield->field_name), key_part_length, order, profile,
+            profile_extension));
       }
     }
     if (key_parts.elements) {
@@ -17660,20 +17685,12 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
   }
 
-  // TODO(villagesql-indexing): changing the primary key of a table with a
-  // custom index is not supported yet
-  if (villagesql::alter_changes_pk_of_custom_indexed_table(
-          table, alter_info, key_info, key_count)) {
-    my_error(ER_VILLAGESQL_GENERIC_ERROR, MYF(0),
-             "Changing the primary key of a table with a USING EXTENDED index "
-             "is not supported");
-    goto err_new_table_cleanup;
-  }
-
   // VillageSQL: stash the real target table name so the #sql-xxx rebuild table
   // can resolve its custom indexes against the victionary under that name (the
-  // #sql-xxx name matches nothing there).
-  villagesql::SetAlterTargetForCustomIndexes(thd, table);
+  // #sql-xxx name matches nothing there). With RENAME it is the new name, which
+  // the table's custom indexes are staged under.
+  villagesql::SetAlterTargetForCustomIndexes(thd, alter_ctx.new_db,
+                                             alter_ctx.new_name);
 
   if (alter_info->requested_algorithm !=
       Alter_info::ALTER_TABLE_ALGORITHM_COPY) {
@@ -17688,10 +17705,12 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
 
     // VillageSQL: Inject custom context here for both newly added custom
-    // indexes and pre-existing ones (needed in rebuild path).
+    // indexes and pre-existing ones (needed in rebuild path). Resolve them
+    // under the ALTER's target name, which differs from table's with RENAME.
     for (uint j = 0; j < ha_alter_info.key_count; j++) {
       if (villagesql::MaybeInjectCustomIndex(thd, *table->s,
-                                             &ha_alter_info.key_info_buffer[j]))
+                                             &ha_alter_info.key_info_buffer[j],
+                                             /*use_alter_target=*/true))
         goto err_new_table_cleanup;
     }
 

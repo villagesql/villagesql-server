@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2026, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -501,6 +502,9 @@ struct btr_pcur_t {
   /* NOTE that the following field is initialized only during import
   tablespace, otherwise undefined */
   import_ctx_t *import_ctx{nullptr};
+
+  // Extension defined Cursor for a custom index.
+  void *custom_cursor{nullptr};
 };
 
 inline void btr_pcur_t::init(size_t read_level) {

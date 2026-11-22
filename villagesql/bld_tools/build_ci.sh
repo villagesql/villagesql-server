@@ -54,7 +54,9 @@ CMAKE_FLAGS=(
 if [[ "$BUILD_TYPE" == "debug" ]]; then
     CMAKE_FLAGS+=("-DCMAKE_BUILD_TYPE=Debug" "-DWITH_DEBUG=1")
 else
-    CMAKE_FLAGS+=("-DCMAKE_BUILD_TYPE=RelWithDebInfo")
+    # Set explicitly: a release configure in a reused build tree must not
+    # inherit a debug configure's cached value.
+    CMAKE_FLAGS+=("-DCMAKE_BUILD_TYPE=RelWithDebInfo" "-DWITH_DEBUG=0")
 fi
 
 if [[ -n "${CMAKE_EXTRA_FLAGS:-}" ]]; then

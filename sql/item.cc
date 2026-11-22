@@ -3617,16 +3617,8 @@ void Item_string::print(const THD *, String *str,
 
   // Custom types: decode binary representation to string format.
   if (has_type_context()) {
-    str->append('\'');
-    String decoded;
-    if (!villagesql::DecodeStringUncached(*get_type_context(), str_value,
-                                          &decoded)) {
-      str->append(decoded);
-    } else {
-      //  TODO(villagesql-general): Make this error observable.
-      str->append("<error decoding value>");
-    }
-    str->append('\'');
+    villagesql::PrintEncodedLiteral(*get_type_context(), str_value, query_type,
+                                    str);
     return;
   }
 
@@ -4296,6 +4288,7 @@ void Item_param::reset() {
   m_param_state = NO_VALUE;
   m_data_type_actual = MYSQL_TYPE_INVALID;
   null_value = false;
+  villagesql::MaybeClearOutParamTypeContext(this);
 }
 
 type_conversion_status Item_param::save_in_field_inner(Field *field,
@@ -4319,7 +4312,8 @@ type_conversion_status Item_param::save_in_field_inner(Field *field,
       return TYPE_OK;
     case MYSQL_TYPE_VARCHAR: {
       if (field->has_type_context()) {
-        return villagesql::EncodeAndStoreStringToCustomField(str_value, field);
+        return villagesql::ParamEncodeAndStoreCustomField(this, str_value,
+                                                          field);
       }
       return field->store(str_value.ptr(), str_value.length(),
                           str_value.charset());
@@ -4998,7 +4992,7 @@ void Item_param::set_param_type_and_swap_value(Item_param *src) {
     @retval false on success
 */
 
-bool Item_param::set_value(THD *, sp_rcontext *, Item **it) {
+bool Item_param::set_value(THD *thd, sp_rcontext *, Item **it) {
   Item *arg = *it;
 
   if (arg->is_null()) {
@@ -5012,7 +5006,8 @@ bool Item_param::set_value(THD *, sp_rcontext *, Item **it) {
     case STRING_RESULT: {
       char str_buffer[STRING_BUFFER_USUAL_SIZE];
       String sv_buffer(str_buffer, sizeof(str_buffer), &my_charset_bin);
-      String *sv = arg->val_str(&sv_buffer);
+      // VillageSQL: a custom-typed value is read as text.
+      String *sv = arg->val_external_str(&sv_buffer);
 
       if (!sv) return true;
 
@@ -5020,6 +5015,10 @@ bool Item_param::set_value(THD *, sp_rcontext *, Item **it) {
       str_value_ptr.set(str_value.ptr(), str_value.length(),
                         str_value.charset());
       collation.set(str_value.charset(), DERIVATION_COERCIBLE);
+      // VillageSQL: set_str() above stores the text as binary; this restores
+      // its charset for a custom-typed value and gives the `?` that type.
+      if (villagesql::MaybeSetOutParamCustomType(thd, this, arg, sv->charset()))
+        return true;
       break;
     }
 
@@ -6625,6 +6624,7 @@ bool Item::eq_by_collation(Item *item, bool binary_cmp,
 /**
   Create a field to hold a string value from an item.
 
+  If the item carries a custom type, ignore CONVERT_IF_BIGGER_TO_BLOB @n
   If max_length > CONVERT_IF_BIGGER_TO_BLOB create a blob @n
   If max_length > 0 create a varchar @n
   If max_length == 0 create a CHAR(0)
@@ -6642,6 +6642,15 @@ Field *Item::make_string_field(TABLE *table) const {
     field = new (*THR_MALLOC)
         Field_geom(max_length, m_nullable, item_name.ptr(),
                    Field::GEOM_GEOMETRY, std::optional<gis::srid_t>());
+  } else if (has_type_context()) {
+    // VillageSQL: don't change the type to a blob if the field is a
+    // custom type.
+    // TODO(villagesql-blob): allow a blob here once custom types can use
+    // blobs as their underlying storage.
+    assert(get_type_context()->descriptor()->implementation_type() ==
+           MYSQL_TYPE_VARCHAR);
+    field = new (*THR_MALLOC) Field_varstring(
+        max_length, m_nullable, item_name.ptr(), table->s, collation.collation);
   } else if (max_length / collation.collation->mbmaxlen >
              CONVERT_IF_BIGGER_TO_BLOB)
     field = new (*THR_MALLOC) Field_blob(
@@ -7053,15 +7062,7 @@ type_conversion_status Item::save_in_field_inner(Field *field,
           villagesql::EncodeStringForField(field, *result, status);
       if (encoded == nullptr) {
         str_value.set_quick(nullptr, 0, cs);
-        switch (status) {
-          case villagesql::EncodeStatus::kNull:
-            return set_field_to_null_with_conversions(field, no_conversions);
-          case villagesql::EncodeStatus::kOom:
-            return TYPE_ERR_OOM;
-          case villagesql::EncodeStatus::kErrorRaised:
-          case villagesql::EncodeStatus::kBadValue:
-            return TYPE_ERR_BAD_VALUE;
-        }
+        return villagesql::HandleFailedEncode(field, status, no_conversions);
       }
       result = encoded;
       cs = &my_charset_bin;
@@ -7111,15 +7112,7 @@ type_conversion_status Item_string::save_in_field_inner(Field *field,
     String *encoded =
         villagesql::EncodeStringForField(field, str_value, status);
     if (encoded == nullptr) {
-      switch (status) {
-        case villagesql::EncodeStatus::kNull:
-          return set_field_to_null_with_conversions(field, no_conversions);
-        case villagesql::EncodeStatus::kOom:
-          return TYPE_ERR_OOM;
-        case villagesql::EncodeStatus::kErrorRaised:
-        case villagesql::EncodeStatus::kBadValue:
-          return TYPE_ERR_BAD_VALUE;
-      }
+      return villagesql::HandleFailedEncode(field, status, no_conversions);
     }
 
     // Now re-cache the new version. The repertoire must match the encoded
@@ -7489,6 +7482,11 @@ my_decimal *Item_hex_string::val_decimal(my_decimal *decimal_value) {
 type_conversion_status Item_hex_string::save_in_field_inner(Field *field,
                                                             bool) {
   field->set_notnull();
+  // VillageSQL: a hex or bit literal is a binary string, encoded for the
+  // custom type as any binary value is, unless it is already encoded.
+  if (field->has_type_context() && !has_type_context()) {
+    return villagesql::EncodeAndStoreStringToCustomField(str_value, field);
+  }
   if (field->result_type() == STRING_RESULT)
     return field->store(str_value.ptr(), str_value.length(),
                         collation.collation);
@@ -7521,6 +7519,12 @@ void Item_hex_string::print(const THD *, String *str,
                             enum_query_type query_type) const {
   if (query_type & QT_NORMALIZED_FORMAT) {
     str->append("?");
+    return;
+  }
+  // VillageSQL: an encoded custom type value prints as its text form.
+  if (has_type_context()) {
+    villagesql::PrintEncodedLiteral(*get_type_context(), str_value, query_type,
+                                    str);
     return;
   }
   const uchar *ptr = pointer_cast<const uchar *>(str_value.ptr());
@@ -8272,7 +8276,7 @@ void Item_field::print(const THD *thd, String *str,
       !(query_type & QT_NO_DATA_EXPANSION)) {
     char buff[MAX_FIELD_WIDTH];
     String tmp(buff, sizeof(buff), str->charset());
-    field->val_str(&tmp);
+    field->val_external_str(&tmp);
     if (field->is_null())
       str->append("NULL");
     else {

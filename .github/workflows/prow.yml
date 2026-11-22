@@ -46,10 +46,10 @@ concurrency:
 jobs:
   prow:
     if: github.event_name != 'workflow_dispatch' && github.event_name != 'push'
-    uses: cncf/prow-github-actions/.github/workflows/prow.yml@110e1bfb921393902cc15cb2925f50662c581e4d
+    uses: cncf/prow-github-actions/.github/workflows/prow.yml@e3119adfdf11b3b9491f7a3ed807f48687e18733
 
   label-sync:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
-    uses: cncf/prow-github-actions/.github/workflows/prow.yml@110e1bfb921393902cc15cb2925f50662c581e4d
+    uses: cncf/prow-github-actions/.github/workflows/prow.yml@e3119adfdf11b3b9491f7a3ed807f48687e18733
     with:
       jobs: label-sync

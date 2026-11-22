@@ -15,6 +15,30 @@ vsql_keyring_reader.keyring_store('vsql_test_key', NULL, 'my_secret_value')
 SELECT vsql_keyring_reader.keyring_read('vsql_test_key', NULL);
 vsql_keyring_reader.keyring_read('vsql_test_key', NULL)
 my_secret_value
+# Read key larger than 4096bytes
+SELECT vsql_keyring_reader.keyring_store('big', NULL, REPEAT('a', 5000));
+vsql_keyring_reader.keyring_store('big', NULL, REPEAT('a', 5000))
+0
+SELECT LENGTH(vsql_keyring_reader.keyring_read('big', NULL)) AS len,
+vsql_keyring_reader.keyring_read('big', NULL) = REPEAT('a', 5000) AS same;
+len	same
+5000	1
+# Read key exactly 4096bytes
+SELECT vsql_keyring_reader.keyring_store('exact', NULL, REPEAT('a', 4096));
+vsql_keyring_reader.keyring_store('exact', NULL, REPEAT('a', 4096))
+0
+SELECT LENGTH(vsql_keyring_reader.keyring_read('exact', NULL)) AS len,
+vsql_keyring_reader.keyring_read('exact', NULL) = REPEAT('a', 4096) AS same;
+len	same
+4096	1
+# Read key slightly larger than 4096bytes
+SELECT vsql_keyring_reader.keyring_store('slightly_big', NULL, REPEAT('a', 4097));
+vsql_keyring_reader.keyring_store('slightly_big', NULL, REPEAT('a', 4097))
+0
+SELECT LENGTH(vsql_keyring_reader.keyring_read('slightly_big', NULL)) AS len,
+vsql_keyring_reader.keyring_read('slightly_big', NULL) = REPEAT('a', 4097) AS same;
+len	same
+4097	1
 # Restart server - keyring component reloads from its backing file
 # restart: --plugin-dir=KEYRING_FILE_COMPONENT_DIR
 # Secret should survive restart

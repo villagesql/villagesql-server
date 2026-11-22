@@ -26,7 +26,7 @@ FROM t
 ORDER BY d LIMIT 3;
 EXPLAIN
 -> Limit: 3 row(s)  (cost=COST rows=ROWS)
-    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+    -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 SELECT DISTINCT id, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
 FROM t
@@ -46,7 +46,7 @@ EXPLAIN
     -> Table scan on <temporary>  (cost=COST rows=ROWS)
         -> Temporary table with deduplication  (cost=COST rows=ROWS)
             -> Limit table size: 3 unique row(s)
-                -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+                -> Index KNN scan on t using idx_v (v <-> '[1,0,0,0]'), limit 3  (cost=COST rows=ROWS)
 
 SELECT DISTINCT grp, vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') AS d
 FROM t

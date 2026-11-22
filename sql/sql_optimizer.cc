@@ -118,7 +118,7 @@
 #include "sql/window.h"
 #include "sql_string.h"
 #include "template_utils.h"
-#include "villagesql/sql/custom_index_knn_optimizer_classic.h"
+#include "villagesql/sql/optimizer.h"
 
 using std::ceil;
 using std::max;
@@ -960,13 +960,9 @@ bool JOIN::optimize(bool finalize_access_paths) {
     for (ORDER *tmp_order = order.order; tmp_order;
          tmp_order = tmp_order->next) {
       Item *item = *tmp_order->item;
-      // VillageSQL: a KNN distance UDF over a custom index is "expensive" but
-      // is exactly the ordering that index can serve. Don't force it into a
-      // filesort here, or test_if_skip_sort_order() (and the KNN recognition
-      // hook) never gets the chance to route it to the custom distance scan.
+      // VillageSQL: Consider deterministic VDFs to enable KNN optimization.
       if (item->cost().IsExpensive() &&
-          !villagesql::IsCustomKnnDistanceOrderItem(
-              best_ref[const_tables]->table(), item)) {
+          !villagesql::optimizer::is_deterministic_vdf(item)) {
         /* Force tmp table without sort */
         simple_order = simple_group = false;
         break;
@@ -1401,8 +1397,8 @@ uint QEP_TAB::effective_index() const {
       return uint(ref().key);
 
     case JT_INDEX_SCAN:
+    case JT_KNN_SCAN:
     case JT_FT:
-    case JT_INDEX_DISTANCE:
       return index();
 
     case JT_INDEX_MERGE:
@@ -2323,30 +2319,21 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
   }
 
   /*
-    VillageSQL: a KNN-capable custom index can satisfy a single ASC
-    ORDER BY <distance>(col, const) LIMIT k, analogous to the FT case above.
-    All recognition and plan marking live in villagesql; if it applies, the
-    table is marked JT_INDEX_DISTANCE and QEP_TAB::access_path() builds the
-    distance scan. As with FT, this is the only place a non-field ordering can
-    bind to an index; the generic loop below rejects function orderings.
-  */
-  if (villagesql::TrySkipSortWithCustomKnnIndex(tab, order.order, *map,
-                                                no_changes)) {
-    *order_idx = -1;
-    return true;
-  }
-
-  /*
     Keys disabled by ALTER TABLE ... DISABLE KEYS should have already
     been taken into account.
   */
   Key_map usable_keys = *map;
 
+  // Set when the ORDER BY list contains a non-field item (e.g. a KNN
+  // distance function).
+  bool non_field_order = false;
+
   for (ORDER *tmp_order = order.order; tmp_order; tmp_order = tmp_order->next) {
     const Item *item = (*tmp_order->item)->real_item();
     if (item->type() != Item::FIELD_ITEM) {
       usable_keys.clear_all();
-      return false;
+      non_field_order = true;
+      break;
     }
     usable_keys.intersect(
         down_cast<const Item_field *>(item)->field->part_of_sortkey);
@@ -2378,7 +2365,17 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
     // The optimizer has decided to use an index scan.
     ref_key = tab->index();
     ref_key_parts = actual_key_parts(&table->key_info[tab->index()]);
+  } else if (tab->type() == JT_KNN_SCAN) {
+    return false;
   }
+
+  // Check if a KNN-capable index (HA_SUPPORT_KNN) can be used to retrieve
+  // the result in the required order.
+  if (villagesql::optimizer::try_knn_order(
+          tab, order, ref_key, map, select_limit, no_changes, order_idx)) {
+    return true;
+  }
+  if (non_field_order) return false;
 
   Opt_trace_context *const trace = &thd->opt_trace;
   const Opt_trace_object trace_wrapper_1(trace);
@@ -3746,6 +3743,9 @@ static bool setup_join_buffering(JOIN_TAB *tab, JOIN *join,
 
       tab->join_cache_flags = join_cache_flags;
       return false;
+    case JT_KNN_SCAN:
+      goto no_join_cache;
+
     default:;
   }
 

@@ -117,8 +117,7 @@ UpdatePreCheckResult check_dropped_types_have_no_dependents(
     const UpdatePreCheckInput &current,
     const std::unordered_set<std::string> &target_type_names) {
   for (const auto &col : current.dependent_columns) {
-    if (target_type_names.find(col.type_name) != target_type_names.end())
-      continue;
+    if (target_type_names.contains(col.type_name)) continue;
     char buf[512];
     std::snprintf(buf, sizeof(buf),
                   "Cannot update extension '%s': type '%s' is being dropped "
@@ -129,8 +128,7 @@ UpdatePreCheckResult check_dropped_types_have_no_dependents(
     return fail(buf);
   }
   for (const auto &sp : current.dependent_sp_params) {
-    if (target_type_names.find(sp.type_name) != target_type_names.end())
-      continue;
+    if (target_type_names.contains(sp.type_name)) continue;
     char buf[512];
     std::snprintf(buf, sizeof(buf),
                   "Cannot update extension '%s': type '%s' is being dropped "
@@ -181,8 +179,8 @@ UpdatePreCheckResult RunUpdatePreCheck(const UpdatePreCheckInput &input) {
         length.max_persisted_length =
             static_cast<int64_t>(t->max_persisted_length);
       }
-      if (t->protocol >= VEF_PROTOCOL_4 &&
-          target.negotiated_protocol >= VEF_PROTOCOL_4) {
+      if (t->protocol >= VEF_PROTOCOL_5 &&
+          target.negotiated_protocol >= VEF_PROTOCOL_5) {
         length.variable_length = t->variable_length;
       }
       target_lengths[t->name] = length;

@@ -17,6 +17,7 @@
 #ifndef VILLAGESQL_SQL_METADATA_MODIFIER_H_
 #define VILLAGESQL_SQL_METADATA_MODIFIER_H_
 
+#include <map>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -33,6 +34,7 @@ class Create_field;
 class Croutine_hash_entry;
 struct HA_CREATE_INFO;
 struct handlerton;
+struct LEX;
 struct TABLE;
 class Table_ref;
 class THD;
@@ -163,7 +165,7 @@ class Metadata_modifier {
     return !to_add_.empty() || !to_remove_.empty() || !to_rename_.empty() ||
            !to_call_.empty() || !to_add_indexes_.empty() ||
            !to_add_index_columns_.empty() || !to_remove_indexes_.empty() ||
-           !to_remove_index_columns_.empty();
+           !to_remove_index_columns_.empty() || !to_rename_indexes_.empty();
   }
 
  private:
@@ -205,6 +207,16 @@ class Metadata_modifier {
       THD *thd, Table_name old_name, Table_name new_name,
       const std::unordered_set<std::string> *skip_columns = nullptr);
 
+  // Update the table name associated with custom indexes from old_name to
+  // new_name, and rename the indexes in index_renames (keyed by canonical old
+  // index name) to the mapped names. Canonical index names in skip_indexes are
+  // left alone: the caller stages their removal under old_name.
+  // Returns false on success, true on error.
+  bool rename_indexes_table(
+      THD *thd, Table_name old_name, Table_name new_name,
+      const std::unordered_set<std::string> *skip_indexes = nullptr,
+      const std::map<std::string, std::string> *index_renames = nullptr);
+
   // Modify column entries based on alter_info. table_ref is the table being
   // altered.
   // Returns false on success, true on error.
@@ -242,11 +254,6 @@ class Metadata_modifier {
   // Returns false on success, true on error.
   bool add_functions(SQL_I_List<Croutine_hash_entry> &croutines_list);
 
-  // Verify that the storage engine is InnoDB; otherwise, report an error.
-  // Returns false on success and true on error.
-  static bool ensure_engine_is_innodb(const handlerton *hton,
-                                      const char *operation);
-
   std::vector<ColumnEntry> to_add_;
   std::vector<ColumnEntry> to_remove_;
   size_t existing_custom_count_ = 0;
@@ -260,6 +267,8 @@ class Metadata_modifier {
   // Custom index entries staged for deletion
   std::vector<IndexEntry> to_remove_indexes_;
   std::vector<IndexColumnEntry> to_remove_index_columns_;
+  // Pair of (new_entry, old_key) for custom indexes moved to another table name
+  std::vector<std::pair<IndexEntry, IndexKey>> to_rename_indexes_;
   // Number of VillageSQL system tables opened by add_system_tables().
   uint system_tables_opened_ = 0;
 };
@@ -301,6 +310,12 @@ extern bool DeleteCustomSpParams(THD *thd, const sp_name *name);
 // DROP DATABASE removes its routines without the per-routine DROP path.
 // Returns false on success, true on error.
 extern bool DeleteCustomSpParamsForDatabase(THD *thd, const char *db_name);
+
+// Remove the system tables the statement staged from lex->query_tables. They
+// are allocated in the statement's execution memory, so this must run at the
+// end of every statement, before a prepared statement or stored routine that
+// keeps the LEX can run again or be freed.
+void UnlinkStagedSystemTables(LEX *lex);
 
 }  // namespace villagesql
 

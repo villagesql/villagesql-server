@@ -6,7 +6,7 @@ This document describes how build caching works in CI, known issues, and how to 
 
 The "Build and Test" workflow uses [ccache](https://ccache.dev/) to cache compiled object files, backed by [GitHub Actions cache](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows) for persistence across runs.
 
-Builds run on self-hosted runners (see the github-runner directory in our tools repo; sorry open source people, we're still figuring out how to set up infrastructure).
+Builds run on self-hosted runners (see the github-runner directory in our tools repo; sorry open source people, we're still figuring out how to set up infrastructure). The Linux runners are ephemeral VMs, which is why their ccache has to round-trip through the GitHub Actions cache. The macOS runners are persistent Mac minis and keep a local cache instead; see [macOS runners](#macos-runners) below.
 
 **Components:**
 - **ccache**: Caches compiled C/C++ object files locally. Keyed on preprocessed source content + compiler flags. Compression is enabled.
@@ -30,6 +30,16 @@ After each build, the workflow runs `ccache --evict-older-than 3600s` to prune c
 The ccache `max-size` is set to 5GB. This is chosen to fit two cache entries within the GitHub Actions 10GB default quota (since ccache compression means GH entries are roughly the same size as the on-disk ccache directory).
 
 Only "Build and Test" and "Nightly" workflows have caching enabled. Other infrequent workflows (full-test-suite, valgrind, release) have caching disabled to avoid polluting the quota (see PR #120).
+
+## macOS runners
+
+The macOS self-hosted runners are persistent machines, so they work differently from the Linux VMs above:
+
+- **The workspace is wiped before every job** by a runner hook (`github-runner/macos/job_started_hook.sh` in the tools repo). Every job starts from an empty `_work/<repo>/<repo>`, so nothing from a previous build, test run, or workflow should leak into the next one. The hook's output appears in the job log under "Set up runner".
+- **ccache is machine-local**. `villagesql/bld_tools/build_server.sh` turns ccache on for every macOS build when it is installed (`setup_macos_build_env.sh` installs it). The cache directory and size limit come from the runner's `.env` file (`CCACHE_DIR`, `CCACHE_MAXSIZE`), which the tools repo setup guide covers. The cache lives outside `_work`, so the wipe does not touch it, and it is shared by every workflow and build type on that machine. The GitHub Actions cache and its quota are not involved.
+- **Statistics are in the build step**, not a separate step: `build_server.sh` zeroes the counters before configuring and prints `ccache --show-stats` after the build, whether or not the build succeeded.
+
+A cold cache on macOS happens after the cache directory is first created, after an Xcode or Command Line Tools update (the compiler changed), or if the cache was deleted. One build repopulates it.
 
 ## Performance Tiers
 
