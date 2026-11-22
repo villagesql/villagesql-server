@@ -478,6 +478,35 @@ static bool ResolveTypeToContext(std::string_view extension_name,
 
   auto &vclient = VictionaryClient::instance();
   const TypeDescriptor *type_descriptor = nullptr;
+
+  // Hot path (read lock): a TypeContext is created once per (type, parameters)
+  // and afterwards only looked up, so the common case needs no write lock.
+  // Taking the write lock here serialized every statement that binds an
+  // extension function or typed argument (same read-first pattern as
+  // InjectCustomSpParams).
+  {
+    auto read_guard = vclient.get_read_lock();
+    if (resolve_type_descriptor_locked(vclient, extension_name, type_name,
+                                       type_descriptor)) {
+      return true;
+    }
+
+    // The type didn't resolve, which isn't a failure here. It probably is to
+    // the caller, but they will see result is nullptr.
+    if (type_descriptor == nullptr) return false;
+
+    TypeDescriptorKey type_descriptor_key(type_descriptor->type_name(),
+                                          type_descriptor->extension_name(),
+                                          type_descriptor->extension_version());
+    TypeContextKey type_context_key(type_descriptor_key, parameters);
+    result = vclient.type_contexts().acquire(type_context_key, mem_root);
+    if (result != nullptr) return false;
+  }
+
+  // Cold path (write lock): the TypeContext does not exist yet, or the hot
+  // path could not register it. The descriptor pointer is only valid while a
+  // lock is held, so resolve it again before creating the context.
+  type_descriptor = nullptr;
   auto guard = vclient.get_write_lock();
 
   if (resolve_type_descriptor_locked(vclient, extension_name, type_name,
