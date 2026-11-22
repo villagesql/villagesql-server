@@ -681,6 +681,16 @@ still not implemented on /40.
   fails in 2 of 50 rounds, returning `9 7` in one and `2 3` in the other for
   LIMIT 7.
   delete/hnsw_purge_locking passes.
+- Not stale graph links. delete/hnsw_stale_link runs the hnsw_purge_scattered
+  steps, then inserts 30 rows into the gaps, and after each phase reads the
+  graph with svector_page_dump. On deb/custom-index/43 with
+  deb/hnsw_index/37 (c91f417) no link points at a freed node or vector slot,
+  at a node that now holds another vector, or at a node that does not record
+  it, in 5 of 5 runs, although the inserts reused all 10 freed vector slots
+  and 3 of the 10 freed node slots. At the same point `[30.2,0,0,0]` returned
+  `123 114 103 104 113` instead of `31 29 32 28 123`. So the wrong results
+  come from search or from the quality of the repair, not from links to
+  reused slots.
 
 ## KNN-28: Rollback at recovery of a prepared transaction that changed an HNSW index fails
 
