@@ -162,10 +162,36 @@ class TypeParamsCache {
   // std::map on the hot per-row path; the map is built only on a cache miss.
   template <typename ParseFn>
   const T &get(const vef_type_params_t &raw, ParseFn &&parse_fn) {
-    if (const T *hit = lookup_raw(raw)) return *hit;
-    std::string key = key_from_raw(raw);
-    if (const T *hit = lookup(key)) return *hit;
-    return insert(std::move(key), parse_fn(map_from_raw(raw)));
+    // Fast path: the same parameter arrays (the same TypeContext) seen
+    // before. The slot remembers which entry they led to; the entry is still
+    // checked by content, because arrays freed and reallocated at the same
+    // addresses could hold other parameters. A slot is filled once and kept
+    // until the cache is destroyed (no churn when two contexts share a slot).
+    std::atomic<const PtrSlot *> &slot = ptr_slots_[ptr_slot_of(raw)];
+    if (const PtrSlot *s = slot.load(std::memory_order_acquire)) {
+      if (s->keys == raw.keys && s->values == raw.values &&
+          s->count == raw.count && key_equals_raw(s->node->key, raw)) {
+        return s->node->value;
+      }
+    }
+    const Node *node = lookup_raw_node(raw);
+    if (node == nullptr) {
+      std::string key = key_from_raw(raw);
+      node = lookup_node(key);
+      if (node == nullptr) {
+        node = insert_node(std::move(key), parse_fn(map_from_raw(raw)));
+      }
+    }
+    if (slot.load(std::memory_order_relaxed) == nullptr) {
+      const PtrSlot *fresh = new PtrSlot{raw.keys, raw.values, raw.count, node};
+      const PtrSlot *expected = nullptr;
+      if (!slot.compare_exchange_strong(expected, fresh,
+                                        std::memory_order_release,
+                                        std::memory_order_relaxed)) {
+        delete fresh;
+      }
+    }
+    return node->value;
   }
 
  private:
@@ -190,6 +216,22 @@ class TypeParamsCache {
   };
   static constexpr size_t kBucketCount = 64;
   std::array<std::atomic<const Node *>, kBucketCount> buckets_{};
+
+  // Parameter-array addresses -> entry, for get(raw)'s fast path.
+  struct PtrSlot {
+    const char *const *keys;
+    const char *const *values;
+    unsigned count;
+    const Node *node;
+  };
+  static constexpr size_t kPtrSlotCount = 64;
+  std::array<std::atomic<const PtrSlot *>, kPtrSlotCount> ptr_slots_{};
+
+  static size_t ptr_slot_of(const vef_type_params_t &raw) {
+    const auto k = reinterpret_cast<std::uintptr_t>(raw.keys);
+    const auto v = reinterpret_cast<std::uintptr_t>(raw.values);
+    return ((k >> 4) ^ (v >> 4) ^ raw.count) % kPtrSlotCount;
+  }
   std::mutex insert_mu_;
 
   // FNV-1a over the key's bytes. The same hash can be fed piece by piece from
@@ -234,7 +276,7 @@ class TypeParamsCache {
   // function that takes a parameterized type. Returns nullptr on a miss and
   // also when raw's keys are not in sorted order (the caller then builds the
   // canonical key, as before).
-  const T *lookup_raw(const vef_type_params_t &raw) const {
+  const Node *lookup_raw_node(const vef_type_params_t &raw) const {
     uint64_t h = kFnvOffsetBasis;
     for (unsigned i = 0; i < raw.count; ++i) {
       if (i > 0) {
@@ -248,29 +290,42 @@ class TypeParamsCache {
     for (const Node *n =
              buckets_[h % kBucketCount].load(std::memory_order_acquire);
          n != nullptr; n = n->next) {
-      if (key_equals_raw(n->key, raw)) return &n->value;
+      if (key_equals_raw(n->key, raw)) return n;
+    }
+    return nullptr;
+  }
+  const T *lookup_raw(const vef_type_params_t &raw) const {
+    const Node *n = lookup_raw_node(raw);
+    return n == nullptr ? nullptr : &n->value;
+  }
+
+  const Node *lookup_node(const std::string &key) const {
+    for (const Node *n =
+             buckets_[bucket_of(key)].load(std::memory_order_acquire);
+         n != nullptr; n = n->next) {
+      if (n->key == key) return n;
     }
     return nullptr;
   }
 
   const T *lookup(const std::string &key) const {
-    for (const Node *n =
-             buckets_[bucket_of(key)].load(std::memory_order_acquire);
-         n != nullptr; n = n->next) {
-      if (n->key == key) return &n->value;
-    }
-    return nullptr;
+    const Node *n = lookup_node(key);
+    return n == nullptr ? nullptr : &n->value;
   }
 
-  const T &insert(std::string key, T value) {
+  const Node *insert_node(std::string key, T value) {
     std::lock_guard<std::mutex> lock(insert_mu_);
     // Re-check: another thread may have inserted while we waited for the lock.
-    if (const T *hit = lookup(key)) return *hit;
+    if (const Node *hit = lookup_node(key)) return hit;
     std::atomic<const Node *> &head = buckets_[bucket_of(key)];
     const Node *node = new Node(std::move(key), std::move(value),
                                 head.load(std::memory_order_relaxed));
     head.store(node, std::memory_order_release);
-    return node->value;
+    return node;
+  }
+
+  const T &insert(std::string key, T value) {
+    return insert_node(std::move(key), std::move(value))->value;
   }
 
  public:
@@ -278,6 +333,7 @@ class TypeParamsCache {
   TypeParamsCache(const TypeParamsCache &) = delete;
   TypeParamsCache &operator=(const TypeParamsCache &) = delete;
   ~TypeParamsCache() {
+    for (auto &s : ptr_slots_) delete s.load(std::memory_order_relaxed);
     for (auto &head : buckets_) {
       const Node *n = head.load(std::memory_order_relaxed);
       while (n != nullptr) {
