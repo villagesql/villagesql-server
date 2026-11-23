@@ -99,8 +99,8 @@ bool prepare_returning_fields(THD *thd, Query_block *query_block,
 void Query_result_returning::set_into(PT_returning_into *into,
                                       Query_block *query_block) {
   m_into = into->json_var;
-  m_into_vars = into->scalar_vars != nullptr ? &into->scalar_vars->value
-                                              : nullptr;
+  m_into_vars =
+      into->scalar_vars != nullptr ? &into->scalar_vars->value : nullptr;
   m_into_table_ref = into->table_ref;
   m_query_block = query_block;
 }
