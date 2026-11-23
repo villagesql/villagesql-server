@@ -50,7 +50,12 @@ UNINSTALL EXTENSION vsql_array;
 SELECT * FROM t ORDER BY id;
 
 --echo # Binlog: only the DML row events, nothing about the aggregate.
+# Read the events from the binlog in use now, not the first one: when the
+# test server is reused by an earlier test that rotated the binlog, the first
+# binlog holds none of this test's events. Mask its name for the same reason.
+--let $binlog_file= query_get_value(SHOW BINARY LOG STATUS, File, 1)
 --let $binlog_start= query_get_value(SHOW BINARY LOG STATUS, Position, 1)
+--let $mask_binlog_filename= 1
 CALL p_ret(1);
 --source include/rpl/deprecated/show_binlog_events.inc
 
