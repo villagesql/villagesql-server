@@ -34,8 +34,8 @@
 #include "sql/auth/auth_common.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
-#include "sql/item_strfunc.h"
 #include "sql/item_json_func.h"
+#include "sql/item_strfunc.h"
 #include "sql/parse_tree_nodes.h"
 #include "sql/protocol.h"
 #include "sql/query_result.h"
@@ -98,8 +98,8 @@ class Item_returning_collect final : public Item_str_func {
   // Run the aggregate's result function once and keep the value; val_str()
   // then returns it to the variable assignment.
   bool evaluate(THD *thd) {
-    String *res = m_vdf.val_str(&m_value, &m_save, m_udf->name.str,
-                                &my_charset_bin);
+    String *res =
+        m_vdf.val_str(&m_value, &m_save, m_udf->name.str, &my_charset_bin);
     if (thd->is_error()) return true;
     if (res == nullptr) {
       my_error(ER_NOT_SUPPORTED_YET, MYF(0),
@@ -498,8 +498,7 @@ bool Query_result_returning::assign_collected(THD *thd) {
   List_iterator_fast<PT_select_var> var_li(*m_into_vars);
   for (PT_select_var *mv; (mv = var_li++) != nullptr;) {
     Item *value = m_collectors[i++];
-    if (thd->sp_runtime_ctx->set_variable(thd, false, mv->get_offset(),
-                                          &value))
+    if (thd->sp_runtime_ctx->set_variable(thd, false, mv->get_offset(), &value))
       return true;
   }
   return thd->is_error();

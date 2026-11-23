@@ -221,7 +221,8 @@ typedef enum : unsigned int {
                    // + to_binary_vdf_name on vef_type_desc_t: a type may
                    //   declare a decode to its binary form.
   VEF_PROTOCOL_6,  // Under development, not stable. Adds:
-                   // + collect_aggregate_vdf_name on vef_type_desc_t: a type may
+                   // + collect_aggregate_vdf_name on vef_type_desc_t: a type
+                   // may
                    //   name the aggregate VDF the server uses to collect many
                    //   rows into one value of the type (RETURNING ... INTO an
                    //   array variable).

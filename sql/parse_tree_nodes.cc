@@ -4418,19 +4418,18 @@ bool PT_returning_into::do_contextualize(Parse_context *pc) {
     // ARRAY) is filled by that aggregate at execution. Register it like any
     // other VDF call in the statement (used custom routines, MDL tracking).
     sp_pcontext *pctx = pc->thd->lex->get_sp_current_parsing_ctx();
-    sp_variable *spv = var->is_local() && pctx != nullptr
-                           ? pctx->find_variable(var->name.str,
-                                                 var->name.length, false)
-                           : nullptr;
+    sp_variable *spv =
+        var->is_local() && pctx != nullptr
+            ? pctx->find_variable(var->name.str, var->name.length, false)
+            : nullptr;
     const villagesql::TypeContext *tc =
         spv != nullptr ? spv->field_def.custom_type_context : nullptr;
     if (tc != nullptr && tc->descriptor() != nullptr &&
         !tc->descriptor()->collect_aggregate_name().empty()) {
       const std::string &agg = tc->descriptor()->collect_aggregate_name();
-      custom_add_used_routine(pc->thd->lex, pc->thd->stmt_arena,
-                              tc->extension_name().c_str(),
-                              tc->extension_name().length(), agg.c_str(),
-                              agg.length());
+      custom_add_used_routine(
+          pc->thd->lex, pc->thd->stmt_arena, tc->extension_name().c_str(),
+          tc->extension_name().length(), agg.c_str(), agg.length());
     }
   }
   return false;
