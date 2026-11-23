@@ -37,6 +37,17 @@ vsql_complex.complex_divide('(1,1)', '(0,0)')
 NULL
 Warnings:
 Warning	3200	VDF error in function 'complex_divide': division by 0
+# complex_divide does not overflow or underflow for divisors with very
+# large or very small parts
+SELECT vsql_complex.complex_divide('(1e200,0)', '(1e200,0)');
+vsql_complex.complex_divide('(1e200,0)', '(1e200,0)')
+(1,0)
+SELECT vsql_complex.complex_divide('(1,1)', '(1e200,0)');
+vsql_complex.complex_divide('(1,1)', '(1e200,0)')
+(1e-200,1e-200)
+SELECT vsql_complex.complex_divide('(1,0)', '(1e-200,0)');
+vsql_complex.complex_divide('(1,0)', '(1e-200,0)')
+(1e+200,0)
 # complex_abs does not overflow for large parts
 SELECT vsql_complex.complex_abs('(3e200,4e200)') BETWEEN 4.999e200 AND 5.001e200 AS near_5e200;
 near_5e200

@@ -28,7 +28,6 @@
 
 #include <villagesql/vsql.h>
 
-#include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
@@ -131,7 +130,6 @@ static bool parse_complex(std::string_view from, Complex *cx) {
   };
   auto parse_double = [&](double *out) {
     skip_ws();
-    errno = 0;
     char *endptr = nullptr;
     const double v = strtod(p, &endptr);
     if (endptr == p) return true;
@@ -334,15 +332,22 @@ void complex_divide(CustomArg in_l, CustomArg in_r, CustomResult out) {
   Complex lhs = load_complex(in_l.value().data());
   Complex rhs = load_complex(in_r.value().data());
   // Check for division by zero
-  double denominator = rhs.re * rhs.re + rhs.im * rhs.im;
-  if (denominator == 0.0) {
+  if (rhs.re == 0.0 && rhs.im == 0.0) {
     out.warning("division by 0");
     return;
   }
+  // Scale the divisor by a power of two so that c^2 + d^2 cannot overflow or
+  // underflow. The scaling is exact, so a result that did not overflow or
+  // underflow before is unchanged.
+  const int scale = std::ilogb(std::fmax(std::fabs(rhs.re), std::fabs(rhs.im)));
+  const double c = std::scalbn(rhs.re, -scale);
+  const double d = std::scalbn(rhs.im, -scale);
+  const double denominator = c * c + d * d;
   // (a + bi) / (c + di) = [(ac + bd) + (bc - ad)i] / (c^2 + d^2)
-  store_finite(Complex{(lhs.re * rhs.re + lhs.im * rhs.im) / denominator,
-                       (lhs.im * rhs.re - lhs.re * rhs.im) / denominator},
-               out);
+  store_finite(
+      Complex{std::scalbn((lhs.re * c + lhs.im * d) / denominator, -scale),
+              std::scalbn((lhs.im * c - lhs.re * d) / denominator, -scale)},
+      out);
 }
 
 // Utility: complex_real(c) -> REAL
@@ -382,7 +387,7 @@ void complex_abs(CustomArg in, RealResult out) {
     return;
   }
   Complex cx = load_complex(in.value().data());
-  // hypot does not overflow for parts whose squares would
+  // hypot does not overflow for parts whose squares would overflow.
   const double abs = std::hypot(cx.re, cx.im);
   if (!std::isfinite(abs)) {
     out.error("DOUBLE value is out of range");
@@ -433,6 +438,8 @@ void complex_sum_result(const ComplexSumState &state, CustomResult out) {
   }
   Complex total = state.value();
   total.canonicalize();
+  // The running total can overflow partway even when the final sum is in
+  // range (1.7e308 + 1.7e308 - 1.7e308), so the result can depend on row order.
   store_finite(total, out);
 }
 
