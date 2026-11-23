@@ -28,3 +28,7 @@ release/0.0.7 vsql_sys_var v0.0.6
 # vsql-cube main expects cube_point_nd's errors at execution (vsql-cube#30);
 # 0.0.7 reports them at inference. vsql-cube's own release 0.0.8 predates that.
 release/0.0.7 vsql-cube 0.0.8
+
+# vsql-vector main moved to the extended preview index_builder API
+# (villagesql-server #1472–#1484, vsql-vector #85–#90), which 0.0.8 lacks.
+release/0.0.8 vsql-vector 0.0.1
