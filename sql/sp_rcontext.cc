@@ -132,7 +132,8 @@ bool sp_rcontext::alloc_arrays(THD *thd) {
   return !m_cstack.array() || !m_case_expr_holders.array();
 }
 
-bool sp_rcontext::init_var_table(THD *thd, Vsql_var_table_keeper *var_table_owner) {
+bool sp_rcontext::init_var_table(THD *thd,
+                                 Vsql_var_table_keeper *var_table_owner) {
   List<Create_field> field_def_lst;
 
   if (!m_root_parsing_ctx->max_var_index()) return false;

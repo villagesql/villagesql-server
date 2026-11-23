@@ -2819,9 +2819,8 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
 
   thd->swap_query_arena(call_arena, &backup_arena);
 
-  sp_rcontext *func_runtime_ctx =
-      sp_rcontext::create(thd, m_root_parsing_ctx, return_value_fld,
-                          &m_vsql_var_table_keepers[0]);
+  sp_rcontext *func_runtime_ctx = sp_rcontext::create(
+      thd, m_root_parsing_ctx, return_value_fld, &m_vsql_var_table_keepers[0]);
 
   if (!func_runtime_ctx) {
     thd->swap_query_arena(backup_arena, &call_arena);
@@ -3047,9 +3046,8 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
     thd->sp_runtime_ctx->callers_arena = thd;
   }
 
-  sp_rcontext *proc_runtime_ctx =
-      sp_rcontext::create(thd, m_root_parsing_ctx, nullptr,
-                          &m_vsql_var_table_keepers[0]);
+  sp_rcontext *proc_runtime_ctx = sp_rcontext::create(
+      thd, m_root_parsing_ctx, nullptr, &m_vsql_var_table_keepers[0]);
 
   if (proc_runtime_ctx == nullptr) {
     thd->sp_runtime_ctx = sp_runtime_ctx_saved;
