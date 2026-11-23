@@ -117,6 +117,7 @@ class PT_query_expression;
 class PT_query_expression_body;
 class PT_query_primary;
 class PT_role_or_privilege;
+class PT_returning_into;
 class PT_select_var;
 class PT_select_var_list;
 class PT_set;
@@ -467,6 +468,7 @@ union MY_SQL_PARSER_STYPE {
   Field_separators field_separators;
   PT_into_destination *into_destination;
   PT_select_var *select_var_ident;
+  PT_returning_into *returning_into;
   PT_select_var_list *select_var_list;
   Mem_root_array_YY<PT_table_reference *> table_reference_list;
   Item_param *param_marker;

@@ -122,3 +122,9 @@ bool Item_old_field::is_null() {
   Old_value_guard guard(field);
   return super::is_null();
 }
+
+type_conversion_status Item_old_field::save_in_field_inner(
+    Field *to, bool no_conversions) {
+  Old_value_guard guard(field);
+  return super::save_in_field_inner(to, no_conversions);
+}

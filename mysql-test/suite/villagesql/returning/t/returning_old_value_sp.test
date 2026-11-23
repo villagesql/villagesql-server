@@ -1,0 +1,56 @@
+--echo #
+--echo # OLD_VALUE() stored into stored-procedure local variables by RETURNING ... INTO v1, v2.
+--echo # SP locals are assigned through Item::save_in_field(), which must also read the pre-update image.
+--echo #
+CREATE TABLE t1(id INT PRIMARY KEY, q INT, s VARCHAR(10), d DECIMAL(6,2), t DATETIME);
+INSERT INTO t1 VALUES (1, 10, NULL, 10.50, '2026-01-01 10:00:00'), (2, 20, 'b', NULL, NULL);
+
+DELIMITER |;
+CREATE PROCEDURE p_new_old(IN p INT)
+BEGIN
+  DECLARE n, o INT;
+  UPDATE t1 SET q = q + 1 WHERE id = p RETURNING q, OLD_VALUE(q) INTO n, o;
+  SELECT n, o;
+END|
+CREATE PROCEDURE p_old_new(IN p INT)
+BEGIN
+  DECLARE n, o INT;
+  UPDATE t1 SET q = q + 1 WHERE id = p RETURNING OLD_VALUE(q), q INTO o, n;
+  SELECT n, o;
+END|
+CREATE PROCEDURE p_str(IN p INT)
+BEGIN
+  DECLARE ns, os VARCHAR(10);
+  UPDATE t1 SET s = 'new' WHERE id = p RETURNING s, OLD_VALUE(s) INTO ns, os;
+  SELECT ns, os, os IS NULL AS os_is_null;
+END|
+CREATE PROCEDURE p_dec_dt(IN p INT)
+BEGIN
+  DECLARE nd, od DECIMAL(6,2);
+  DECLARE nt, ot DATETIME;
+  UPDATE t1 SET d = COALESCE(d, 0) + 1.25, t = COALESCE(t, '2026-06-01 00:00:00') + INTERVAL 1 DAY
+    WHERE id = p RETURNING d, OLD_VALUE(d), t, OLD_VALUE(t) INTO nd, od, nt, ot;
+  SELECT nd, od, nt, ot;
+END|
+DELIMITER ;|
+
+--echo # P1: q, OLD_VALUE(q) INTO n, o (called twice: first execution and re-execution)
+CALL p_new_old(1);
+CALL p_new_old(1);
+--echo # P2: OLD_VALUE(q), q INTO o, n (called twice)
+CALL p_old_new(2);
+CALL p_old_new(2);
+--echo # VARCHAR: old value NULL, then not NULL
+CALL p_str(1);
+CALL p_str(2);
+--echo # DECIMAL and DATETIME: old values set (called twice), then old values NULL
+CALL p_dec_dt(1);
+CALL p_dec_dt(1);
+CALL p_dec_dt(2);
+SELECT * FROM t1 ORDER BY id;
+
+DROP PROCEDURE p_new_old;
+DROP PROCEDURE p_old_new;
+DROP PROCEDURE p_str;
+DROP PROCEDURE p_dec_dt;
+DROP TABLE t1;

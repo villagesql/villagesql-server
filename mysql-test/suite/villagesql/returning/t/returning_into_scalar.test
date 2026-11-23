@@ -1,0 +1,94 @@
+--echo #
+--echo # RETURNING ... INTO v1, v2 (scalar targets)
+--echo #
+--echo # Positional assignment like SELECT ... INTO: exactly one row; no row is the
+--echo # NOT FOUND warning (variables unchanged); more than one row is an error.
+--echo #
+
+CREATE TABLE t1(id INT PRIMARY KEY, q INT, amt DECIMAL(6,2), note VARCHAR(20));
+INSERT INTO t1 VALUES (1, 10, 41.99, 'aa'), (2, 20, 123.45, 'bb'), (3, 30, 0.01, 'cc');
+
+--echo # --- UPDATE ... RETURNING INTO @user_vars, incl. expressions and OLD_VALUE
+UPDATE t1 SET q = q + 5 WHERE id = 1
+RETURNING q, amt, note, q - 5, OLD_VALUE(q) INTO @q, @amt, @note, @qm5, @oldq;
+SELECT @q, @amt, @note, @qm5, @oldq;
+SELECT * FROM t1 ORDER BY id;
+
+--echo # --- DELETE ... RETURNING INTO @user_vars
+DELETE FROM t1 WHERE id = 3 RETURNING id, note INTO @did, @dnote;
+SELECT @did, @dnote;
+SELECT COUNT(*) FROM t1;
+
+--echo # --- Types survive the assignment (DECIMAL stays DECIMAL, no double drift)
+UPDATE t1 SET amt = amt WHERE id = 2 RETURNING amt INTO @amt2;
+SELECT @amt2, @amt2 = 123.45 AS exact;
+
+--echo # --- No matching row: NOT FOUND warning, variables keep their old values
+SET @keep = 'kept';
+UPDATE t1 SET q = 0 WHERE id = 999 RETURNING note INTO @keep;
+SHOW WARNINGS;
+SELECT @keep;
+SELECT ROW_COUNT();
+
+--echo # --- More than one row: error; statement is rolled back (InnoDB)
+--error ER_TOO_MANY_ROWS
+UPDATE t1 SET q = q + 1 RETURNING id INTO @only;
+SELECT id, q FROM t1 ORDER BY id;
+
+--echo # --- Wrong number of targets
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+UPDATE t1 SET q = q WHERE id = 1 RETURNING id, q INTO @one;
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+UPDATE t1 SET q = q WHERE id = 1 RETURNING id INTO @one, @two;
+
+--echo # --- Inside a stored procedure: SP locals, NOT FOUND handler, loop
+DELIMITER |;
+CREATE PROCEDURE p_bump(IN p_id INT, OUT p_new INT, OUT p_old INT, OUT p_found INT)
+BEGIN
+  DECLARE v_new INT; DECLARE v_old INT;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET p_found = 0;
+  SET p_found = 1;
+  UPDATE t1 SET q = q + 1 WHERE id = p_id
+    RETURNING q, OLD_VALUE(q) INTO v_new, v_old;
+  SET p_new = v_new, p_old = v_old;
+END|
+DELIMITER ;|
+CALL p_bump(1, @n, @o, @f);
+SELECT @n, @o, @f;
+CALL p_bump(999, @n, @o, @f);
+SELECT @f;
+DROP PROCEDURE p_bump;
+
+--echo # --- A local variable named json is a variable, not the JSON keyword form
+DELIMITER |;
+CREATE PROCEDURE p_json_named()
+BEGIN
+  DECLARE json INT;
+  UPDATE t1 SET q = q + 1 WHERE id = 2 RETURNING q INTO json;
+  SELECT json;
+END|
+DELIMITER ;|
+CALL p_json_named();
+DROP PROCEDURE p_json_named;
+
+--echo # --- Multi-table UPDATE (single updated table), immediate and buffered paths
+CREATE TABLE t2(id INT PRIMARY KEY, nv INT);
+INSERT INTO t2 VALUES (1, 111), (2, 222);
+UPDATE /*+ JOIN_ORDER(t1,t2) */ t1 JOIN t2 ON t1.id=t2.id SET t1.q=t2.nv
+  WHERE t1.id=1 RETURNING t1.q, OLD_VALUE(q) INTO @mq, @mo;
+SELECT @mq, @mo;
+UPDATE /*+ JOIN_ORDER(t2,t1) */ t1 JOIN t2 ON t1.id=t2.id SET t1.q=t2.nv
+  WHERE t1.id=2 RETURNING t1.q, OLD_VALUE(q) INTO @mq, @mo;
+SELECT @mq, @mo;
+
+--echo # --- Prepared statement, executed twice
+PREPARE s FROM 'UPDATE t1 SET q = q + 1 WHERE id = 1 RETURNING q INTO @ps';
+EXECUTE s; SELECT @ps;
+EXECUTE s; SELECT @ps;
+DEALLOCATE PREPARE s;
+
+--echo # --- INTO JSON is unchanged next to the scalar form
+UPDATE t1 SET q = q + 1 WHERE id = 1 RETURNING id, q INTO JSON @j;
+SELECT @j;
+
+DROP TABLE t1, t2;

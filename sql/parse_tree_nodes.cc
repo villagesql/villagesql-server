@@ -136,7 +136,7 @@ bool contextualize_safe(Context *pc, Node node, Nodes... nodes) {
 bool contextualize_returning_clause(
     Parse_context *pc, PT_item_list *returning_clause,
     mem_root_deque<Item *> **returning_fields = nullptr,
-    PT_select_var *returning_into = nullptr) {
+    PT_returning_into *returning_into = nullptr) {
   if (returning_fields != nullptr) *returning_fields = nullptr;
   if (returning_clause == nullptr) {
     // INTO without a RETURNING list is a grammar impossibility; guard anyway.
@@ -154,11 +154,12 @@ bool contextualize_returning_clause(
   select->parsing_place = CTX_NONE;
   if (returning_error) return true;
 
-  // Resolve the RETURNING ... INTO JSON target (an SP-local offset or a
-  // @user_var). Unlike SELECT ... INTO, we do not install a Query_dumpvar into
-  // lex->result: RETURNING drives its own Query_result_returning, which handles
-  // the JSON capture. We still mark the statement uncacheable because it writes
-  // a session/routine variable as a side effect.
+  // Resolve the RETURNING ... INTO target (JSON var or scalar var list; each an
+  // SP-local offset or a @user_var). Unlike SELECT ... INTO, we do not install
+  // a Query_dumpvar into lex->result: RETURNING drives its own
+  // Query_result_returning, which handles the JSON capture. We still mark the
+  // statement uncacheable because it writes a session/routine variable as a
+  // side effect.
   if (returning_into != nullptr) {
     if (returning_into->contextualize(pc)) return true;
     lex->set_uncacheable(select, UNCACHEABLE_SIDEEFFECT);
@@ -4352,6 +4353,17 @@ bool PT_into_destination_dumpfile::do_contextualize(Parse_context *pc) {
   lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
   lex->result = new (pc->mem_root) Query_result_dump(&m_exchange);
   return lex->result == nullptr;
+}
+
+bool PT_returning_into::do_contextualize(Parse_context *pc) {
+  if (super::do_contextualize(pc)) return true;
+  if (json_var != nullptr) return json_var->contextualize(pc);
+  List_iterator<PT_select_var> it(scalar_vars->value);
+  PT_select_var *var;
+  while ((var = it++)) {
+    if (var->contextualize(pc)) return true;
+  }
+  return false;
 }
 
 bool PT_select_var_list::do_contextualize(Parse_context *pc) {

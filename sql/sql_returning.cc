@@ -28,6 +28,7 @@
 #include <memory>
 
 #include "mem_root_deque.h"
+#include "mysqld_error.h"
 #include "sql-common/json_dom.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/item.h"
@@ -39,12 +40,13 @@
 #include "sql/sp_rcontext.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
+#include "sql/sql_error.h"
 #include "sql/sql_lex.h"
 
 bool prepare_returning_fields(THD *thd, Query_block *query_block,
                               mem_root_deque<Item *> *returning_fields,
                               Query_result_returning **returning_result,
-                              PT_select_var *into) {
+                              PT_returning_into *into) {
   // DELETE resolves its RETURNING items directly into query_block->fields
   // (i.e. returning_fields aliases &query_block->fields); INSERT and UPDATE own
   // a separate deque and expect query_block->fields to be left untouched.
@@ -72,19 +74,54 @@ bool prepare_returning_fields(THD *thd, Query_block *query_block,
   *returning_result = new (thd->mem_root) Query_result_returning;
   if (*returning_result == nullptr) return true; /* purecov: inspected */
   (*returning_result)->set_fields(returning_fields);
-  if (into != nullptr) (*returning_result)->set_into(into);
+  if (into != nullptr) {
+    (*returning_result)->set_into(into);
+    // INTO v1, v2 assigns positionally, so the counts must agree (same rule and
+    // error as SELECT ... INTO).
+    if ((*returning_result)->into_scalar() &&
+        (*returning_result)->into_scalar_count() !=
+            CountVisibleFields(*returning_fields)) {
+      my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
+      return true;
+    }
+  }
   return false;
 }
 
+void Query_result_returning::set_into(PT_returning_into *into) {
+  m_into = into->json_var;
+  m_into_vars =
+      into->scalar_vars != nullptr ? &into->scalar_vars->value : nullptr;
+}
+
+void Query_result_returning::cleanup() {
+  Query_result_send::cleanup();
+  m_into_rows = 0;
+  m_into_array.reset();
+}
+
 bool Query_result_returning::send_metadata(THD *thd) {
-  // In the INTO-JSON case there is no client result set: rows are captured into
-  // a variable and the terminator is a plain OK. Suppress metadata entirely.
-  if (into_json()) return false;
+  // In the INTO cases there is no client result set: rows are captured into
+  // variables and the terminator is a plain OK. Suppress metadata entirely.
+  if (has_into()) return false;
   return send_result_set_metadata(thd, *m_fields,
                                   Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF);
 }
 
 bool Query_result_returning::send_count_eof(THD *thd, longlong row_count) {
+  if (into_scalar()) {
+    // Same contract as SELECT ... INTO v1, v2: no row is a NOT FOUND warning
+    // (it triggers a CONTINUE/EXIT HANDLER FOR NOT FOUND); the variables keep
+    // their previous values.
+    const bool no_row = m_into_rows == 0;
+    m_into_rows = 0;
+    if (no_row)
+      push_warning(thd, Sql_condition::SL_WARNING, ER_SP_FETCH_NO_DATA,
+                   ER_THD(thd, ER_SP_FETCH_NO_DATA));
+    if (thd->is_error()) return true;
+    my_ok(thd, row_count);
+    return false;
+  }
   if (into_json()) {
     if (assign_into(thd)) return true;
     my_ok(thd, row_count);
@@ -151,7 +188,36 @@ static bool item_to_json_dom(THD *, Item *item, bool target_is_text,
   return *out == nullptr;
 }
 
+bool Query_result_returning::assign_scalars(THD *thd) {
+  // Mirrors Query_dumpvar::send_data: one row only, columns assigned in order
+  // to SP-local variables or @user_vars.
+  if (m_into_rows++ > 0) {
+    my_error(ER_TOO_MANY_ROWS, MYF(0));
+    return true;
+  }
+  List_iterator_fast<PT_select_var> var_li(*m_into_vars);
+  auto it = VisibleFields(*m_fields).begin();
+  const auto end = VisibleFields(*m_fields).end();
+  PT_select_var *mv;
+  while ((mv = var_li++) && it != end) {
+    Item *item = *it++;
+    if (mv->is_local()) {
+      if (thd->sp_runtime_ctx->set_variable(thd, false, mv->get_offset(),
+                                            &item))
+        return true;
+    } else {
+      Item_func_set_user_var *suv =
+          new (thd->mem_root) Item_func_set_user_var(mv->name, item);
+      if (suv == nullptr || suv->fix_fields(thd, nullptr)) return true;
+      suv->save_item_result(item);
+      if (suv->update()) return true;
+    }
+  }
+  return thd->is_error();
+}
+
 bool Query_result_returning::append_row(THD *thd) {
+  if (into_scalar()) return assign_scalars(thd);
   const bool target_is_text = !m_into->is_local();
   if (m_into_array == nullptr) {
     m_into_array = create_dom_ptr<Json_array>();

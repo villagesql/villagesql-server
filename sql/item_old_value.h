@@ -75,6 +75,15 @@ class Item_old_field final : public Item_field {
   bool get_time(MYSQL_TIME *ltime) override;
   bool get_timeval(my_timeval *tm, int *warnings) override;
   bool is_null() override;
+
+ protected:
+  // Item_field::save_in_field_inner() copies straight from the field's current
+  // buffer (field_conv), bypassing the val_*() overrides above. It is the path
+  // used when the value is stored into another Field, e.g. a stored-procedure
+  // local variable (sp_eval_expr -> save_in_field), so it must read the
+  // pre-update image as well.
+  type_conversion_status save_in_field_inner(Field *to,
+                                             bool no_conversions) override;
 };
 
 #endif  // SQL_ITEM_OLD_VALUE_INCLUDED
