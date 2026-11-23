@@ -539,6 +539,10 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
         if (plugin_vars != nullptr) {
           auto it = std::find_if(plugin_vars->begin(), plugin_vars->end(),
                                  [&full_name](const st_persist_var &v) {
+                                   // Lets a test change the set while this
+                                   // loop walks it; see
+                                   // sys_var_depopulate_persisted_lookup.test.
+                                   DEBUG_SYNC_C("vef_sys_var_persisted_lookup");
                                    return v.key == full_name;
                                  });
           if (it == plugin_vars->end()) continue;

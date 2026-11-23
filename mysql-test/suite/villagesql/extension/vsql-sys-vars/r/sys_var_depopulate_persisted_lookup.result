@@ -1,0 +1,34 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_range_clamp_test;
+INSTALL EXTENSION vsql_config_vars_test;
+# Persist the variables of the other extension: these are the elements
+# UNINSTALL walks
+SET PERSIST vsql_config_vars_test.max_items = 7;
+SET PERSIST vsql_config_vars_test.mode = 'sync';
+SET PERSIST vsql_config_vars_test.label = 'persisted';
+# Record waits on mutexes, to see RESET PERSIST waiting on the walk
+UPDATE performance_schema.setup_instruments SET ENABLED = 'YES'
+  WHERE NAME LIKE 'wait/synch/mutex/%/m_LOCK_persist_variables';
+UPDATE performance_schema.setup_consumers SET ENABLED = 'YES'
+  WHERE NAME = 'events_waits_current';
+# con_uninstall: park UNINSTALL on the first element it compares
+SET DEBUG_SYNC = 'vef_sys_var_persisted_lookup SIGNAL in_lookup WAIT_FOR continue_uninstall';
+UNINSTALL EXTENSION vsql_range_clamp_test;
+SET DEBUG_SYNC = 'now WAIT_FOR in_lookup';
+# con_persist: empty the set, freeing the element UNINSTALL is on
+RESET PERSIST;
+# Wait until RESET PERSIST has finished or waits on the mutex
+# Let UNINSTALL go on to the next element
+SET DEBUG_SYNC = 'now SIGNAL continue_uninstall';
+SET DEBUG_SYNC = 'RESET';
+# vsql_range_clamp_test is gone; RESET PERSIST left the other
+# extension's current values as they were
+SELECT @@global.vsql_range_clamp_test.label;
+ERROR HY000: Unknown system variable 'vsql_range_clamp_test.label'
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+7
+UNINSTALL EXTENSION vsql_config_vars_test;
+SET DEBUG_SYNC = 'RESET';
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
