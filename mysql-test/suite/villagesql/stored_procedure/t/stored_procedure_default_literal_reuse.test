@@ -6,6 +6,7 @@
 # CALL and EXECUTE below must return the same value as the first one.
 
 INSTALL EXTENSION vsql_complex;
+INSTALL EXTENSION vsql_tarray_test;
 
 --echo #
 --echo # Stored procedure, COMPLEX variable with a DEFAULT literal.
@@ -43,6 +44,25 @@ CALL p_a();
 CALL p_a();
 
 --echo #
+--echo # Stored procedure, parameterized TARRAY variables with DEFAULT literals,
+--echo # one of them modified.
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_t()
+BEGIN
+  DECLARE a vsql_tarray_test.TARRAY('type=int16,max_size=16') DEFAULT '[1,2]';
+  DECLARE e vsql_tarray_test.TARRAY('type=int16,max_size=16') DEFAULT '[3]';
+  SET a = vsql_tarray_test.tarray_concat(a, e);
+  SELECT a, vsql_tarray_test.tarray_dim(a) AS len;
+END//
+delimiter ;//
+CALL p_t();
+CALL p_t();
+CALL p_t();
+CALL p_t();
+
+--echo #
 --echo # Stored function, called once per row.
 --echo #
 
@@ -77,5 +97,7 @@ DROP TABLE t_c;
 
 DROP PROCEDURE p_c;
 DROP PROCEDURE p_a;
+DROP PROCEDURE p_t;
 DROP FUNCTION f_c;
+UNINSTALL EXTENSION vsql_tarray_test;
 UNINSTALL EXTENSION vsql_complex;
