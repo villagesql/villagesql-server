@@ -1,0 +1,47 @@
+# Test stored procedures and functions whose parameters and return type use a
+# parameterized custom type (TVECTOR(N)). The routine is loaded from the data
+# dictionary on first use and again after a restart, so the stored type must
+# keep its parameters.
+
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE FUNCTION f1(x TVECTOR(3)) RETURNS TVECTOR(3) DETERMINISTIC RETURN x;
+
+delimiter //;
+CREATE PROCEDURE p1(IN x TVECTOR(3), OUT y TVECTOR(3))
+BEGIN
+  SET y = x;
+END//
+delimiter ;//
+
+SELECT f1('[1,2,3]');
+CALL p1('[4,5,6]', @out);
+SELECT @out;
+
+SELECT SPECIFIC_NAME, PARAMETER_NAME, DTD_IDENTIFIER
+  FROM information_schema.parameters
+  WHERE SPECIFIC_SCHEMA = 'test'
+  ORDER BY SPECIFIC_NAME, ORDINAL_POSITION;
+
+SELECT DTD_IDENTIFIER
+  FROM information_schema.routines
+  WHERE ROUTINE_NAME = 'f1';
+
+# A value of the wrong dimension is rejected by the parameter type.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+SELECT f1('[1,2]');
+
+# Restart to clear the routine cache, so the routines load from the DD again.
+--source include/restart_mysqld.inc
+
+SELECT f1('[7,8,9]');
+CALL p1('[10,11,12]', @out);
+SELECT @out;
+
+DROP FUNCTION f1;
+DROP PROCEDURE p1;
+
+# Clear user variables so TypeContext refs are released before UNINSTALL.
+SET @out = NULL;
+
+--source include/villagesql/uninstall_tvector_extension.inc

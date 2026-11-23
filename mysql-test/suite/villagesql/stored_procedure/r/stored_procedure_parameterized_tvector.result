@@ -1,0 +1,39 @@
+CREATE FUNCTION f1(x TVECTOR(3)) RETURNS TVECTOR(3) DETERMINISTIC RETURN x;
+CREATE PROCEDURE p1(IN x TVECTOR(3), OUT y TVECTOR(3))
+BEGIN
+SET y = x;
+END//
+SELECT f1('[1,2,3]');
+f1('[1,2,3]')
+[1,2,3]
+CALL p1('[4,5,6]', @out);
+SELECT @out;
+@out
+[4,5,6]
+SELECT SPECIFIC_NAME, PARAMETER_NAME, DTD_IDENTIFIER
+FROM information_schema.parameters
+WHERE SPECIFIC_SCHEMA = 'test'
+  ORDER BY SPECIFIC_NAME, ORDINAL_POSITION;
+SPECIFIC_NAME	PARAMETER_NAME	DTD_IDENTIFIER
+f1	NULL	vsql_tvector.TVECTOR(3)
+f1	x	vsql_tvector.TVECTOR(3)
+p1	x	vsql_tvector.TVECTOR(3)
+p1	y	vsql_tvector.TVECTOR(3)
+SELECT DTD_IDENTIFIER
+FROM information_schema.routines
+WHERE ROUTINE_NAME = 'f1';
+DTD_IDENTIFIER
+vsql_tvector.TVECTOR(3)
+SELECT f1('[1,2]');
+ERROR HY000: Incorrect TVECTOR value: '[1,2]' for column 'x' at row 1
+# restart
+SELECT f1('[7,8,9]');
+f1('[7,8,9]')
+[7,8,9]
+CALL p1('[10,11,12]', @out);
+SELECT @out;
+@out
+[10,11,12]
+DROP FUNCTION f1;
+DROP PROCEDURE p1;
+SET @out = NULL;
