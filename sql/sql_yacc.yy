@@ -13665,9 +13665,16 @@ opt_returning_clause:
 //                     SELECT ... INTO. Requires exactly one returned row (zero
 //                     rows raises the NOT FOUND warning, more than one raises
 //                     ER_TOO_MANY_ROWS).
+//   INTO TABLE <tbl>  inserts every returned row into an existing table
+//                     (typically a TEMPORARY table), columns assigned
+//                     positionally; the column counts must match.
 opt_returning_into:
           %empty { $$= nullptr; }
         | INTO JSON_SYM select_var_ident
+          {
+            $$= NEW_PTN PT_returning_into(@$, $3);
+          }
+        | INTO TABLE_SYM table_ident
           {
             $$= NEW_PTN PT_returning_into(@$, $3);
           }

@@ -38,6 +38,7 @@ class PT_returning_into;
 class PT_select_var;
 class Query_block;
 class THD;
+class Table_ref;
 
 // A Query_result_send that owns RETURNING's send sequencing. The DML paths only
 // ever talk to this object through the three Query_result virtuals plus the
@@ -50,23 +51,35 @@ class THD;
 // is assigned to the target variable. The DML loops call the identical helpers
 // in both modes, so the send-vs-capture choice lives here rather than in each
 // delete/update/insert loop.
+//
+// RETURNING ... INTO TABLE <tbl> takes the same capture path: each row is
+// inserted into <tbl> (opened and locked with the statement, see
+// PT_returning_into) through the server's normal fill_record() +
+// write_record() path, inside the statement and its transaction.
 class Query_result_returning final : public Query_result_send {
  public:
   void set_fields(mem_root_deque<Item *> *fields) { m_fields = fields; }
   const mem_root_deque<Item *> &fields() const { return *m_fields; }
 
-  // Redirect this RETURNING into variables rather than sending a result set to
-  // the client: either one variable receiving a JSON array of row objects
-  // (INTO JSON), or a list of scalar variables receiving the single returned
-  // row positionally (INTO v1, v2).
-  void set_into(PT_returning_into *into);
+  // Redirect this RETURNING into variables or a table rather than sending a
+  // result set to the client: either one variable receiving a JSON array of
+  // row objects (INTO JSON), a list of scalar variables receiving the single
+  // returned row positionally (INTO v1, v2), or a table receiving every row
+  // positionally (INTO TABLE t).
+  void set_into(PT_returning_into *into, Query_block *query_block);
   bool into_json() const { return m_into != nullptr; }
   bool into_scalar() const { return m_into_vars != nullptr; }
-  bool has_into() const { return into_json() || into_scalar(); }
+  bool into_table() const { return m_into_table_ref != nullptr; }
+  bool has_into() const { return into_json() || into_scalar() || into_table(); }
   // Number of target variables for INTO v1, v2 (0 for the other modes).
   uint into_scalar_count() const {
     return m_into_vars != nullptr ? m_into_vars->elements : 0;
   }
+  // INTO TABLE: validate the opened target table against the RETURNING list
+  // (base or temporary table, same column count, not a table the statement
+  // itself modifies, no triggers, INSERT privilege). Done once per execution;
+  // returns true (error reported) when the target is not usable.
+  bool check_into_table(THD *thd);
   void cleanup() override;
 
   bool send_metadata(THD *thd);
@@ -106,6 +119,10 @@ class Query_result_returning final : public Query_result_send {
   // Assign m_into_array to the INTO target variable (SP-local or @user_var).
   bool assign_into(THD *thd);
 
+  // INTO TABLE: insert the row currently in the record buffer into the target
+  // table, columns assigned positionally.
+  bool write_into_table(THD *thd);
+
   mem_root_deque<Item *> *m_fields{nullptr};
 
   // RETURNING ... INTO JSON target, or nullptr.
@@ -114,6 +131,14 @@ class Query_result_returning final : public Query_result_send {
   List<PT_select_var> *m_into_vars{nullptr};
   // Rows seen by the scalar INTO (more than one is an error).
   ulonglong m_into_rows{0};
+  // RETURNING ... INTO TABLE target (opened with the statement), or nullptr.
+  Table_ref *m_into_table_ref{nullptr};
+  // Query block of the data-change statement; its leaf tables are the tables
+  // the statement modifies or reads, which the INTO table must not be.
+  Query_block *m_query_block{nullptr};
+  // True once check_into_table() has validated the target in the current
+  // execution; reset when the statement terminates (send_count_eof/cleanup).
+  bool m_into_table_checked{false};
   // Rows accumulated for the INTO-JSON case, allocated on first use. Remains
   // null (and is materialized as an empty array on assignment) when no row
   // matched.
@@ -122,8 +147,8 @@ class Query_result_returning final : public Query_result_send {
 
 // Resolve the RETURNING select-list of query_block and allocate a
 // Query_result_returning bound to those fields. When into is non-null, the
-// result captures rows into that variable as a JSON array instead of sending
-// them to the client.
+// result captures rows into that target (JSON variable, scalar variables or
+// table) instead of sending them to the client.
 bool prepare_returning_fields(THD *thd, Query_block *query_block,
                               mem_root_deque<Item *> *returning_fields,
                               Query_result_returning **returning_result,

@@ -31,6 +31,7 @@
 #include "mysqld_error.h"
 #include "sql-common/json_dom.h"
 #include "sql/auth/auth_acls.h"
+#include "sql/auth/auth_common.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
 #include "sql/item_json_func.h"
@@ -41,7 +42,9 @@
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
+#include "sql/sql_insert.h"
 #include "sql/sql_lex.h"
+#include "sql/table.h"
 
 bool prepare_returning_fields(THD *thd, Query_block *query_block,
                               mem_root_deque<Item *> *returning_fields,
@@ -75,7 +78,7 @@ bool prepare_returning_fields(THD *thd, Query_block *query_block,
   if (*returning_result == nullptr) return true; /* purecov: inspected */
   (*returning_result)->set_fields(returning_fields);
   if (into != nullptr) {
-    (*returning_result)->set_into(into);
+    (*returning_result)->set_into(into, query_block);
     // INTO v1, v2 assigns positionally, so the counts must agree (same rule and
     // error as SELECT ... INTO).
     if ((*returning_result)->into_scalar() &&
@@ -84,20 +87,113 @@ bool prepare_returning_fields(THD *thd, Query_block *query_block,
       my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
       return true;
     }
+    // INTO TABLE: the target was opened with the statement's tables; report
+    // an unusable target at prepare time rather than at the first row.
+    if ((*returning_result)->into_table() &&
+        (*returning_result)->check_into_table(thd))
+      return true;
   }
   return false;
 }
 
-void Query_result_returning::set_into(PT_returning_into *into) {
+void Query_result_returning::set_into(PT_returning_into *into,
+                                      Query_block *query_block) {
   m_into = into->json_var;
   m_into_vars =
       into->scalar_vars != nullptr ? &into->scalar_vars->value : nullptr;
+  m_into_table_ref = into->table_ref;
+  m_query_block = query_block;
 }
 
 void Query_result_returning::cleanup() {
   Query_result_send::cleanup();
   m_into_rows = 0;
   m_into_array.reset();
+  m_into_table_checked = false;
+}
+
+bool Query_result_returning::check_into_table(THD *thd) {
+  if (m_into_table_checked) return false;
+  Table_ref *const tr = m_into_table_ref;
+  TABLE *const table = tr->table;
+  if (table == nullptr) {
+    // open_tables() reports a missing table or a view (required_type is
+    // BASE_TABLE); guard against any other unopened reference.
+    my_error(ER_WRONG_OBJECT, MYF(0), tr->db, tr->table_name, "BASE TABLE");
+    return true;
+  }
+
+  // The INTO table must not be one of the tables the statement modifies or
+  // reads: the rows would be written to the table being scanned.
+  for (Table_ref *leaf = m_query_block != nullptr ? m_query_block->leaf_tables
+                                                  : nullptr;
+       leaf != nullptr; leaf = leaf->next_leaf) {
+    if (leaf->table != nullptr && leaf->table->s == table->s) {
+      my_error(ER_UPDATE_TABLE_USED, MYF(0), tr->table_name);
+      return true;
+    }
+  }
+
+  // Triggers on the target are not supported: they were not pre-locked with
+  // the statement, and firing INSERT triggers from inside a DELETE/UPDATE is
+  // not a defined behaviour.
+  if (table->triggers != nullptr) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "RETURNING ... INTO TABLE into a table with triggers");
+    return true;
+  }
+
+  // Columns are assigned positionally to every column of the target except
+  // system-hidden ones (e.g. functional index columns), as INSERT without a
+  // column list does.
+  uint target_columns = 0;
+  for (Field **field = table->field; *field != nullptr; ++field) {
+    if (!(*field)->is_hidden_by_system()) ++target_columns;
+  }
+  if (target_columns != CountVisibleFields(*m_fields)) {
+    my_error(ER_WRONG_VALUE_COUNT, MYF(0));
+    return true;
+  }
+
+  // INSERT privilege on the target (temporary tables pass, as for INSERT).
+  if (check_table_access(thd, INSERT_ACL, tr, false, 1, false)) return true;
+
+  m_into_table_checked = true;
+  return false;
+}
+
+bool Query_result_returning::write_into_table(THD *thd) {
+  if (check_into_table(thd)) return true;
+  TABLE *const table = m_into_table_ref->table;
+
+  // Every column is written (positional, full-row), so read/write all.
+  table->use_all_columns();
+  restore_record(table, s->default_values);
+  table->next_number_field = table->found_next_number_field;
+
+  // Same row-write path as INSERT ... SELECT (Query_result_insert::send_data):
+  // store the values with truncation warnings, enforce NOT NULL and CHECK
+  // constraints, then write_record() for the handler write, error reporting
+  // and auto-increment bookkeeping. The target has no triggers
+  // (check_into_table), so no BEFORE trigger runs. Duplicates are errors (no
+  // REPLACE/ON DUPLICATE semantics; a statement-level IGNORE downgrades them
+  // as for any write).
+  const enum_check_fields save_check_for_truncated_fields =
+      thd->check_for_truncated_fields;
+  thd->check_for_truncated_fields = CHECK_FIELD_WARN;
+  bool error = fill_record_n_invoke_before_triggers(
+      thd, table->field, *m_fields, table, TRG_EVENT_INSERT, table->s->fields);
+  thd->check_for_truncated_fields = save_check_for_truncated_fields;
+  if (!error && !thd->is_error() &&
+      !invoke_table_check_constraints(thd, table) && !thd->is_error()) {
+    COPY_INFO info(COPY_INFO::INSERT_OPERATION, nullptr,
+                   /*manage_defaults=*/false, DUP_ERROR);
+    error = write_record(thd, table, &info, nullptr);
+  }
+  table->next_number_field = nullptr;
+  table->autoinc_field_has_explicit_non_null_value = false;
+  table->file->ha_release_auto_increment();
+  return error || thd->is_error();
 }
 
 bool Query_result_returning::send_metadata(THD *thd) {
@@ -124,6 +220,16 @@ bool Query_result_returning::send_count_eof(THD *thd, longlong row_count) {
   }
   if (into_json()) {
     if (assign_into(thd)) return true;
+    my_ok(thd, row_count);
+    return false;
+  }
+  if (into_table()) {
+    // Validate even when no row was returned, so a bad target is reported
+    // consistently; then end the statement with a plain OK like the other
+    // INTO forms.
+    const bool error = check_into_table(thd);
+    m_into_table_checked = false;
+    if (error || thd->is_error()) return true;
     my_ok(thd, row_count);
     return false;
   }
@@ -218,6 +324,7 @@ bool Query_result_returning::assign_scalars(THD *thd) {
 
 bool Query_result_returning::append_row(THD *thd) {
   if (into_scalar()) return assign_scalars(thd);
+  if (into_table()) return write_into_table(thd);
   const bool target_is_text = !m_into->is_local();
   if (m_into_array == nullptr) {
     m_into_array = create_dom_ptr<Json_array>();
