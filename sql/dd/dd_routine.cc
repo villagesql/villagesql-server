@@ -63,21 +63,25 @@
 #include "sql_string.h"
 #include "typelib.h"
 
-#include "villagesql/schema/systable/helpers.h"
+#include "villagesql/types/util.h"
 
 struct CHARSET_INFO;
 
 namespace dd {
 
-// VillageSQL: returns the fully qualified custom type name if the field has a
-// custom type context, otherwise falls back to the standard sql type string.
+// VillageSQL: returns the fully qualified custom type name, including any type
+// parameters (e.g. "ext.TYPE(3)"), if the field has a custom type context,
+// otherwise falls back to the standard sql type string. When the routine is
+// loaded from the data dictionary, this string is parsed as SQL again, so it
+// must keep the parameters.
 static dd::String_type get_param_type_utf8(TABLE *table,
                                            const Create_field &field) {
-  if (field.custom_type_context != nullptr)
-    return dd::String_type(villagesql::make_qualified_base_name(
-                               field.custom_type_context->extension_name(),
-                               field.custom_type_context->type_name())
-                               .c_str());
+  if (field.custom_type_context != nullptr) {
+    String type;
+    type.set_charset(system_charset_info);
+    villagesql::AppendFullyQualifiedName(*field.custom_type_context, &type);
+    return dd::String_type(type.ptr(), type.length());
+  }
   return get_sql_type_by_create_field(table, field);
 }
 

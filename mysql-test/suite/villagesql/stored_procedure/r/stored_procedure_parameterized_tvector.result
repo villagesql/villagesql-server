@@ -1,0 +1,84 @@
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[4,5,6]');
+CREATE FUNCTION f1(x TVECTOR(3)) RETURNS TVECTOR(3) DETERMINISTIC RETURN x;
+CREATE PROCEDURE p1(IN x TVECTOR(3), OUT y TVECTOR(3))
+BEGIN
+SET y = x;
+END//
+CREATE PROCEDURE p_local()
+BEGIN
+DECLARE y TVECTOR(3) DEFAULT '[7,8,9]';
+SELECT y;
+END//
+# The function
+SELECT f1('[1,2,3]');
+f1('[1,2,3]')
+[1,2,3]
+SELECT id, f1(v) FROM t ORDER BY id;
+id	f1(v)
+1	[1,2,3]
+2	[4,5,6]
+SELECT id FROM t WHERE f1(v) = v ORDER BY id;
+id
+1
+2
+SELECT f1('[1,2]');
+ERROR HY000: Incorrect TVECTOR value: '[1,2]' for column 'x' at row 1
+# The function result stored into a column
+CREATE TABLE t3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t3 SELECT id, f1(v) FROM t;
+SELECT id, v FROM t3 ORDER BY id;
+id	v
+1	[1,2,3]
+2	[4,5,6]
+CREATE TABLE t4 (id INT PRIMARY KEY, v TVECTOR(4));
+INSERT INTO t4 SELECT id, f1(v) FROM t;
+ERROR HY000: Incorrect TVECTOR value: cannot implicitly cast string expression. Use explicit conversion for column 'v' at row 1
+# The procedure
+CALL p1('[4,5,6]', @out);
+SELECT @out;
+@out
+[4,5,6]
+# A local variable
+CALL p_local();
+y
+[7,8,9]
+# The stored definitions
+SHOW CREATE FUNCTION f1;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `f1`(`x` vsql_tvector.TVECTOR(3)) RETURNS vsql_tvector.TVECTOR(3)
+    DETERMINISTIC
+RETURN x	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SHOW CREATE PROCEDURE p1;
+Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
+p1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(IN `x` vsql_tvector.TVECTOR(3), OUT `y` vsql_tvector.TVECTOR(3))
+BEGIN
+SET y = x;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SELECT SPECIFIC_NAME, PARAMETER_NAME, DTD_IDENTIFIER
+FROM information_schema.parameters
+WHERE SPECIFIC_SCHEMA = 'test'
+  ORDER BY SPECIFIC_NAME, ORDINAL_POSITION;
+SPECIFIC_NAME	PARAMETER_NAME	DTD_IDENTIFIER
+f1	NULL	vsql_tvector.TVECTOR(3)
+f1	x	vsql_tvector.TVECTOR(3)
+p1	x	vsql_tvector.TVECTOR(3)
+p1	y	vsql_tvector.TVECTOR(3)
+SELECT DTD_IDENTIFIER
+FROM information_schema.routines
+WHERE ROUTINE_NAME = 'f1';
+DTD_IDENTIFIER
+vsql_tvector.TVECTOR(3)
+# restart
+SELECT f1('[7,8,9]');
+f1('[7,8,9]')
+[7,8,9]
+CALL p1('[10,11,12]', @out);
+SELECT @out;
+@out
+[10,11,12]
+DROP FUNCTION f1;
+DROP PROCEDURE p1;
+DROP PROCEDURE p_local;
+DROP TABLE t, t3, t4;
+SET @out = NULL;
