@@ -286,8 +286,8 @@ TEST_F(TypeParamsCacheRawTest, UnsortedAndMapInputReachTheSameEntry) {
   const CacheTestParams &unsorted = Get(Raw(keys_unsorted, values_unsorted, 2));
   const std::map<std::string, std::string> as_map = {{"type", "int32"},
                                                      {"max_size", "15"}};
-  const CacheTestParams &from_map = cache_.get(
-      as_map, [this](const std::map<std::string, std::string> &) {
+  const CacheTestParams &from_map =
+      cache_.get(as_map, [this](const std::map<std::string, std::string> &) {
         return CacheTestParams{++parses_};
       });
   EXPECT_EQ(&sorted, &unsorted);
