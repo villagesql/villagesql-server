@@ -1,0 +1,49 @@
+# A COMPLEX value stored into a column of a non-custom type needs an explicit
+# conversion, whether it is copied from a column or assigned through an
+# expression such as a subquery or a VDF result. A NULL is stored as NULL.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t VALUES (1, '(1,2)'), (2, '(3,4)');
+CREATE TABLE tb (id INT PRIMARY KEY, b VARBINARY(64));
+INSERT INTO tb VALUES (1, 'x');
+
+--echo # A column
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE tb, t SET tb.b = t.c WHERE tb.id = 1 AND t.id = 1;
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO tb SELECT 2, c FROM t;
+
+--echo # A subquery
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE tb SET b = (SELECT c FROM t WHERE id = 1);
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO tb VALUES (2, (SELECT c FROM t WHERE id = 1));
+
+--echo # A VDF result
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE tb SET b = COMPLEX::from_string('(5,6)');
+
+--echo # Nothing was stored
+SELECT id, b FROM tb ORDER BY id;
+
+--echo # IGNORE does not make it a warning
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT IGNORE INTO tb VALUES (2, (SELECT c FROM t WHERE id = 1));
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE IGNORE tb SET b = (SELECT c FROM t WHERE id = 1);
+SELECT id, b FROM tb ORDER BY id;
+
+--echo # A NULL COMPLEX value is stored as NULL
+UPDATE tb SET b = (SELECT c FROM t WHERE id = 99);
+INSERT INTO tb VALUES (3, (SELECT c FROM t WHERE id = 99));
+SELECT id, b FROM tb ORDER BY id;
+
+--echo # A subquery that fails reports only its own error
+--error ER_SUBQUERY_NO_1_ROW
+UPDATE tb SET b = (SELECT c FROM t);
+SHOW WARNINGS;
+
+DROP TABLE t, tb;
+--source include/villagesql/uninstall_complex_extension.inc

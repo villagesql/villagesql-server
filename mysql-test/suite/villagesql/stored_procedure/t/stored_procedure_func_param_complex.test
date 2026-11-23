@@ -1,0 +1,72 @@
+# A stored function with a COMPLEX parameter, called with a COMPLEX value:
+# a column, a VDF result and a user variable holding a COMPLEX value. A string
+# literal argument is covered by stored_procedure_restart_complex. The
+# function's COMPLEX result compares with a COMPLEX column and with a string
+# literal, passes to another stored function or a VDF, and stores into a COMPLEX
+# column. A value of another custom type, or a COMPLEX value for a parameter of
+# a non-custom type, is rejected.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t VALUES (1, '(1,2)'), (2, '(3,4)');
+
+delimiter //;
+CREATE FUNCTION f(x COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+  RETURN x;
+END//
+delimiter ;//
+
+--echo # A column
+SELECT id, f(c) FROM t ORDER BY id;
+SELECT id FROM t WHERE f(c) = c ORDER BY id;
+
+--echo # A VDF result
+SELECT f(COMPLEX::from_string('(5,6)'));
+
+--echo # A user variable holding a COMPLEX value
+SELECT c INTO @v FROM t WHERE id = 2;
+SELECT f(@v);
+
+--echo # A stored function result
+SELECT id, f(f(c)) FROM t ORDER BY id;
+SELECT id FROM t WHERE f(c) = '(1,2)';
+
+--echo # A VDF over a stored function result
+SELECT id, vsql_complex.complex_conjugate(f(c)) FROM t ORDER BY id;
+
+--echo # A stored function calling another with its COMPLEX parameter
+delimiter //;
+CREATE FUNCTION h(x COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+  RETURN f(x);
+END//
+delimiter ;//
+SELECT id, h(c) FROM t ORDER BY id;
+
+--echo # A stored function result stored into a COMPLEX column
+CREATE TABLE t2 (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t2 SELECT id, f(c) FROM t;
+SELECT id, c FROM t2 ORDER BY id;
+DROP TABLE t2;
+
+--echo # A value of another custom type
+CREATE TABLE t3 (c2 COMPLEX2);
+INSERT INTO t3 VALUES ('(1,2)');
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT f(c2) FROM t3;
+DROP TABLE t3;
+
+--echo # A COMPLEX value for a parameter of a non-custom type
+CREATE FUNCTION g(x VARCHAR(20)) RETURNS VARCHAR(20) DETERMINISTIC RETURN x;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT g(c) FROM t;
+
+SET @v = NULL;
+DROP FUNCTION h;
+DROP FUNCTION f;
+DROP FUNCTION g;
+DROP TABLE t;
+
+--source include/villagesql/uninstall_complex_extension.inc

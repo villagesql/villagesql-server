@@ -1,0 +1,79 @@
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t VALUES (1, '(1,2)'), (2, '(3,4)');
+CREATE TABLE t3 (id INT PRIMARY KEY, c2 COMPLEX2);
+INSERT INTO t3 VALUES (1, '(7,8)');
+CREATE PROCEDURE p_in(IN x COMPLEX)
+BEGIN
+SELECT x;
+END//
+CREATE PROCEDURE p_out(IN x COMPLEX, OUT y COMPLEX)
+BEGIN
+SET y = x;
+END//
+CREATE PROCEDURE p_inout(INOUT x COMPLEX)
+BEGIN
+SET x = vsql_complex.complex_conjugate(x);
+END//
+CREATE PROCEDURE p_outer(IN x COMPLEX)
+BEGIN
+CALL p_in(x);
+END//
+CREATE PROCEDURE p_str(IN x VARCHAR(20))
+BEGIN
+SELECT x;
+END//
+CREATE PROCEDURE p_local(IN x COMPLEX)
+BEGIN
+DECLARE s VARCHAR(20);
+SET s = x;
+SELECT s;
+END//
+# A column
+CALL p_in((SELECT c FROM t WHERE id = 1));
+x
+(1,2)
+# A VDF result
+CALL p_in(COMPLEX::from_string('(5,6)'));
+x
+(5,6)
+# A user variable holding a COMPLEX value
+SELECT c INTO @v FROM t WHERE id = 2;
+CALL p_in(@v);
+x
+(3,4)
+# OUT and INOUT with COMPLEX values
+CALL p_out((SELECT c FROM t WHERE id = 1), @o);
+SELECT @o;
+@o
+(1,2)
+SELECT id FROM t WHERE c = @o;
+id
+1
+CALL p_inout(@v);
+SELECT @v;
+@v
+(3,-4)
+# A procedure passing its COMPLEX parameter to another
+CALL p_outer((SELECT c FROM t WHERE id = 2));
+x
+(3,4)
+# A value of another custom type
+CALL p_in((SELECT c2 FROM t3 WHERE id = 1));
+ERROR HY000: Cannot implicitly cast from vsql_complex.COMPLEX2 to vsql_complex.COMPLEX for column 'x' at row 2
+SELECT c2 INTO @v2 FROM t3 WHERE id = 1;
+CALL p_in(@v2);
+ERROR HY000: Incorrect COMPLEX value: cannot implicitly cast string expression. Use explicit conversion for column 'x' at row 1
+# A COMPLEX value for a parameter of a non-custom type
+CALL p_str((SELECT c FROM t WHERE id = 1));
+ERROR HY000: Type mismatch. Use explicit conversion of COMPLEX value '(1,2)' for column 'x' at row 2
+# A COMPLEX value for a local variable of a non-custom type
+CALL p_local((SELECT c FROM t WHERE id = 1));
+ERROR HY000: Type mismatch. Use explicit conversion of COMPLEX value '(1,2)' for column 's' at row 1
+SET @v = NULL, @v2 = NULL, @o = NULL;
+DROP PROCEDURE p_in;
+DROP PROCEDURE p_out;
+DROP PROCEDURE p_inout;
+DROP PROCEDURE p_outer;
+DROP PROCEDURE p_str;
+DROP PROCEDURE p_local;
+DROP TABLE t, t3;

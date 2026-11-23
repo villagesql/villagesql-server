@@ -1,0 +1,69 @@
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t VALUES (1, '(1,2)'), (2, '(3,4)');
+CREATE FUNCTION f(x COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+RETURN x;
+END//
+# A column
+SELECT id, f(c) FROM t ORDER BY id;
+id	f(c)
+1	(1,2)
+2	(3,4)
+SELECT id FROM t WHERE f(c) = c ORDER BY id;
+id
+1
+2
+# A VDF result
+SELECT f(COMPLEX::from_string('(5,6)'));
+f(COMPLEX::from_string('(5,6)'))
+(5,6)
+# A user variable holding a COMPLEX value
+SELECT c INTO @v FROM t WHERE id = 2;
+SELECT f(@v);
+f(@v)
+(3,4)
+# A stored function result
+SELECT id, f(f(c)) FROM t ORDER BY id;
+id	f(f(c))
+1	(1,2)
+2	(3,4)
+SELECT id FROM t WHERE f(c) = '(1,2)';
+id
+1
+# A VDF over a stored function result
+SELECT id, vsql_complex.complex_conjugate(f(c)) FROM t ORDER BY id;
+id	vsql_complex.complex_conjugate(f(c))
+1	(1,-2)
+2	(3,-4)
+# A stored function calling another with its COMPLEX parameter
+CREATE FUNCTION h(x COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+RETURN f(x);
+END//
+SELECT id, h(c) FROM t ORDER BY id;
+id	h(c)
+1	(1,2)
+2	(3,4)
+# A stored function result stored into a COMPLEX column
+CREATE TABLE t2 (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO t2 SELECT id, f(c) FROM t;
+SELECT id, c FROM t2 ORDER BY id;
+id	c
+1	(1,2)
+2	(3,4)
+DROP TABLE t2;
+# A value of another custom type
+CREATE TABLE t3 (c2 COMPLEX2);
+INSERT INTO t3 VALUES ('(1,2)');
+SELECT f(c2) FROM t3;
+ERROR HY000: Cannot implicitly cast from vsql_complex.COMPLEX2 to vsql_complex.COMPLEX for column 'x' at row 1
+DROP TABLE t3;
+# A COMPLEX value for a parameter of a non-custom type
+CREATE FUNCTION g(x VARCHAR(20)) RETURNS VARCHAR(20) DETERMINISTIC RETURN x;
+SELECT g(c) FROM t;
+ERROR HY000: Type mismatch. Use explicit conversion of COMPLEX value '(1,2)' for column 'x' at row 1
+SET @v = NULL;
+DROP FUNCTION h;
+DROP FUNCTION f;
+DROP FUNCTION g;
+DROP TABLE t;
