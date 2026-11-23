@@ -1,9 +1,13 @@
 # Test stored procedures and functions whose parameters and return type use a
 # parameterized custom type (TVECTOR(N)). The routine is loaded from the data
 # dictionary on first use and again after a restart, so the stored type must
-# keep its parameters.
+# keep its parameters. A local variable of the type is a control: the routine
+# body is stored as written.
 
 --source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t VALUES (1, '[1,2,3]'), (2, '[4,5,6]');
 
 CREATE FUNCTION f1(x TVECTOR(3)) RETURNS TVECTOR(3) DETERMINISTIC RETURN x;
 
@@ -12,11 +16,41 @@ CREATE PROCEDURE p1(IN x TVECTOR(3), OUT y TVECTOR(3))
 BEGIN
   SET y = x;
 END//
+CREATE PROCEDURE p_local()
+BEGIN
+  DECLARE y TVECTOR(3) DEFAULT '[7,8,9]';
+  SELECT y;
+END//
 delimiter ;//
 
+--echo # The function
 SELECT f1('[1,2,3]');
+SELECT id, f1(v) FROM t ORDER BY id;
+SELECT id FROM t WHERE f1(v) = v ORDER BY id;
+
+# A value of the wrong dimension is rejected by the parameter type.
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+SELECT f1('[1,2]');
+
+--echo # The function result stored into a column
+CREATE TABLE t3 (id INT PRIMARY KEY, v TVECTOR(3));
+INSERT INTO t3 SELECT id, f1(v) FROM t;
+SELECT id, v FROM t3 ORDER BY id;
+CREATE TABLE t4 (id INT PRIMARY KEY, v TVECTOR(4));
+# TODO(villagesql-general): The error should name TVECTOR(3).
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t4 SELECT id, f1(v) FROM t;
+
+--echo # The procedure
 CALL p1('[4,5,6]', @out);
 SELECT @out;
+
+--echo # A local variable
+CALL p_local();
+
+--echo # The stored definitions
+SHOW CREATE FUNCTION f1;
+SHOW CREATE PROCEDURE p1;
 
 SELECT SPECIFIC_NAME, PARAMETER_NAME, DTD_IDENTIFIER
   FROM information_schema.parameters
@@ -27,10 +61,6 @@ SELECT DTD_IDENTIFIER
   FROM information_schema.routines
   WHERE ROUTINE_NAME = 'f1';
 
-# A value of the wrong dimension is rejected by the parameter type.
---error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
-SELECT f1('[1,2]');
-
 # Restart to clear the routine cache, so the routines load from the DD again.
 --source include/restart_mysqld.inc
 
@@ -40,6 +70,8 @@ SELECT @out;
 
 DROP FUNCTION f1;
 DROP PROCEDURE p1;
+DROP PROCEDURE p_local;
+DROP TABLE t, t3, t4;
 
 # Clear user variables so TypeContext refs are released before UNINSTALL.
 SET @out = NULL;

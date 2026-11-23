@@ -71,8 +71,9 @@ namespace dd {
 
 // VillageSQL: returns the fully qualified custom type name, including any type
 // parameters (e.g. "ext.TYPE(3)"), if the field has a custom type context,
-// otherwise falls back to the standard sql type string. Loading the routine
-// parses this string again, so it must keep the parameters.
+// otherwise falls back to the standard sql type string. When the routine is
+// loaded from the data dictionary, this string is parsed as SQL again, so it
+// must keep the parameters.
 static dd::String_type get_param_type_utf8(TABLE *table,
                                            const Create_field &field) {
   if (field.custom_type_context != nullptr) {

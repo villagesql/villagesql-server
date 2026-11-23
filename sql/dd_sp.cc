@@ -142,8 +142,9 @@ static void prepare_type_string_from_dd_param(THD *thd,
   DBUG_TRACE;
 
   // VillageSQL: at CREATE PROCEDURE/FUNCTION time, get_param_type_utf8() stores
-  // the fully qualified custom type name in data_type_utf8. A qualified name
-  // is an unambiguous signal that this param uses a VillageSQL custom type.
+  // the fully qualified custom type name, with its type parameters, in
+  // data_type_utf8. A qualified name is an unambiguous signal that this param
+  // uses a VillageSQL custom type.
   // Note: sp_params serves a different purpose — it stores the extension/type
   // mapping for runtime TypeContext injection at CALL time. Here we only need
   // the type name string to feed back to the parser, which data_type_utf8
