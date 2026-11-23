@@ -7,10 +7,13 @@ ERROR HY000: Failed to load VEF extension 'vsql_sys_var_rollback_test': Failed t
 # good_int must not be visible — it was rolled back
 SELECT @@global.vsql_sys_var_rollback_test.good_int;
 ERROR HY000: Unknown system variable 'vsql_sys_var_rollback_test.good_int'
+# good_enum must not be visible — it was rolled back
+SELECT @@global.vsql_sys_var_rollback_test.good_enum;
+ERROR HY000: Unknown system variable 'vsql_sys_var_rollback_test.good_enum'
 # bad_double must not be visible either
 SELECT @@global.vsql_sys_var_rollback_test.bad_double;
 ERROR HY000: Unknown system variable 'vsql_sys_var_rollback_test.bad_double'
-# SHOW VARIABLES should list neither variable
+# SHOW VARIABLES should list none of the variables
 SHOW GLOBAL VARIABLES LIKE 'vsql_sys_var_rollback_test.%';
 Variable_name	Value
 SET PERSIST vsql_allow_preview_extensions = OFF;

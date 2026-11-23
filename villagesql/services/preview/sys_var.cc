@@ -17,6 +17,7 @@
 #include "villagesql/services/preview/sys_var.h"
 
 #include <algorithm>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -64,15 +65,15 @@ struct RegisteredSysVar {
   // Back-pointer to the descriptor list this var came from, used as the
   // depopulate key.
   const void *capability_config;
-  // For VEF_VAR_ENUM only: the TYPE_LIB and its fully server-owned backing
-  // arrays. register_variable stores the TYPE_LIB pointer (it does not
-  // deep-copy), so it must outlive the registered variable. Everything the
-  // TYPE_LIB points at is copied here -- the name strings included -- so
-  // nothing references the extension's memory, which is unmapped when the
-  // extension unloads. Held on the heap (unique_ptr) so a g_sys_vars
-  // reallocation cannot move the TYPE_LIB while the registered SYS_VAR points
-  // at it; freed when this entry is erased on depopulate, after the variable
-  // has been unregistered. Empty for non-enum variables.
+  // For VEF_VAR_ENUM only: the TYPE_LIB listing the variable's allowed values,
+  // and its fully server-owned backing arrays. register_variable stores the
+  // TYPE_LIB pointer (it does not deep-copy), so it must outlive the registered
+  // variable. Everything the TYPE_LIB points at is copied here -- the name
+  // strings included -- so nothing references the extension's memory, which is
+  // unmapped when the extension unloads. Held on the heap (unique_ptr) so a
+  // g_sys_vars reallocation cannot move the TYPE_LIB while the registered
+  // SYS_VAR points at it; freed when this entry is destroyed, after the
+  // variable has been unregistered. Empty for non-enum variables.
   std::vector<std::string> enum_names;       // owned copies of the name strings
   std::vector<const char *> enum_name_ptrs;  // -> enum_names, NULL-terminated
   std::vector<unsigned int> enum_name_lengths;
@@ -172,6 +173,36 @@ static void vef_sys_var_update_trampoline(MYSQL_THD, SYS_VAR *var,
   // broken.
   DEBUG_SYNC_C("vef_sys_var_before_on_change");
   on_change(&change);
+}
+
+// Moves every entry registered from capability_config out of g_sys_vars. The
+// caller must keep the returned entries alive until their variables are
+// unregistered. The TYPE_LIB passed to register_variable() lists an enum
+// variable's allowed values. The server keeps a pointer to it, but the
+// variable's RegisteredSysVar owns it. Destroying the RegisteredSysVar first
+// would let a concurrent SET statement on that variable validate against the
+// freed list.
+std::vector<RegisteredSysVar> extract_registered_vars(
+    const void *capability_config) {
+  std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
+  auto it = std::stable_partition(
+      g_sys_vars.begin(), g_sys_vars.end(), [&](const RegisteredSysVar &rv) {
+        return rv.capability_config != capability_config;
+      });
+  std::vector<RegisteredSysVar> extracted(
+      std::make_move_iterator(it), std::make_move_iterator(g_sys_vars.end()));
+  g_sys_vars.erase(it, g_sys_vars.end());
+  return extracted;
+}
+
+void unregister_vars(SERVICE_TYPE(registry) * registry,
+                     const std::vector<RegisteredSysVar> &vars) {
+  my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
+      "component_sys_variable_unregister", registry);
+  if (!unreg_svc.is_valid()) return;
+  for (const RegisteredSysVar &rv : vars)
+    unreg_svc->unregister_variable(rv.extension_name.c_str(),
+                                   rv.var_name.c_str());
 }
 
 }  // namespace
@@ -452,27 +483,16 @@ bool on_populate_sys_var(const PopulateContext &ctx,
               v->name, extension_name.c_str());
       error_message = std::string("Failed to register system variable '") +
                       v->name + "' for extension '" + extension_name + "'";
-      // Roll back any variables registered so far.
-      {
-        std::vector<std::string> to_unreg;
-        {
-          std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-          std::erase_if(g_sys_vars, [&](const RegisteredSysVar &rv) {
-            if (rv.capability_config == ctx.capability_config) {
-              to_unreg.push_back(rv.var_name);
-              return true;
-            }
-            return false;
-          });
-        }
-        my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
-            "component_sys_variable_unregister", registry);
-        if (unreg_svc.is_valid()) {
-          for (const auto &name : to_unreg)
-            unreg_svc->unregister_variable(extension_name.c_str(),
-                                           name.c_str());
-        }
-      }
+      // Roll back the variables registered so far.
+      // See extract_registered_vars().
+      const std::vector<RegisteredSysVar> retired =
+          extract_registered_vars(ctx.capability_config);
+      // The variables are out of g_sys_vars but stay registered with MySQL
+      // until unregister_vars(), so a concurrent SET can still reach them. The
+      // sync point lets a test run that SET here; see
+      // sys_var_rollback_set_race.test.
+      DEBUG_SYNC_C("vef_sys_var_after_rollback_extract");
+      unregister_vars(registry, retired);
       return true;
     }
 
@@ -485,28 +505,10 @@ bool on_populate_sys_var(const PopulateContext &ctx,
 }
 
 void on_depopulate_sys_var(const DepopulateContext &ctx) {
-  std::vector<std::string> var_names;
-  std::string extension_name;
-  // Entries moved out of g_sys_vars, kept alive until after unregister_variable
-  // below. An enum entry owns the TYPE_LIB the registered variable still points
-  // at, so freeing it at erase time -- before unregister -- would leave the
-  // variable (still resolvable to a concurrent SET, see the sync point below)
-  // dereferencing a freed TYPE_LIB in its check function. Destroyed at end of
-  // scope, after the variables are unregistered.
-  std::vector<RegisteredSysVar> retired;
-  {
-    std::lock_guard<std::mutex> lock(g_sys_vars_mutex);
-    auto it = std::stable_partition(
-        g_sys_vars.begin(), g_sys_vars.end(), [&](const RegisteredSysVar &v) {
-          return v.capability_config != ctx.capability_config;
-        });
-    for (auto rv = it; rv != g_sys_vars.end(); ++rv) {
-      if (extension_name.empty()) extension_name = rv->extension_name;
-      var_names.push_back(rv->var_name);
-      retired.push_back(std::move(*rv));
-    }
-    g_sys_vars.erase(it, g_sys_vars.end());
-  }
+  // Destroyed at end of scope, after unregister_vars().
+  // See extract_registered_vars().
+  const std::vector<RegisteredSysVar> retired =
+      extract_registered_vars(ctx.capability_config);
 
   // The variables are out of g_sys_vars but stay registered with MySQL until
   // unregister_variable below, so a concurrent SET still reaches the update
@@ -514,7 +516,7 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
   // SET here; see sys_var_depopulate_set_race.test.
   DEBUG_SYNC_C("vef_sys_var_after_depopulate_erase");
 
-  if (var_names.empty()) return;
+  if (retired.empty()) return;
 
   // Remove persisted values from mysqld-auto.cnf. This is done before
   // unregister_variable so that the variable name is still resolvable in
@@ -534,8 +536,8 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
       // were never persisted).
       Persisted_variables_uset *plugin_vars =
           pvc->get_persisted_dynamic_plugin_variables();
-      for (const auto &name : var_names) {
-        std::string full_name = extension_name + "." + name;
+      for (const RegisteredSysVar &rv : retired) {
+        std::string full_name = rv.extension_name + "." + rv.var_name;
         if (plugin_vars != nullptr) {
           auto it = std::find_if(plugin_vars->begin(), plugin_vars->end(),
                                  [&full_name](const st_persist_var &v) {
@@ -550,14 +552,7 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
 
   PluginRegistry registry;
   if (!registry.is_valid()) return;
-
-  my_service<SERVICE_TYPE(component_sys_variable_unregister)> unreg_svc(
-      "component_sys_variable_unregister", registry);
-  if (unreg_svc.is_valid()) {
-    for (const auto &name : var_names) {
-      unreg_svc->unregister_variable(extension_name.c_str(), name.c_str());
-    }
-  }
+  unregister_vars(registry, retired);
 }
 
 }  // namespace villagesql::services
