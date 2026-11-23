@@ -29,8 +29,8 @@
 #include <assert.h>
 #include <limits.h>
 #include <sys/types.h>
-#include <bit>
 #include <atomic>
+#include <bit>
 #include <memory>
 #include <utility>
 
@@ -192,7 +192,8 @@ Query_result_delete *multi_delete_returning_result(THD *thd, JOIN *join) {
   const enum_sql_command cmd = thd->lex->sql_command;
   if (cmd != SQLCOM_DELETE && cmd != SQLCOM_DELETE_MULTI) return nullptr;
   if (!thd->lex->has_returning_clause) return nullptr;
-  auto *result = down_cast<Query_result_delete *>(join->query_block->query_result());
+  auto *result =
+      down_cast<Query_result_delete *>(join->query_block->query_result());
   if (result->returning(thd) == nullptr || result->returning_table() == nullptr)
     return nullptr;
   return result;
