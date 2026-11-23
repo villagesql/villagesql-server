@@ -1,0 +1,46 @@
+# Issue #1559: a routine that was called and then dropped stays in the
+# session's routine cache until its next lookup, and the cached copy kept
+# references to the extension's functions, so UNINSTALL EXTENSION reported
+# them as in use. UNINSTALL now clears the session's own routine caches
+# before it checks for uses.
+
+--echo #
+--echo # Case 1: the reproducer from #1559 (DROP DATABASE of a called routine).
+--echo #
+
+INSTALL EXTENSION vsql_complex;
+CREATE DATABASE d1;
+CREATE PROCEDURE d1.p(IN c COMPLEX) SELECT complex_real(c) AS r;
+CALL d1.p('(1.0,2.0)');
+DROP DATABASE d1;
+UNINSTALL EXTENSION vsql_complex;
+
+--echo #
+--echo # Case 2: DROP PROCEDURE and DROP FUNCTION of called routines that use
+--echo # an extension function, then UNINSTALL in the same session.
+--echo #
+
+INSTALL EXTENSION vsql_complex;
+CREATE PROCEDURE p2() SELECT complex_real('(3.0,4.0)') AS r;
+CREATE FUNCTION f2() RETURNS DOUBLE DETERMINISTIC
+  RETURN complex_imag('(3.0,4.0)');
+CALL p2();
+SELECT f2();
+DROP PROCEDURE p2;
+DROP FUNCTION f2;
+UNINSTALL EXTENSION vsql_complex;
+
+--echo #
+--echo # Case 3: a routine that still exists does not block UNINSTALL because
+--echo # it was cached, and it works again after the extension is installed
+--echo # again (the cleared cache is refilled on the next CALL).
+--echo #
+
+INSTALL EXTENSION vsql_complex;
+CREATE PROCEDURE p3() SELECT complex_real('(5.0,6.0)') AS r;
+CALL p3();
+UNINSTALL EXTENSION vsql_complex;
+INSTALL EXTENSION vsql_complex;
+CALL p3();
+DROP PROCEDURE p3;
+UNINSTALL EXTENSION vsql_complex;
