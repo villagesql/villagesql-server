@@ -28,7 +28,6 @@
 
 #include <villagesql/vsql.h>
 
-#include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
@@ -105,6 +104,17 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
   return hash;
 }
 
+// Stores cx as the result, or raises an error when a part is infinite or NaN:
+// like MySQL's DOUBLE, a COMPLEX value is always finite.
+static void store_finite(const Complex &cx, CustomResult &out) {
+  if (!std::isfinite(cx.re) || !std::isfinite(cx.im)) {
+    out.error("COMPLEX value is out of range");
+    return;
+  }
+  store_complex(out.buffer().data(), cx);
+  out.set_length(kComplexSize);
+}
+
 // Parse "( <double> , <double> )" out of `from` into `cx`, tolerating
 // whitespace around every token. Returns false on success, true on error --
 // including trailing garbage.
@@ -120,13 +130,12 @@ static bool parse_complex(std::string_view from, Complex *cx) {
   };
   auto parse_double = [&](double *out) {
     skip_ws();
-    errno = 0;
     char *endptr = nullptr;
     const double v = strtod(p, &endptr);
     if (endptr == p) return true;
-    // Reject overflow ("1e400"), but accept underflow to a denormal or zero.
-    // A literal "inf" parses without setting ERANGE, so it still round-trips.
-    if (errno == ERANGE && std::isinf(v)) return true;
+    // Reject "inf", "nan" and overflow ("1e400"), as MySQL does for DOUBLE,
+    // but accept underflow to a denormal or zero.
+    if (!std::isfinite(v)) return true;
     *out = v;
     p = endptr;
     return false;
@@ -250,8 +259,7 @@ void complex_add(CustomArg in_l, CustomArg in_r, CustomResult out) {
   }
   Complex lhs = load_complex(in_l.value().data());
   Complex rhs = load_complex(in_r.value().data());
-  store_complex(out.buffer().data(), Complex{lhs.re + rhs.re, lhs.im + rhs.im});
-  out.set_length(kComplexSize);
+  store_finite(Complex{lhs.re + rhs.re, lhs.im + rhs.im}, out);
 }
 
 // Arithmetic: complex_subtract(a, b) -> COMPLEX
@@ -274,8 +282,7 @@ void complex_subtract(CustomArg in_l, CustomArg in_r, CustomResult out) {
   }
   Complex lhs = load_complex(in_l.value().data());
   Complex rhs = load_complex(in_r.value().data());
-  store_complex(out.buffer().data(), Complex{lhs.re - rhs.re, lhs.im - rhs.im});
-  out.set_length(kComplexSize);
+  store_finite(Complex{lhs.re - rhs.re, lhs.im - rhs.im}, out);
 }
 
 // Arithmetic: complex_multiply(a, b) -> COMPLEX
@@ -299,10 +306,9 @@ void complex_multiply(CustomArg in_l, CustomArg in_r, CustomResult out) {
   Complex lhs = load_complex(in_l.value().data());
   Complex rhs = load_complex(in_r.value().data());
   // (a + bi) * (c + di) = (ac - bd) + (ad + bc)i
-  store_complex(out.buffer().data(),
-                Complex{lhs.re * rhs.re - lhs.im * rhs.im,
-                        lhs.re * rhs.im + lhs.im * rhs.re});
-  out.set_length(kComplexSize);
+  store_finite(Complex{lhs.re * rhs.re - lhs.im * rhs.im,
+                       lhs.re * rhs.im + lhs.im * rhs.re},
+               out);
 }
 
 // Arithmetic: complex_divide(a, b) -> COMPLEX
@@ -326,16 +332,22 @@ void complex_divide(CustomArg in_l, CustomArg in_r, CustomResult out) {
   Complex lhs = load_complex(in_l.value().data());
   Complex rhs = load_complex(in_r.value().data());
   // Check for division by zero
-  double denominator = rhs.re * rhs.re + rhs.im * rhs.im;
-  if (denominator == 0.0) {
+  if (rhs.re == 0.0 && rhs.im == 0.0) {
     out.warning("division by 0");
     return;
   }
+  // Scale the divisor by a power of two so that c^2 + d^2 cannot overflow or
+  // underflow. The scaling is exact, so a result that did not overflow or
+  // underflow before is unchanged.
+  const int scale = std::ilogb(std::fmax(std::fabs(rhs.re), std::fabs(rhs.im)));
+  const double c = std::scalbn(rhs.re, -scale);
+  const double d = std::scalbn(rhs.im, -scale);
+  const double denominator = c * c + d * d;
   // (a + bi) / (c + di) = [(ac + bd) + (bc - ad)i] / (c^2 + d^2)
-  store_complex(out.buffer().data(),
-                Complex{(lhs.re * rhs.re + lhs.im * rhs.im) / denominator,
-                        (lhs.im * rhs.re - lhs.re * rhs.im) / denominator});
-  out.set_length(kComplexSize);
+  store_finite(
+      Complex{std::scalbn((lhs.re * c + lhs.im * d) / denominator, -scale),
+              std::scalbn((lhs.im * c - lhs.re * d) / denominator, -scale)},
+      out);
 }
 
 // Utility: complex_real(c) -> REAL
@@ -375,7 +387,13 @@ void complex_abs(CustomArg in, RealResult out) {
     return;
   }
   Complex cx = load_complex(in.value().data());
-  out.set(sqrt(cx.re * cx.re + cx.im * cx.im));
+  // hypot does not overflow for parts whose squares would overflow.
+  const double abs = std::hypot(cx.re, cx.im);
+  if (!std::isfinite(abs)) {
+    out.error("DOUBLE value is out of range");
+    return;
+  }
+  out.set(abs);
 }
 
 // Utility: complex_conjugate(c) -> COMPLEX
@@ -420,8 +438,9 @@ void complex_sum_result(const ComplexSumState &state, CustomResult out) {
   }
   Complex total = state.value();
   total.canonicalize();
-  store_complex(out.buffer().data(), total);
-  out.set_length(kComplexSize);
+  // The running total can overflow partway even when the final sum is in
+  // range (1.7e308 + 1.7e308 - 1.7e308), so the result can depend on row order.
+  store_finite(total, out);
 }
 
 // Type name NTTPs — required for auto-generating VDF names like
