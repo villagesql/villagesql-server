@@ -121,8 +121,27 @@ struct CallCounter {
   long long n = 0;
 };
 
+// emplace_state rather than set_user_data(new CallCounter{}). This counter is
+// written on every row, which makes where it lands matter.
+//
+// A plain `new` of eight bytes does not get you eight bytes to yourself. The
+// allocator hands out fixed-size slots, rounds the request up to 16 bytes,
+// and cuts those slots next to each other. Eight slots fit in 128 bytes,
+// which is one cache line: the smallest block of memory a CPU core can load
+// or own. So eight counters, belonging to eight statements running on eight
+// cores, can all sit inside one line.
+//
+// A core cannot update just its own eight bytes. To write anything in the
+// line it must first take the whole line, and taking it means the other seven
+// cores lose their copy. Each of them takes it back for its own increment.
+// Nothing is shared in the code, but the hardware moves the line from core to
+// core on every row as if the eight counters were one variable.
+//
+// emplace_state asks for a whole cache line per state, so nothing else can
+// share it.
+// See villagesql/vsql/cache_line.h.
 void ba_call_index_prerun(PrerunArgs, PrerunResult out) {
-  out.set_user_data(new CallCounter{});
+  out.emplace_state<CallCounter>();
 }
 
 void ba_call_index(CallCounter &state, IntResult out) {
@@ -130,8 +149,10 @@ void ba_call_index(CallCounter &state, IntResult out) {
   out.set(state.n);
 }
 
+// Must be destroy_emplaced_state, not delete_state: emplace_state allocates
+// over-aligned.
 void ba_call_index_postrun(PostrunArgs args) {
-  args.delete_state<CallCounter>();
+  args.destroy_emplaced_state<CallCounter>();
 }
 
 // BA_CONCAT: concatenate two bytearrays (returns STRING with 16 bytes)
