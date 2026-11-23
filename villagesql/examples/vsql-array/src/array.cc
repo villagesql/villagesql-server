@@ -42,6 +42,14 @@
 //   array_contains(a, v)   INT    1/0; v is parsed as the element type
 //   array_append(a, v)     ARRAY  a with v appended; a NULL a is treated as
 //                                 the empty array; error past max_size
+//   array_rows_json2(a, b)    STRING  '[[a1,b1],[a2,b2],...]': the arrays
+//   zipped array_rows_json3(a, b, c) STRING  position by position as a JSON
+//   array of rows,
+//                                 to read arrays as a table in one call:
+//                                 JSON_TABLE(array_rows_json3(a, b, c), '$[*]'
+//                                 COLUMNS (n FOR ORDINALITY, x INT PATH '$[0]',
+//                                 ...)). NULL if any argument is NULL; error if
+//                                 the arrays differ in length
 //   array_agg(x)           ARRAY  aggregate of INT x -> type=int64
 //   array_agg_int32(x)     ARRAY  aggregate of INT x -> type=int32
 //   array_agg_double(x)    ARRAY  aggregate of REAL x -> type=double
@@ -59,6 +67,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <string>
@@ -114,6 +123,16 @@ constexpr int kDoubleRoundTripDigits =
 
 // max_size of the ARRAY returned by the array_agg family.
 constexpr int64_t kAggMaxSize = kArrayMaxInt64Elems;
+
+// array_rows_json*: the most arrays zipped into one row, and the longest
+// text they can produce: per row the brackets, a separator after it, and per
+// element its longest text plus a separator; plus the outer brackets.
+constexpr int64_t kRowsJsonMaxArrays = 3;
+constexpr int64_t kRowsJsonMaxLen =
+    kBracketChars +
+    kArrayMaxInt64Elems *
+        (kBracketChars + kSeparatorChars +
+         kRowsJsonMaxArrays * (kMaxTextDouble + kSeparatorChars));
 
 // Room for one formatted element plus its terminating NUL.
 constexpr size_t kElemTextBuf = 32;
@@ -727,6 +746,76 @@ void array_append(vsql::CustomArgWith<ArrayParams> in, vsql::StringArg value,
   out.set_length(static_cast<size_t>(kHeaderBytes) + old_payload + width);
 }
 
+// Writes the arrays zipped position by position as a JSON array of rows,
+// '[[a1,b1,...],[a2,b2,...],...]', so one call hands several arrays to
+// JSON_TABLE as a table. NULL if any array is NULL; error if they differ in
+// length or the text does not fit.
+static void rows_json(const vsql::CustomArgWith<ArrayParams> *arrays,
+                      size_t n_arrays, vsql::StringResult out) {
+  ArrayView views[kRowsJsonMaxArrays];
+  for (size_t a = 0; a < n_arrays; a++) {
+    if (arrays[a].is_null()) {
+      out.set_null();
+      return;
+    }
+    if (!make_view(arrays[a].value(), arrays[a].params().elem, &views[a])) {
+      out.error("array_rows_json: malformed ARRAY value");
+      return;
+    }
+    if (views[a].count != views[0].count) {
+      out.error("array_rows_json: the arrays differ in length");
+      return;
+    }
+  }
+  auto buf = out.buffer();
+  size_t pos = 0;
+  char text[kElemTextBuf];
+  const size_t row_overhead =
+      static_cast<size_t>(kBracketChars + kSeparatorChars);
+  if (buf.size() < static_cast<size_t>(kBracketChars)) {
+    out.error("array_rows_json: text buffer too small");
+    return;
+  }
+  buf[pos++] = '[';
+  for (size_t i = 0; i < views[0].count; i++) {
+    if (pos + row_overhead >= buf.size()) {
+      out.error("array_rows_json: text buffer too small");
+      return;
+    }
+    if (i > 0) buf[pos++] = ',';
+    buf[pos++] = '[';
+    for (size_t a = 0; a < n_arrays; a++) {
+      const int n = format_elem(text, views[a].elem, views[a].at(i));
+      // Room for the element, its separator, and the two closing brackets.
+      if (n <= 0 || pos + static_cast<size_t>(n) + row_overhead >= buf.size()) {
+        out.error("array_rows_json: text buffer too small");
+        return;
+      }
+      if (a > 0) buf[pos++] = ',';
+      memcpy(buf.data() + pos, text, static_cast<size_t>(n));
+      pos += static_cast<size_t>(n);
+    }
+    buf[pos++] = ']';
+  }
+  buf[pos++] = ']';
+  out.set_length(pos);
+}
+
+void array_rows_json2(vsql::CustomArgWith<ArrayParams> a,
+                      vsql::CustomArgWith<ArrayParams> b,
+                      vsql::StringResult out) {
+  const vsql::CustomArgWith<ArrayParams> arrays[] = {a, b};
+  rows_json(arrays, std::size(arrays), out);
+}
+
+void array_rows_json3(vsql::CustomArgWith<ArrayParams> a,
+                      vsql::CustomArgWith<ArrayParams> b,
+                      vsql::CustomArgWith<ArrayParams> c,
+                      vsql::StringResult out) {
+  const vsql::CustomArgWith<ArrayParams> arrays[] = {a, b, c};
+  rows_json(arrays, std::size(arrays), out);
+}
+
 // ---------------------------------------------------------------------------
 // Aggregates: array_agg (int64), array_agg_int32, array_agg_double
 // ---------------------------------------------------------------------------
@@ -881,6 +970,21 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(ARRAY)
                   .param(ARRAY)
                   .param(STRING)
+                  .deterministic()
+                  .build())
+        .func(make_func<&array_rows_json2>("array_rows_json2")
+                  .returns(STRING)
+                  .param(ARRAY)
+                  .param(ARRAY)
+                  .buffer_size(static_cast<size_t>(kRowsJsonMaxLen))
+                  .deterministic()
+                  .build())
+        .func(make_func<&array_rows_json3>("array_rows_json3")
+                  .returns(STRING)
+                  .param(ARRAY)
+                  .param(ARRAY)
+                  .param(ARRAY)
+                  .buffer_size(static_cast<size_t>(kRowsJsonMaxLen))
                   .deterministic()
                   .build())
         .func(make_aggregate_func<ArrayAggState, &array_agg_result>("array_agg")
