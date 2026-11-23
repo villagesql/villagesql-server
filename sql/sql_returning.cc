@@ -400,6 +400,26 @@ bool Query_result_returning::assign_scalars(THD *thd) {
   // Mirrors Query_dumpvar::send_data: one row only, columns assigned in order
   // to SP-local variables or @user_vars.
   if (m_into_rows++ > 0) {
+    // A custom-type variable can take more than one row only when its type
+    // declares a collect aggregate (see decide_into_collect()). Name the type
+    // so the user knows why this one can't. The error code stays
+    // ER_TOO_MANY_ROWS, so handlers and tests that catch it still match.
+    if (thd->sp_runtime_ctx != nullptr) {
+      List_iterator_fast<PT_select_var> var_li(*m_into_vars);
+      for (PT_select_var *mv; (mv = var_li++) != nullptr;) {
+        if (!mv->is_local()) continue;
+        const villagesql::TypeContext *tc =
+            thd->sp_runtime_ctx->get_item(mv->get_offset())->get_type_context();
+        if (tc == nullptr) continue;
+        my_printf_error(ER_TOO_MANY_ROWS,
+                        "Result consisted of more than one row, and variable "
+                        "'%s' has type '%s.%s', which cannot collect rows "
+                        "(it declares no collect aggregate)",
+                        MYF(0), mv->name.str, tc->extension_name().c_str(),
+                        tc->type_name().c_str());
+        return true;
+      }
+    }
     my_error(ER_TOO_MANY_ROWS, MYF(0));
     return true;
   }
