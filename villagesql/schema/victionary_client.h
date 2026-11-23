@@ -419,7 +419,9 @@ class SystemTableMap {
   // without the VictionaryClient lock: a session that staged an operation did
   // so on its own thread before it commits or rolls back, so it always sees a
   // non-zero count for its own pending work.
-  uint64_t uncommitted_entry_count() const { return m_uncommitted_entry_count.load(); }
+  uint64_t uncommitted_entry_count() const {
+    return m_uncommitted_entry_count.load();
+  }
 
   // ===== Transaction lifecycle =====
 
@@ -723,8 +725,8 @@ class SystemTableMap {
     for (const auto &[_, list] : m_uncommitted) summed += list.size();
     assert(summed == m_uncommitted_entry_count.load());
 #endif
-    return {m_committed.size(), m_uncommitted_entry_count.load(),
-            m_hits.load(), m_misses.load()};
+    return {m_committed.size(), m_uncommitted_entry_count.load(), m_hits.load(),
+            m_misses.load()};
   }
 
  private:
@@ -736,7 +738,8 @@ class SystemTableMap {
   std::map<THD *, UncommittedList> m_uncommitted;
 
   // Count of PendingOperation entries held in m_uncommitted (all sessions).
-  // Modified only under the write lock; read lock-free by uncommitted_entry_count().
+  // Modified only under the write lock; read lock-free by
+  // uncommitted_entry_count().
   std::atomic<uint64_t> m_uncommitted_entry_count{0};
 
   // Per-map statistics
