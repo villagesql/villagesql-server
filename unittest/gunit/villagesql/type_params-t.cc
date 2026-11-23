@@ -15,8 +15,8 @@
 
 #include <gtest/gtest.h>
 
-#include <cstddef>
 #include <atomic>
+#include <cstddef>
 #include <map>
 #include <string>
 #include <thread>

@@ -230,7 +230,6 @@ class TypeParamsCache {
   }
 
  private:
-
   static std::string key_from_map(
       const std::map<std::string, std::string> &params) {
     // One ',' between each pair of entries.
