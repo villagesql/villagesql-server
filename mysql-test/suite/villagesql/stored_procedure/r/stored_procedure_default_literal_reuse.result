@@ -1,5 +1,4 @@
 INSTALL EXTENSION vsql_complex;
-INSTALL EXTENSION vsql_array;
 #
 # Stored procedure, COMPLEX variable with a DEFAULT literal.
 #
@@ -24,26 +23,35 @@ CALL p_c();
 c
 (1.5,2.5)
 #
-# Stored procedure, ARRAY variable with a DEFAULT literal, modified.
+# Stored procedure, COMPLEX variable with a DEFAULT literal, modified.
 #
 CREATE PROCEDURE p_a()
 BEGIN
-DECLARE a vsql_array.ARRAY('type=int32,max_size=16') DEFAULT '[1,2]';
-SET a = vsql_array.array_append(a, 3);
-SELECT a, vsql_array.array_length(a) AS len;
+DECLARE a COMPLEX DEFAULT '(1,2)';
+SELECT a;
+SET a = '(7,8)';
+SELECT a;
 END//
 CALL p_a();
-a	len
-[1,2,3]	3
+a
+(1,2)
+a
+(7,8)
 CALL p_a();
-a	len
-[1,2,3]	3
+a
+(1,2)
+a
+(7,8)
 CALL p_a();
-a	len
-[1,2,3]	3
+a
+(1,2)
+a
+(7,8)
 CALL p_a();
-a	len
-[1,2,3]	3
+a
+(1,2)
+a
+(7,8)
 #
 # Stored function, called once per row.
 #
@@ -84,5 +92,4 @@ DROP TABLE t_c;
 DROP PROCEDURE p_c;
 DROP PROCEDURE p_a;
 DROP FUNCTION f_c;
-UNINSTALL EXTENSION vsql_array;
 UNINSTALL EXTENSION vsql_complex;

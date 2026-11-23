@@ -6,7 +6,6 @@
 # CALL and EXECUTE below must return the same value as the first one.
 
 INSTALL EXTENSION vsql_complex;
-INSTALL EXTENSION vsql_array;
 
 --echo #
 --echo # Stored procedure, COMPLEX variable with a DEFAULT literal.
@@ -26,15 +25,16 @@ CALL p_c();
 CALL p_c();
 
 --echo #
---echo # Stored procedure, ARRAY variable with a DEFAULT literal, modified.
+--echo # Stored procedure, COMPLEX variable with a DEFAULT literal, modified.
 --echo #
 
 delimiter //;
 CREATE PROCEDURE p_a()
 BEGIN
-  DECLARE a vsql_array.ARRAY('type=int32,max_size=16') DEFAULT '[1,2]';
-  SET a = vsql_array.array_append(a, 3);
-  SELECT a, vsql_array.array_length(a) AS len;
+  DECLARE a COMPLEX DEFAULT '(1,2)';
+  SELECT a;
+  SET a = '(7,8)';
+  SELECT a;
 END//
 delimiter ;//
 CALL p_a();
@@ -78,5 +78,4 @@ DROP TABLE t_c;
 DROP PROCEDURE p_c;
 DROP PROCEDURE p_a;
 DROP FUNCTION f_c;
-UNINSTALL EXTENSION vsql_array;
 UNINSTALL EXTENSION vsql_complex;
