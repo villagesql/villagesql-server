@@ -98,16 +98,19 @@ constexpr int64_t kSeparatorChars = 1;
 constexpr int64_t kBracketChars = 2;
 
 // Static upper bound on the text form, the largest over the element types.
-constexpr int64_t kArrayMaxDecodeLen = std::max(
-    {(kArrayMaxPayload / kElemInt32) * (kMaxTextInt32 + kSeparatorChars),
-     (kArrayMaxPayload / kElemInt64) * (kMaxTextInt64 + kSeparatorChars),
-     (kArrayMaxPayload / kElemDouble) * (kMaxTextDouble + kSeparatorChars)}) +
+constexpr int64_t kArrayMaxDecodeLen =
+    std::max(
+        {(kArrayMaxPayload / kElemInt32) * (kMaxTextInt32 + kSeparatorChars),
+         (kArrayMaxPayload / kElemInt64) * (kMaxTextInt64 + kSeparatorChars),
+         (kArrayMaxPayload / kElemDouble) *
+             (kMaxTextDouble + kSeparatorChars)}) +
     kBracketChars;
 
 // Doubles print with the shortest of these precisions that reads back to the
 // same value (DBL_DIG, then max_digits10).
 constexpr int kDoubleShortDigits = std::numeric_limits<double>::digits10;
-constexpr int kDoubleRoundTripDigits = std::numeric_limits<double>::max_digits10;
+constexpr int kDoubleRoundTripDigits =
+    std::numeric_limits<double>::max_digits10;
 
 // max_size of the ARRAY returned by the array_agg family.
 constexpr int64_t kAggMaxSize = kArrayMaxInt64Elems;
@@ -231,8 +234,8 @@ static uint64_t load_bytes(const unsigned char *buf, int64_t n) {
 
 // One element value, wide enough for every element type.
 struct ElemValue {
-  int64_t i = 0;    // int32 / int64
-  double d = 0.0;   // double
+  int64_t i = 0;   // int32 / int64
+  double d = 0.0;  // double
 };
 
 static void store_elem(unsigned char *slot, ArrayElem e, const ElemValue &v) {
@@ -320,9 +323,8 @@ static const char *parse_elem(const char *s, ArrayElem e, ElemValue *v,
     long long x = strtoll(s, &endptr, 10);
     if (endptr == s) return "expected an integer element";
     if (errno == ERANGE) return "integer element out of range";
-    if (e == ArrayElem::kInt32 &&
-        (x < std::numeric_limits<int32_t>::min() ||
-         x > std::numeric_limits<int32_t>::max())) {
+    if (e == ArrayElem::kInt32 && (x < std::numeric_limits<int32_t>::min() ||
+                                   x > std::numeric_limits<int32_t>::max())) {
       return "element out of range for int32";
     }
     v->i = x;
@@ -418,8 +420,7 @@ bool array_resolve_params(std::map<std::string, std::string> &params,
     return true;
   }
   if (max_size <= 0) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "ARRAY max_size must be positive");
+    snprintf(error_msg, VEF_MAX_ERROR_LEN, "ARRAY max_size must be positive");
     return true;
   }
   if (max_size > elem_max_count(elem)) {
@@ -442,8 +443,8 @@ bool array_resolve_params(std::map<std::string, std::string> &params,
 
 // STRING -> binary. Rejects (warning, no value) malformed text, elements that
 // do not parse as the element type, and more than max_size elements.
-void array_from_string(vsql::MaybeParams<ArrayParams> &p,
-                       std::string_view from, vsql::CustomResult out) {
+void array_from_string(vsql::MaybeParams<ArrayParams> &p, std::string_view from,
+                       vsql::CustomResult out) {
   if (!p.is_known()) {
     // Only reached when the server asks the type to infer parameters from a
     // constant string: a decimal point or exponent means double, otherwise
@@ -459,9 +460,8 @@ void array_from_string(vsql::MaybeParams<ArrayParams> &p,
   const int64_t max_size = p.value().max_size;
   const size_t width = static_cast<size_t>(elem_width(elem));
   auto buf = out.buffer();
-  if (max_size <= 0 ||
-      buf.size() < static_cast<size_t>(kHeaderBytes) +
-                       static_cast<size_t>(max_size) * width) {
+  if (max_size <= 0 || buf.size() < static_cast<size_t>(kHeaderBytes) +
+                                        static_cast<size_t>(max_size) * width) {
     out.error("ARRAY: output buffer smaller than max_size elements");
     return;
   }
@@ -591,8 +591,7 @@ void array_length(vsql::CustomArgWith<ArrayParams> in, vsql::IntResult out) {
 }
 
 // Resolves the 1-based index; false when the element does not exist.
-static bool element_at(const ArrayView &view, long long index,
-                       ElemValue *out) {
+static bool element_at(const ArrayView &view, long long index, ElemValue *out) {
   if (index < 1 || static_cast<unsigned long long>(index) > view.count) {
     return false;
   }
@@ -806,7 +805,8 @@ void array_agg_result(const ArrayAggState &s,
   }
   const size_t width = static_cast<size_t>(elem_width(elem));
   auto buf = out.buffer();
-  if (buf.size() < static_cast<size_t>(kHeaderBytes) + s.values.size() * width) {
+  if (buf.size() <
+      static_cast<size_t>(kHeaderBytes) + s.values.size() * width) {
     out.error("array_agg: output buffer too small");
     return;
   }
@@ -891,7 +891,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .bind_and_check_types<&array_agg_bind<ArrayElem::kInt64>>()
                   .build())
         .func(make_aggregate_func<ArrayAggState, &array_agg_result>(
-                "array_agg_int32")
+                  "array_agg_int32")
                   .returns(ARRAY)
                   .param(INT)
                   .clear<&array_agg_clear>()
@@ -899,7 +899,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .bind_and_check_types<&array_agg_bind<ArrayElem::kInt32>>()
                   .build())
         .func(make_aggregate_func<ArrayAggState, &array_agg_result>(
-                "array_agg_double")
+                  "array_agg_double")
                   .returns(ARRAY)
                   .param(REAL)
                   .clear<&array_agg_clear>()
