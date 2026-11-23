@@ -1,0 +1,21 @@
+INSTALL EXTENSION vsql_lifecycle_test;
+# Record waits on rwlocks, to see UNINSTALL waiting on the SET
+UPDATE performance_schema.setup_instruments SET ENABLED = 'YES'
+  WHERE NAME = 'wait/synch/rwlock/sql/LOCK_system_variables_hash';
+UPDATE performance_schema.setup_consumers SET ENABLED = 'YES'
+  WHERE NAME = 'events_waits_current';
+# con_set: park SET GLOBAL ... = ON before the enabled callback runs
+SET DEBUG_SYNC = 'vef_one_var_before_on_change SIGNAL in_on_change WAIT_FOR release_on_change';
+SET GLOBAL vsql_lifecycle_test.monitor_enabled = ON;
+SET DEBUG_SYNC = 'now WAIT_FOR in_on_change';
+# con_uninstall: UNINSTALL EXTENSION with the SET parked
+UNINSTALL EXTENSION vsql_lifecycle_test;
+# default: wait until UNINSTALL waits to unregister the variable
+# default: release the SET; it starts the worker
+SET DEBUG_SYNC = 'now SIGNAL release_on_change';
+SET DEBUG_SYNC = 'RESET';
+# con_uninstall: UNINSTALL completes
+# No worker thread is left and the variable is gone
+SELECT @@global.vsql_lifecycle_test.monitor_enabled;
+ERROR HY000: Unknown system variable 'vsql_lifecycle_test.monitor_enabled'
+SET DEBUG_SYNC = 'RESET';

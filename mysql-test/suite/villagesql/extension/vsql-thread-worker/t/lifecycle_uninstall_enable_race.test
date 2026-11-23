@@ -1,0 +1,91 @@
+# UNINSTALL EXTENSION racing SET GLOBAL <worker>_enabled = ON.
+#
+# A SET GLOBAL that has entered the enabled variable's update callback holds
+# LOCK_system_variables_hash for read, and starts the worker when it resumes.
+# on_depopulate_thread_worker() must not destroy the WorkerState with that
+# thread still joinable: std::terminate() aborts the server. The SET is parked
+# inside the callback until UNINSTALL waits on that lock, then released.
+# Found by pstress (capability lifecycle workload).
+#
+# Verifies:
+# - UNINSTALL EXTENSION completes and the server stays up
+# - No worker thread of the extension is left running
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+# The processlist checks require PSI thread instrumentation.
+if (`SELECT COUNT(*)=0 FROM performance_schema.threads`)
+{
+  skip Needs PSI thread instrumentation (DISABLE_PSI_THREAD must be 0);
+}
+
+INSTALL EXTENSION vsql_lifecycle_test;
+
+# Both sessions are opened before the SET GLOBAL parks: a parked SET GLOBAL
+# holds LOCK_global_system_variables, which a new connection needs to copy the
+# global variable defaults.
+connect (con_set,localhost,root);
+connect (con_uninstall,localhost,root);
+
+--echo # Record waits on rwlocks, to see UNINSTALL waiting on the SET
+--let $instrument_enabled = `SELECT ENABLED FROM performance_schema.setup_instruments WHERE NAME = 'wait/synch/rwlock/sql/LOCK_system_variables_hash'`
+--let $consumer_enabled = `SELECT ENABLED FROM performance_schema.setup_consumers WHERE NAME = 'events_waits_current'`
+UPDATE performance_schema.setup_instruments SET ENABLED = 'YES'
+  WHERE NAME = 'wait/synch/rwlock/sql/LOCK_system_variables_hash';
+UPDATE performance_schema.setup_consumers SET ENABLED = 'YES'
+  WHERE NAME = 'events_waits_current';
+
+connection con_set;
+--echo # con_set: park SET GLOBAL ... = ON before the enabled callback runs
+SET DEBUG_SYNC = 'vef_one_var_before_on_change SIGNAL in_on_change WAIT_FOR release_on_change';
+--send SET GLOBAL vsql_lifecycle_test.monitor_enabled = ON
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR in_on_change';
+
+connection con_uninstall;
+--echo # con_uninstall: UNINSTALL EXTENSION with the SET parked
+--send UNINSTALL EXTENSION vsql_lifecycle_test
+
+connection default;
+--echo # default: wait until UNINSTALL waits to unregister the variable
+let $wait_condition =
+  SELECT COUNT(*) = 1 FROM performance_schema.threads t
+  WHERE t.PROCESSLIST_INFO LIKE 'UNINSTALL EXTENSION vsql_lifecycle_test%'
+    AND EXISTS (
+      SELECT 1 FROM performance_schema.events_waits_current w
+      WHERE w.THREAD_ID = t.THREAD_ID AND w.END_EVENT_ID IS NULL
+        AND w.EVENT_NAME = 'wait/synch/rwlock/sql/LOCK_system_variables_hash');
+--source include/wait_condition.inc
+
+--echo # default: release the SET; it starts the worker
+SET DEBUG_SYNC = 'now SIGNAL release_on_change';
+
+connection con_set;
+reap;
+SET DEBUG_SYNC = 'RESET';
+
+connection con_uninstall;
+--echo # con_uninstall: UNINSTALL completes
+reap;
+
+connection default;
+disconnect con_set;
+disconnect con_uninstall;
+
+--echo # No worker thread is left and the variable is gone
+--let $wait_condition = SELECT COUNT(*) = 0 FROM performance_schema.threads WHERE PROCESSLIST_INFO = 'vsql_lifecycle_test/monitor'
+--source include/wait_condition.inc
+--error ER_UNKNOWN_SYSTEM_VARIABLE
+SELECT @@global.vsql_lifecycle_test.monitor_enabled;
+
+--disable_query_log
+eval UPDATE performance_schema.setup_instruments SET ENABLED = '$instrument_enabled'
+  WHERE NAME = 'wait/synch/rwlock/sql/LOCK_system_variables_hash';
+eval UPDATE performance_schema.setup_consumers SET ENABLED = '$consumer_enabled'
+  WHERE NAME = 'events_waits_current';
+--enable_query_log
+
+SET DEBUG_SYNC = 'RESET';
+--source include/wait_until_count_sessions.inc

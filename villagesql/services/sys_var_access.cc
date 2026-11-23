@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "my_sys.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
@@ -61,7 +62,9 @@ static void one_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
       }
     }
   }
-  if (on_change != nullptr) on_change(var_name_copy.c_str(), new_val);
+  if (on_change == nullptr) return;
+  DEBUG_SYNC_C("vef_one_var_before_on_change");
+  on_change(var_name_copy.c_str(), new_val);
 }
 
 }  // namespace
