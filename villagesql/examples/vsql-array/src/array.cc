@@ -42,8 +42,9 @@
 //   array_contains(a, v)   INT    1/0; v is parsed as the element type
 //   array_append(a, v)     ARRAY  a with v appended; a NULL a is treated as
 //                                 the empty array; error past max_size
-//   array_rows_json2(a, b)    STRING  '[[a1,b1],[a2,b2],...]': the arrays zipped
-//   array_rows_json3(a, b, c) STRING  position by position as a JSON array of rows,
+//   array_rows_json2(a, b)    STRING  '[[a1,b1],[a2,b2],...]': the arrays
+//   zipped array_rows_json3(a, b, c) STRING  position by position as a JSON
+//   array of rows,
 //                                 to read arrays as a table in one call:
 //                                 JSON_TABLE(array_rows_json3(a, b, c), '$[*]'
 //                                 COLUMNS (n FOR ORDINALITY, x INT PATH '$[0]',
@@ -129,9 +130,9 @@ constexpr int64_t kAggMaxSize = kArrayMaxInt64Elems;
 constexpr int64_t kRowsJsonMaxArrays = 3;
 constexpr int64_t kRowsJsonMaxLen =
     kBracketChars +
-    kArrayMaxInt64Elems * (kBracketChars + kSeparatorChars +
-                           kRowsJsonMaxArrays *
-                               (kMaxTextDouble + kSeparatorChars));
+    kArrayMaxInt64Elems *
+        (kBracketChars + kSeparatorChars +
+         kRowsJsonMaxArrays * (kMaxTextDouble + kSeparatorChars));
 
 // Room for one formatted element plus its terminating NUL.
 constexpr size_t kElemTextBuf = 32;
