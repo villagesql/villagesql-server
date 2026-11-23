@@ -2445,8 +2445,6 @@ TEST_F(VictionaryClientTest, SpParamOnlyHasUncommittedOnSpParams) {
   client_->rollback_all_tables(fake_thd);
 }
 
-// ===== Lock-free transaction end when nothing is pending =====
-
 // How long a transaction-end call may take before the test decides it is
 // blocked on the write lock.
 static const std::chrono::seconds kNoLockWaitLimit{5};
@@ -2467,12 +2465,12 @@ TEST_F(VictionaryClientTest, UncommittedOperationCount) {
     client_->columns().MarkForInsertion(*fake_thd, std::move(entry2));
     client_->columns().MarkForInsertion(*other_thd, std::move(entry3));
   }
-  EXPECT_EQ(client_->columns().uncommitted_ops(), 3u);
+  EXPECT_EQ(client_->columns().uncommitted_entry_count(), 3u);
   EXPECT_TRUE(client_->has_uncommitted_operations());
 
   // Committing one session leaves the other session's operation pending.
   client_->commit_all_tables(fake_thd);
-  EXPECT_EQ(client_->columns().uncommitted_ops(), 1u);
+  EXPECT_EQ(client_->columns().uncommitted_entry_count(), 1u);
   EXPECT_TRUE(client_->has_uncommitted_operations());
   {
     auto guard = client_->get_read_lock();
@@ -2483,7 +2481,7 @@ TEST_F(VictionaryClientTest, UncommittedOperationCount) {
   }
 
   client_->rollback_all_tables(other_thd);
-  EXPECT_EQ(client_->columns().uncommitted_ops(), 0u);
+  EXPECT_EQ(client_->columns().uncommitted_entry_count(), 0u);
   EXPECT_FALSE(client_->has_uncommitted_operations());
 
   // A staged DELETE counts too, and clear_all_tables() resets the count.

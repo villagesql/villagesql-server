@@ -398,7 +398,7 @@ class SystemTableMap {
 
     m_uncommitted[&thd].emplace_back(op_type, std::move(entry_ptr),
                                      std::move(key));
-    m_uncommitted_ops.fetch_add(1);
+    m_uncommitted_entry_count.fetch_add(1);
     return false;
   }
 
@@ -410,7 +410,7 @@ class SystemTableMap {
     // entry is nullptr for DELETE-by-key
     m_uncommitted[&thd].emplace_back(OperationType::DELETE, nullptr,
                                      std::move(key));
-    m_uncommitted_ops.fetch_add(1);
+    m_uncommitted_entry_count.fetch_add(1);
     return false;
   }
 
@@ -419,7 +419,7 @@ class SystemTableMap {
   // without the VictionaryClient lock: a session that staged an operation did
   // so on its own thread before it commits or rolls back, so it always sees a
   // non-zero count for its own pending work.
-  uint64_t uncommitted_ops() const { return m_uncommitted_ops.load(); }
+  uint64_t uncommitted_entry_count() const { return m_uncommitted_entry_count.load(); }
 
   // ===== Transaction lifecycle =====
 
@@ -433,7 +433,7 @@ class SystemTableMap {
       return;  // No uncommitted operations
     }
 
-    m_uncommitted_ops.fetch_sub(thd_it->second.size());
+    m_uncommitted_entry_count.fetch_sub(thd_it->second.size());
 
     // Apply all pending operations to committed map in order
     for (PendingOperation<EntryType> &op : thd_it->second) {
@@ -470,7 +470,7 @@ class SystemTableMap {
 
     auto thd_it = m_uncommitted.find(thd);
     if (thd_it == m_uncommitted.end()) return;
-    m_uncommitted_ops.fetch_sub(thd_it->second.size());
+    m_uncommitted_entry_count.fetch_sub(thd_it->second.size());
     m_uncommitted.erase(thd_it);
   }
 
@@ -504,7 +504,7 @@ class SystemTableMap {
       rollback(thd);
       return;
     }
-    m_uncommitted_ops.fetch_sub(list.size() - savepoint.elements);
+    m_uncommitted_entry_count.fetch_sub(list.size() - savepoint.elements);
     list.erase(list.begin() + savepoint.elements, list.end());
   }
 
@@ -515,7 +515,7 @@ class SystemTableMap {
     assert_write_lock_held();
     m_committed.clear();
     m_uncommitted.clear();
-    m_uncommitted_ops.store(0);
+    m_uncommitted_entry_count.store(0);
   }
 
   // ===== Table I/O (PERSISTENT mode only) =====
@@ -717,14 +717,14 @@ class SystemTableMap {
   // Requires read lock
   Stats get_stats() const {
     assert_read_or_write_lock_held();
-
-    size_t uncommitted_count = 0;
-    for (const auto &[_, list] : m_uncommitted) {
-      uncommitted_count += list.size();
-    }
-
-    return {m_committed.size(), uncommitted_count, m_hits.load(),
-            m_misses.load()};
+#ifndef NDEBUG
+    // The counter must equal the entries held; every stats read checks it.
+    size_t summed = 0;
+    for (const auto &[_, list] : m_uncommitted) summed += list.size();
+    assert(summed == m_uncommitted_entry_count.load());
+#endif
+    return {m_committed.size(), m_uncommitted_entry_count.load(),
+            m_hits.load(), m_misses.load()};
   }
 
  private:
@@ -736,8 +736,8 @@ class SystemTableMap {
   std::map<THD *, UncommittedList> m_uncommitted;
 
   // Count of PendingOperation entries held in m_uncommitted (all sessions).
-  // Modified only under the write lock; read lock-free by uncommitted_ops().
-  std::atomic<uint64_t> m_uncommitted_ops{0};
+  // Modified only under the write lock; read lock-free by uncommitted_entry_count().
+  std::atomic<uint64_t> m_uncommitted_entry_count{0};
 
   // Per-map statistics
   mutable std::atomic<uint64_t> m_hits{0};
@@ -905,19 +905,48 @@ class VictionaryClient {
   // Lock-free. commit_all_tables()/rollback_all_tables() use it to return
   // without the write lock in the common case where nothing is pending.
   bool has_uncommitted_operations() const {
-    return m_properties.uncommitted_ops() != 0 ||
-           m_columns.uncommitted_ops() != 0 ||
-           m_sp_params.uncommitted_ops() != 0 ||
-           m_extensions.uncommitted_ops() != 0 ||
-           m_type_descriptors.uncommitted_ops() != 0 ||
-           m_extension_descriptors.uncommitted_ops() != 0 ||
-           m_type_contexts.uncommitted_ops() != 0 ||
-           m_funcs.uncommitted_ops() != 0 ||
-           m_index_contexts.uncommitted_ops() != 0 ||
-           m_custom_indexes.uncommitted_ops() != 0 ||
-           m_custom_index_columns.uncommitted_ops() != 0 ||
-           m_index_type_descriptors.uncommitted_ops() != 0 ||
-           m_index_profile_descriptors.uncommitted_ops() != 0;
+    bool any = false;
+    for_each_table([&any](const auto &table) {
+      any = any || table.uncommitted_entry_count() != 0;
+    });
+    return any;
+  }
+
+  // Calls fn(table) for every table map, in a fixed order. This is the one
+  // list of all maps: commit, rollback, clear and the pending check use it,
+  // so a map added here is covered by all of them. Update it when a map is
+  // added.
+  template <typename Fn>
+  void for_each_table(Fn &&fn) {
+    fn(m_properties);
+    fn(m_columns);
+    fn(m_sp_params);
+    fn(m_extensions);
+    fn(m_type_descriptors);
+    fn(m_extension_descriptors);
+    fn(m_type_contexts);
+    fn(m_funcs);
+    fn(m_index_contexts);
+    fn(m_custom_indexes);
+    fn(m_custom_index_columns);
+    fn(m_index_type_descriptors);
+    fn(m_index_profile_descriptors);
+  }
+  template <typename Fn>
+  void for_each_table(Fn &&fn) const {
+    fn(m_properties);
+    fn(m_columns);
+    fn(m_sp_params);
+    fn(m_extensions);
+    fn(m_type_descriptors);
+    fn(m_extension_descriptors);
+    fn(m_type_contexts);
+    fn(m_funcs);
+    fn(m_index_contexts);
+    fn(m_custom_indexes);
+    fn(m_custom_index_columns);
+    fn(m_index_type_descriptors);
+    fn(m_index_profile_descriptors);
   }
 
   // A position in this THD's uncommitted entries across all tables.
