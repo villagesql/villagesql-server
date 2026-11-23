@@ -2528,11 +2528,11 @@ TEST_F(VictionaryClientTest, TransactionEndStillAppliesPendingOperations) {
   client_->commit_all_tables(fake_thd);
   {
     auto guard = client_->get_read_lock();
-    EXPECT_EQ(client_->columns()
-                  .get_prefix_committed(
-                      ColumnKeyPrefix("testdb", "pendingtable"))
-                  .size(),
-              1u);
+    EXPECT_EQ(
+        client_->columns()
+            .get_prefix_committed(ColumnKeyPrefix("testdb", "pendingtable"))
+            .size(),
+        1u);
   }
   EXPECT_FALSE(client_->has_uncommitted_operations());
 }
