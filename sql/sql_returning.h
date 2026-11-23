@@ -30,8 +30,8 @@
 #include "my_inttypes.h"
 #include "sql-common/json_dom.h"
 #include "sql/query_result.h"
-#include "sql/sql_list.h"
 #include "sql/sql_data_change.h"
+#include "sql/sql_list.h"
 
 class Item;
 class PT_returning_into;

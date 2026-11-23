@@ -28,6 +28,7 @@
 #include <memory>
 
 #include "mem_root_deque.h"
+#include "mysqld_error.h"
 #include "sql-common/json_dom.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/item.h"
@@ -38,7 +39,6 @@
 #include "sql/query_result.h"
 #include "sql/sp_rcontext.h"
 #include "sql/sql_base.h"
-#include "mysqld_error.h"
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
 #include "sql/sql_lex.h"
@@ -90,8 +90,8 @@ bool prepare_returning_fields(THD *thd, Query_block *query_block,
 
 void Query_result_returning::set_into(PT_returning_into *into) {
   m_into = into->json_var;
-  m_into_vars = into->scalar_vars != nullptr ? &into->scalar_vars->value
-                                              : nullptr;
+  m_into_vars =
+      into->scalar_vars != nullptr ? &into->scalar_vars->value : nullptr;
 }
 
 void Query_result_returning::cleanup() {
@@ -206,8 +206,8 @@ bool Query_result_returning::assign_scalars(THD *thd) {
                                             &item))
         return true;
     } else {
-      Item_func_set_user_var *suv = new (thd->mem_root)
-          Item_func_set_user_var(mv->name, item);
+      Item_func_set_user_var *suv =
+          new (thd->mem_root) Item_func_set_user_var(mv->name, item);
       if (suv == nullptr || suv->fix_fields(thd, nullptr)) return true;
       suv->save_item_result(item);
       if (suv->update()) return true;

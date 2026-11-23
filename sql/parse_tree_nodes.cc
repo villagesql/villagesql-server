@@ -155,10 +155,11 @@ bool contextualize_returning_clause(
   if (returning_error) return true;
 
   // Resolve the RETURNING ... INTO target (JSON var or scalar var list; each an
-  // SP-local offset or a @user_var). Unlike SELECT ... INTO, we do not install a Query_dumpvar into
-  // lex->result: RETURNING drives its own Query_result_returning, which handles
-  // the JSON capture. We still mark the statement uncacheable because it writes
-  // a session/routine variable as a side effect.
+  // SP-local offset or a @user_var). Unlike SELECT ... INTO, we do not install
+  // a Query_dumpvar into lex->result: RETURNING drives its own
+  // Query_result_returning, which handles the JSON capture. We still mark the
+  // statement uncacheable because it writes a session/routine variable as a
+  // side effect.
   if (returning_into != nullptr) {
     if (returning_into->contextualize(pc)) return true;
     lex->set_uncacheable(select, UNCACHEABLE_SIDEEFFECT);
