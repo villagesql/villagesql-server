@@ -502,8 +502,7 @@ std::optional<TypeDescriptor> build_type_descriptor_v5(
   // 8. Collect aggregate (optional, protocol >= 6): an aggregate VDF of this
   // extension taking one argument and returning this type. RETURNING ... INTO
   // a variable of this type runs it over the returned rows.
-  if (td->protocol >= VEF_PROTOCOL_6 &&
-      extension_protocol >= VEF_PROTOCOL_6 &&
+  if (td->protocol >= VEF_PROTOCOL_6 && extension_protocol >= VEF_PROTOCOL_6 &&
       td->collect_aggregate_vdf_name != nullptr) {
     const char *agg_name = td->collect_aggregate_vdf_name;
     const vef_func_desc_t *agg = find_vdf_by_name(reg, agg_name);
@@ -515,9 +514,8 @@ std::optional<TypeDescriptor> build_type_descriptor_v5(
       return std::nullopt;
     }
     const vef_signature_t *sig = agg->signature;
-    if (agg->clear == nullptr || agg->accumulate == nullptr ||
-        sig == nullptr || sig->param_count != 1 ||
-        sig->return_type.id != VEF_TYPE_CUSTOM ||
+    if (agg->clear == nullptr || agg->accumulate == nullptr || sig == nullptr ||
+        sig->param_count != 1 || sig->return_type.id != VEF_TYPE_CUSTOM ||
         sig->return_type.custom_type == nullptr ||
         strcmp(sig->return_type.custom_type, td->name) != 0) {
       LogVSQL(ERROR_LEVEL,

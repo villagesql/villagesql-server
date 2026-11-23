@@ -328,7 +328,6 @@ class TypeDescriptor {
   std::optional<IntrinsicDefaultFunction> intrinsic_default_fn_;
   std::optional<std::string> intrinsic_default_str_;
 
-
   // Storage interface provided by the extension for managing column storage.
   // Empty if the type uses default InnoDB column storage.
   std::optional<StorageInterface> storage_intf_;
