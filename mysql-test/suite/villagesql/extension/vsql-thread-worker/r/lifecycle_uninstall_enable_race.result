@@ -11,7 +11,7 @@ SET DEBUG_SYNC = 'now WAIT_FOR in_on_change';
 # con_uninstall: UNINSTALL EXTENSION with the SET parked
 UNINSTALL EXTENSION vsql_lifecycle_test;
 # default: wait until UNINSTALL waits to unregister the variable
-# default: release the SET; it starts the worker
+# default: release the SET, which must not start the worker
 SET DEBUG_SYNC = 'now SIGNAL release_on_change';
 SET DEBUG_SYNC = 'RESET';
 # con_uninstall: UNINSTALL completes

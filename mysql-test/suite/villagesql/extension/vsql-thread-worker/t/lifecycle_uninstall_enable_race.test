@@ -59,7 +59,7 @@ let $wait_condition =
         AND w.EVENT_NAME = 'wait/synch/rwlock/sql/LOCK_system_variables_hash');
 --source include/wait_condition.inc
 
---echo # default: release the SET; it starts the worker
+--echo # default: release the SET, which must not start the worker
 SET DEBUG_SYNC = 'now SIGNAL release_on_change';
 
 connection con_set;
