@@ -77,6 +77,21 @@ bool Custom_column::alter_add_drop_with_extended_storage(
   return false;
 }
 
+bool Custom_column::check_compressed(const TABLE *table) {
+  for (uint i = 0; i < table->s->fields; i++) {
+    const Field *f = table->field[i];
+    const TypeContext *tc = f->get_type_context();
+    // Only stored columns get extended storage, see load().
+    if (f->is_virtual_gcol() || tc == nullptr || !tc->storage_intf()) continue;
+    villagesql_error(
+        "ROW_FORMAT=COMPRESSED is not supported for column '%s' with "
+        "extended storage.",
+        MYF(0), f->field_name);
+    return true;
+  }
+  return false;
+}
+
 Custom_column::Info Custom_column::get_from_field(const dict_field_t *field) {
   bool ascending = true;
   Custom_column *custom_column = nullptr;
