@@ -2194,6 +2194,8 @@ bool Persisted_variables_cache::reset_persisted_variables(THD *thd,
                                                           bool if_exists) {
   bool result = false, found = false;
   const bool reset_all = (name ? 0 : 1);
+  // TODO(villagesql-rebase): drop this change once upstream fixes MySQL Bug
+  // #121838.
   // VillageSQL: look up the alias before taking m_LOCK_persist_variables.
   // register_variable and plugin install hold LOCK_system_variables_hash when
   // they take m_LOCK_persist_variables, so it must not be taken inside it.
