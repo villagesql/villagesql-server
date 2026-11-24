@@ -1,69 +1,75 @@
-INSTALL EXTENSION vsql_array;
+INSTALL EXTENSION vsql_tarray_test;
 #
 # Case 1: the same procedure called repeatedly in one connection.
 #
 CREATE PROCEDURE p_sum(IN n INT)
 BEGIN
-DECLARE a vsql_array.ARRAY('type=int32,max_size=16') DEFAULT '[]';
+DECLARE a vsql_tarray_test.TARRAY('type=int16,max_size=16') DEFAULT '[]';
+DECLARE e vsql_tarray_test.TARRAY('type=int16,max_size=16');
 DECLARE i INT DEFAULT 1;
+DECLARE t VARCHAR(64);
 WHILE i <= n DO
-SET a = vsql_array.array_append(a, i * 10);
+SET t = CONCAT('[', i * 10, ']');
+SET e = t;
+SET a = vsql_tarray_test.tarray_concat(a, e);
 SET i = i + 1;
 END WHILE;
-SELECT a, vsql_array.array_length(a) AS len,
-vsql_array.array_get(a, n) AS last;
+SELECT a, vsql_tarray_test.tarray_dim(a) AS len;
 END//
 CALL p_sum(1);
-a	len	last
-[10]	1	10
+a	len
+[10]	1
 CALL p_sum(2);
-a	len	last
-[10,20]	2	20
+a	len
+[10,20]	2
 CALL p_sum(3);
-a	len	last
-[10,20,30]	3	30
+a	len
+[10,20,30]	3
 CALL p_sum(3);
-a	len	last
-[10,20,30]	3	30
-# The element type still applies: int32 overflow is an error.
+a	len
+[10,20,30]	3
+# The type parameters still apply: max_size=2 caps the element count.
 CREATE PROCEDURE p_overflow()
 BEGIN
-DECLARE a vsql_array.ARRAY('type=int32,max_size=2') DEFAULT '[1,2]';
-SET a = vsql_array.array_append(a, 3);
+DECLARE a vsql_tarray_test.TARRAY('type=int16,max_size=2') DEFAULT '[1,2]';
+DECLARE e vsql_tarray_test.TARRAY('type=int16,max_size=2') DEFAULT '[3]';
+SET a = vsql_tarray_test.tarray_concat(a, e);
 SELECT a;
 END//
 CALL p_overflow();
-ERROR HY000: VDF error in function 'array_append': array_append: result would exceed max_size (2)
+a
+NULL
 CALL p_overflow();
-ERROR HY000: VDF error in function 'array_append': array_append: result would exceed max_size (2)
+a
+NULL
 #
 # Case 2: another connection, with its own copy of the routine.
 #
 CALL p_sum(2);
-a	len	last
-[10,20]	2	20
+a	len
+[10,20]	2
 CALL p_sum(4);
-a	len	last
-[10,20,30,40]	4	40
+a	len
+[10,20,30,40]	4
 CALL p_sum(4);
-a	len	last
-[10,20,30,40]	4	40
+a	len
+[10,20,30,40]	4
 #
 # Case 3: a victionary commit between calls (a table with a custom
 # column), then the same procedure again in both connections.
 #
 CREATE TABLE t_arr (id INT PRIMARY KEY,
-a vsql_array.ARRAY('type=int32,max_size=16'));
+a vsql_tarray_test.TARRAY('type=int16,max_size=16'));
 CALL p_sum(5);
-a	len	last
-[10,20,30,40,50]	5	50
+a	len
+[10,20,30,40,50]	5
 CALL p_sum(5);
-a	len	last
-[10,20,30,40,50]	5	50
+a	len
+[10,20,30,40,50]	5
 DROP TABLE t_arr;
 CALL p_sum(1);
-a	len	last
-[10]	1	10
+a	len
+[10]	1
 #
 # Case 4: the procedure dropped and created again with other type
 # parameters (double elements); both connections see the new type.
@@ -71,78 +77,84 @@ a	len	last
 DROP PROCEDURE p_sum;
 CREATE PROCEDURE p_sum(IN n INT)
 BEGIN
-DECLARE a vsql_array.ARRAY('type=double,max_size=16') DEFAULT '[]';
+DECLARE a vsql_tarray_test.TARRAY('type=double,max_size=16') DEFAULT '[]';
+DECLARE e vsql_tarray_test.TARRAY('type=double,max_size=16');
 DECLARE i INT DEFAULT 1;
+DECLARE t VARCHAR(64);
 WHILE i <= n DO
-SET a = vsql_array.array_append(a, i * 25e-2);
+SET t = CONCAT('[', i * 0.25, ']');
+SET e = t;
+SET a = vsql_tarray_test.tarray_concat(a, e);
 SET i = i + 1;
 END WHILE;
-SELECT a, vsql_array.array_length(a) AS len,
-vsql_array.array_get_double(a, n) AS last;
+SELECT a, vsql_tarray_test.tarray_dim(a) AS len;
 END//
 CALL p_sum(3);
-a	len	last
-[0.25,0.5,0.75]	3	0.75
+a	len
+[0.25,0.5,0.75]	3
 CALL p_sum(3);
-a	len	last
-[0.25,0.5,0.75]	3	0.75
+a	len
+[0.25,0.5,0.75]	3
 CALL p_sum(2);
-a	len	last
-[0.25,0.5]	2	0.5
+a	len
+[0.25,0.5]	2
 #
-# Case 5: a procedure with an array variable called in a loop of another
-# procedure (array values passed as scalars: a routine PARAMETER of a
-# parameterized custom type cannot be loaded yet, ISSUES-LOG F95).
+# Case 5: a procedure with a TARRAY variable called in a loop of another
+# procedure (values passed as scalars: a routine PARAMETER of a
+# parameterized custom type cannot be loaded yet, issue #1600).
 #
-CREATE PROCEDURE p_add(IN k INT, OUT len INT, OUT last BIGINT)
+CREATE PROCEDURE p_add(IN k INT, OUT len INT)
 BEGIN
-DECLARE a vsql_array.ARRAY('type=int64,max_size=8') DEFAULT '[]';
+DECLARE a vsql_tarray_test.TARRAY('type=double,max_size=8') DEFAULT '[]';
+DECLARE e vsql_tarray_test.TARRAY('type=double,max_size=8');
 DECLARE i INT DEFAULT 1;
+DECLARE t VARCHAR(64);
 WHILE i <= k DO
-SET a = vsql_array.array_append(a, i * 1000000000);
+SET t = CONCAT('[', i * 1000000000, ']');
+SET e = t;
+SET a = vsql_tarray_test.tarray_concat(a, e);
 SET i = i + 1;
 END WHILE;
-SET len = vsql_array.array_length(a), last = vsql_array.array_get(a, k);
+SET len = vsql_tarray_test.tarray_dim(a);
 END//
 CREATE PROCEDURE p_outer(IN n INT)
 BEGIN
 DECLARE i INT DEFAULT 1;
 DECLARE len INT;
-DECLARE last BIGINT;
 WHILE i <= n DO
-CALL p_add(i, len, last);
-SELECT i, len, last;
+CALL p_add(i, len);
+SELECT i, len;
 SET i = i + 1;
 END WHILE;
 END//
 CALL p_outer(3);
-i	len	last
-1	1	1000000000
-i	len	last
-2	2	2000000000
-i	len	last
-3	3	3000000000
+i	len
+1	1
+i	len
+2	2
+i	len
+3	3
 CALL p_outer(5);
-i	len	last
-1	1	1000000000
-i	len	last
-2	2	2000000000
-i	len	last
-3	3	3000000000
-i	len	last
-4	4	4000000000
-i	len	last
-5	5	5000000000
+i	len
+1	1
+i	len
+2	2
+i	len
+3	3
+i	len
+4	4
+i	len
+5	5
 #
-# Case 6: a stored function with an array variable, called once per row
+# Case 6: a stored function with a TARRAY variable, called once per row
 # (the value passed as text: a routine PARAMETER of a parameterized custom
-# type cannot be loaded yet, ISSUES-LOG F95).
+# type cannot be loaded yet, issue #1600).
 #
 CREATE FUNCTION f_len(s VARCHAR(64)) RETURNS INT DETERMINISTIC
 BEGIN
-DECLARE a vsql_array.ARRAY('type=int32,max_size=16');
+DECLARE a vsql_tarray_test.TARRAY('type=int16,max_size=16');
 SET a = s;
-RETURN IFNULL(vsql_array.array_length(a), -1);
+RETURN IFNULL(vsql_tarray_test.tarray_dim(a), -1);
 END//
 CREATE TABLE t_rows (id INT PRIMARY KEY, s VARCHAR(64));
 INSERT INTO t_rows VALUES (1, '[]'), (2, '[1]'), (3, '[1,2,3]'), (4, NULL),
@@ -174,13 +186,14 @@ DROP PROCEDURE p_overflow;
 DROP PROCEDURE p_add;
 DROP PROCEDURE p_outer;
 DROP FUNCTION f_len;
-UNINSTALL EXTENSION vsql_array;
+UNINSTALL EXTENSION vsql_tarray_test;
 # And installing it again works with a new procedure.
-INSTALL EXTENSION vsql_array;
+INSTALL EXTENSION vsql_tarray_test;
 CREATE PROCEDURE p_again()
 BEGIN
-DECLARE a vsql_array.ARRAY('type=int32,max_size=4') DEFAULT '[7]';
-SET a = vsql_array.array_append(a, 8);
+DECLARE a vsql_tarray_test.TARRAY('type=int16,max_size=4') DEFAULT '[7]';
+DECLARE e vsql_tarray_test.TARRAY('type=int16,max_size=4') DEFAULT '[8]';
+SET a = vsql_tarray_test.tarray_concat(a, e);
 SELECT a;
 END//
 CALL p_again();
@@ -190,4 +203,4 @@ CALL p_again();
 a
 [7,8]
 DROP PROCEDURE p_again;
-UNINSTALL EXTENSION vsql_array;
+UNINSTALL EXTENSION vsql_tarray_test;
