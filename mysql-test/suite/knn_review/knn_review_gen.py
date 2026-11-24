@@ -15,7 +15,6 @@ ALL8 = ["1", "4", "8", "2", "5", "3", "6", "7"]
 # KNN_REVIEW_ALL=1 in the environment.
 KNOWN_ISSUES = {
     "ddl/check_table": "KNN-10 CHECK TABLE reports the KNN index corrupt and marks it so",
-    "ddl/rename_table": "KNN-12 After RENAME TABLE a KNN query fails (index_init called for a KNN scan)",
     "ddl/create_index_populated": "NYI-4 Building a KNN index over existing rows is not implemented yet",
     "ddl/recreate_index": "NYI-4 Building a KNN index over existing rows is not implemented yet",
     "ddl/table_rebuild": "NYI-4 Building a KNN index over existing rows is not implemented yet",
@@ -29,8 +28,6 @@ KNOWN_ISSUES = {
     "locking/phantom_for_update": "KNN-22 A locking KNN read takes no gap locks, so another session can insert a phantom",
     "locking/phantom_for_share": "KNN-22 A locking KNN read takes no gap locks, so another session can insert a phantom",
     "select_plan/dml_explain": "KNN-23 EXPLAIN of a KNN-ordered DELETE or UPDATE shows a plain index scan",
-    "ddl/rename_drop_uninstall": "KNN-12 After RENAME TABLE a KNN query fails (index_init called for a KNN scan)",
-    "ddl/alter_rename_table": "KNN-12 After RENAME TABLE a KNN query fails (index_init called for a KNN scan)",
     "locking/hnsw_current_entry_after_change": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_delete": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_vector_update": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
