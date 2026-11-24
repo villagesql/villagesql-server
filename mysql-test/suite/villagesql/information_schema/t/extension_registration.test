@@ -19,7 +19,8 @@ INSTALL EXTENSION foo;
 --replace_regex /"sdk_version":"[^"]*"/"sdk_version":"SDK_VERSION"/ /"extension_version":"[^"]*"/"extension_version":"EXT_VERSION"/
 SELECT * FROM INFORMATION_SCHEMA.EXTENSION_REGISTRATION ORDER BY EXTENSION_NAME;
 
---echo # Verify requested and negotiated protocols match the server's VEF protocol version
+--echo # foo is built against the dev SDK and registers the server's VEF protocol;
+--echo # vsql_complex is built against the stable SDK and registers the stable protocol
 SELECT EXTENSION_NAME,
        JSON_EXTRACT(REGISTRATION_JSON, '$.requested_protocol') = @@villagesql_vef_server_protocol AS requested_matches_server,
        NEGOTIATED_PROTOCOL = @@villagesql_vef_server_protocol AS negotiated_matches_server
