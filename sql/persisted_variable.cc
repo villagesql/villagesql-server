@@ -2197,11 +2197,12 @@ bool Persisted_variables_cache::reset_persisted_variables(THD *thd,
   // TODO(villagesql-rebase): drop this change once upstream fixes MySQL Bug
   // #121838.
   // VillageSQL: look up the alias before taking m_LOCK_persist_variables.
-  // register_variable and plugin install hold LOCK_system_variables_hash when
-  // they take m_LOCK_persist_variables, so it must not be taken inside it.
-  // get_variable_alias() takes LOCK_system_variables_hash itself; holding it
-  // here as well would nest the read lock, which waits behind a queued
-  // writer that is waiting for this thread.
+  // register_variable and plugin install take LOCK_system_variables_hash
+  // before m_LOCK_persist_variables, so this function must not take the hash
+  // lock while it holds m_LOCK_persist_variables. get_variable_alias() takes
+  // LOCK_system_variables_hash itself, so it is not taken here as well. A
+  // nested read lock waits behind a queued writer that is waiting for this
+  // thread.
   std::string alias_name;
   if (!reset_all) alias_name = get_variable_alias(name);
   /* update on m_persisted_dynamic_variables/m_persisted_static_variables must
