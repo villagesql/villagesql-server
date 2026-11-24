@@ -17,7 +17,7 @@ UPDATE t1 SET new_complex_value = VSQL_COMPLEX.COMPLEX::from_string(old_value);
 ALTER TABLE t1 DROP COLUMN old_value;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t1	new_complex_value	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	new_complex_value	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -35,7 +35,7 @@ id	new_complex_value
 ALTER TABLE t1 MODIFY new_complex_value COMPLEX NOT NULL;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t1	new_complex_value	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	new_complex_value	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -51,7 +51,7 @@ id	new_complex_value
 ALTER TABLE t1 CHANGE new_complex_value renamed_complex COMPLEX NOT NULL;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t1	renamed_complex	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	renamed_complex	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (

@@ -5,12 +5,12 @@ description TEXT
 );
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	complex_data	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	complex_data	vsql_complex	0.0.2	COMPLEX	{}
 INSERT INTO source_table VALUES (1, '(5.0,6.0)', 'temp source');
 CREATE TEMPORARY TABLE temp_like LIKE source_table;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	complex_data	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	complex_data	vsql_complex	0.0.2	COMPLEX	{}
 SHOW COLUMNS FROM temp_like;
 Field	Type	Null	Key	Default	Extra
 id	int	NO	PRI	NULL	NULL
@@ -23,7 +23,7 @@ id	complex_data	description
 DROP TABLE temp_like;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	complex_data	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	complex_data	vsql_complex	0.0.2	COMPLEX	{}
 DROP TABLE source_table;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters

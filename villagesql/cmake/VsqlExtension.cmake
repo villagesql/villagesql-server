@@ -57,7 +57,7 @@ function(vsql_add_extension)
     CMAKE_GENERATOR ${CMAKE_GENERATOR}
     CMAKE_ARGS
       "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include-dev"
+      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${SDK_STAGING_DIR}/include"
       "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
       "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
       ${_ext_cov_args}

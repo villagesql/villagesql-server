@@ -8,7 +8,7 @@ SET SESSION DEBUG="-d,pre_commit_error";
 # The failed uninstall rolled back: extension must still be installed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-vsql_simple	0.0.1
+vsql_simple	0.0.2
 # The .so must still be loaded: exercise type resolution, encode,
 # decode, and a VDF call (crashes if the .so was unloaded)
 CREATE TABLE t1 (id INT PRIMARY KEY, data BYTEARRAY);

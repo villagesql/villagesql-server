@@ -7,7 +7,7 @@
 INSTALL EXTENSION vsql_complex;
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-vsql_complex	0.0.1
+vsql_complex	0.0.2
 #
 # Phase 2: Switch to data1 (no extensions installed)
 #
@@ -21,7 +21,7 @@ extension_count
 # Extension should still be loaded
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-vsql_complex	0.0.1
+vsql_complex	0.0.2
 #
 # Cleanup
 #

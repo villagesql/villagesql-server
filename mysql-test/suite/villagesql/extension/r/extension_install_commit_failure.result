@@ -10,7 +10,7 @@ EXTENSION_NAME	EXTENSION_VERSION
 INSTALL EXTENSION vsql_simple;
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-vsql_simple	0.0.1
+vsql_simple	0.0.2
 CREATE TABLE t1 (id INT PRIMARY KEY, data BYTEARRAY);
 INSERT INTO t1 VALUES (1, 'hello');
 SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") AS rotated FROM t1;

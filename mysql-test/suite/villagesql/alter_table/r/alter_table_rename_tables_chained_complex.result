@@ -10,12 +10,12 @@ INSERT INTO t1 VALUES (1, '(1.0,2.0)');
 INSERT INTO t2 VALUES (2, '3.0');
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t1	value	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	value	vsql_complex	0.0.2	COMPLEX	{}
 # Swap t1 and t2 through a temporary name.
 RENAME TABLE t1 TO tmp, t2 TO t1, tmp TO t2;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t2	value	vsql_complex	0.0.1	COMPLEX	{}
+test	t2	value	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -40,7 +40,7 @@ id	value
 RENAME TABLE t2 TO t3, t3 TO t4;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t4	value	vsql_complex	0.0.1	COMPLEX	{}
+test	t4	value	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t4;
 Table	Create Table
 t4	CREATE TABLE `t4` (
@@ -60,8 +60,8 @@ INSERT INTO t5 VALUES (5, '(5.0,6.0)');
 RENAME TABLE t4 TO tmp, t5 TO t4, tmp TO t5;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t4	value	vsql_complex	0.0.1	COMPLEX	{}
-test	t5	value	vsql_complex	0.0.1	COMPLEX	{}
+test	t4	value	vsql_complex	0.0.2	COMPLEX	{}
+test	t5	value	vsql_complex	0.0.2	COMPLEX	{}
 SELECT * FROM t4;
 id	value
 5	(5,6)
@@ -89,9 +89,9 @@ INSERT INTO t7 VALUES (7, 3.5, '(4.0,4.0)');
 RENAME TABLE t6 TO tmp, t7 TO t6, tmp TO t7;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t6	c2	vsql_complex	0.0.1	COMPLEX	{}
-test	t7	c1	vsql_complex	0.0.1	COMPLEX	{}
-test	t7	c2	vsql_complex	0.0.1	COMPLEX	{}
+test	t6	c2	vsql_complex	0.0.2	COMPLEX	{}
+test	t7	c1	vsql_complex	0.0.2	COMPLEX	{}
+test	t7	c2	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t6;
 Table	Create Table
 t6	CREATE TABLE `t6` (
@@ -121,9 +121,9 @@ RENAME TABLE t6 TO tmp, t7 TO t6, tmp TO t8;
 ERROR 42S01: Table 't8' already exists
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t6	c2	vsql_complex	0.0.1	COMPLEX	{}
-test	t7	c1	vsql_complex	0.0.1	COMPLEX	{}
-test	t7	c2	vsql_complex	0.0.1	COMPLEX	{}
+test	t6	c2	vsql_complex	0.0.2	COMPLEX	{}
+test	t7	c1	vsql_complex	0.0.2	COMPLEX	{}
+test	t7	c2	vsql_complex	0.0.2	COMPLEX	{}
 SHOW TABLES;
 Tables_in_test
 t6

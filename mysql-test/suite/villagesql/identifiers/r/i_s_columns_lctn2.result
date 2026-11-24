@@ -3,7 +3,7 @@ USE MixedDb;
 CREATE TABLE MixedTab (MixedCol vsql_complex.COMPLEX, plain INT);
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-mixeddb	mixedtab	MixedCol	vsql_complex	0.0.1	COMPLEX	{}
+mixeddb	mixedtab	MixedCol	vsql_complex	0.0.2	COMPLEX	{}
 SHOW FIELDS FROM MixedTab;
 Field	Type	Null	Key	Default	Extra
 MixedCol	vsql_complex.COMPLEX	YES		NULL	

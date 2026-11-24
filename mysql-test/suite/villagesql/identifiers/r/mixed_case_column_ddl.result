@@ -4,16 +4,16 @@ CREATE TABLE t1 (MyCol vsql_complex.COMPLEX);
 ALTER TABLE t1 MODIFY mycol vsql_complex.COMPLEX;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-mixed_case	t1	mycol	vsql_complex	0.0.1	COMPLEX	{}
+mixed_case	t1	mycol	vsql_complex	0.0.2	COMPLEX	{}
 CREATE TABLE t2 (OtherCol vsql_complex.COMPLEX, keep INT);
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-mixed_case	t1	mycol	vsql_complex	0.0.1	COMPLEX	{}
-mixed_case	t2	OtherCol	vsql_complex	0.0.1	COMPLEX	{}
+mixed_case	t1	mycol	vsql_complex	0.0.2	COMPLEX	{}
+mixed_case	t2	OtherCol	vsql_complex	0.0.2	COMPLEX	{}
 ALTER TABLE t2 DROP COLUMN OTHERCOL;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-mixed_case	t1	mycol	vsql_complex	0.0.1	COMPLEX	{}
+mixed_case	t1	mycol	vsql_complex	0.0.2	COMPLEX	{}
 # restart
 USE mixed_case;
 SHOW FIELDS FROM t1;

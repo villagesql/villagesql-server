@@ -5,13 +5,13 @@ f FLOAT
 );
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	measurement	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	measurement	vsql_complex	0.0.2	COMPLEX	{}
 INSERT INTO source_table VALUES (1, '(13.0,14.0)', 18.62);
 CREATE TABLE IF NOT EXISTS t1 (LIKE source_table);
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	measurement	vsql_complex	0.0.1	COMPLEX	{}
-test	t1	measurement	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	measurement	vsql_complex	0.0.2	COMPLEX	{}
+test	t1	measurement	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -29,12 +29,12 @@ Warnings:
 Note	1050	Table 't1' already exists
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	measurement	vsql_complex	0.0.1	COMPLEX	{}
-test	t1	measurement	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	measurement	vsql_complex	0.0.2	COMPLEX	{}
+test	t1	measurement	vsql_complex	0.0.2	COMPLEX	{}
 DROP TABLE t1;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	measurement	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	measurement	vsql_complex	0.0.2	COMPLEX	{}
 DROP TABLE source_table;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
