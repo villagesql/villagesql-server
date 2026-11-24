@@ -10,37 +10,39 @@ fixed, run its tests with `KNN_REVIEW_ALL=1` in the environment; when they
 pass, remove the two lines (and the entry in the generator's KNOWN_ISSUES) and
 mark the issue fixed here.
 
+🟢 fixed, 🔴 open, 🟡 known behaviour or moved to NYI, ⚪ obsolete.
+
 | Id | Title | Status | Tests |
 |---|---|---|---|
-| KNN-1 | Locking KNN read at REPEATABLE READ fails with ER 3219 (range lock) | fixed in /40 | locking/insert_select, locking/lock_wait_rr, locking/repeatable_read, select_plan/locking_repeatable_read |
-| KNN-2 | UPDATE of the primary key crashes: old index entry built with a new column reference | fixed in /40 | update/pk_update |
-| KNN-3 | A KNN scan that stops early never ends its extension cursor | fixed in /40 | select_correctness/cursor_leak |
-| KNN-4 | A KNN scan skips NULL vectors the plain query fails on (result depends on the plan) | open | select_correctness/null_vectors_knn_scan |
-| KNN-5 | A profile can bind more than one ORDER function; a KNN scan then ranks by the first, not the query's | open | select_correctness/order_function |
-| KNN-6 | A RANGE_SCAN custom index rejects an equality read with ER 3219 (end range) | fixed in /40 | select_correctness/range_read |
-| KNN-7 | A window function under a KNN ORDER BY ... LIMIT sees only LIMIT rows (wrong result) | open | select_correctness/window_under_knn_limit |
-| KNN-8 | A HAVING clause stops the KNN scan (plan only, rows correct) | open | select_plan/having |
-| KNN-9 | Unlocking a row rejected by WHERE in a READ COMMITTED locking KNN read crashes | fixed in /40 | locking/unlock_row |
-| KNN-10 | CHECK TABLE reports the KNN index corrupt (0 entries) and marks it corrupted | open | ddl/check_table |
-| KNN-11 | Building a KNN index from existing rows crashes (custom_column.cc old_index != nullptr) | moved to NYI-4, #1391 | ddl/create_index_populated, ddl/recreate_index, ddl/table_rebuild, ddl/primary_key_change |
-| KNN-12 | After RENAME TABLE a KNN query fails (index_init() called for a KNN scan) | open, main #1541 | ddl/rename_table, ddl/alter_rename_table, ddl/rename_drop_uninstall |
-| KNN-13 | Entries invisible to the reader use up the KNN LIMIT (too few rows) | fixed in /40 | rollback/other_session_insert, rollback/snapshot_insert |
-| KNN-14 | An MVCC_VISIBILITY index shows a row committed after the reader's snapshot (phantom) | obsolete | (tests removed) |
-| KNN-15 | A READ COMMITTED locking KNN read drops rows whose entry is current | fixed in /40 | locking/current_entry_pk, locking/current_entry_btree, locking/read_committed |
-| KNN-16 | VEF_INDEX_CAP_APPROXIMATE has the same bit as VEF_INDEX_CAP_KNN | fixed in /40 | unit test index_capability_bits-t |
-| KNN-17 | UPDATE of a column-store column in an intrinsic temporary table crashes (write_trx_id of trx 0) | fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table (not skipped) |
-| KNN-18 | INSERT of a vsql-vector SVECTOR into an intrinsic temporary table crashes (write_trx_id of trx 0) | fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table (not skipped) |
-| KNN-19 | A column store created in the temporary tablespace gets a root page with stale bytes (vsql-vector asserts) | fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table, storage_temp_table (not skipped) |
-| KNN-20 | DROP TABLE and TRUNCATE TABLE do not call the custom index drop callback (file-per-table) | open | ddl/drop_table_entries, ddl/truncate_entries |
-| KNN-21 | CREATE INDEX ... USING EXTENDED on a temporary table is refused with a misleading message | open, #1392 | ddl/temporary_table (records the current message) |
-| KNN-22 | A REPEATABLE READ locking KNN read takes no gap locks, so another session can insert a phantom | open | locking/phantom_for_update, locking/phantom_for_share |
-| KNN-23 | EXPLAIN of a KNN-ordered DELETE or UPDATE shows a plain index scan | open, #1382 | select_plan/dml_explain |
-| KNN-24 | With an HNSW index, entries a READ COMMITTED locking KNN read rejects use up the LIMIT (too few rows) | open, #1398 | locking/hnsw_current_entry_after_change, locking/hnsw_lock_wait_then_delete, locking/hnsw_lock_wait_then_vector_update |
-| KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | fixed in /42 | rollback/hnsw_crash_recovery |
-| KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | fixed in vsql-vector /34 | delete/hnsw_many_deleted |
-| KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress, hnsw_purge_then_restart |
-| KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | fixed in /43 | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
-| KNN-29 | After a restart, purge of HNSW entries deleted before it makes other rows unreachable | open | delete/hnsw_purge_restart |
+| KNN-1 | Locking KNN read at REPEATABLE READ fails with ER 3219 (range lock) | 🟢 fixed by #1649 | locking/insert_select, locking/lock_wait_rr, locking/repeatable_read, select_plan/locking_repeatable_read |
+| KNN-2 | UPDATE of the primary key crashes: old index entry built with a new column reference | 🟢 fixed by the DML PRs #1640 to #1647 | update/pk_update |
+| KNN-3 | A KNN scan that stops early never ends its extension cursor | 🟢 fixed by #1650 | select_correctness/cursor_leak |
+| KNN-4 | A KNN scan skips NULL vectors the plain query fails on (result depends on the plan) | 🔴 open | select_correctness/null_vectors_knn_scan |
+| KNN-5 | A profile can bind more than one ORDER function; a KNN scan then ranks by the first, not the query's | 🔴 open | select_correctness/order_function |
+| KNN-6 | A RANGE_SCAN custom index rejects an equality read with ER 3219 (end range) | 🟡 avoided by #1649: no range read is planned; range reads still unsupported | select_correctness/range_read |
+| KNN-7 | A window function under a KNN ORDER BY ... LIMIT sees only LIMIT rows (wrong result) | 🔴 open | select_correctness/window_under_knn_limit |
+| KNN-8 | A HAVING clause stops the KNN scan (plan only, rows correct) | 🔴 open | select_plan/having |
+| KNN-9 | Unlocking a row rejected by WHERE in a READ COMMITTED locking KNN read crashes | 🟢 fixed by #1646 | locking/unlock_row |
+| KNN-10 | CHECK TABLE reports the KNN index corrupt (0 entries) and marks it corrupted | 🔴 open | ddl/check_table |
+| KNN-11 | Building a KNN index from existing rows crashes (custom_column.cc old_index != nullptr) | 🟡 moved to NYI-4, #1391 | ddl/create_index_populated, ddl/recreate_index, ddl/table_rebuild, ddl/primary_key_change |
+| KNN-12 | After RENAME TABLE a KNN query fails (index_init() called for a KNN scan) | 🟢 fixed by #1544 (main #1541) | ddl/rename_table, ddl/alter_rename_table, ddl/rename_drop_uninstall |
+| KNN-13 | Entries invisible to the reader use up the KNN LIMIT (too few rows) | 🟢 fixed by #1646 | rollback/other_session_insert, rollback/snapshot_insert |
+| KNN-14 | An MVCC_VISIBILITY index shows a row committed after the reader's snapshot (phantom) | ⚪ obsolete | (tests removed) |
+| KNN-15 | A READ COMMITTED locking KNN read drops rows whose entry is current | 🟢 fixed by #1645 and #1646 | locking/current_entry_pk, locking/current_entry_btree, locking/read_committed |
+| KNN-16 | VEF_INDEX_CAP_APPROXIMATE has the same bit as VEF_INDEX_CAP_KNN | 🟢 fixed by #1481 | unit test index_capability_bits-t |
+| KNN-17 | UPDATE of a column-store column in an intrinsic temporary table crashes (write_trx_id of trx 0) | 🟢 fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table (not skipped) |
+| KNN-18 | INSERT of a vsql-vector SVECTOR into an intrinsic temporary table crashes (write_trx_id of trx 0) | 🟢 fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table (not skipped) |
+| KNN-19 | A column store created in the temporary tablespace gets a root page with stale bytes (vsql-vector asserts) | 🟢 fixed | villagesql/extension/vsql-storage-test/storage_intrinsic_table, storage_temp_table (not skipped) |
+| KNN-20 | DROP TABLE and TRUNCATE TABLE do not call the custom index drop callback (file-per-table) | 🔴 open | ddl/drop_table_entries, ddl/truncate_entries |
+| KNN-21 | CREATE INDEX ... USING EXTENDED on a temporary table is refused with a misleading message | 🔴 open, #1392 | ddl/temporary_table (records the current message) |
+| KNN-22 | A REPEATABLE READ locking KNN read takes no gap locks, so another session can insert a phantom | 🔴 open | locking/phantom_for_update, locking/phantom_for_share |
+| KNN-23 | EXPLAIN of a KNN-ordered DELETE or UPDATE shows a plain index scan | 🔴 open, #1382 | select_plan/dml_explain |
+| KNN-24 | With an HNSW index, entries a READ COMMITTED locking KNN read rejects use up the LIMIT (too few rows) | 🔴 open, #1398 | locking/hnsw_current_entry_after_change, locking/hnsw_lock_wait_then_delete, locking/hnsw_lock_wait_then_vector_update |
+| KNN-25 | Restart after a crash asserts in redo recovery on a PK mapping B-tree record | 🟢 fixed by #1654 and #1655 | rollback/hnsw_crash_recovery |
+| KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | 🟢 fixed by vsql-vector #101 | delete/hnsw_many_deleted |
+| KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | 🟡 known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress, hnsw_purge_then_restart |
+| KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | 🟢 fixed by #1656 | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
+| KNN-29 | After a restart, purge of HNSW entries deleted before it makes other rows unreachable | 🔴 open | delete/hnsw_purge_restart |
 
 ## Not implemented yet
 
@@ -59,7 +61,9 @@ still not implemented on /40.
 
 ## KNN-1: Locking KNN read at REPEATABLE READ fails with ER 3219 (range lock)
 
-- Fixed in deb/custom-index/40 (25df4f5): its tests pass.
+- Fixed by #1649 (Custom Index: Optimizer KNN for DML), which removes the
+  range-lock rejection that #1480 added: its tests pass. A locking KNN read at
+  REPEATABLE READ now takes no gap locks (KNN-22).
 - Seen on: deb/custom-index/26 (0094de4), with 528c6ad.
 - Earlier name: D6′.
 - Symptom: `ERROR 3219 (HY000): InnoDB: Custom type operation failed`; server
@@ -95,7 +99,9 @@ still not implemented on /40.
 
 ## KNN-3: A KNN scan that stops early never ends its extension cursor
 
-- Fixed in deb/custom-index/40 (25df4f5): the test passes (no cursor left open).
+- Fixed by #1650 (Custom Index: InnoDB fixes), which ends the cursor at the
+  end of the scan and before a new one opens: the test passes (no cursor left
+  open).
 - Seen on: deb/custom-index/26 (0094de4), with 528c6ad.
 - Symptom: after three `... LIMIT 1` KNN queries on a 3-row table,
   `kvec_open_cursors()` is 3 higher than before (expected 0). A scan that
@@ -160,7 +166,12 @@ still not implemented on /40.
 
 ## KNN-6: A RANGE_SCAN custom index rejects an equality read with ER 3219 (end range)
 
-- Fixed in deb/custom-index/40 (25df4f5): the test passes.
+- Avoided, not fixed: the test passes since #1649 (Custom Index: Optimizer KNN
+  for DML), which stops advertising `HA_READ_RANGE` for RANGE_SCAN, so the
+  optimizer no longer uses the index for the equality read
+  (`disable_custom_keys_for_query`). `check_row_search_conditions` still
+  refuses a read with an end range (added in #1482). A RANGE_SCAN index does
+  not yet serve keyed reads.
 - Seen on: deb/custom-index/26 (0094de4), with 528c6ad, and the test
   extension's kvec_range index type (uncommitted in the deb26 worktree).
 - Repro: kvec_range index (capability RANGE_SCAN) on v;
@@ -222,7 +233,8 @@ still not implemented on /40.
 
 ## KNN-9: Unlocking a row rejected by WHERE in a READ COMMITTED locking KNN read crashes
 
-- Fixed in deb/custom-index/40 (25df4f5): the test passes.
+- Fixed by #1646 (Custom Index: InnoDB DML -3), which stores the clustered
+  position: the test passes.
 - Seen on: deb/custom-index/26 (0094de4), with 528c6ad. Debug build.
 - Repro: READ COMMITTED, standard 8-row table,
   `SELECT id FROM t WHERE pay <> 'a' ORDER BY kvec_l2_distance(v, '[1,0,0,0]')
@@ -295,6 +307,8 @@ still not implemented on /40.
 
 ## KNN-12: After RENAME TABLE a KNN query fails (index_init() called for a KNN scan)
 
+- Fixed by #1544 (Move custom index metadata when a table is renamed), on
+  main: its tests pass.
 - Filed against main as villagesql/villagesql-server#1541
   (https://github.com/villagesql/villagesql-server/issues/1541). The rename
   bug is on main, not in deb/custom-index; the KNN failure here is how it
@@ -333,7 +347,7 @@ still not implemented on /40.
 
 ## KNN-13: Entries invisible to the reader use up the KNN LIMIT (too few rows)
 
-- Fixed in deb/custom-index/40 (25df4f5): both tests pass. The extension
+- Fixed by #1646 (Custom Index: InnoDB DML -3): both tests pass. The extension
   now filters entries by the scan's read view, so invisible entries never
   reach the LIMIT.
 - Seen on: deb/custom-index/26 (0094de4), with 528c6ad.
@@ -384,7 +398,8 @@ still not implemented on /40.
 ## KNN-15: A READ COMMITTED locking KNN read drops rows whose entry is current
 
 - Seen on: deb/custom-index/26 (0094de4). Earlier name: D2.
-- Fixed in deb/custom-index/40: check_and_lock locks the clustered record
+- Fixed by #1645 (Custom Index: SDK validate) and #1646 (Custom Index: InnoDB
+  DML -3): check_and_lock locks the clustered record
   first, then skips it if it is delete-marked or the extension's scan_validate
   rejects the entry (created by trx_ref and not delete-marked). This replaces
   our earlier fix (entry_matches_rec, compare the column reference).
@@ -411,7 +426,7 @@ still not implemented on /40.
   server tests APPROXIMATE on its own yet, so nothing visibly breaks; it is
   the bit an exact-LIMIT decision needs (see KNN-13).
 - Test: unittest/gunit/villagesql/index_capability_bits-t.cc.
-- Fixed in the rebased deb/custom-index/26 (e39911b): MVCC_VISIBILITY was
+- Fixed by #1481 (Custom Index: Update SDK interface): MVCC_VISIBILITY was
   removed and APPROXIMATE is now `1u << 5`.
 
 ## KNN-17: UPDATE of a column-store column in an intrinsic temporary table crashes (write_trx_id of trx 0)
@@ -600,7 +615,7 @@ still not implemented on /40.
 
 ## KNN-25: Restart after a crash asserts in redo recovery on a PK mapping B-tree record
 
-- Fixed in deb/custom-index/42: 129bdbd "Fix recovery redo apply" and b9315d6
+- Fixed by #1654 "Fix recovery redo apply" and #1655
   "Fix recovery rollback". rollback/hnsw_crash_recovery passes.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/40 25df4f5) with
   vsql-vector deb/hnsw_index/33 (ce25b42).
@@ -625,7 +640,7 @@ still not implemented on /40.
 
 ## KNN-26: With an HNSW index and most rows deleted, a KNN query returns too few rows
 
-- Fixed in vsql-vector deb/hnsw_index/34: 279b873 "HNSW Index: Fix MVCC
+- Fixed by vsql-vector #101 "HNSW Index: Fix MVCC
   termination". delete/hnsw_many_deleted passes.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/40 25df4f5) with
   vsql-vector deb/hnsw_index/33 (ce25b42).
@@ -694,7 +709,7 @@ still not implemented on /40.
 
 ## KNN-28: Rollback at recovery of a prepared transaction that changed an HNSW index fails
 
-- Fixed in deb/custom-index/43: 851f84b "Custom Index: Fix binlog recovery".
+- Fixed by #1656 "Custom Index: Fix binlog recovery".
   rollback/hnsw_recovery_prepared_rollback{,_insert,_delete} pass.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
   vsql-vector deb/hnsw_index/33 (ce25b42), debug build, binary log on.

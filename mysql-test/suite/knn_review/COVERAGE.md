@@ -9,7 +9,7 @@ whether it restarts the server, and the known issue it skips for.
 
 | Test | Checks | Index | Debug | Restart | Known issue |
 |---|---|---|---|---|---|
-| alter_rename_table | After ALTER TABLE ... RENAME TO, also to another database, the KNN index keeps working under the new name, and dropping the table frees the extension. | test ext |  |  | KNN-12 |
+| alter_rename_table | After ALTER TABLE ... RENAME TO, also to another database, the KNN index keeps working under the new name, and dropping the table frees the extension. | test ext |  |  |  |
 | check_table | CHECK TABLE on a table with a custom index reports it OK, and the index keeps working afterwards. | test ext |  |  | KNN-10 |
 | create_index_populated | CREATE INDEX on a table that already has rows indexes them all. | test ext |  |  | NYI-4 |
 | drop_index | After DROP INDEX the same KNN query still answers, sorted. | test ext |  |  |  |
@@ -18,8 +18,8 @@ whether it restarts the server, and the known issue it skips for.
 | instant_ddl | ALTER TABLE operations that do not rebuild the table (instant ADD and DROP COLUMN, RENAME COLUMN, an in-place secondary index) leave the KNN index working, also for rows written after them. | test ext |  |  |  |
 | primary_key_change | Changing the primary key of a table with a custom index is refused, and the index keeps working. | test ext |  |  | NYI-4 |
 | recreate_index | An index dropped and created again on the populated table is complete and usable. | test ext |  |  | NYI-4 |
-| rename_drop_uninstall | A table renamed and then dropped leaves nothing behind that depends on the extension, so the extension can be uninstalled. | test ext |  |  | KNN-12 |
-| rename_table | After RENAME TABLE the KNN index is complete and usable under the new name, and again after renaming back. | test ext |  |  | KNN-12 |
+| rename_drop_uninstall | A table renamed and then dropped leaves nothing behind that depends on the extension, so the extension can be uninstalled. | test ext |  |  |  |
+| rename_table | After RENAME TABLE the KNN index is complete and usable under the new name, and again after renaming back. | test ext |  |  |  |
 | table_rebuild | Table rebuilds keep the KNN index complete and usable. | test ext |  |  | NYI-4 |
 | temporary_table | A KNN index on a temporary table either works like on a base table or is refused when it is created; it never returns wrong rows. | test ext |  |  |  |
 | truncate_entries | TRUNCATE TABLE releases the entries of the KNN index: the extension's entry count afterwards counts only rows inserted after it. | test ext |  |  | KNN-20 |
