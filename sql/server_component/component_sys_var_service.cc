@@ -603,6 +603,9 @@ DEFINE_BOOL_METHOD(mysql_component_sys_variable_imp::register_variable,
         // two in the opposite order, so LOCK_plugin must not be held here.
         mysql_mutex_assert_not_owner(&LOCK_plugin);
         mysql_rwlock_wrlock(&LOCK_system_variables_hash);
+        // VillageSQL: holds LOCK_system_variables_hash, before
+        // set_persisted_options() takes m_LOCK_persist_variables.
+        DEBUG_SYNC_C("register_variable_after_hash_lock");
         // ignore the SET PERSIST errors, as they're reported into the log
         class Error_to_warning_error_handler : public Internal_error_handler {
          public:
