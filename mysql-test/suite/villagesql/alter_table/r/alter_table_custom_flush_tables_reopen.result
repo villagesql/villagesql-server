@@ -1,0 +1,52 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, c COMPLEX, c2 COMPLEX) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, '(1,2)', '(3,4)'), (2, '(5,6)', '(7,8)');
+#
+# ALTER TABLE
+#
+# con_ddl: ALTER TABLE, parked after it opened t1
+SET DEBUG_SYNC = 'alter_table_after_mdl_lock_fk SIGNAL opened WAIT_FOR flushed';
+ALTER TABLE t1 MODIFY c2 COMPLEX;
+SET DEBUG_SYNC = 'now WAIT_FOR opened';
+# con_flush: FLUSH TABLES, which waits for t1 to be closed
+FLUSH TABLES;
+# default: let the ALTER go on to open the system tables
+SET DEBUG_SYNC = 'now SIGNAL flushed';
+SET DEBUG_SYNC = 'RESET';
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `c` vsql_complex.COMPLEX DEFAULT NULL,
+  `c2` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT id, c, c2 FROM t1 ORDER BY id;
+id	c	c2
+1	(1,2)	(3,4)
+2	(5,6)	(7,8)
+#
+# CREATE TABLE ... LIKE
+#
+CREATE TABLE t2 (id INT PRIMARY KEY, c COMPLEX, KEY k_c (c),
+KEY k_fn ((complex_real(c)))) ENGINE=InnoDB;
+INSERT INTO t2 VALUES (1, '(1,2)');
+# con_ddl: CREATE TABLE ... LIKE, parked after it opened t2
+SET DEBUG_SYNC = 'create_table_like_after_open SIGNAL opened WAIT_FOR flushed';
+CREATE TABLE t3 LIKE t2;
+SET DEBUG_SYNC = 'now WAIT_FOR opened';
+# con_flush: FLUSH TABLES, which waits for t2 to be closed
+FLUSH TABLES;
+# default: let the CREATE go on to open the system tables
+SET DEBUG_SYNC = 'now SIGNAL flushed';
+SET DEBUG_SYNC = 'RESET';
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL,
+  `c` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `k_c` (`c`),
+  KEY `k_fn` ((vsql_complex.complex_real(`c`)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1, t2, t3;
+SET DEBUG_SYNC = 'RESET';
