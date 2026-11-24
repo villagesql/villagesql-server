@@ -46,13 +46,10 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     return true;
   }
 
-  // Read in a read-only attachable transaction, like data dictionary reads:
-  // InnoDB then does a consistent read and takes no row locks. This runs at
-  // startup before ha_post_recover() rolls back the transactions recovered
-  // from the redo log, so a locking read would wait on their row locks until
-  // it times out. A consistent read skips their uncommitted changes and sees
-  // what remains after the rollback. Ending the attachable transaction
-  // commits it and closes the table.
+  // Read in a read-only attachable transaction, as data dictionary reads do,
+  // so InnoDB does a consistent read without row locks. At startup this runs
+  // before ha_post_recover() rolls back recovered transactions, and a locking
+  // read would wait on their locks. Ending the transaction closes the table.
   thd->begin_attachable_ro_transaction();
   auto attachable_guard =
       create_scope_guard([&thd]() { thd->end_attachable_transaction(); });
