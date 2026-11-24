@@ -1265,7 +1265,13 @@ static bool open_staged_system_tables(THD *thd, Table_ref *first, uint flags,
   // opens has none recorded. The system tables are not the statement's own,
   // and each execution stages them anew, so they must not ask.
   thd->push_reprepare_observer(nullptr);
-  const bool open_failed = open_tables(thd, &first, &counter, flags, &strategy);
+  // The statement has opened its own tables already. After a concurrent FLUSH
+  // TABLES, the system tables would come from a newer table cache version,
+  // and open_tables() would close all the statement's tables to reopen only
+  // these, leaving the caller with closed tables. Skip the table cache version
+  // check instead, as MySQL does when it opens its own system tables.
+  const bool open_failed = open_tables(
+      thd, &first, &counter, flags | MYSQL_OPEN_IGNORE_FLUSH, &strategy);
   thd->pop_reprepare_observer();
   if (open_failed) {
     villagesql_error("Cannot open VillageSQL system tables", MYF(0));
