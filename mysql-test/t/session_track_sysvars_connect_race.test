@@ -1,0 +1,46 @@
+# A new connection copies the global session_track_system_variables string
+# into the session. It must not read the global string after a concurrent
+# SET GLOBAL has freed it.
+#
+# plugin_thdvar_init() copies global_system_variables into the session under
+# LOCK_global_system_variables, which leaves the session's
+# track_sysvars_ptr pointing at the global string. After unlocking, it calls
+# Session_sysvar_resource_manager::init(), which copies that string. A
+# SET GLOBAL session_track_system_variables in between frees it in
+# Sys_var_charptr::global_update(). MySQL Bug #121849.
+#
+# Debug sync is not set up yet in plugin_thdvar_init(), so the debug point
+# plugin_thdvar_init_sleep_before_sysvar_copy sleeps 5 seconds before the
+# copy instead. A background client connects and parks there, and this
+# connection changes the global value meanwhile. With the fix, the sleep holds
+# LOCK_global_system_variables, so the SET GLOBAL waits for the copy. Without
+# the fix, ASan reports a heap-use-after-free. Without ASan, run with
+# --mysqld-env=MallocScribble=1 on macOS so the freed string is overwritten.
+#
+# Expected: the new session gets the value the global had when it connected.
+
+--source include/have_debug.inc
+
+SET GLOBAL session_track_system_variables = 'autocommit,time_zone';
+
+--let $out = $MYSQLTEST_VARDIR/tmp/session_track_sysvars_connect_race.out
+
+--echo # Connect in the background; the new session parks before the copy
+SET GLOBAL DEBUG = '+d,plugin_thdvar_init_sleep_before_sysvar_copy';
+--exec_in_background $MYSQL -N -e "SELECT @@session.session_track_system_variables" > $out 2>&1
+--sleep 2
+
+--echo # Replace the global value, which frees the old string
+SET GLOBAL session_track_system_variables = 'sql_mode';
+SET GLOBAL DEBUG = '-d,plugin_thdvar_init_sleep_before_sysvar_copy';
+
+--echo # Wait for the background client to print its session value
+--perl
+my $f = "$ENV{MYSQLTEST_VARDIR}/tmp/session_track_sysvars_connect_race.out";
+for (1 .. 300) { last if -s $f; select(undef, undef, undef, 0.1); }
+EOF
+--echo # The session value of the background client
+--cat_file $out
+--remove_file $out
+
+SET GLOBAL session_track_system_variables = DEFAULT;
