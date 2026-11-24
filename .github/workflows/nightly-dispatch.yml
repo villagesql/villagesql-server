@@ -129,6 +129,76 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "workflow_branch=$WORKFLOW_BRANCH" >> "$GITHUB_OUTPUT"
 
+  # Consumed by long-running tests.
+  start-build-release:
+    if: always()
+    name: Start server build (linux, release)
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start server build (release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.ref }}
+          TAG: ${{ needs.collect-info.outputs.tag }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+          REF="${TAG:-$REF}"
+
+          URL=$(gh workflow run build-server-branch.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f platform=linux-x86_64 \
+            -f release_build="true" \
+            -f build-type=release \
+            -f os=linux \
+            -f runner='["self-hosted","linux-server","x86_64","server_build_worker","ubuntu_24"]' \
+            -f bundled_extensions=true \
+            -f run_unit_tests=false \
+            -f run_integration_tests=true \
+            -f upload_sdk=true)
+          echo "Started build-server-branch (release) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  # Consumed by long-running tests.
+  start-build-debug:
+    if: always()
+    name: Start server build (linux, debug)
+    needs: collect-info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # Required to start a workflow run
+    steps:
+      - name: Start build server branch (debug)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ needs.collect-info.outputs.ref }}
+          TAG: ${{ needs.collect-info.outputs.tag }}
+          WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
+        run: |
+          set -euo pipefail
+          REF="${TAG:-$REF}"
+
+          URL=$(gh workflow run build-server-branch.yml \
+            --ref "$WORKFLOW_BRANCH" \
+            -f ref="$REF" \
+            -f platform=linux-x86_64 \
+            -f release_build="false" \
+            -f build-type=debug \
+            -f os=linux \
+            -f runner='["self-hosted","linux-server","x86_64","server_build_worker","ubuntu_24"]' \
+            -f bundled_extensions=true \
+            -f run_unit_tests=false \
+            -f run_integration_tests=true \
+            -f upload_sdk=false)
+          echo "Started build-server-branch (debug) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+
   start-full-test-release:
     if: always()
     name: Start full test suite (linux, release)
@@ -148,13 +218,13 @@ jobs:
         run: |
           set -euo pipefail
           REF="${TAG:-$REF}"
-          gh workflow run full-test-suite.yml \
+          URL=$(gh workflow run full-test-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
             -f build-type=release \
             -f platform=linux-x86_64 \
-            -f artifact-prefix=nightly-full-release
-          echo "Started full-test-suite (release) on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f artifact-prefix=nightly-full-release)
+          echo "Started full-test-suite (release) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   start-full-test-debug:
     if: always()
@@ -175,14 +245,14 @@ jobs:
         run: |
           set -euo pipefail
           REF="${TAG:-$REF}"
-          gh workflow run full-test-suite.yml \
+          URL=$(gh workflow run full-test-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
             -f build-type=debug \
             -f platform=linux-x86_64 \
             -f slack_notify=true \
-            -f artifact-prefix=nightly-full-debug
-          echo "Started full-test-suite (debug) on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f artifact-prefix=nightly-full-debug)
+          echo "Started full-test-suite (debug) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   # macos uses a case-insensitive filesystem.
   start-full-test-macos-debug:
@@ -204,13 +274,13 @@ jobs:
         run: |
           set -euo pipefail
           REF="${TAG:-$REF}"
-          gh workflow run full-test-suite.yml \
+          URL=$(gh workflow run full-test-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
             -f build-type=debug \
             -f platform=macos-arm64 \
-            -f artifact-prefix=nightly-full-macos-debug
-          echo "Started full-test-suite (macOS, debug) on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f artifact-prefix=nightly-full-macos-debug)
+          echo "Started full-test-suite (macOS, debug) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   # IBM's s390x is big endian hardware.
   start-full-test-s390x-debug:
@@ -232,13 +302,13 @@ jobs:
         run: |
           set -euo pipefail
           REF="${TAG:-$REF}"
-          gh workflow run full-test-suite.yml \
+          URL=$(gh workflow run full-test-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
             -f build-type=debug \
             -f platform=linux-s390x \
-            -f artifact-prefix=nightly-full-s390x-debug
-          echo "Started full-test-suite (s390x, debug) on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f artifact-prefix=nightly-full-s390x-debug)
+          echo "Started full-test-suite (s390x, debug) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   # Unlike the suites above, this one is gated on the nightly having passed.
   # extension-actions in every extension repo resolves the latest successful
@@ -261,12 +331,12 @@ jobs:
           WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
         run: |
           set -euo pipefail
-          gh workflow run extension-compat.yml \
+          URL=$(gh workflow run extension-compat.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
             -f run-tag=nightly \
-            -f slack_notify=true
-          echo "Started extension-compat on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f slack_notify=true)
+          echo "Started extension-compat on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   # Tests extensions against the latest release, not the nightly commit, so it
   # does not depend on the nightly having passed.
@@ -292,12 +362,12 @@ jobs:
           WORKFLOW_BRANCH: ${{ needs.collect-info.outputs.workflow-branch }}
         run: |
           set -euo pipefail
-          gh workflow run extension-compat-suite.yml \
+          URL=$(gh workflow run extension-compat-suite.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
             -f slack_notify=true \
-            -f title="Extension SDK Compatibility ($REF)"
-          echo "Started extension-compat-suite on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f title="Extension SDK Compatibility ($REF)")
+          echo "Started extension-compat-suite on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   start-valgrind:
     if: always()
@@ -319,11 +389,11 @@ jobs:
 
           # The phase toggles all default to true, so this runs the unit tests,
           # the villagesql MTR suite, and every bundled extension.
-          gh workflow run valgrind.yml \
+          URL=$(gh workflow run valgrind.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
-            -f slack_notify=true
-          echo "Started valgrind tests on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f slack_notify=true)
+          echo "Started valgrind tests on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   start-tsan:
     if: always()
@@ -345,11 +415,11 @@ jobs:
 
           # The phase toggles all default to true, so this runs the unit tests,
           # the villagesql MTR suite, and every bundled extension.
-          gh workflow run tsan.yml \
+          URL=$(gh workflow run tsan.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
-            -f slack_notify=true
-          echo "Started TSan tests on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f slack_notify=true)
+          echo "Started TSan tests on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   start-sanitizer:
     if: always()
@@ -370,8 +440,8 @@ jobs:
           set -euo pipefail
 
           # no -f extension= value so sanitizer runs all extensions
-          gh workflow run sanitizer.yml \
+          URL=$(gh workflow run sanitizer.yml \
             --ref "$WORKFLOW_BRANCH" \
             -f ref="$REF" \
-            -f slack_notify=true
-          echo "Started sanitizer tests on $REF" >> "$GITHUB_STEP_SUMMARY"
+            -f slack_notify=true)
+          echo "Started sanitizer tests on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"

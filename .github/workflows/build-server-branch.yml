@@ -1,4 +1,8 @@
 name: Build Server Branch
+# Only applies to dispatched runs; a workflow_call run takes its caller's name.
+run-name: >-
+  Build Server Branch (${{ inputs.ref }}, ${{ inputs.platform }},
+  ${{ inputs.build-type }}, ${{ inputs.release_build && 'release' || 'dev' }})
 
 # Builds the dev-server package for a SINGLE target, runs the integration
 # tests, and uploads the package + SDK as run-scoped artifacts.
@@ -32,6 +36,11 @@ on:
         description: 'Strip the -dev suffix from the version.'
         required: true
         type: boolean
+      build-type:
+        description: 'Build type: debug or release.'
+        required: false
+        type: string
+        default: 'release'
       os:
         description: 'Build OS family: linux or macos.'
         required: true
@@ -80,6 +89,14 @@ on:
         required: false
         type: boolean
         default: false
+      build-type:
+        description: 'Build type.'
+        required: false
+        type: choice
+        options:
+          - release
+          - debug
+        default: release
       os:
         description: 'Build OS family.'
         required: true
@@ -132,6 +149,7 @@ jobs:
       RUN_INTEGRATION_TESTS: ${{ inputs.run_integration_tests && '1' || '0' }}
       BUILD_BUNDLED_EXTENSIONS: ${{ inputs.bundled_extensions && '1' || '0' }}
       UPLOAD_SDK: ${{ inputs.upload_sdk && '1' || '0' }}
+      BUILD_TYPE: ${{ inputs.build-type }}
       # SPOOKY ACTION AT A DISTANCE: Resolve the release/-dev decision once, at
       # job scope, so every step sees the same value. Scripts that re-derive the
       # version from VSQL_VERSION key off this env var; leave it unset and they
@@ -145,6 +163,7 @@ jobs:
           echo "Git Rev: ${{ inputs.ref }}"
           echo "Platform: ${{ inputs.platform }}"
           echo "Release Bld: ${{ inputs.release_build }}"
+          echo "Build Type: $BUILD_TYPE"
           echo "OS: ${{ inputs.os }}"
           echo "Runner: ${{ inputs.runner }}"
           echo "Run Unit Tests: $RUN_UNIT_TESTS (${{ inputs.run_unit_tests }})"
