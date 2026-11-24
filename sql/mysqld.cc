@@ -9335,6 +9335,7 @@ int mysqld_main(int argc, char **argv)
     so that they are instrumented as well.
   */
   my_thread_global_reinit();
+  persisted_variables_cache.reinit();
 #endif /* HAVE_PSI_INTERFACE */
 
   /* This limits ability to configure SSL library through config options */

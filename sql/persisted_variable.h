@@ -119,6 +119,11 @@ class Persisted_variables_cache final {
  public:
   explicit Persisted_variables_cache();
   int init(int *argc, char ***argv);
+  /**
+    VillageSQL: recreate the mutexes created by init(), which runs before the
+    performance schema is initialized, so that they are instrumented.
+  */
+  void reinit();
   static Persisted_variables_cache *get_instance();
   /**
     Update in-memory copy for every SET PERSIST statement

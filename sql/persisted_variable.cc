@@ -2379,6 +2379,19 @@ Persisted_variables_cache::get_persisted_static_parse_early_variables() {
   return &m_persisted_static_parse_early_variables;
 }
 
+void Persisted_variables_cache::reinit() {
+#ifdef HAVE_PSI_INTERFACE
+  my_init_persist_psi_keys();
+#endif
+
+  mysql_mutex_destroy(&m_LOCK_persist_variables);
+  mysql_mutex_init(key_persist_variables, &m_LOCK_persist_variables,
+                   MY_MUTEX_INIT_FAST);
+
+  mysql_mutex_destroy(&m_LOCK_persist_file);
+  mysql_mutex_init(key_persist_file, &m_LOCK_persist_file, MY_MUTEX_INIT_FAST);
+}
+
 void Persisted_variables_cache::cleanup() {
   mysql_mutex_destroy(&m_LOCK_persist_variables);
   mysql_mutex_destroy(&m_LOCK_persist_file);
