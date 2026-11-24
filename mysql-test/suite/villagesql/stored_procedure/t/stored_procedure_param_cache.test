@@ -22,8 +22,10 @@ BEGIN
   DECLARE a vsql_tarray_test.TARRAY('type=int16,max_size=16') DEFAULT '[]';
   DECLARE e vsql_tarray_test.TARRAY('type=int16,max_size=16');
   DECLARE i INT DEFAULT 1;
+  DECLARE t VARCHAR(64);
   WHILE i <= n DO
-    SET e = CONCAT('[', i * 10, ']');
+    SET t = CONCAT('[', i * 10, ']');
+    SET e = t;
     SET a = vsql_tarray_test.tarray_concat(a, e);
     SET i = i + 1;
   END WHILE;
@@ -87,8 +89,10 @@ BEGIN
   DECLARE a vsql_tarray_test.TARRAY('type=double,max_size=16') DEFAULT '[]';
   DECLARE e vsql_tarray_test.TARRAY('type=double,max_size=16');
   DECLARE i INT DEFAULT 1;
+  DECLARE t VARCHAR(64);
   WHILE i <= n DO
-    SET e = CONCAT('[', i * 0.25, ']');
+    SET t = CONCAT('[', i * 0.25, ']');
+    SET e = t;
     SET a = vsql_tarray_test.tarray_concat(a, e);
     SET i = i + 1;
   END WHILE;
@@ -113,8 +117,10 @@ BEGIN
   DECLARE a vsql_tarray_test.TARRAY('type=double,max_size=8') DEFAULT '[]';
   DECLARE e vsql_tarray_test.TARRAY('type=double,max_size=8');
   DECLARE i INT DEFAULT 1;
+  DECLARE t VARCHAR(64);
   WHILE i <= k DO
-    SET e = CONCAT('[', i * 1000000000, ']');
+    SET t = CONCAT('[', i * 1000000000, ']');
+    SET e = t;
     SET a = vsql_tarray_test.tarray_concat(a, e);
     SET i = i + 1;
   END WHILE;
