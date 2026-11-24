@@ -61,9 +61,13 @@ connection con_persist;
 connection default;
 --echo # Wait until RESET PERSIST has finished or waits on the mutex
 let $wait_condition =
-  SELECT COUNT(*) = 1 FROM performance_schema.threads t
+  SELECT COUNT(*) = 1
+  FROM performance_schema.threads t
+  JOIN performance_schema.events_statements_current s
+    ON s.THREAD_ID = t.THREAD_ID
   WHERE t.PROCESSLIST_ID = $persist_id
-    AND (t.PROCESSLIST_INFO IS NULL OR EXISTS (
+    AND s.SQL_TEXT = 'RESET PERSIST'
+    AND (s.END_EVENT_ID IS NOT NULL OR EXISTS (
       SELECT 1 FROM performance_schema.events_waits_current w
       WHERE w.THREAD_ID = t.THREAD_ID AND w.END_EVENT_ID IS NULL
         AND w.EVENT_NAME LIKE 'wait/synch/mutex/%/m_LOCK_persist_variables'));

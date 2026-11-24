@@ -540,17 +540,17 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
           // SET PERSIST, RESET PERSIST and INSTALL EXTENSION change the set
           // under its lock, so walk it under the lock too. It is released
           // before reset_persisted_variables, which takes it itself.
-          pvc->lock();
-          auto it = std::find_if(plugin_vars->begin(), plugin_vars->end(),
-                                 [&full_name](const st_persist_var &v) {
-                                   // Lets a test change the set while this
-                                   // loop walks it; see
-                                   // sys_var_depopulate_persisted_lookup.test.
-                                   DEBUG_SYNC_C("vef_sys_var_persisted_lookup");
-                                   return v.key == full_name;
-                                 });
-          const bool persisted = it != plugin_vars->end();
-          pvc->unlock();
+          bool persisted;
+          {
+            std::lock_guard<Persisted_variables_cache> guard(*pvc);
+            persisted = std::ranges::any_of(
+                *plugin_vars, [&full_name](const st_persist_var &v) {
+                  // Lets a test change the set while this loop walks it; see
+                  // sys_var_depopulate_persisted_lookup.test.
+                  DEBUG_SYNC_C("vef_sys_var_persisted_lookup");
+                  return v.key == full_name;
+                });
+          }
           if (!persisted) continue;
         }
         pvc->reset_persisted_variables(ctx.thd, full_name.c_str(), true);
