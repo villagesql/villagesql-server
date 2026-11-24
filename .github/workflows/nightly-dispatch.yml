@@ -138,8 +138,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: build-server-branch.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start server build (release)
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -163,6 +167,7 @@ jobs:
             -f run_integration_tests=true \
             -f upload_sdk=true)
           echo "Started build-server-branch (release) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   # Consumed by long-running tests.
   start-build-debug:
@@ -173,8 +178,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: build-server-branch.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start build server branch (debug)
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -198,6 +207,7 @@ jobs:
             -f run_integration_tests=true \
             -f upload_sdk=false)
           echo "Started build-server-branch (debug) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   start-full-test-release:
     if: always()
@@ -207,8 +217,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: full-test-suite.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start full-test-suite (release)
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -225,6 +239,7 @@ jobs:
             -f platform=linux-x86_64 \
             -f artifact-prefix=nightly-full-release)
           echo "Started full-test-suite (release) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   start-full-test-debug:
     if: always()
@@ -234,8 +249,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: full-test-suite.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start full-test-suite (debug)
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -253,6 +272,7 @@ jobs:
             -f slack_notify=true \
             -f artifact-prefix=nightly-full-debug)
           echo "Started full-test-suite (debug) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   # macos uses a case-insensitive filesystem.
   start-full-test-macos-debug:
@@ -263,8 +283,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: full-test-suite.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start full-test-suite (macOS, debug)
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -281,6 +305,7 @@ jobs:
             -f platform=macos-arm64 \
             -f artifact-prefix=nightly-full-macos-debug)
           echo "Started full-test-suite (macOS, debug) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   # IBM's s390x is big endian hardware.
   start-full-test-s390x-debug:
@@ -291,8 +316,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: full-test-suite.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start full-test-suite (s390x, debug)
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -309,6 +338,7 @@ jobs:
             -f platform=linux-s390x \
             -f artifact-prefix=nightly-full-s390x-debug)
           echo "Started full-test-suite (s390x, debug) on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   # Unlike the suites above, this one is gated on the nightly having passed.
   # extension-actions in every extension repo resolves the latest successful
@@ -322,8 +352,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: extension-compat.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start extension-compat
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -337,6 +371,7 @@ jobs:
             -f run-tag=nightly \
             -f slack_notify=true)
           echo "Started extension-compat on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   # Tests extensions against the latest release, not the nightly commit, so it
   # does not depend on the nightly having passed.
@@ -353,8 +388,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: extension-compat-suite.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start extension-compat-suite (latest release)
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -368,6 +407,7 @@ jobs:
             -f slack_notify=true \
             -f title="Extension SDK Compatibility ($REF)")
           echo "Started extension-compat-suite on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   start-valgrind:
     if: always()
@@ -377,8 +417,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: valgrind.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start valgrind
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -394,6 +438,7 @@ jobs:
             -f ref="$REF" \
             -f slack_notify=true)
           echo "Started valgrind tests on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   start-tsan:
     if: always()
@@ -403,8 +448,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: tsan.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start tsan
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -420,6 +469,7 @@ jobs:
             -f ref="$REF" \
             -f slack_notify=true)
           echo "Started TSan tests on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   start-sanitizer:
     if: always()
@@ -429,8 +479,12 @@ jobs:
     permissions:
       contents: read
       actions: write  # Required to start a workflow run
+    outputs:
+      workflow: sanitizer.yml
+      url: ${{ steps.start.outputs.url }}
     steps:
       - name: Start sanitizer
+        id: start
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -445,3 +499,53 @@ jobs:
             -f ref="$REF" \
             -f slack_notify=true)
           echo "Started sanitizer tests on $REF: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+  # Records which workflow run each start-* job created, as an artifact that
+  # later tools can fetch from this run. A job that was skipped or failed to
+  # dispatch is still listed, with its result and an empty url.
+  summarize:
+    if: always()
+    name: Summarize started runs
+    needs:
+      - collect-info
+      - start-build-release
+      - start-build-debug
+      - start-full-test-release
+      - start-full-test-debug
+      - start-full-test-macos-debug
+      - start-full-test-s390x-debug
+      - start-extension-compat
+      - start-extension-compat-release
+      - start-valgrind
+      - start-tsan
+      - start-sanitizer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Write run list
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+
+          jq '{
+                ref: .["collect-info"].outputs.ref,
+                tag: .["collect-info"].outputs.tag,
+                release_tag: .["collect-info"].outputs["release-tag"],
+                runs: [to_entries[]
+                       | select(.key | startswith("start-"))
+                       | {job: .key,
+                          result: .value.result,
+                          workflow: (.value.outputs.workflow // ""),
+                          url: (.value.outputs.url // ""),
+                          run_id: ((.value.outputs.url // "") | split("/") | last // "")}]
+              }' <<< "$NEEDS" > nightly-dispatch-runs.json
+          cat nightly-dispatch-runs.json
+
+      - name: Upload run list
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-dispatch-runs
+          path: nightly-dispatch-runs.json
