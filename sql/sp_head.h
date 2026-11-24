@@ -60,6 +60,21 @@ class Sroutine_hash_entry;
 class Table_trigger_field_support;
 class THD;
 class sp_head;
+
+// VillageSQL: one variable table kept by a routine between calls. It is
+// allocated on m_vsql_var_table_root, which lives as long as the routine
+// (sp_head), and reused only while the victionary generation is the one
+// recorded when it was created (custom-type fields keep TypeContext and
+// encoder pointers), and never by two executions at once.
+struct Vsql_var_table_keeper {
+  TABLE *m_vsql_var_table_cache{nullptr};
+  std::unique_ptr<MEM_ROOT> m_vsql_var_table_root;
+  uint64_t m_vsql_var_table_gen{0};
+  bool m_vsql_var_table_in_use{false};
+  // Destroys the kept variable table, if any, and frees its memory.
+  void vsql_drop_var_table_cache();
+};
+
 struct CHARSET_INFO;
 struct MY_BITMAP;
 namespace villagesql {
@@ -462,6 +477,15 @@ class sp_head {
   };
   std::vector<Vsql_custom_param_ref> m_vsql_custom_params_cache;
   uint64_t m_vsql_custom_params_gen{0};
+
+  // VillageSQL: variable tables of this routine, kept after a CALL (or a
+  // function call) for the next one instead of being created and destroyed
+  // every time (sp_rcontext::init_var_table): [0] the routine's own context,
+  // [1] the placeholder caller context a top-level CALL creates with the same
+  // layout (to pass OUT parameters). See Vsql_var_table_keeper. Stored
+  // procedures and functions only (not triggers, whose sp_head can move
+  // between threads).
+  Vsql_var_table_keeper m_vsql_var_table_keepers[2];
 
   /**
     Instrumentation interface for SP.

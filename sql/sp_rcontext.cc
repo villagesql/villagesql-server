@@ -37,11 +37,14 @@
 #include "sql/derror.h"  // ER_THD
 #include "sql/field.h"
 #include "sql/protocol.h"
-#include "sql/sp.h"           // sp_eval_instr
+#include "sql/psi_memory_key.h"
+#include "sql/sp.h"  // sp_eval_instr
+#include "sql/sp_head.h"
 #include "sql/sp_instr.h"     // sp_instr
 #include "sql/sp_pcontext.h"  // sp_pcontext
 #include "sql/sql_class.h"    // THD
-#include "sql/sql_cursor.h"   // mysql_open_cursor
+#include "sql/sql_const.h"
+#include "sql/sql_cursor.h"  // mysql_open_cursor
 #include "sql/sql_list.h"
 #include "sql/sql_tmp_table.h"  // create_tmp_table_from_fields
 #include "template_utils.h"     // delete_container_pointers
@@ -70,8 +73,21 @@ sp_rcontext::sp_rcontext(const sp_pcontext *root_parsing_ctx,
 
 sp_rcontext::~sp_rcontext() {
   if (m_var_table != nullptr) {
-    free_blobs(m_var_table);
-    ::destroy_at(m_var_table);
+    if (m_var_table_owner != nullptr &&
+        m_var_table_owner->m_vsql_var_table_cache == m_var_table) {
+      // VillageSQL: hand the variable table back to its routine for the next
+      // call, unless the victionary changed while this call ran.
+      if (m_var_table_owner->m_vsql_var_table_gen ==
+          villagesql::VictionaryGeneration()) {
+        free_blobs(m_var_table);
+        m_var_table_owner->m_vsql_var_table_in_use = false;
+      } else {
+        m_var_table_owner->vsql_drop_var_table_cache();
+      }
+    } else {
+      free_blobs(m_var_table);
+      ::destroy_at(m_var_table);
+    }
   }
 
   delete_container_pointers(m_activated_handlers);
@@ -83,13 +99,14 @@ sp_rcontext::~sp_rcontext() {
 }
 
 sp_rcontext *sp_rcontext::create(THD *thd, const sp_pcontext *root_parsing_ctx,
-                                 Field *return_value_fld) {
+                                 Field *return_value_fld,
+                                 Vsql_var_table_keeper *var_table_owner) {
   sp_rcontext *ctx = new (thd->mem_root)
       sp_rcontext(root_parsing_ctx, return_value_fld, thd->in_sub_stmt);
 
   if (!ctx) return nullptr;
 
-  if (ctx->alloc_arrays(thd) || ctx->init_var_table(thd) ||
+  if (ctx->alloc_arrays(thd) || ctx->init_var_table(thd, var_table_owner) ||
       ctx->init_var_items(thd)) {
     ::destroy_at(ctx);
     return nullptr;
@@ -115,17 +132,68 @@ bool sp_rcontext::alloc_arrays(THD *thd) {
   return !m_cstack.array() || !m_case_expr_holders.array();
 }
 
-bool sp_rcontext::init_var_table(THD *thd) {
+bool sp_rcontext::init_var_table(THD *thd,
+                                 Vsql_var_table_keeper *var_table_owner) {
   List<Create_field> field_def_lst;
 
   if (!m_root_parsing_ctx->max_var_index()) return false;
+
+  // VillageSQL: reuse the variable table the routine kept from its previous
+  // call, if nothing in the victionary changed since it was created. Every
+  // variable is assigned before it is read (DECLARE assigns its DEFAULT or
+  // NULL; parameters are bound by the caller), so only the NULL flags and
+  // the blob buffers (freed when the table was handed back) need resetting.
+  if (var_table_owner != nullptr &&
+      var_table_owner->m_vsql_var_table_cache != nullptr) {
+    if (!var_table_owner->m_vsql_var_table_in_use &&
+        var_table_owner->m_vsql_var_table_gen ==
+            villagesql::VictionaryGeneration()) {
+      m_var_table = var_table_owner->m_vsql_var_table_cache;
+      m_var_table->in_use = thd;
+      for (Field **f = m_var_table->field; *f != nullptr; f++) {
+        (*f)->set_null();
+      }
+      var_table_owner->m_vsql_var_table_in_use = true;
+      m_var_table_owner = var_table_owner;
+      return false;
+    }
+    // Stale (or, defensively, in use): this call gets its own table below,
+    // and a stale one is dropped so that the next call can keep a new one.
+    if (!var_table_owner->m_vsql_var_table_in_use) {
+      var_table_owner->vsql_drop_var_table_cache();
+    } else {
+      var_table_owner = nullptr;
+    }
+  }
 
   m_root_parsing_ctx->retrieve_field_definitions(&field_def_lst);
 
   assert(field_def_lst.elements == m_root_parsing_ctx->max_var_index());
 
-  if (!(m_var_table = create_tmp_table_from_fields(thd, field_def_lst)))
+  if (var_table_owner != nullptr) {
+    // Create the table on memory that lives as long as the routine, read the
+    // generation first so that a change during creation makes it stale.
+    if (!var_table_owner->m_vsql_var_table_root) {
+      var_table_owner->m_vsql_var_table_root = std::make_unique<MEM_ROOT>(
+          key_memory_sp_head_main_root, MEM_ROOT_BLOCK_SIZE);
+    }
+    const uint64_t generation = villagesql::VictionaryGeneration();
+    MEM_ROOT *const saved_root = thd->mem_root;
+    thd->mem_root = var_table_owner->m_vsql_var_table_root.get();
+    m_var_table = create_tmp_table_from_fields(thd, field_def_lst);
+    thd->mem_root = saved_root;
+    if (m_var_table == nullptr) {
+      var_table_owner->m_vsql_var_table_root->Clear();
+      return true;
+    }
+    var_table_owner->m_vsql_var_table_cache = m_var_table;
+    var_table_owner->m_vsql_var_table_gen = generation;
+    var_table_owner->m_vsql_var_table_in_use = true;
+    m_var_table_owner = var_table_owner;
+  } else if (!(m_var_table =
+                   create_tmp_table_from_fields(thd, field_def_lst))) {
     return true;
+  }
 
   m_var_table->copy_blobs = true;
   m_var_table->alias = "";

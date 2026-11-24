@@ -1912,9 +1912,24 @@ bool sp_head::has_updated_trigger_fields(const MY_BITMAP *used_fields) const {
   return false;
 }
 
+void Vsql_var_table_keeper::vsql_drop_var_table_cache() {
+  if (m_vsql_var_table_cache != nullptr) {
+    free_blobs(m_vsql_var_table_cache);
+    ::destroy_at(m_vsql_var_table_cache);
+    m_vsql_var_table_cache = nullptr;
+  }
+  if (m_vsql_var_table_root) m_vsql_var_table_root->Clear();
+  m_vsql_var_table_gen = 0;
+  m_vsql_var_table_in_use = false;
+}
+
 sp_head::~sp_head() {
   LEX *lex;
   sp_instr *i;
+
+  for (Vsql_var_table_keeper &k : m_vsql_var_table_keepers) {
+    k.vsql_drop_var_table_cache();
+  }
 
   // Parsing of SP-body must have been already finished.
   assert(!m_parser_data.is_parsing_sp_body());
@@ -2804,8 +2819,8 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
 
   thd->swap_query_arena(call_arena, &backup_arena);
 
-  sp_rcontext *func_runtime_ctx =
-      sp_rcontext::create(thd, m_root_parsing_ctx, return_value_fld);
+  sp_rcontext *func_runtime_ctx = sp_rcontext::create(
+      thd, m_root_parsing_ctx, return_value_fld, &m_vsql_var_table_keepers[0]);
 
   if (!func_runtime_ctx) {
     thd->swap_query_arena(backup_arena, &call_arena);
@@ -3019,8 +3034,8 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
 
   if (!parent_sp_runtime_ctx) {
     // Create a temporary old context. We need it to pass OUT-parameter values.
-    parent_sp_runtime_ctx =
-        sp_rcontext::create(thd, m_root_parsing_ctx, nullptr);
+    parent_sp_runtime_ctx = sp_rcontext::create(
+        thd, m_root_parsing_ctx, nullptr, &m_vsql_var_table_keepers[1]);
 
     if (!parent_sp_runtime_ctx) return true;
 
@@ -3031,8 +3046,8 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
     thd->sp_runtime_ctx->callers_arena = thd;
   }
 
-  sp_rcontext *proc_runtime_ctx =
-      sp_rcontext::create(thd, m_root_parsing_ctx, nullptr);
+  sp_rcontext *proc_runtime_ctx = sp_rcontext::create(
+      thd, m_root_parsing_ctx, nullptr, &m_vsql_var_table_keepers[0]);
 
   if (proc_runtime_ctx == nullptr) {
     thd->sp_runtime_ctx = sp_runtime_ctx_saved;

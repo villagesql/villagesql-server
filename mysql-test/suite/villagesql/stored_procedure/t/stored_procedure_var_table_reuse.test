@@ -1,0 +1,174 @@
+# A stored procedure or function keeps its variable table from one call to
+# the next (sp_head::m_vsql_var_table_cache). Every call must behave as with a
+# fresh table: variables without DEFAULT start NULL, OUT parameters start
+# NULL, TEXT/BLOB/JSON values do not leak between calls, recursion and
+# nested calls get their own tables, a dropped and recreated routine gets a
+# new table, and a victionary change (custom types) between calls is safe.
+
+--source include/count_sessions.inc
+
+--echo #
+--echo # Variables without DEFAULT are NULL at every call; values do not leak.
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_leak(IN set_them INT)
+BEGIN
+  DECLARE i INT;
+  DECLARE s VARCHAR(20);
+  DECLARE t TEXT;
+  DECLARE j JSON;
+  SELECT i, s, t, j;
+  IF set_them THEN
+    SET i = 42, s = 'abc', t = REPEAT('x', 5000), j = '{"k": [1, 2, 3]}';
+    SELECT i, s, LENGTH(t) AS tlen, j;
+  END IF;
+END//
+delimiter ;//
+CALL p_leak(1);
+CALL p_leak(0);
+CALL p_leak(1);
+CALL p_leak(1);
+CALL p_leak(0);
+
+--echo #
+--echo # OUT parameters start NULL; INOUT keep the passed value.
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_out(OUT o TEXT, INOUT io INT)
+BEGIN
+  SELECT o AS o_at_start, io AS io_at_start;
+  SET o = CONCAT('call ', io), io = io + 1;
+END//
+delimiter ;//
+SET @o = 'outside', @io = 1;
+CALL p_out(@o, @io);
+SELECT @o, @io;
+CALL p_out(@o, @io);
+SELECT @o, @io;
+
+--echo #
+--echo # A stored function with TEXT variables, called once per row.
+--echo #
+
+delimiter //;
+CREATE FUNCTION f_rep(n INT) RETURNS TEXT DETERMINISTIC
+BEGIN
+  DECLARE acc TEXT;
+  DECLARE k INT DEFAULT 0;
+  SET acc = CONCAT('n', n, ':');
+  WHILE k < n DO
+    SET acc = CONCAT(acc, k);
+    SET k = k + 1;
+  END WHILE;
+  RETURN acc;
+END//
+delimiter ;//
+CREATE TABLE t_n (n INT PRIMARY KEY);
+INSERT INTO t_n VALUES (0), (1), (2), (3), (4), (5);
+SELECT n, f_rep(n) AS r FROM t_n ORDER BY n;
+SELECT n, f_rep(n) AS r FROM t_n ORDER BY n DESC;
+--echo # The same function as an argument of itself (the inner call runs while
+--echo # the outer call holds the kept table).
+SELECT f_rep(LENGTH(f_rep(3))) AS nested, f_rep(2) AS plain;
+DROP TABLE t_n;
+
+--echo #
+--echo # Recursion and a procedure calling another one.
+--echo #
+
+SET SESSION max_sp_recursion_depth = 5;
+delimiter //;
+CREATE PROCEDURE p_rec(IN n INT, INOUT acc TEXT)
+BEGIN
+  DECLARE mine VARCHAR(10);
+  SET mine = CONCAT('<', n, '>');
+  IF n > 0 THEN
+    CALL p_rec(n - 1, acc);
+  END IF;
+  SET acc = CONCAT(IFNULL(acc, ''), mine);
+END//
+delimiter ;//
+SET @acc = NULL;
+CALL p_rec(4, @acc);
+SELECT @acc;
+SET @acc = NULL;
+CALL p_rec(4, @acc);
+SELECT @acc;
+SET SESSION max_sp_recursion_depth = DEFAULT;
+
+--echo #
+--echo # Dropped and recreated with other variable types.
+--echo #
+
+DROP PROCEDURE p_leak;
+delimiter //;
+CREATE PROCEDURE p_leak(IN set_them INT)
+BEGIN
+  DECLARE d DATE;
+  DECLARE x DECIMAL(10,2);
+  SELECT d, x;
+  IF set_them THEN
+    SET d = '2026-11-20', x = 12.5;
+    SELECT d, x;
+  END IF;
+END//
+delimiter ;//
+CALL p_leak(1);
+CALL p_leak(0);
+
+--echo #
+--echo # Another connection, with its own copy of the routine.
+--echo #
+
+connect (con1, localhost, root,,);
+CALL p_leak(1);
+CALL p_leak(0);
+disconnect con1;
+connection default;
+
+--echo #
+--echo # Custom types: a victionary change between calls (extension
+--echo # uninstalled and installed again after the routine is recreated).
+--echo #
+
+INSTALL EXTENSION vsql_complex;
+delimiter //;
+CREATE PROCEDURE p_cx(IN set_it INT)
+BEGIN
+  DECLARE c COMPLEX;
+  SELECT c;
+  IF set_it THEN
+    SET c = '(1.0,2.0)';
+    SELECT c;
+  END IF;
+END//
+delimiter ;//
+CALL p_cx(1);
+CALL p_cx(0);
+CREATE TABLE t_cx (c COMPLEX);
+DROP TABLE t_cx;
+CALL p_cx(1);
+DROP PROCEDURE p_cx;
+UNINSTALL EXTENSION vsql_complex;
+INSTALL EXTENSION vsql_complex;
+delimiter //;
+CREATE PROCEDURE p_cx()
+BEGIN
+  DECLARE c COMPLEX;
+  SET c = '(3.0,4.0)';
+  SELECT c;
+END//
+delimiter ;//
+CALL p_cx();
+CALL p_cx();
+DROP PROCEDURE p_cx;
+UNINSTALL EXTENSION vsql_complex;
+
+DROP PROCEDURE p_leak;
+DROP PROCEDURE p_out;
+DROP PROCEDURE p_rec;
+DROP FUNCTION f_rep;
+
+--source include/wait_until_count_sessions.inc
