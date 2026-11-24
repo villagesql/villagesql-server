@@ -10,11 +10,12 @@
 # Sys_var_charptr::global_update(). MySQL Bug #121849.
 #
 # Debug sync is not set up yet in plugin_thdvar_init(), so the debug point
-# plugin_thdvar_init_sleep_before_sysvar_copy sleeps 3 seconds after the
-# unlock instead. A background client connects and parks there, and this
-# connection changes the global value meanwhile. ASan reports a
-# heap-use-after-free. Without ASan, run with --mysqld-env=MallocScribble=1 on
-# macOS so the freed string is overwritten.
+# plugin_thdvar_init_sleep_before_sysvar_copy sleeps 5 seconds before the
+# copy instead. A background client connects and parks there, and this
+# connection changes the global value meanwhile. With the fix, the sleep holds
+# LOCK_global_system_variables, so the SET GLOBAL waits for the copy. Without
+# the fix, ASan reports a heap-use-after-free. Without ASan, run with
+# --mysqld-env=MallocScribble=1 on macOS so the freed string is overwritten.
 #
 # Expected: the new session gets the value the global had when it connected.
 
@@ -24,10 +25,10 @@ SET GLOBAL session_track_system_variables = 'autocommit,time_zone';
 
 --let $out = $MYSQLTEST_VARDIR/tmp/session_track_sysvars_connect_race.out
 
---echo # Connect in the background; the new session parks after the unlock
+--echo # Connect in the background; the new session parks before the copy
 SET GLOBAL DEBUG = '+d,plugin_thdvar_init_sleep_before_sysvar_copy';
 --exec_in_background $MYSQL -N -e "SELECT @@session.session_track_system_variables" > $out 2>&1
---sleep 1
+--sleep 2
 
 --echo # Replace the global value, which frees the old string
 SET GLOBAL session_track_system_variables = 'sql_mode';

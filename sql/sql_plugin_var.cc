@@ -395,6 +395,8 @@ bool sys_var_pluginvar::session_update(THD *thd, set_var *var) {
   // VillageSQL: copy the global MEMALLOC string before unlocking. A
   // concurrent SET GLOBAL frees it in plugin_var_memalloc_global_update().
   // MySQL Bug #121849.
+  // TODO(villagesql-rebase): drop this change once upstream fixes MySQL Bug
+  // #121849.
   char *global_copy = nullptr;
   if (memalloc_str && !var->value) {
     const char *global_value = *static_cast<char *const *>(src);

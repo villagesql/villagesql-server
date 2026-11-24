@@ -3060,11 +3060,12 @@ void plugin_thdvar_init(THD *thd, bool enable_plugins) {
   // @@session.session_track_system_variables
   // VillageSQL: copy it before unlocking. track_sysvars_ptr points at the
   // global string, which a concurrent SET GLOBAL frees. MySQL Bug #121849.
+  // TODO(villagesql-rebase): drop this change once upstream fixes MySQL Bug
+  // #121849.
+  DBUG_EXECUTE_IF("plugin_thdvar_init_sleep_before_sysvar_copy",
+                  my_sleep(5000000););
   thd->session_sysvar_res_mgr.init(&thd->variables.track_sysvars_ptr);
   mysql_mutex_unlock(&LOCK_global_system_variables);
-
-  DBUG_EXECUTE_IF("plugin_thdvar_init_sleep_before_sysvar_copy",
-                  my_sleep(3000000););
 }
 
 /*

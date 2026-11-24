@@ -1,5 +1,5 @@
 SET GLOBAL session_track_system_variables = 'autocommit,time_zone';
-# Connect in the background; the new session parks after the unlock
+# Connect in the background; the new session parks before the copy
 SET GLOBAL DEBUG = '+d,plugin_thdvar_init_sleep_before_sysvar_copy';
 # Replace the global value, which frees the old string
 SET GLOBAL session_track_system_variables = 'sql_mode';
