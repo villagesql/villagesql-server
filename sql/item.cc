@@ -6939,8 +6939,8 @@ type_conversion_status Item::save_in_field(Field *field, bool no_conversions) {
       return TYPE_ERR_BAD_VALUE;
     }
   } else if (has_type_context()) {
-    // VillageSQL: a custom value needs an explicit conversion to be stored in
-    // a field without a custom type.
+    // VillageSQL: a non-NULL custom value needs an explicit conversion to be
+    // stored in a field without a custom type.
     return villagesql::StoreCustomValueInNonCustomField(this, field,
                                                         no_conversions);
   }

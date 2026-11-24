@@ -28,6 +28,8 @@ UPDATE tb SET b = COMPLEX::from_string('(5,6)');
 --echo # Nothing was stored
 SELECT id, b FROM tb ORDER BY id;
 
+# TODO(villagesql-general): Under IGNORE, MySQL makes an incompatible value a
+# warning and stores a default. Custom type errors stay errors.
 --echo # IGNORE does not make it a warning
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSERT IGNORE INTO tb VALUES (2, (SELECT c FROM t WHERE id = 1));
