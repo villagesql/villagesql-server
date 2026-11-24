@@ -93,6 +93,10 @@ struct WorkerState {
   // SET racing UNINSTALL EXTENSION) can reach the lifecycle code at once.
   std::mutex lifecycle_mu;
 
+  // Set under lifecycle_mu once UNINSTALL starts depopulating the worker.
+  // worker_start() then starts no thread.
+  bool depopulating{false};
+
   // Current dynamic wakeup config, updated from work_fn return values.
   int current_poll_fd{-1};
   unsigned int current_sleep_ms{0};
@@ -324,7 +328,7 @@ static void thread_main(WorkerState *state) {
 
 static void worker_start(WorkerState *state) {
   std::lock_guard<std::mutex> lifecycle(state->lifecycle_mu);
-  if (state->thread.joinable()) return;
+  if (state->depopulating || state->thread.joinable()) return;
 
   const vef_thread_worker_descriptor_t *desc = state->descriptor;
   state->current_sleep_ms =
@@ -457,6 +461,15 @@ void on_depopulate_thread_worker(const DepopulateContext &ctx) {
     auto it = g_workers.find(desc);
     if (it == g_workers.end()) return;
     state = it->second.get();
+  }
+
+  // A SET GLOBAL already in on_enabled_change() holds
+  // LOCK_system_variables_hash for read, so the unregister below waits for it,
+  // but the stop does not. Its worker_start() can run after worker_stop() has
+  // returned, and must not start a thread the WorkerState is destroyed with.
+  {
+    std::lock_guard<std::mutex> lifecycle(state->lifecycle_mu);
+    state->depopulating = true;
   }
 
   worker_stop(state);
