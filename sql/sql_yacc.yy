@@ -13636,6 +13636,20 @@ delete_stmt:
         | opt_with_clause
           DELETE_SYM
           opt_delete_options
+          table_alias_ref_list
+          FROM
+          table_reference_list
+          opt_where_clause
+          returning_clause
+          opt_returning_into
+          {
+            // Multi-table DELETE ... RETURNING: the RETURNING list may refer to
+            // columns of exactly one deleted table (checked at prepare).
+            $$= NEW_PTN PT_delete(@$, $1, $2, $3, $4, $6, $7, $8, $9);
+          }
+        | opt_with_clause
+          DELETE_SYM
+          opt_delete_options
           FROM
           table_alias_ref_list
           USING
@@ -13643,6 +13657,19 @@ delete_stmt:
           opt_where_clause
           {
             $$= NEW_PTN PT_delete(@$, $1, $2, $3, $5, $7, $8);
+          }
+        | opt_with_clause
+          DELETE_SYM
+          opt_delete_options
+          FROM
+          table_alias_ref_list
+          USING
+          table_reference_list
+          opt_where_clause
+          returning_clause
+          opt_returning_into
+          {
+            $$= NEW_PTN PT_delete(@$, $1, $2, $3, $5, $7, $8, $9, $10);
           }
         ;
 

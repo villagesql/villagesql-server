@@ -2,6 +2,7 @@
 #define SQL_ITERATORS_DELETE_ROWS_ITERATOR_H_
 
 /* Copyright (c) 2021, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,6 +35,7 @@
 #include "sql/uniques.h"
 
 class JOIN;
+class Query_result_returning;
 class THD;
 struct TABLE;
 
@@ -86,6 +88,11 @@ class DeleteRowsIterator final : public RowIterator {
   ha_rows m_deleted_rows{0};
   /// True if any row ID has been stored in one of the m_tempfiles.
   bool m_has_delayed_deletes{false};
+  /// DELETE ... RETURNING on the multi-table executor: the result receiving
+  /// one row per row deleted from m_returning_table (a single table), or
+  /// nullptr.
+  Query_result_returning *m_returning{nullptr};
+  table_map m_returning_table{0};
 
   /// Perform all the immediate deletes for the current row returned by the
   /// join, and buffer row IDs for the non-immediate tables.
