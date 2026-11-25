@@ -350,8 +350,11 @@ static void kvector_from_string(std::string_view from, vsql::CustomResult out) {
     p = num_end;
     ++count;
   }
+  // A wrong element count is a bad value, as vsql-vector's SVECTOR reports a
+  // wrong dimension: the server raises it, while a non-number above raises
+  // the extension's own error. Tests use both paths.
   if (count != kVecDim) {
-    out.error("kvector: expected exactly 4 elements");
+    out.warning("kvector: expected exactly 4 elements");
     return;
   }
   out.set_length(kFieldSize);
