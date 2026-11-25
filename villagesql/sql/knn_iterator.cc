@@ -20,6 +20,8 @@
 #include "sql/sql_executor.h"
 #include "sql/sql_select.h"
 #include "sql/table.h"
+#include "sql_string.h"
+#include "villagesql/include/error.h"
 
 namespace villagesql {
 
@@ -48,7 +50,20 @@ bool IndexKnnScanIterator::Init() {
     store_key key_copier(thd(), key_part->field, key_buff + maybe_null,
                          maybe_null ? key_buff : nullptr, key_part->length,
                          m_query_point);
-    if (key_copier.copy() == store_key::STORE_KEY_FATAL) return true;
+    if (key_copier.copy() == store_key::STORE_KEY_FATAL) {
+      // The key field takes a value its type rejects with only a warning.
+      // Read the query point as the distance function does without the
+      // index, so a bad parameter reports its own error.
+      if (!thd()->is_error()) {
+        StringBuffer<STRING_BUFFER_USUAL_SIZE> buf;
+        m_query_point->val_str(&buf);
+      }
+      if (!thd()->is_error()) {
+        villagesql_error("Incorrect query point for the KNN scan of index '%s'",
+                         MYF(0), table()->key_info[m_idx].name);
+      }
+      return true;
+    }
 
     int error = table()->file->ha_knn_index_init(
         m_idx, key_buff, key_part->store_length, m_limit, m_limit_is_exact);
