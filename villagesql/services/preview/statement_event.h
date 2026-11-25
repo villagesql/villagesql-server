@@ -51,6 +51,10 @@ void on_statement_postexecute(THD *thd);
 // overhead
 bool statement_event_wants_status_snapshot();
 
+// True when a statement_event hook is registered. A hook is given each
+// statement's text, so EXECUTE builds the text with its parameter values.
+bool statement_event_has_hooks();
+
 }  // namespace villagesql::services
 
 #endif  // VILLAGESQL_SERVICES_PREVIEW_STATEMENT_EVENT_H
