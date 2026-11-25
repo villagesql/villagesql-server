@@ -2464,8 +2464,8 @@ TEST_F(VictionaryClientTest, ResolveExistingTypeContextUnderReadLock) {
       villagesql::CompareFunction(test_compare));
   {
     auto guard = client_->get_write_lock();
-    ASSERT_FALSE(client_->type_descriptors().MarkForInsertion(
-        *fake_thd, std::move(desc)));
+    ASSERT_FALSE(client_->type_descriptors().MarkForInsertion(*fake_thd,
+                                                              std::move(desc)));
   }
   client_->commit_all_tables(fake_thd);
 
@@ -2474,8 +2474,8 @@ TEST_F(VictionaryClientTest, ResolveExistingTypeContextUnderReadLock) {
 
   // First resolution creates the TypeContext (write lock).
   const villagesql::TypeContext *created = nullptr;
-  ASSERT_FALSE(villagesql::ResolveTypeToContext(
-      "readlock_ext", "READLOCK_TYPE", params, mem_root, created));
+  ASSERT_FALSE(villagesql::ResolveTypeToContext("readlock_ext", "READLOCK_TYPE",
+                                                params, mem_root, created));
   ASSERT_NE(created, nullptr);
 
   // Second resolution of the same type and parameters, while another thread
