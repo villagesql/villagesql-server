@@ -95,8 +95,12 @@ class PT_custom_type : public PT_type {
                                  const LEX_STRING &type_name,
                                  const TypeDescriptor *&descriptor) {
     descriptor = nullptr;
-    return ResolveTypeDescriptor(to_string_view(extension_name),
-                                 to_string_view(type_name), descriptor);
+    if (ResolveTypeDescriptor(to_string_view(extension_name),
+                              to_string_view(type_name), descriptor))
+      return true;
+    // Between resolving the descriptor and acquiring its TypeContext.
+    DEBUG_SYNC_C("villagesql_after_resolve_type_descriptor");
+    return false;
   }
 
  public:

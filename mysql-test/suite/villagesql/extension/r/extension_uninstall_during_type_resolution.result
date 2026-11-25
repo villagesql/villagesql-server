@@ -1,0 +1,77 @@
+#
+# CREATE TABLE with a COMPLEX column
+#
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+CREATE TABLE t1 (id INT PRIMARY KEY, c COMPLEX);
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+UNINSTALL EXTENSION vsql_complex;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+EXTENSION_NAME
+vsql_complex
+SET DEBUG_SYNC = 'now SIGNAL go';
+SET DEBUG_SYNC = 'RESET';
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot drop extension `vsql_complex` as 1 column(s) depend on it, e.g. test.t1.c has type COMPLEX
+DROP TABLE t1;
+#
+# CREATE FUNCTION with a COMPLEX parameter
+#
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1;
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+UNINSTALL EXTENSION vsql_complex;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+EXTENSION_NAME
+vsql_complex
+SET DEBUG_SYNC = 'now SIGNAL go';
+SET DEBUG_SYNC = 'RESET';
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': stored procedure test.f_arg uses custom type COMPLEX
+DROP FUNCTION f_arg;
+#
+# CREATE FUNCTION returning COMPLEX
+#
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+CREATE FUNCTION f_ret() RETURNS COMPLEX DETERMINISTIC RETURN '(1,2)';
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+UNINSTALL EXTENSION vsql_complex;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+EXTENSION_NAME
+vsql_complex
+SET DEBUG_SYNC = 'now SIGNAL go';
+SET DEBUG_SYNC = 'RESET';
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': stored procedure test.f_ret uses custom type COMPLEX
+DROP FUNCTION f_ret;
+#
+# CREATE PROCEDURE with a COMPLEX parameter
+#
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+CREATE PROCEDURE p_arg(IN x COMPLEX) SET @x = 1;
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+UNINSTALL EXTENSION vsql_complex;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+EXTENSION_NAME
+vsql_complex
+SET DEBUG_SYNC = 'now SIGNAL go';
+SET DEBUG_SYNC = 'RESET';
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': stored procedure test.p_arg uses custom type COMPLEX
+DROP PROCEDURE p_arg;
+#
+# CREATE FUNCTION with a TVECTOR(3) parameter: resolve_params runs in
+# the window
+#
+SET DEBUG_SYNC = 'villagesql_after_resolve_type_descriptor SIGNAL resolved WAIT_FOR go';
+CREATE FUNCTION f_tv(x TVECTOR(3)) RETURNS INT DETERMINISTIC RETURN 1;
+SET DEBUG_SYNC = 'now WAIT_FOR resolved';
+UNINSTALL EXTENSION vsql_tvector;
+SELECT EXTENSION_NAME FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_tvector';
+EXTENSION_NAME
+vsql_tvector
+SET DEBUG_SYNC = 'now SIGNAL go';
+SET DEBUG_SYNC = 'RESET';
+UNINSTALL EXTENSION vsql_tvector;
+ERROR HY000: Cannot uninstall extension 'vsql_tvector': stored procedure test.f_tv uses custom type TVECTOR
+DROP FUNCTION f_tv;
+SET DEBUG_SYNC = 'RESET';
