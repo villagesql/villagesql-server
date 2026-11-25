@@ -1568,6 +1568,45 @@ void bad_bind_params_no_type_bind(vsql::BindArgs args, vsql::BindResult out) {
   out.set_arg(args.size() - 1, LenParam{4, 0});
 }
 
+// lenparam_count: an aggregate over INT that returns LENIENT_PARAM_TYPE, the
+// count of non-NULL rows in its 4-byte form. The built-in rules cannot give
+// the result parameters (the argument is INT), so its bind hook sets
+// length=7, and the result type carries that. Covers
+// AggFuncBuilder::bind_and_check_types().
+struct LenCountState {
+  uint8_t count;
+  bool saw_row;
+};
+
+void lenparam_count_clear(LenCountState &state) {
+  state.count = 0;
+  state.saw_row = false;
+}
+
+void lenparam_count_accumulate(LenCountState &state, vsql::IntArg n) {
+  state.saw_row = true;
+  if (!n.is_null()) state.count++;
+}
+
+void lenparam_count_result(const LenCountState &state,
+                           vsql::CustomResultWith<LenParam> out) {
+  if (!state.saw_row) {
+    out.set_null();
+    return;
+  }
+  auto buf = out.buffer();
+  if (buf.size() < static_cast<size_t>(kParamTestSize)) return;
+  memset(buf.data(), 0, kParamTestSize);
+  buf[0] = state.count;
+  out.set_length(static_cast<size_t>(kParamTestSize));
+}
+
+constexpr int64_t kLenCountBindLength = 7;
+
+void lenparam_count_bind(vsql::BindArgs, vsql::BindResult out) {
+  out.set_return(LenParam{kLenCountBindLength});
+}
+
 using namespace vsql;
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -1638,6 +1677,14 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(INT)
                   .clear<&real_avg_clear>()
                   .accumulate<&real_avg_accumulate>()
+                  .build())
+        .func(make_aggregate_func<LenCountState, &lenparam_count_result>(
+                  "lenparam_count")
+                  .returns(LENIENT_PARAM_TYPE)
+                  .param(INT)
+                  .clear<&lenparam_count_clear>()
+                  .accumulate<&lenparam_count_accumulate>()
+                  .bind_and_check_types<&lenparam_count_bind>()
                   .build())
         // Hooks that break the rules the server checks. See the block comment
         // above their definitions.

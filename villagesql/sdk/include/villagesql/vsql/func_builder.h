@@ -576,11 +576,14 @@ class AggFuncBuilder {
     return *this;
   }
 
-  // Install a type binding/checking hook, as FuncBuilder::
-  // bind_and_check_types() does for scalar VDFs. Called once at resolution
-  // time to work out the return type's parameters when the built-in rules
-  // cannot (e.g. an aggregate over INT that returns a parameterized custom
-  // type). Bumps the required protocol to VEF_PROTOCOL_5.
+  // Install a type binding/checking hook, as
+  // FuncBuilder::bind_and_check_types() does for scalar VDFs. It works out the
+  // return type's parameters when the built-in rules cannot (e.g. an aggregate
+  // over INT that returns a parameterized custom type). It runs at resolution
+  // time, before any row is read. In a prepared statement it runs at every
+  // EXECUTE, and is not called at PREPARE when an argument has a ? with no
+  // value yet, or a custom type whose params are not known yet; see
+  // vsql/bind_check_types.h. Bumps the required protocol to VEF_PROTOCOL_5.
   //
   //   void my_hook(vsql::BindArgs args, vsql::BindResult out);
   template <auto Hook>
