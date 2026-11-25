@@ -183,24 +183,6 @@ void VictionaryClient::rollback_all_tables(THD *thd) {
   m_index_profile_descriptors.rollback(thd);
 }
 
-void VictionaryClient::retire_marked_deletions(THD *thd) {
-  assert_write_lock_held();
-
-  m_properties.retire_marked_deletions(thd);
-  m_columns.retire_marked_deletions(thd);
-  m_sp_params.retire_marked_deletions(thd);
-  m_extensions.retire_marked_deletions(thd);
-  m_type_descriptors.retire_marked_deletions(thd);
-  m_extension_descriptors.retire_marked_deletions(thd);
-  m_type_contexts.retire_marked_deletions(thd);
-  m_funcs.retire_marked_deletions(thd);
-  m_index_contexts.retire_marked_deletions(thd);
-  m_custom_indexes.retire_marked_deletions(thd);
-  m_custom_index_columns.retire_marked_deletions(thd);
-  m_index_type_descriptors.retire_marked_deletions(thd);
-  m_index_profile_descriptors.retire_marked_deletions(thd);
-}
-
 VictionaryClient::Savepoint VictionaryClient::savepoint_all_tables(
     THD *thd) const {
   assert_read_or_write_lock_held();

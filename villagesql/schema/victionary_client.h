@@ -97,11 +97,6 @@ struct PendingOperation {
   // TODO(villagesql): maybe adding a DELETE+INSERT would be simpler?
   key_type key;
 
-  // For DELETE operations removed from the committed map before commit (see
-  // SystemTableMap::retire_marked_deletions): the removed entry, put back on
-  // rollback.
-  std::shared_ptr<EntryType> removed;
-
   PendingOperation() = delete;
 
   // Constructor for INSERT (no key needed)
@@ -463,10 +458,7 @@ class SystemTableMap {
     assert_write_lock_held();
     if (!thd) return;
 
-    auto thd_it = m_uncommitted.find(thd);
-    if (thd_it == m_uncommitted.end()) return;
-    restore_removed(thd_it->second.begin(), thd_it->second.end());
-    m_uncommitted.erase(thd_it);
+    m_uncommitted.erase(thd);
   }
 
   // A position in this THD's uncommitted operations. rollback_to() discards
@@ -499,26 +491,7 @@ class SystemTableMap {
       rollback(thd);
       return;
     }
-    restore_removed(list.begin() + savepoint.elements, list.end());
     list.erase(list.begin() + savepoint.elements, list.end());
-  }
-
-  // Removes the entries this THD has marked for deletion from the committed
-  // map now, so that no other THD can find or acquire them before this THD
-  // commits. Rollback puts them back. UNINSTALL EXTENSION uses this once its
-  // checks have found the entries unused.
-  // Requires write lock
-  void retire_marked_deletions(THD *thd) {
-    assert_write_lock_held();
-    auto thd_it = m_uncommitted.find(thd);
-    if (thd_it == m_uncommitted.end()) return;
-    for (PendingOperation<EntryType> &op : thd_it->second) {
-      if (op.op_type != OperationType::DELETE || op.removed) continue;
-      auto it = m_committed.find(op.key.str());
-      if (it == m_committed.end()) continue;
-      op.removed = std::move(it->second);
-      m_committed.erase(it);
-    }
   }
 
   // ===== Bulk operations =====
@@ -747,17 +720,6 @@ class SystemTableMap {
   CommittedMap m_committed;
   std::map<THD *, UncommittedList> m_uncommitted;
 
-  // Puts back the entries that retire_marked_deletions() removed for the ops
-  // in [first, last), which are being discarded.
-  void restore_removed(typename UncommittedList::iterator first,
-                       typename UncommittedList::iterator last) {
-    for (auto it = first; it != last; ++it) {
-      if (it->removed) {
-        m_committed.emplace(it->key.str(), std::move(it->removed));
-      }
-    }
-  }
-
   // Per-map statistics
   mutable std::atomic<uint64_t> m_hits{0};
   mutable std::atomic<uint64_t> m_misses{0};
@@ -919,11 +881,6 @@ class VictionaryClient {
 
   // Rollback all uncommitted entries across all tables for this transaction
   void rollback_all_tables(THD *thd);
-
-  // Remove this transaction's pending deletions in all tables from the
-  // committed maps now; rollback puts them back (see
-  // SystemTableMap::retire_marked_deletions). Requires write lock.
-  void retire_marked_deletions(THD *thd);
 
   // A position in this THD's uncommitted entries across all tables.
   // rollback_all_tables_to() discards the entries marked after it and keeps

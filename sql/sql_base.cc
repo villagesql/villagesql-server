@@ -6087,14 +6087,18 @@ restart:
         // Remember if any of SF modifies data.
         some_routine_modifies_data |= routine_modifies_data;
       }
-      // Process custom functions (extension UDFs) to acquire MDL locks on
-      // their extensions.
-      if (villagesql::Metadata_modifier::process_calls(
-              thd, thd->lex->croutines_list)) {
-        error = true;
-        goto err;
-      }
     }
+  }
+
+  // Process custom functions (extension UDFs) to acquire MDL locks on
+  // their extensions.
+  // VillageSQL: outside the loop, which a statement without tables or
+  // routines does not enter.
+  if (thd->locked_tables_mode <= LTM_LOCK_TABLES &&
+      villagesql::Metadata_modifier::process_calls(thd,
+                                                   thd->lex->croutines_list)) {
+    error = true;
+    goto err;
   }
 
   /* Accessing data in XA_IDLE or XA_PREPARED is not allowed. */

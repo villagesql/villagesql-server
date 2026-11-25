@@ -1,37 +1,64 @@
 #
-# CREATE FUNCTION with a COMPLEX parameter after the checks: the
-# extension and the routine must not outlive each other
+# CREATE FUNCTION with a COMPLEX parameter waits for the UNINSTALL and
+# fails once it commits
 #
 SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
 UNINSTALL EXTENSION vsql_complex;
 SET DEBUG_SYNC = 'now WAIT_FOR checked';
 CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1;
-ERROR 42000: Expected a type or a custom type instead of "COMPLEX" near 'COMPLEX) RETURNS INT DETERMINISTIC RETURN 1' at line 1
 SET DEBUG_SYNC = 'now SIGNAL go';
+ERROR HY000: Custom type 'COMPLEX' from extension 'vsql_complex' version 'VERSION' not found
+SELECT COUNT(*) AS routines FROM INFORMATION_SCHEMA.ROUTINES
+WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME = 'f_arg';
+routines
+0
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE EXTENSION_NAME = 'vsql_complex';
+installed
+0
 SET DEBUG_SYNC = 'RESET';
-SELECT (SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS
-WHERE EXTENSION_NAME = 'vsql_complex') =
-(SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES
-WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME = 'f_arg') AS consistent;
-consistent
-1
-DROP FUNCTION IF EXISTS f_arg;
 INSTALL EXTENSION vsql_complex;
 #
-# PREPARE using vsql_complex VDFs after the checks, EXECUTE after the
-# UNINSTALL: a VDF must not run once its extension is uninstalled
+# PREPARE of a statement calling vsql_complex VDFs waits for the
+# UNINSTALL and fails once it commits
 #
 SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
 UNINSTALL EXTENSION vsql_complex;
 SET DEBUG_SYNC = 'now WAIT_FOR checked';
 PREPARE s FROM 'SELECT complex_abs(COMPLEX::from_string(''(3,4)'')) AS a';
-ERROR HY000: Unknown custom type 'COMPLEX'
 SET DEBUG_SYNC = 'now SIGNAL go';
-SET DEBUG_SYNC = 'RESET';
+ERROR HY000: Extension 'vsql_complex' not found for custom function 'FUNCTION'
 EXECUTE s;
 ERROR HY000: Unknown prepared statement handler (s) given to EXECUTE
-consistent
-1
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE EXTENSION_NAME = 'vsql_complex';
+installed
+0
+SET DEBUG_SYNC = 'RESET';
+INSTALL EXTENSION vsql_complex;
+#
+# UNINSTALL fails after its checks: the CREATE FUNCTION and the PREPARE
+# that waited for it succeed
+#
+SET SESSION DEBUG = '+d,uninstall_fail_write';
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+UNINSTALL EXTENSION vsql_complex;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1;
+PREPARE s FROM 'SELECT complex_abs(COMPLEX::from_string(''(3,4)'')) AS a';
+SET DEBUG_SYNC = 'now SIGNAL go';
+ERROR HY000: Failed to delete extension 'vsql_complex'
+SET SESSION DEBUG = '-d,uninstall_fail_write';
+EXECUTE s;
+a
+5
 DEALLOCATE PREPARE s;
-ERROR HY000: Unknown prepared statement handler (s) given to DEALLOCATE PREPARE
+SELECT f_arg('(1,2)') AS f;
+f
+1
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE EXTENSION_NAME = 'vsql_complex';
+installed
+1
+DROP FUNCTION f_arg;
 SET DEBUG_SYNC = 'RESET';
