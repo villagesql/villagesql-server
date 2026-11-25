@@ -904,54 +904,6 @@ class VictionaryClient {
   // Rollback all uncommitted entries across all tables for this transaction
   void rollback_all_tables(THD *thd);
 
-  // True when any session has pending (uncommitted) operations in any table.
-  // Lock-free. commit_all_tables()/rollback_all_tables() use it to return
-  // without the write lock in the common case where nothing is pending.
-  bool has_uncommitted_operations() const {
-    bool any = false;
-    for_each_table([&any](const auto &table) {
-      any = any || table.uncommitted_entry_count() != 0;
-    });
-    return any;
-  }
-
-  // Calls fn(table) for every table map, in a fixed order. This is the one
-  // list of all maps: commit, rollback, clear and the pending check use it,
-  // so a map added here is covered by all of them. Update it when a map is
-  // added.
-  template <typename Fn>
-  void for_each_table(Fn &&fn) {
-    fn(m_properties);
-    fn(m_columns);
-    fn(m_sp_params);
-    fn(m_extensions);
-    fn(m_type_descriptors);
-    fn(m_extension_descriptors);
-    fn(m_type_contexts);
-    fn(m_funcs);
-    fn(m_index_contexts);
-    fn(m_custom_indexes);
-    fn(m_custom_index_columns);
-    fn(m_index_type_descriptors);
-    fn(m_index_profile_descriptors);
-  }
-  template <typename Fn>
-  void for_each_table(Fn &&fn) const {
-    fn(m_properties);
-    fn(m_columns);
-    fn(m_sp_params);
-    fn(m_extensions);
-    fn(m_type_descriptors);
-    fn(m_extension_descriptors);
-    fn(m_type_contexts);
-    fn(m_funcs);
-    fn(m_index_contexts);
-    fn(m_custom_indexes);
-    fn(m_custom_index_columns);
-    fn(m_index_type_descriptors);
-    fn(m_index_profile_descriptors);
-  }
-
   // A position in this THD's uncommitted entries across all tables.
   // rollback_all_tables_to() discards the entries marked after it and keeps
   // the earlier ones, so a failed step can be undone without discarding the
@@ -1071,6 +1023,48 @@ class VictionaryClient {
   // Disable copy and assignment
   VictionaryClient(const VictionaryClient &) = delete;
   VictionaryClient &operator=(const VictionaryClient &) = delete;
+
+  // True when any session has pending (uncommitted) operations in any table.
+  // Lock-free. commit_all_tables()/rollback_all_tables() use it to return
+  // without the write lock in the common case where nothing is pending.
+  bool has_uncommitted_operations() const {
+    bool any = false;
+    for_each_table([&any](const auto &table) {
+      any = any || table.uncommitted_entry_count() != 0;
+    });
+    return any;
+  }
+
+  // Calls fn(table) for every table map, in a fixed order. This is the one
+  // list of all maps: commit, rollback, clear and the pending check use it,
+  // so a map added here is covered by all of them. Update it when a map is
+  // added.
+  template <typename Fn>
+  void for_each_table(Fn &&fn) {
+    for_each_table_of(*this, fn);
+  }
+  template <typename Fn>
+  void for_each_table(Fn &&fn) const {
+    for_each_table_of(*this, fn);
+  }
+  // Self is VictionaryClient or const VictionaryClient, so fn gets each map
+  // with the matching constness.
+  template <typename Self, typename Fn>
+  static void for_each_table_of(Self &self, Fn &fn) {
+    fn(self.m_properties);
+    fn(self.m_columns);
+    fn(self.m_sp_params);
+    fn(self.m_extensions);
+    fn(self.m_type_descriptors);
+    fn(self.m_extension_descriptors);
+    fn(self.m_type_contexts);
+    fn(self.m_funcs);
+    fn(self.m_index_contexts);
+    fn(self.m_custom_indexes);
+    fn(self.m_custom_index_columns);
+    fn(self.m_index_type_descriptors);
+    fn(self.m_index_profile_descriptors);
+  }
 
   // Reload all tables from their backing system tables, which happens during
   // init(). Returns false on success, true on error.
