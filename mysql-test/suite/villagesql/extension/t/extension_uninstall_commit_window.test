@@ -1,5 +1,5 @@
 # UNINSTALL EXTENSION holds an X lock on the extension from its start to its
-# commit. Statements that use the extension's types or functions take an IX
+# commit. Statements that use the extension's types or functions take an S
 # lock on it, so a statement that starts while UNINSTALL runs its checks,
 # writes the system tables and commits waits for it. It then fails if the
 # UNINSTALL committed, and goes on if it rolled back. The
