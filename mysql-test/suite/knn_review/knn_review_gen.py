@@ -23,6 +23,7 @@ KNOWN_ISSUES = {
     "select_correctness/order_function": "KNN-5 A KNN scan ranks by the first ORDER function of the profile",
     "select_correctness/window_under_knn_limit": "KNN-7 A window under a KNN ORDER BY LIMIT sees only LIMIT rows",
     "select_correctness/hnsw_bad_query_param": "KNN-30 A KNN scan crashes on a prepared statement parameter that is not a valid SVECTOR",
+    "select_correctness/svector_read_uncommitted_insert": "KNN-33 A READ UNCOMMITTED read of a row being inserted fetches its SVECTOR from an unset reference",
     "select_plan/having": "KNN-8 A HAVING clause stops the KNN scan",
     "ddl/drop_table_entries": "KNN-20 DROP TABLE does not call the custom index drop callback",
     "ddl/truncate_entries": "KNN-20 DROP TABLE does not call the custom index drop callback",
@@ -2327,6 +2328,63 @@ def hnsw_lock_wait_then(name, header, change, after):
     hnsw_uninstall(t)
     t.raw(["--source include/wait_until_count_sessions.inc"])
     tests.append(t)
+
+
+t = T("select_correctness", "svector_read_uncommitted_insert", """
+A READ UNCOMMITTED session reads the SVECTOR values (vsql-vector column
+storage, no index) of a table while another session inserts rows. InnoDB
+writes the clustered record before the column store value and its
+reference, so the reader can meet a row whose value is not stored yet. It
+must skip the row, as it does for an InnoDB BLOB not written yet, and the
+server keeps running.""")
+t.raw(["--source include/count_sessions.inc", ""])
+t.sql("INSTALL EXTENSION vsql_vector")
+t.sql("CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, v SVECTOR(8) NOT NULL)")
+t.raw(["delimiter //;",
+       "CREATE PROCEDURE ins(n INT)",
+       "BEGIN",
+       "  WHILE n > 0 DO",
+       "    INSERT INTO t (v) VALUES ('[1,0,-1,2,0.5,-0.5,3,-3]'), ('[0,0,0,0,0,0,0,0.001]'), ('[-4,4,-4,4,-4,4,-4,4]');",
+       "    SET n = n - 1;",
+       "  END WHILE;",
+       "END//",
+       "CREATE PROCEDURE rd(n INT)",
+       "BEGIN",
+       "  WHILE n > 0 DO",
+       "    SELECT SUM(VECTOR_NORM(v)) INTO @s FROM t;",
+       "    SET n = n - 1;",
+       "  END WHILE;",
+       "END//",
+       "delimiter ;//",
+       "--connect (con1, localhost, root,,)",
+       "--send CALL ins(400)",
+       "--connection default"],
+      ["CREATE PROCEDURE ins(n INT)",
+       "BEGIN",
+       "WHILE n > 0 DO",
+       "INSERT INTO t (v) VALUES ('[1,0,-1,2,0.5,-0.5,3,-3]'), ('[0,0,0,0,0,0,0,0.001]'), ('[-4,4,-4,4,-4,4,-4,4]');",
+       "SET n = n - 1;",
+       "END WHILE;",
+       "END//",
+       "CREATE PROCEDURE rd(n INT)",
+       "BEGIN",
+       "WHILE n > 0 DO",
+       "SELECT SUM(VECTOR_NORM(v)) INTO @s FROM t;",
+       "SET n = n - 1;",
+       "END WHILE;",
+       "END//",
+       "CALL ins(400);"])
+t.sql("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+t.sql("CALL rd(2000)")
+t.sql("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+t.raw(["--connection con1", "--reap", "--disconnect con1", "--connection default"])
+t.sql("SELECT COUNT(*) AS n FROM t", rows=["1200"], header="n")
+t.sql("DROP PROCEDURE ins")
+t.sql("DROP PROCEDURE rd")
+t.sql("DROP TABLE t")
+t.sql("UNINSTALL EXTENSION vsql_vector")
+t.raw(["--source include/wait_until_count_sessions.inc"])
+tests.append(t)
 
 
 t = T("rollback", "hnsw_crash_recovery", """

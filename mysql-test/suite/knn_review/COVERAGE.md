@@ -149,6 +149,7 @@ whether it restarts the server, and the known issue it skips for.
 | range_read | A custom index advertising RANGE_SCAN serves an ordinary keyed read, not only KNN ORDER BY. | test ext |  |  |  |
 | self_insert_select | INSERT ... SELECT that copies the nearest rows of a table into the same table copies exactly those rows; the copies are found by KNN queries afterwards. | test ext |  |  |  |
 | shapes | KNN ordering inside other query shapes: joins, more ORDER BY keys, DESC, no LIMIT, subqueries, derived tables, HAVING and views. | test ext |  |  |  |
+| svector_read_uncommitted_insert | A READ UNCOMMITTED session reads the SVECTOR values (vsql-vector column storage, no index) of a table while another session inserts rows. | HNSW |  |  | KNN-33 |
 | two_indexes | Two KNN indexes on one column, L2 and cosine. | test ext |  |  |  |
 | union | Two KNN queries with different query points combined with UNION ALL and UNION each return their own nearest rows. | test ext |  |  |  |
 | window | KNN ordering combined with window functions: a distance as the window's sort key, a window over the rows of a KNN derived table, and the nearest row per group. | test ext |  |  |  |
