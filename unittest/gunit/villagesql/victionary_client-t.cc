@@ -55,6 +55,12 @@ class VictionaryClientTest : public ::testing::Test {
     client_->clear_all_tables();
   }
 
+  // has_uncommitted_operations() is private. Friendship covers this fixture
+  // but not the TEST_F classes derived from it, so the tests call this.
+  bool has_uncommitted_operations() const {
+    return client_->has_uncommitted_operations();
+  }
+
   VictionaryClient *client_;
 };
 
@@ -2454,7 +2460,7 @@ TEST_F(VictionaryClientTest, UncommittedOperationCount) {
   THD *fake_thd = reinterpret_cast<THD *>(0x9a10);
   THD *other_thd = reinterpret_cast<THD *>(0x9a20);
 
-  EXPECT_FALSE(client_->has_uncommitted_operations());
+  EXPECT_FALSE(has_uncommitted_operations());
 
   {
     auto guard = client_->get_write_lock();
@@ -2466,12 +2472,12 @@ TEST_F(VictionaryClientTest, UncommittedOperationCount) {
     client_->columns().MarkForInsertion(*other_thd, std::move(entry3));
   }
   EXPECT_EQ(client_->columns().uncommitted_entry_count(), 3u);
-  EXPECT_TRUE(client_->has_uncommitted_operations());
+  EXPECT_TRUE(has_uncommitted_operations());
 
   // Committing one session leaves the other session's operation pending.
   client_->commit_all_tables(fake_thd);
   EXPECT_EQ(client_->columns().uncommitted_entry_count(), 1u);
-  EXPECT_TRUE(client_->has_uncommitted_operations());
+  EXPECT_TRUE(has_uncommitted_operations());
   {
     auto guard = client_->get_read_lock();
     EXPECT_EQ(client_->columns()
@@ -2482,7 +2488,7 @@ TEST_F(VictionaryClientTest, UncommittedOperationCount) {
 
   client_->rollback_all_tables(other_thd);
   EXPECT_EQ(client_->columns().uncommitted_entry_count(), 0u);
-  EXPECT_FALSE(client_->has_uncommitted_operations());
+  EXPECT_FALSE(has_uncommitted_operations());
 
   // A staged DELETE counts too, and clear_all_tables() resets the count.
   {
@@ -2490,16 +2496,16 @@ TEST_F(VictionaryClientTest, UncommittedOperationCount) {
     client_->columns().MarkForDeletion(
         *fake_thd, ColumnKey("testdb", "counttable", "col1"));
   }
-  EXPECT_TRUE(client_->has_uncommitted_operations());
+  EXPECT_TRUE(has_uncommitted_operations());
   client_->clear_all_tables();
-  EXPECT_FALSE(client_->has_uncommitted_operations());
+  EXPECT_FALSE(has_uncommitted_operations());
 }
 
 // With nothing pending, commit and rollback must not take the write lock:
 // they complete while another thread holds the read lock.
 TEST_F(VictionaryClientTest, TransactionEndDoesNotLockWhenNothingPending) {
   THD *fake_thd = reinterpret_cast<THD *>(0x9b10);
-  ASSERT_FALSE(client_->has_uncommitted_operations());
+  ASSERT_FALSE(has_uncommitted_operations());
 
   std::future<void> done;
   std::future_status status;
@@ -2532,7 +2538,7 @@ TEST_F(VictionaryClientTest, TransactionEndStillAppliesPendingOperations) {
             .size(),
         1u);
   }
-  EXPECT_FALSE(client_->has_uncommitted_operations());
+  EXPECT_FALSE(has_uncommitted_operations());
 }
 
 }  // namespace villagesql_unittest
