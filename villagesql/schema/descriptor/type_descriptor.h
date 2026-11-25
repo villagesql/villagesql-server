@@ -333,7 +333,6 @@ class TypeDescriptor {
   std::optional<StorageInterface> storage_intf_;
 
   // Collect aggregate VDF name (empty = none). See collect_aggregate_name().
-  // Kept last so the offsets of the members above do not change.
   std::string collect_aggregate_name_;
 };
 

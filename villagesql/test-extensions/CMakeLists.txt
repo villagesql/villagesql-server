@@ -61,6 +61,10 @@ vsql_add_test_extension(vsql-huge-fixed-test           vsql_huge_fixed_test)
 vsql_add_test_extension(vsql-huge-var-test             vsql_huge_var_test)
 vsql_add_test_extension(vsql-bitfield-test             vsql_bitfield_test)
 vsql_add_test_extension(vsql-tarray-test               vsql_tarray_test)
+# Bad-registration fixtures for a type's collect aggregate (VEF_PROTOCOL_6):
+# the named VDF is missing, or is not a one-argument aggregate returning the type.
+vsql_add_test_extension(vsql-bad-collect-missing-test  vsql_bad_collect_missing_test)
+vsql_add_test_extension(vsql-bad-collect-not-agg-test  vsql_bad_collect_not_agg_test)
 vsql_add_test_extension(vsql-resolve-only-test         vsql_resolve_only_test)
 
 # update_test installable + three target variants exercise the pre-checks
