@@ -107,9 +107,9 @@ class MaybeParams {
 // concurrent VDF calls on many cores do not slow each other down. Even a
 // shared lock writes the lock word on every lock and unlock, so every caller
 // would write the same cache line. Only a miss takes a mutex. Entries are
-// only evicted when the extension is uninstalled
-// because type parameters are immutable per type instantiation. Also the ABI
-// does not currently have a mechanism to know when a type is no longer used.
+// only evicted when the extension is uninstalled, because type parameters
+// are immutable per type instantiation. Also the ABI does not currently have
+// a mechanism to know when a type is no longer used.
 template <typename T>
 class TypeParamsCache {
  public:
