@@ -379,8 +379,7 @@ std::vector<const IndexColumnEntry *> VictionaryClient::GetColumnsForIndex(
 }
 
 void VictionaryClient::init_index_id_counter() {
-  // Must be called while holding write lock (reload_ddl_tables_locked holds
-  // it).
+  assert_write_lock_held();
   uint64_t max_id = 0;
   for (const IndexEntry *entry : m_custom_indexes.get_all_committed()) {
     if (entry->index_id > max_id) max_id = entry->index_id;

@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "scope_guard.h"
+#include "sql/auto_thd.h"
 #include "sql/bootstrap.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/mysqld.h"
@@ -273,18 +274,16 @@ static bool do_init_extension_infrastructure(THD *thd) {
   return false;
 }
 
-static bool do_reload_after_binlog_recovery(THD *thd) {
-  const dd::cache::Dictionary_client::Auto_releaser scope_releaser(
-      thd->dd_client());
-  return VictionaryClient::instance().reload_ddl_tables(thd);
-}
-
 }  // namespace
 
 bool reload_after_binlog_recovery() {
-  if (bootstrap::run_bootstrap_thread(nullptr, nullptr,
-                                      &do_reload_after_binlog_recovery,
-                                      SYSTEM_THREAD_DD_INITIALIZE)) {
+  // An Auto_THD, as dd::reset_tables_and_tablespaces() uses right after this.
+  // A bootstrap thread would take a thread ID and shift the connection IDs
+  // that clients see.
+  Auto_THD thd;
+  const dd::cache::Dictionary_client::Auto_releaser scope_releaser(
+      thd.thd->dd_client());
+  if (VictionaryClient::instance().reload_ddl_tables(thd.thd)) {
     LogVSQL(ERROR_LEVEL, "Failed to reload system tables after recovery");
     return true;
   }
