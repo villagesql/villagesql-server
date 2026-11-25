@@ -51,6 +51,11 @@ extern "C" {
 
 #define VEF_PREVIEW_SESSION_VAR_NAME "vsql::session_var"
 
+// String values and defaults are valid UTF-8 without embedded NUL. SQL
+// assignments are converted from their source charset before storage and
+// callbacks; binary SQL input is accepted only when it is valid UTF-8.
+// Getters return UTF-8. SQL NULL remains distinct from an empty string.
+//
 // Capability ABI version compiled into this SDK snapshot.
 #define VEF_PREVIEW_SESSION_VAR_ABI_VERSION 1
 

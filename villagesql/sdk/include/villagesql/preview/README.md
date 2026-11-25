@@ -62,3 +62,9 @@ When a preview capability's shape has settled and we are ready to commit to
 its stability, it will move out of `villagesql/preview/` into the stable
 SDK surface, with appropriate protocol/version guarantees. Until then,
 assume nothing in this directory is stable.
+
+## String system variables
+
+Global and session extension system variables use valid UTF-8 for string defaults, stored values, SDK reads and change callbacks. SQL assignments are converted from their source charset; SQL binary strings must already contain valid UTF-8. Malformed text and embedded NUL are rejected. The SDK's `std::string` setter checks for embedded NUL before passing the value to the NUL-terminated ABI. SQL NULL and empty strings remain distinct.
+
+SQL expressions reading these variables use `utf8mb4_bin` with MySQL's existing SYSCONST derivation.

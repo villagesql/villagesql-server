@@ -248,7 +248,8 @@ class sys_var_pluginvar : public sys_var {
   static void operator delete(void *ptr) { my_free(ptr); }
 
   sys_var_pluginvar(sys_var_chain *chain, const char *name_arg,
-                    SYS_VAR *plugin_var_arg)
+                    SYS_VAR *plugin_var_arg,
+                    const CHARSET_INFO *value_charset = nullptr)
       : sys_var(
             chain, name_arg, plugin_var_arg->comment,
             (plugin_var_arg->flags & PLUGIN_VAR_THDLOCAL ? SESSION : GLOBAL) |
@@ -275,6 +276,7 @@ class sys_var_pluginvar : public sys_var {
         plugin_var(plugin_var_arg),
         orig_pluginvar_name(plugin_var_arg->name) {
     plugin_var->name = name_arg;
+    m_value_charset = value_charset;
     is_plugin = true;
   }
   sys_var_pluginvar *cast_pluginvar() override { return this; }
@@ -320,6 +322,8 @@ class sys_var_pluginvar : public sys_var {
 */
 struct st_item_value_holder : public st_mysql_value {
   Item *item;
+  String *string_value{nullptr};
+  bool string_value_ready{false};
 };
 
 // Defined in sql_plugin.cc, but declared here since sql_plugin.h has so
