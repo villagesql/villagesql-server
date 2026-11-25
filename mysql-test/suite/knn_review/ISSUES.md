@@ -43,9 +43,10 @@ mark the issue fixed here.
 | KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | 🟡 known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress, hnsw_purge_then_restart |
 | KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | 🟢 fixed by #1656 | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
 | KNN-29 | After a restart, purge of HNSW entries deleted before it makes other rows unreachable | 🔴 open | delete/hnsw_purge_restart |
-| KNN-30 | A KNN scan crashes on a prepared statement parameter that is not a valid SVECTOR | 🔴 open | select_correctness/hnsw_bad_query_param |
+| KNN-30 | A KNN scan crashes on a prepared statement parameter that is not a valid SVECTOR | 🔴 open, fix in #1675 | select_correctness/hnsw_bad_query_param |
 | KNN-31 | Purge run again after a restart asserts on the HNSW entry of a row that reused the slot | 🔴 open | delete/hnsw_purge_again_after_restart |
 | KNN-32 | A primary key UPDATE that waits for a lock delete-marks the old row's column store values twice | 🔴 open | locking/hnsw_pk_update_lock_wait_rollback, hnsw_pk_update_lock_wait_commit |
+| KNN-33 | A READ UNCOMMITTED read of a row being inserted fetches its SVECTOR from an unset reference | 🔴 open | select_correctness/svector_read_uncommitted_insert |
 
 ## Not implemented yet
 
@@ -790,7 +791,25 @@ still not implemented on /40.
 - The EXECUTE runs Sql_cmd_dml::execute twice (the second time through the
   reprepare path); the second execute_inner() returns failure with no error
   set.
+- Cause: IndexKnnScanIterator::Init (villagesql/sql/knn_iterator.cc) builds
+  the key from the query point with store_key::copy() and returns true on
+  STORE_KEY_FATAL, assuming an error was raised. store_key runs with
+  check_for_truncated_fields = CHECK_FIELD_IGNORE, and Item_param stores a
+  custom type value through ParamEncodeAndStoreCustomField and
+  HandleFailedEncode, which for a value the type rejects without a message
+  of its own (vsql-vector's from_string uses warning()) only pushes
+  ER_TRUNCATED_WRONG_VALUE_FOR_FIELD as a warning and returns
+  TYPE_ERR_BAD_VALUE. So Init fails with no error. Without the index the
+  distance function converts the parameter through
+  EncodeStringForCustomParam, which raises "Incorrect ... for parameter".
+  KVECTOR passes because its from_string raises its own error. The code is
+  on main unchanged, so main has the bug too.
 - Expected: the parameter's error, as with the index ignored.
+- Fix in #1675 "Report a bad KNN query point instead of failing without an
+  error" (against main). When the copy fails with no error, Init reads the
+  query point with val_str(), which raises the parameter's error, and raises
+  a general error if there is still none. Not on this stack yet, so
+  select_correctness/hnsw_bad_query_param still skips.
 
 ## KNN-31: Purge run again after a restart asserts on the HNSW entry of a row that reused the slot
 
@@ -856,3 +875,25 @@ still not implemented on /40.
 - Expected: after the wait the UPDATE succeeds (session 1 rolled back) or
   fails with ER_DUP_ENTRY and leaves the row as it was (session 1
   committed).
+
+## KNN-33: A READ UNCOMMITTED read of a row being inserted fetches its SVECTOR from an unset reference
+
+- Seen on: tomas/stress-knn-20261125 (main with the /43 stack) with
+  vsql-vector deb/hnsw_index/38 (deddb66), debug build. Found by pstress
+  (vsql_vector workload without restarts): the first two trials crashed
+  within a minute, in a table scan of vsql.vv1 for a join.
+- Repro: a table with an SVECTOR(8) column, no index. One session inserts
+  rows in a loop; another reads `SUM(VECTOR_NORM(v))` in a loop at READ
+  UNCOMMITTED. The reader asserts `slot_index < max_num_recs`
+  (vsql-vector data_page.cc:279, `DataPage::get_record_status` from
+  `ColumnStore::fetch`, through `Custom_column::fetch` in
+  `row_sel_store_mysql_rec`). The same at READ COMMITTED passes. The test
+  extension's KVECTOR column store does not assert with the same steps.
+- Cause: row_ins_clust_index_entry_low (row0ins.cc) commits the mtr that
+  inserts the clustered record, and only then calls Custom_column::insert,
+  which stores the value and writes its reference into the record. A READ
+  UNCOMMITTED reader in between reads the reference before it is written.
+  For an InnoDB BLOB not written yet, row_sel_store_mysql_rec returns false
+  and the row is skipped (row0sel.cc, the comment on TRX_ISO_READ_UNCOMMITTED
+  readers); the column store fetch has no such check.
+- Expected: the reader skips the row, as for a BLOB not written yet.
