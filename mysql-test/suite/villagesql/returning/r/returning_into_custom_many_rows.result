@@ -1,0 +1,33 @@
+CREATE TABLE t (id INT PRIMARY KEY, c vsql_complex.COMPLEX) ENGINE=InnoDB;
+INSERT INTO t VALUES (1, '(1,2)'), (2, '(3,4)');
+CREATE PROCEDURE p_many()
+BEGIN
+DECLARE z vsql_complex.COMPLEX;
+UPDATE t SET id = id + 10 RETURNING c INTO z;
+SELECT z;
+END//
+CREATE PROCEDURE p_one()
+BEGIN
+DECLARE z vsql_complex.COMPLEX;
+UPDATE t SET id = id + 10 WHERE id = 1 RETURNING c INTO z;
+SELECT z;
+END//
+# Two rows into a COMPLEX variable: refused, with the type named.
+CALL p_many();
+ERROR 42000: Result consisted of more than one row, and variable 'z' has type 'vsql_complex.COMPLEX', which cannot collect rows (it declares no collect aggregate)
+# The statement rolled back: the ids are unchanged.
+SELECT id FROM t ORDER BY id;
+id
+1
+2
+# One row still works.
+CALL p_one();
+z
+(1,2)
+SELECT id FROM t ORDER BY id;
+id
+2
+11
+DROP PROCEDURE p_many;
+DROP PROCEDURE p_one;
+DROP TABLE t;
