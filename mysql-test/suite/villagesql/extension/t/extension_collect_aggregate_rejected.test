@@ -37,3 +37,4 @@ die "Expected the 'not found' rejection in the error log" unless $missing;
 die "Expected the 'must be an aggregate VDF' rejection in the error log"
   unless $not_agg;
 print "Found both collect aggregate rejection messages in the error log\n";
+EOF
