@@ -1,0 +1,27 @@
+# An UPDATE of the primary key waits for the lock on the new key,
+# which another session has inserted; that session rolls back,
+# and the UPDATE succeeds.
+# After the wait InnoDB calls row_upd_clust_rec_by_insert again, and the old
+# row's values in the column store must be delete-marked only once.
+
+--source include/count_sessions.inc
+
+INSTALL EXTENSION vsql_knn_index_test;
+--source suite/knn_review/include/knn_table.inc
+--connect (con1, localhost, root,,)
+START TRANSACTION;
+INSERT INTO t VALUES (100, 1, 'z', '[9,9,9,9]');
+--connection default
+--send UPDATE t SET id = 100 WHERE id = 1
+--connection con1
+--let $wait_condition = SELECT COUNT(*) = 1 FROM information_schema.innodb_trx WHERE trx_state = 'LOCK WAIT'
+--source include/wait_condition.inc
+ROLLBACK;
+--connection default
+--reap
+SELECT id, pay FROM t WHERE id IN (1, 100) ORDER BY id;
+SELECT id FROM t ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--disconnect con1
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
+--source include/wait_until_count_sessions.inc

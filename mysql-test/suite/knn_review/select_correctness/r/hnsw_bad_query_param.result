@@ -1,0 +1,34 @@
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+PREPARE p FROM 'SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_vector.l2_distance(v, ?) LIMIT 3';
+SET @v = '[1,0,0,0]';
+EXECUTE p USING @v;
+id
+1
+4
+8
+SET @v = '[1,2,3]';
+EXECUTE p USING @v;
+ERROR HY000: Incorrect vsql_vector.SVECTOR(4) value: '[1,2,3]' for parameter '?'
+SET @v = 'not a vector';
+EXECUTE p USING @v;
+ERROR HY000: Incorrect vsql_vector.SVECTOR(4) value: 'not a vector' for parameter '?'
+DEALLOCATE PREPARE p;
+PREPARE p FROM 'SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, ?) LIMIT 3';
+SET @v = '[1,0,0,0]';
+EXECUTE p USING @v;
+id
+1
+4
+8
+SET @v = '[1,2,3]';
+EXECUTE p USING @v;
+ERROR HY000: Incorrect vsql_vector.SVECTOR(4) value: '[1,2,3]' for parameter '?'
+SET @v = 'not a vector';
+EXECUTE p USING @v;
+ERROR HY000: Incorrect vsql_vector.SVECTOR(4) value: 'not a vector' for parameter '?'
+DEALLOCATE PREPARE p;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;

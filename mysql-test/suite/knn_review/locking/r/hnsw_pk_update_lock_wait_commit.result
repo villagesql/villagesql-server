@@ -1,0 +1,20 @@
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+START TRANSACTION;
+INSERT INTO t VALUES (100, 1, 'z', '[9,9,9,9]');
+UPDATE t SET id = 100 WHERE id = 1;
+COMMIT;
+ERROR 23000: Duplicate entry '100' for key 't.PRIMARY'
+SELECT id, pay FROM t WHERE id IN (1, 100) ORDER BY id;
+id	pay
+1	a
+100	z
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+8
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;

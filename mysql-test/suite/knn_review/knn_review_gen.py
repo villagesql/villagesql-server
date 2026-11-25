@@ -22,6 +22,7 @@ KNOWN_ISSUES = {
     "select_correctness/null_vectors_knn_scan": "KNN-4 A KNN scan skips NULL vectors the plain query fails on",
     "select_correctness/order_function": "KNN-5 A KNN scan ranks by the first ORDER function of the profile",
     "select_correctness/window_under_knn_limit": "KNN-7 A window under a KNN ORDER BY LIMIT sees only LIMIT rows",
+    "select_correctness/hnsw_bad_query_param": "KNN-30 A KNN scan crashes on a prepared statement parameter that is not a valid SVECTOR",
     "select_plan/having": "KNN-8 A HAVING clause stops the KNN scan",
     "ddl/drop_table_entries": "KNN-20 DROP TABLE does not call the custom index drop callback",
     "ddl/truncate_entries": "KNN-20 DROP TABLE does not call the custom index drop callback",
@@ -36,6 +37,9 @@ KNOWN_ISSUES = {
     "delete/hnsw_purge_locking": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
     "delete/hnsw_purge_then_restart": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
     "delete/hnsw_purge_locking_stress": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
+    "delete/hnsw_purge_again_after_restart": "KNN-31 Purge run again after a restart asserts on the HNSW entry of a row that reused the slot",
+    "locking/hnsw_pk_update_lock_wait_rollback": "KNN-32 A primary key UPDATE that waits for a lock delete-marks the old row's column store values twice",
+    "locking/hnsw_pk_update_lock_wait_commit": "KNN-32 A primary key UPDATE that waits for a lock delete-marks the old row's column store values twice",
 }
 LOCK_NOWAIT = ("ER_LOCK_NOWAIT", "ERROR HY000: Statement aborted because "
                "lock(s) could not be acquired immediately and NOWAIT is set.")
@@ -2281,6 +2285,25 @@ hnsw_uninstall(t)
 tests.append(t)
 
 
+t = T("select_correctness", "hnsw_bad_query_param", """
+A KNN query on an HNSW index (vsql-vector) whose query point is a prepared
+statement parameter fails with the parameter's error when the value is not a
+valid SVECTOR(4), as it does with the index ignored. A valid value gives the
+same rows both ways.""")
+hnsw_install(t)
+for hint in ("IGNORE INDEX (idx_v) ", ""):
+    t.sql(f"PREPARE p FROM 'SELECT id FROM t {hint}ORDER BY {HD}(v, ?) LIMIT 3'")
+    t.sql("SET @v = '[1,0,0,0]'")
+    t.sql("EXECUTE p USING @v", rows=near(BASE))
+    for val in ("[1,2,3]", "not a vector"):
+        t.sql(f"SET @v = '{val}'")
+        t.sql("EXECUTE p USING @v",
+              error=("ER_VILLAGESQL_GENERIC_ERROR",
+                     f"ERROR HY000: Incorrect vsql_vector.SVECTOR(4) value: '{val}' for parameter '?'"))
+    t.sql("DEALLOCATE PREPARE p")
+hnsw_uninstall(t)
+tests.append(t)
+
 def hnsw_lock_wait_then(name, header, change, after):
     t = T("locking", name, header)
     t.raw(["--source include/count_sessions.inc", ""])
@@ -2792,6 +2815,36 @@ hknn(t, len(m2), rows=near(m2, len(m2)))
 hnsw_uninstall(t)
 tests.append(t)
 
+
+t = T("delete", "hnsw_purge_again_after_restart", """
+A row of a table with an HNSW index (vsql-vector) is deleted and purged, and a
+row inserted after it reuses its vector slot. The server is killed before the
+purged undo log is truncated, so after the restart purge processes the delete
+again. It must leave the new row's entry alone: the restarted server keeps
+running, and KNN reads find the new row before and after purge.""")
+t.raw(["--source include/have_debug.inc", ""])
+t.sql("SET GLOBAL innodb_monitor_enable = 'purge_del_mark_records'")
+hnsw_install(t)
+t.raw(["--let $purged = `SELECT count FROM information_schema.innodb_metrics WHERE name = 'purge_del_mark_records'`"])
+t.sql("DELETE FROM t WHERE id = 4")
+t.sql("SET GLOBAL innodb_purge_run_now = ON")
+t.raw(["--let $wait_condition = SELECT count > $purged FROM information_schema.innodb_metrics WHERE name = 'purge_del_mark_records'",
+       "--source include/wait_condition.inc"])
+t.sql("SET GLOBAL innodb_purge_stop_now = ON")
+t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]')")
+reused = model(r4=None) | {9: (1, "i", (1, 0, 0, 0.1))}
+t.raw(*KILL_RESTART)
+t.echo("After the restart")
+t.sql("SELECT COUNT(*) AS n FROM t", rows=[str(len(reused))], header="n")
+hknn(t, rows=near(reused))
+t.raw(["--source include/villagesql/wait_innodb_history_purged.inc"])
+t.echo("Purged")
+hknn(t, rows=near(reused))
+hnsw_uninstall(t)
+t.sql("SET GLOBAL innodb_monitor_disable = 'purge_del_mark_records'")
+t.sql("SET GLOBAL innodb_monitor_reset = 'purge_del_mark_records'")
+tests.append(t)
+
 t = T("delete", "hnsw_purge_then_restart", """
 delete/hnsw_purge_restart with purge before the restart instead of after it.
 Deletes and a vector update on a table with an HNSW index (vsql-vector) are
@@ -2856,6 +2909,64 @@ hnsw_lock_wait_then("hnsw_lock_wait_then_vector_update",
                     HLW.format(what="has moved away from the query point"),
                     "UPDATE t SET v = '[9,9,9,9]' WHERE id = 1",
                     with_vec(BASE, 1, "[9,9,9,9]"))
+
+
+def pk_update_lock_wait(name, header, end, hnsw):
+    t = T("locking", name, header)
+    t.raw(["--source include/count_sessions.inc", ""])
+    if hnsw:
+        hnsw_install(t)
+    else:
+        t.install()
+    t.raw(["--connect (con1, localhost, root,,)"])
+    t.sql("START TRANSACTION")
+    t.sql("INSERT INTO t VALUES (100, 1, 'z', '[9,9,9,9]')")
+    t.raw(["--connection default"])
+    q = "UPDATE t SET id = 100 WHERE id = 1"
+    t.raw([f"--send {q}"], [f"{q};"])
+    t.raw(["--connection con1",
+           "--let $wait_condition = SELECT COUNT(*) = 1 FROM information_schema.innodb_trx WHERE trx_state = 'LOCK WAIT'",
+           "--source include/wait_condition.inc"])
+    t.sql(end)
+    t.raw(["--connection default"])
+    if end == "ROLLBACK":
+        t.raw(["--reap"])
+        pays, ids = ["100\ta"], ["100", "4", "8"]
+    else:
+        t.raw(["--error ER_DUP_ENTRY", "--reap"],
+              ["ERROR 23000: Duplicate entry '100' for key 't.PRIMARY'"])
+        pays, ids = ["1\ta", "100\tz"], ["1", "4", "8"]
+    t.sql("SELECT id, pay FROM t WHERE id IN (1, 100) ORDER BY id",
+          header="id\tpay", rows=pays)
+    if hnsw:
+        hknn(t, rows=ids)
+    else:
+        knn(t, rows=ids)
+    t.raw(["--disconnect con1"])
+    if hnsw:
+        hnsw_uninstall(t)
+    else:
+        t.uninstall()
+    t.raw(["--source include/wait_until_count_sessions.inc"])
+    tests.append(t)
+
+
+PKLW = """
+An UPDATE of the primary key{idx} waits for the lock on the new key,
+which another session has inserted; {then}.
+After the wait InnoDB calls row_upd_clust_rec_by_insert again, and the old
+row's values in the column store must be delete-marked only once."""
+for hnsw, prefix, idx in ((False, "", ""),
+                          (True, "hnsw_", "\n(table with a vsql-vector HNSW index)")):
+    pk_update_lock_wait(
+        f"{prefix}pk_update_lock_wait_rollback",
+        PKLW.format(idx=idx, then="that session rolls back,\nand the UPDATE "
+                    "succeeds"), "ROLLBACK", hnsw)
+    pk_update_lock_wait(
+        f"{prefix}pk_update_lock_wait_commit",
+        PKLW.format(idx=idx, then="that session commits,\nand the UPDATE fails "
+                    "with a duplicate key and leaves the row as it was"),
+        "COMMIT", hnsw)
 
 
 t = T("delete", "hnsw_many_deleted", """

@@ -38,6 +38,7 @@ whether it restarts the server, and the known issue it skips for.
 | delete_where | Rows deleted by a WHERE clause, by the primary key and by a secondary index, are gone from KNN results. | test ext |  |  |  |
 | foreign_key_cascade | Rows of a child table deleted or updated by a foreign key cascade (InnoDB's own row operations, not the SQL layer's) leave KNN results right, and a rolled back cascade restores them. | test ext |  |  |  |
 | hnsw_many_deleted | With an HNSW index (vsql-vector), a KNN query with LIMIT 10 returns the 10 nearest rows also when most rows are deleted and their entries are still in the index. | HNSW | yes |  |  |
+| hnsw_purge_again_after_restart | A row of a table with an HNSW index (vsql-vector) is deleted and purged, and a row inserted after it reuses its vector slot. | HNSW | yes | yes | KNN-31 |
 | hnsw_purge_locking | Deletes and a vector update on a table with an HNSW index (vsql-vector) are committed while purge is stopped (debug build); then purge runs. | HNSW | yes |  | KNN-27 |
 | hnsw_purge_locking_stress | delete/hnsw_purge_locking 50 times on one server, each round with a new table and index, and with a plain KNN read next to the locking reads. | HNSW | yes |  | KNN-27 |
 | hnsw_purge_restart | Deletes and a vector update on a table with an HNSW index (vsql-vector) are committed while purge is stopped (debug build), and the server is killed before purge runs. | HNSW | yes | yes | KNN-29 |
@@ -59,6 +60,8 @@ whether it restarts the server, and the known issue it skips for.
 | hnsw_current_entry_after_change | READ COMMITTED locking KNN reads with an HNSW index (vsql-vector) skip the old entry of a row whose vector was updated and the entry of a deleted row, and find the updated row at its new place, in this session's transaction and after it. | HNSW |  |  | KNN-24 |
 | hnsw_lock_wait_then_delete | A READ COMMITTED locking KNN read with an HNSW index (vsql-vector) waits for the lock on a row another session has deleted; once that session commits, the read returns the nearest rows as they are now. | HNSW |  |  | KNN-24 |
 | hnsw_lock_wait_then_vector_update | A READ COMMITTED locking KNN read with an HNSW index (vsql-vector) waits for the lock on a row another session has moved away from the query point; once that session commits, the read returns the nearest rows as they are now. | HNSW |  |  | KNN-24 |
+| hnsw_pk_update_lock_wait_commit | An UPDATE of the primary key (table with a vsql-vector HNSW index) waits for the lock on the new key, which another session has inserted; that session commits, and the UPDATE fails with a duplicate key and leaves the row as it was. | HNSW |  |  | KNN-32 |
+| hnsw_pk_update_lock_wait_rollback | An UPDATE of the primary key (table with a vsql-vector HNSW index) waits for the lock on the new key, which another session has inserted; that session rolls back, and the UPDATE succeeds. | HNSW |  |  | KNN-32 |
 | insert_select | INSERT ... SELECT with KNN ordering. | test ext |  |  |  |
 | lock_wait_rc | READ COMMITTED: a row locked by another session makes a locking KNN read wait (reported here by NOWAIT), not skip it; SKIP LOCKED skips it; a plain read does not wait. | test ext |  |  |  |
 | lock_wait_rr | REPEATABLE READ: a row locked by another session makes a locking KNN read wait (reported here by NOWAIT), not skip it; SKIP LOCKED skips it; a plain read does not wait. | test ext |  |  |  |
@@ -71,6 +74,8 @@ whether it restarts the server, and the known issue it skips for.
 | phantom_for_update | A REPEATABLE READ locking KNN read (FOR UPDATE) is repeatable within the transaction: another session cannot insert a row that would become one of the nearest rows, as next-key locks prevent for an ordinary index. | test ext |  |  | KNN-22 |
 | phantom_serializable | A SERIALIZABLE transaction's KNN read is repeatable: another session cannot insert a row that would become one of the nearest rows while the transaction is open, as next-key locks prevent for an ordinary index. | test ext |  |  |  |
 | phantom_serializable_for_update | A SERIALIZABLE transaction's locking KNN read (FOR UPDATE) is repeatable: another session cannot insert a row that would become one of the nearest rows while the transaction is open. | test ext |  |  |  |
+| pk_update_lock_wait_commit | An UPDATE of the primary key waits for the lock on the new key, which another session has inserted; that session commits, and the UPDATE fails with a duplicate key and leaves the row as it was. | test ext |  |  |  |
+| pk_update_lock_wait_rollback | An UPDATE of the primary key waits for the lock on the new key, which another session has inserted; that session rolls back, and the UPDATE succeeds. | test ext |  |  |  |
 | read_committed | READ COMMITTED locking KNN reads (FOR SHARE, FOR UPDATE) return the nearest rows, the same as a plain read and as a locking read with the index ignored. | test ext |  |  |  |
 | repeatable_read | REPEATABLE READ locking KNN reads (FOR SHARE, FOR UPDATE) return the nearest rows. | test ext |  |  |  |
 | serializable | SERIALIZABLE reads, plain and locking, return the nearest rows. | test ext |  |  |  |
@@ -125,6 +130,7 @@ whether it restarts the server, and the known issue it skips for.
 | distinct_group_by | KNN ordering with DISTINCT and GROUP BY. | test ext |  |  |  |
 | empty_table | A KNN query on a table with no rows returns nothing, and finds rows inserted later. | test ext |  |  |  |
 | filters | A KNN query with a WHERE clause returns the nearest rows that satisfy it, whatever access the WHERE could use: none, the primary key, or the secondary index on grp. | test ext |  |  |  |
+| hnsw_bad_query_param | A KNN query on an HNSW index (vsql-vector) whose query point is a prepared statement parameter fails with the parameter's error when the value is not a valid SVECTOR(4), as it does with the index ignored. | HNSW |  |  | KNN-30 |
 | hypergraph | KNN queries under the hypergraph optimizer return the same rows. | test ext |  |  |  |
 | index_hints | Index hints on a KNN query do not change its rows: FORCE INDEX and IGNORE INDEX on the KNN index, and FORCE INDEX on the primary key. | test ext |  |  |  |
 | larger_table | On a 300-row table, before and after deleting and updating many rows, a KNN query returns rows at the same distances as the query with the index ignored (squared distances, which are integers here, so ties compare equal). | test ext |  |  |  |
