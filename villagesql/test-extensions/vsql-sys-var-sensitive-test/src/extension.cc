@@ -29,7 +29,8 @@
 //
 // read_token() and write_token() read and write api_token through
 // SYS_VARS.get() and SYS_VARS.set(), which the extension can do whoever is
-// connected.
+// connected. read_var(component, name) reads any variable through
+// SYS_VARS.get().
 
 #include <string>
 
@@ -58,6 +59,23 @@ void read_token_impl(StringResult out) {
   out.set(val);
 }
 
+// Returns the named variable, or NULL if the read failed. component is an
+// extension name, or "mysql_server" for a built-in variable.
+void read_var_impl(StringArg component, StringArg name, StringResult out) {
+  if (component.is_null() || name.is_null()) {
+    out.set_null();
+    return;
+  }
+  const std::string component_str(component.value());
+  const std::string name_str(name.value());
+  std::string val;
+  if (SYS_VARS.get(component_str.c_str(), name_str.c_str(), val)) {
+    out.set_null();
+    return;
+  }
+  out.set(val);
+}
+
 // Sets api_token, as an extension would when it rotates a token. Returns 1 if
 // the set reported an error, 0 if it succeeded.
 void write_token_impl(StringArg value, IntResult out) {
@@ -80,5 +98,10 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                                         .build())
                               .func(make_func<&write_token_impl>("write_token")
                                         .returns(INT)
+                                        .param(STRING)
+                                        .build())
+                              .func(make_func<&read_var_impl>("read_var")
+                                        .returns(STRING)
+                                        .param(STRING)
                                         .param(STRING)
                                         .build()))

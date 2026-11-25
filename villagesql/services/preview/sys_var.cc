@@ -35,8 +35,6 @@
 #include "sql/auth/auth_common.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/persisted_variable.h"
-#include "sql/server_component/mysql_system_variable_bits.h"
-#include "sql/set_var.h"
 #include "sql/sql_class.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_plugin_var.h"
@@ -242,50 +240,22 @@ static std::optional<vef_var_type_t> registered_var_type(
 // all. Any other variable is read under MySQL's rules.
 static bool sys_var_get(const char *component_name, const char *name,
                         void **val, size_t *val_len) {
-  if (!registered_var_type(component_name, name).has_value())
-    return get_variable(component_name, name, val, val_len);
-
-  THD *thd = current_thd;
-  const System_variable_tracker tracker =
-      System_variable_tracker::make_tracker(component_name, name);
-  // get_variable_value() fails when the value does not fit, and sets len to
-  // the size needed, so a second attempt with that size reads any value.
-  std::string buf(1024, '\0');
-  for (int attempt = 0; attempt < 2; ++attempt) {
-    size_t len = buf.size();
-    const std::optional<bool> read = tracker.access_system_variable<bool>(
-        thd,
-        [&](const System_variable_tracker &, sys_var *var) {
-          return get_variable_value(thd, var, buf.data(), OPT_GLOBAL, &len) !=
-                 nullptr;
-        },
-        Suppress_not_found_error::YES,
-        Force_sensitive_system_variable_access::YES);
-    if (!read.has_value()) return true;
-    if (*read) {
-      char *copy = static_cast<char *>(malloc(len + 1));
-      if (copy == nullptr) return true;
-      memcpy(copy, buf.data(), len);
-      copy[len] = '\0';
-      *val = copy;
-      *val_len = len;
-      return false;
-    }
-    if (len <= buf.size()) return true;
-    buf.assign(len, '\0');
-  }
-  return true;
+  return get_variable(component_name, name,
+                      registered_var_type(component_name, name).has_value(),
+                      val, val_len);
 }
 
 // Serializes the extension's own writes. Each ExtensionSetThd grants its
 // privileges to kExtensionSetUser and revokes them when it goes away, and
 // MySQL does not count the grants, so one write ending would strip the
-// privileges from another still running.
+// privileges from another still running. A write blocked on another lock
+// holds it for up to the 5 second lock_wait_timeout set below.
 std::mutex g_extension_set_mutex;
 
 // The account the extension's own writes run as. Upstream's internal THDs
-// share "sys_session"; a separate account keeps the extra privilege below
-// from reaching them.
+// share "sys_session". A separate account keeps the extra privilege below
+// from reaching them. Nothing reserves this name. An account created with it
+// would hold the privileges during a write and lose them after it.
 constexpr const char *kExtensionSetUser = "villagesql.sys_var";
 
 // The internal THD the extension's own writes run under, passed to the

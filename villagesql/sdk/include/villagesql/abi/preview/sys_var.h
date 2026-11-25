@@ -109,11 +109,13 @@ typedef struct {
 
   // Marks the variable SENSITIVE, for a value such as a password or an API
   // token. Only an account with SENSITIVE_VARIABLES_OBSERVER can read or set it
-  // from SQL; it is left out of SHOW VARIABLES and the performance_schema
+  // from SQL. It is left out of SHOW VARIABLES and the performance_schema
   // variable tables for everyone else. SET PERSIST stores it encrypted when a
   // keyring is loaded. Without one, it is stored in plaintext with a warning,
-  // or refused when persist_sensitive_variables_in_plaintext is OFF. The
-  // extension reads and sets it through vef_preview_sys_var_t regardless.
+  // or refused when persist_sensitive_variables_in_plaintext is OFF.
+  // Extension code reads and sets it through vef_preview_sys_var_t regardless.
+  // That includes other extensions, because get() and set() take the owning
+  // extension's name from the caller.
   bool sensitive;
 
   // Type-specific storage and constraints. Only the field matching type is

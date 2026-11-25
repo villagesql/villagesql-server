@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,9 @@
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
+#include "sql/current_thd.h"
+#include "sql/server_component/mysql_system_variable_bits.h"
+#include "sql/set_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/services/plugin_registry.h"
 
@@ -69,35 +73,43 @@ static void one_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
 
 }  // namespace
 
-bool get_variable(const char *component_name, const char *name, void **val,
-                  size_t *val_len) {
-  PluginRegistry registry;
-  if (!registry.is_valid()) return true;
-
-  my_service<SERVICE_TYPE(component_sys_variable_register)> svc(
-      "component_sys_variable_register", registry);
-  bool result = true;
-  if (svc.is_valid()) {
-    // get_variable requires a caller-supplied buffer. Use a stack buffer to
-    // read the value, then malloc a copy to hand ownership to the caller.
-    char buf[1024];
-    void *ptr = buf;
-    size_t len = sizeof(buf) - 1;
-    result = svc->get_variable(component_name, name, &ptr, &len);
-    if (!result) {
+bool get_variable(const char *component_name, const char *name,
+                  bool force_sensitive_access, void **val, size_t *val_len) {
+  THD *thd = current_thd;
+  // Built-in variables have no prefix.
+  const char *prefix =
+      strcmp(component_name, "mysql_server") == 0 ? "" : component_name;
+  const System_variable_tracker tracker =
+      System_variable_tracker::make_tracker(prefix, name);
+  const Force_sensitive_system_variable_access force =
+      force_sensitive_access ? Force_sensitive_system_variable_access::YES
+                             : Force_sensitive_system_variable_access::NO;
+  // get_variable_value() fails when the value does not fit, and sets len to
+  // the size needed, so a second attempt with that size reads any value.
+  std::string buf(1024, '\0');
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    size_t len = buf.size();
+    const std::optional<bool> read = tracker.access_system_variable<bool>(
+        thd,
+        [&](const System_variable_tracker &, sys_var *var) {
+          return get_variable_value(thd, var, buf.data(), OPT_GLOBAL, &len) !=
+                 nullptr;
+        },
+        Suppress_not_found_error::YES, force);
+    if (!read.has_value()) return true;
+    if (*read) {
       char *copy = static_cast<char *>(malloc(len + 1));
-      if (copy == nullptr) {
-        result = true;
-      } else {
-        memcpy(copy, ptr, len);
-        copy[len] = '\0';
-        if (ptr != static_cast<void *>(buf)) free(ptr);
-        *val = copy;
-        *val_len = len;
-      }
+      if (copy == nullptr) return true;
+      memcpy(copy, buf.data(), len);
+      copy[len] = '\0';
+      *val = copy;
+      *val_len = len;
+      return false;
     }
+    if (len <= buf.size()) return true;
+    buf.assign(len, '\0');
   }
-  return result;
+  return true;
 }
 
 bool set_variable(const char *component_name, const char *name,

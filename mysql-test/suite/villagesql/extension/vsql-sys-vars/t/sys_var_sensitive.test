@@ -6,7 +6,8 @@
 #   api_token  STR, sensitive
 #   plain      INT, not sensitive
 # and read_token() / write_token(), which read and write api_token through
-# SYS_VARS.get() / SYS_VARS.set().
+# SYS_VARS.get() / SYS_VARS.set(), and read_var(), which reads any variable
+# through SYS_VARS.get().
 #
 # This test runs without a keyring, so SET PERSIST stores the value in
 # plaintext with a warning, and the server logs an error that it cannot
@@ -63,6 +64,13 @@ SELECT LENGTH(vsql_sys_var_sensitive_test.read_token()) AS token_length;
 --disconnect obs
 
 --connection default
+--echo # So does a long value of a variable the extension did not register
+SET @orig_init_replica = @@GLOBAL.init_replica;
+SET GLOBAL init_replica = REPEAT('y', 3000);
+SELECT LENGTH(vsql_sys_var_sensitive_test.read_var('mysql_server',
+  'init_replica')) AS init_replica_length;
+SET GLOBAL init_replica = @orig_init_replica;
+
 --echo # The extension writes the value itself, whoever is connected
 SELECT vsql_sys_var_sensitive_test.write_token('rotated') AS err;
 SELECT vsql_sys_var_sensitive_test.read_token() AS token;
