@@ -1,0 +1,48 @@
+INSTALL EXTENSION vsql_simple;
+# Crash after the CREATE TABLE is binlogged, before InnoDB commits it
+SET SESSION DEBUG = '+d,crash_after_flush_binlog';
+CREATE TABLE t2 (id INT PRIMARY KEY, data vsql_simple.BYTEARRAY);
+ERROR HY000: Lost connection to MySQL server during query
+# Restart
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/ --innodb-lock-wait-timeout=5
+# The table was rolled forward with its custom-type column
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `data` vsql_simple.bytearray DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# The extension's VDFs work on the column
+INSERT INTO t2 VALUES (1, 'hello');
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") AS rotated FROM t2;
+id	rotated
+1	'uryyb   '
+DROP TABLE t2;
+CREATE TABLE t1 (id INT PRIMARY KEY, data vsql_simple.BYTEARRAY);
+# Crash after the DROP TABLE is binlogged, before InnoDB commits it
+SET SESSION DEBUG = '+d,crash_after_flush_binlog';
+DROP TABLE t1;
+ERROR HY000: Lost connection to MySQL server during query
+# Restart
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/ --innodb-lock-wait-timeout=5
+# The table was dropped, and its column no longer blocks UNINSTALL
+SHOW TABLES LIKE 't1';
+Tables_in_test (t1)
+UNINSTALL EXTENSION vsql_simple;
+INSTALL EXTENSION vsql_simple;
+# Crash after the CREATE PROCEDURE is binlogged, before InnoDB commits it
+SET SESSION DEBUG = '+d,crash_after_flush_binlog';
+CREATE PROCEDURE p1(IN val vsql_simple.BYTEARRAY)
+SELECT CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(val)), "'") AS rotated;
+ERROR HY000: Lost connection to MySQL server during query
+# Restart
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/ --innodb-lock-wait-timeout=5
+# The procedure was rolled forward with its custom-type parameter
+CALL p1('hello');
+rotated
+'uryyb   '
+UNINSTALL EXTENSION vsql_simple;
+ERROR HY000: Cannot uninstall extension 'vsql_simple': stored procedure test.p1 uses custom type bytearray
+DROP PROCEDURE p1;
+UNINSTALL EXTENSION vsql_simple;

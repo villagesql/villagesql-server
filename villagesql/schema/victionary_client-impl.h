@@ -46,16 +46,20 @@ bool SystemTableMap<EntryType, Mode>::reload_from_table(
     return true;
   }
 
+  // Read in a read-only attachable transaction, as data dictionary reads do,
+  // so InnoDB does a consistent read without row locks. At startup this runs
+  // before ha_post_recover() rolls back recovered transactions, and a locking
+  // read would wait on their locks. Ending the transaction closes the table.
+  thd->begin_attachable_ro_transaction();
+  auto attachable_guard =
+      create_scope_guard([&thd]() { thd->end_attachable_transaction(); });
+
   // Open the table
   TABLE *table = open_ltable(thd, &tables, TL_READ, MYSQL_LOCK_IGNORE_TIMEOUT);
   if (should_assert_if_null(table)) {
     LogVSQL(ERROR_LEVEL, "Cannot open %s.%s table", schema_name, table_name);
     return true;
   }
-
-  // Ensure cleanup on exit
-  auto cleanup_guard =
-      create_scope_guard([&thd]() { commit_and_close_mysql_tables(thd); });
 
   // Mark all fields as readable
   table->use_all_columns();

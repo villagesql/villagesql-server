@@ -1,0 +1,59 @@
+# The server must restart after it is killed inside INSTALL EXTENSION, after
+# the villagesql.extensions row is written and before it commits.
+#
+# Startup reads villagesql.extensions in VictionaryClient::init(), which runs
+# before ha_post_recover() rolls back the transactions recovered from the
+# redo log. The killed INSTALL's transaction still holds its row lock at that
+# point, so the read waits for it until innodb_lock_wait_timeout and fails
+# with HA_ERR_LOCK_WAIT_TIMEOUT. Debug builds then fail an assertion in
+# SystemTableMap::reload_from_table(); release builds fail extension startup.
+#
+# INSTALL EXTENSION parks at install_extension_before_commit. A committed
+# write from another connection then flushes the redo log, which includes
+# the parked transaction's changes, and the server is killed. The restart
+# uses a short innodb_lock_wait_timeout so the test does not wait the default
+# 50 seconds.
+#
+# Expected: the server restarts, the extension is not installed, and it can
+# be installed again.
+
+--source include/have_debug_sync.inc
+--source include/not_valgrind.inc
+
+--let $veb_dir = `SELECT @@veb_dir`
+CREATE TABLE t1 (a INT);
+
+connect (con_install,localhost,root,,);
+--echo # con_install: park INSTALL EXTENSION after it writes its row
+SET DEBUG_SYNC = 'install_extension_before_commit SIGNAL written WAIT_FOR never';
+--send INSTALL EXTENSION vsql_simple
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR written';
+
+--echo # Commit a write so the redo log reaches disk, then kill the server
+INSERT INTO t1 VALUES (1);
+--source include/kill_mysqld.inc
+
+connection con_install;
+--error CR_SERVER_LOST
+--reap
+disconnect con_install;
+
+connection default;
+--echo # Restart
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir --innodb-lock-wait-timeout=5
+--source include/start_mysqld.inc
+
+--echo # The interrupted install was rolled back
+SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_simple';
+
+--echo # The extension can be installed and uninstalled again
+INSTALL EXTENSION vsql_simple;
+SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_simple';
+UNINSTALL EXTENSION vsql_simple;
+
+DROP TABLE t1;

@@ -1,0 +1,30 @@
+CREATE TABLE t1 (a INT);
+INSTALL EXTENSION vsql_simple;
+# con_uninstall: park UNINSTALL EXTENSION after it deletes its row
+SET DEBUG_SYNC = 'uninstall_extension_before_commit SIGNAL deleted WAIT_FOR never';
+UNINSTALL EXTENSION vsql_simple;
+SET DEBUG_SYNC = 'now WAIT_FOR deleted';
+# Commit a write so the redo log reaches disk, then kill the server
+INSERT INTO t1 VALUES (1);
+# Kill the server
+ERROR HY000: Lost connection to MySQL server during query
+# Restart
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/ --innodb-lock-wait-timeout=5
+# The interrupted uninstall was rolled back
+SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_simple';
+EXTENSION_NAME
+vsql_simple
+# The extension's types and VDFs work
+CREATE TABLE t2 (id INT PRIMARY KEY, data BYTEARRAY);
+INSERT INTO t2 VALUES (1, 'hello');
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") AS rotated FROM t2;
+id	rotated
+1	'uryyb   '
+DROP TABLE t2;
+# The extension can be uninstalled
+UNINSTALL EXTENSION vsql_simple;
+SELECT extension_name FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_simple';
+EXTENSION_NAME
+DROP TABLE t1;

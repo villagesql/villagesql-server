@@ -8611,6 +8611,13 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
+  // VillageSQL: binlog crash recovery above can commit DDL that was prepared
+  // when the server stopped, after init_extension_infrastructure() read the
+  // VillageSQL system tables. Read the tables that DDL writes again.
+  if (!opt_initialize && villagesql::reload_after_binlog_recovery()) {
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+
   if (dd::reset_tables_and_tablespaces()) {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
