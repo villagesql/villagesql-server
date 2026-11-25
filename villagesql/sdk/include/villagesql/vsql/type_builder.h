@@ -167,6 +167,23 @@ class TypeBuilder {
                        Name>{s, embedded_funcs_};
   }
 
+  // Names the aggregate VDF (registered by this extension with .func()) that
+  // collects one value per row into a single value of this type. The server
+  // uses it for DML ... RETURNING ... INTO a variable of this type (see
+  // vef_type_desc_t::collect_aggregate_vdf_name for the call sequence and the
+  // required signature). collect_aggregate is a VEF_PROTOCOL_6 feature, so
+  // this raises the type's required protocol to VEF_PROTOCOL_6.
+  constexpr auto collect_aggregate(const char *agg_vdf_name) const {
+    detail::TypeBuilderState s = state_;
+    s.desc.vef_desc.collect_aggregate_vdf_name = agg_vdf_name;
+    require_atleast_min(s.desc.vef_desc.protocol, VEF_PROTOCOL_6);
+    return TypeBuilder<HasFromString, HasToString, HasCompare, ParamsType,
+                       HasIntToParams, HasResolveParams, HasMaxPersistedLength,
+                       HasVariableLength, HasPersistedLength,
+                       HasIntrinsicDefaultStr, HasIntrinsicDefaultVdf, EFT,
+                       Name>{s, embedded_funcs_};
+  }
+
   // Upper bound on persisted_length across all valid parameterizations.
   // Required for parameterized types (parse + to_strings) — build()
   // static_asserts the pairing. Ignored for non-parameterized types

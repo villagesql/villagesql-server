@@ -1,0 +1,64 @@
+# RETURNING ... INTO <variable of a type with a collect aggregate>: every
+# returned row is collected into the variable (vsql_array.ARRAY declares
+# array_collect as its collect aggregate).
+
+INSTALL EXTENSION vsql_array;
+
+CREATE TABLE t (id INT PRIMARY KEY, d INT, v INT);
+INSERT INTO t VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30), (4, 2, NULL);
+
+DELIMITER |;
+CREATE PROCEDURE p_del(IN dd INT)
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  DECLARE vs vsql_array.ARRAY('type=int32,max_size=8');
+  DELETE FROM t WHERE d = dd ORDER BY id RETURNING id, v INTO ids, vs;
+  SELECT vsql_array.array_length(ids) AS n, ids, vs;
+END|
+CREATE PROCEDURE p_one(IN dd INT)
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  DELETE FROM t WHERE d = dd ORDER BY id RETURNING id INTO ids;
+  SELECT vsql_array.array_length(ids) AS n, ids;
+END|
+CREATE PROCEDURE p_small()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=1');
+  DELETE FROM t ORDER BY id RETURNING id INTO ids;
+END|
+CREATE PROCEDURE p_mixed()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  DECLARE x INT;
+  DELETE FROM t ORDER BY id RETURNING id, v INTO ids, x;
+END|
+DELIMITER ;|
+
+--echo # Two rows into two arrays, row pairing kept.
+CALL p_del(1);
+SELECT * FROM t ORDER BY id;
+--echo # Zero rows: empty array.
+CALL p_one(9);
+--echo # NULL value: error, DELETE rolled back.
+--error ER_UDF_ERROR
+CALL p_del(2);
+SELECT * FROM t ORDER BY id;
+--echo # More rows than max_size: error, rolled back.
+--error ER_UDF_ERROR
+CALL p_small();
+SELECT COUNT(*) FROM t;
+--echo # Mixed array and scalar targets.
+--error ER_NOT_SUPPORTED_YET
+CALL p_mixed();
+--echo # Called twice (state reset).
+UPDATE t SET v = 40 WHERE id = 4;
+CALL p_one(2);
+INSERT INTO t VALUES (5, 3, 50);
+CALL p_one(3);
+
+DROP PROCEDURE p_del;
+DROP PROCEDURE p_one;
+DROP PROCEDURE p_small;
+DROP PROCEDURE p_mixed;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_array;

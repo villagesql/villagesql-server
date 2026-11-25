@@ -219,7 +219,7 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   // of its VDFs, so a call resolved once stays valid.
   if (m_udf->vdf_func_desc->prerun || m_udf->vdf_func_desc->postrun ||
       bind_and_check != nullptr) {
-    villagesql::MarkVdfStatementForReprepare(thd);
+    if (m_mark_reprepare) villagesql::MarkVdfStatementForReprepare(thd);
   }
 
   // A postponed call waits for the statement to be prepared again with its
@@ -279,7 +279,7 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
       // value from one EXECUTE to the next.
       if (arguments[0]->type() != Item::STRING_ITEM &&
           arguments[0]->type() != Item::HEX_BIN_ITEM) {
-        villagesql::MarkVdfStatementForReprepare(thd);
+        if (m_mark_reprepare) villagesql::MarkVdfStatementForReprepare(thd);
       }
       String tmp;
       String *val = ReadVdfValue(ArgReadType(param_id, m_udf->vdf_protocol),
@@ -475,6 +475,13 @@ bool vdf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
   m_prerun_ran = !defer_prerun;
   postrun_guard.release();
   return false;
+}
+
+bool vdf_handler::set_return_type_context(const villagesql::TypeContext *tc) {
+  m_return_type_context = tc;
+  if (tc == nullptr) return false;
+  const int64_t buffer_len = tc->field_buffer_length();
+  return buffer_len > 0 && MaybeResizeBuffer(static_cast<size_t>(buffer_len));
 }
 
 void vdf_handler::clear() {

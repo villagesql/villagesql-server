@@ -277,6 +277,17 @@ class TypeDescriptor {
     intrinsic_default_str_ = std::move(str);
   }
 
+  // Name of the aggregate VDF (same extension) that collects many values into
+  // one value of this type, or empty when the type declares none
+  // (vef_type_desc_t::collect_aggregate_vdf_name, VEF_PROTOCOL_6). Used by
+  // RETURNING ... INTO <variable of this type> to collect every returned row.
+  const std::string &collect_aggregate_name() const {
+    return collect_aggregate_name_;
+  }
+  void set_collect_aggregate_name(std::string name) {
+    collect_aggregate_name_ = std::move(name);
+  }
+
   // Returns the storage interface for this type, or nullopt if the type does
   // not manage its own column storage.
   const std::optional<StorageInterface> &storage_intf() const {
@@ -320,6 +331,10 @@ class TypeDescriptor {
   // Storage interface provided by the extension for managing column storage.
   // Empty if the type uses default InnoDB column storage.
   std::optional<StorageInterface> storage_intf_;
+
+  // Collect aggregate VDF name (empty = none). See collect_aggregate_name().
+  // Kept last so the offsets of the members above do not change.
+  std::string collect_aggregate_name_;
 };
 
 // TableTraits specialization for TypeDescriptor.

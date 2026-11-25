@@ -1,0 +1,70 @@
+INSTALL EXTENSION vsql_array;
+CREATE TABLE t (id INT PRIMARY KEY, d INT, v INT);
+INSERT INTO t VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30), (4, 2, NULL);
+CREATE PROCEDURE p_del(IN dd INT)
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+DECLARE vs vsql_array.ARRAY('type=int32,max_size=8');
+DELETE FROM t WHERE d = dd ORDER BY id RETURNING id, v INTO ids, vs;
+SELECT vsql_array.array_length(ids) AS n, ids, vs;
+END|
+CREATE PROCEDURE p_one(IN dd INT)
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+DELETE FROM t WHERE d = dd ORDER BY id RETURNING id INTO ids;
+SELECT vsql_array.array_length(ids) AS n, ids;
+END|
+CREATE PROCEDURE p_small()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=1');
+DELETE FROM t ORDER BY id RETURNING id INTO ids;
+END|
+CREATE PROCEDURE p_mixed()
+BEGIN
+DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+DECLARE x INT;
+DELETE FROM t ORDER BY id RETURNING id, v INTO ids, x;
+END|
+# Two rows into two arrays, row pairing kept.
+CALL p_del(1);
+n	ids	vs
+2	[1,2]	[10,20]
+SELECT * FROM t ORDER BY id;
+id	d	v
+3	2	30
+4	2	NULL
+# Zero rows: empty array.
+CALL p_one(9);
+n	ids
+0	[]
+# NULL value: error, DELETE rolled back.
+CALL p_del(2);
+ERROR HY000: VDF error in function 'array_collect': array_collect: NULL value; an ARRAY cannot hold NULL elements
+SELECT * FROM t ORDER BY id;
+id	d	v
+3	2	30
+4	2	NULL
+# More rows than max_size: error, rolled back.
+CALL p_small();
+ERROR HY000: VDF error in function 'array_collect': array_collect: more than max_size (1) values
+SELECT COUNT(*) FROM t;
+COUNT(*)
+2
+# Mixed array and scalar targets.
+CALL p_mixed();
+ERROR 42000: This version of MySQL doesn't yet support 'mixing collect-type (e.g. ARRAY) and other variables as RETURNING ... INTO targets'
+# Called twice (state reset).
+UPDATE t SET v = 40 WHERE id = 4;
+CALL p_one(2);
+n	ids
+2	[3,4]
+INSERT INTO t VALUES (5, 3, 50);
+CALL p_one(3);
+n	ids
+1	[5]
+DROP PROCEDURE p_del;
+DROP PROCEDURE p_one;
+DROP PROCEDURE p_small;
+DROP PROCEDURE p_mixed;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_array;

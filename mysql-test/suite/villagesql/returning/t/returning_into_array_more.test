@@ -1,0 +1,169 @@
+# More RETURNING ... INTO <ARRAY variable> cases (see returning_into_array):
+# UPDATE (with OLD_VALUE); INSERT/REPLACE (parse error, no INTO); element range and type errors;
+# column/target count mismatch; one statement executed twice in one CALL;
+# dynamic SQL; ROLLBACK after a successful collect.
+
+INSTALL EXTENSION vsql_array;
+
+CREATE TABLE t (id INT PRIMARY KEY, d INT, v BIGINT);
+INSERT INTO t VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30), (4, 2, 40);
+
+DELIMITER |;
+CREATE PROCEDURE p_upd(IN dd INT)
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  DECLARE nv vsql_array.ARRAY('type=int64,max_size=8');
+  DECLARE ov vsql_array.ARRAY('type=int64,max_size=8');
+  UPDATE t SET v = v + 1 WHERE d = dd ORDER BY id
+    RETURNING id, v, OLD_VALUE(v) INTO ids, nv, ov;
+  SELECT vsql_array.array_length(ids) AS n, ids, nv, ov;
+END|
+CREATE PROCEDURE p_upd_old_first(IN dd INT)
+BEGIN
+  DECLARE ov vsql_array.ARRAY('type=int64,max_size=8');
+  DECLARE nv vsql_array.ARRAY('type=int64,max_size=8');
+  UPDATE t SET v = v * 10 WHERE d = dd ORDER BY id
+    RETURNING OLD_VALUE(v), v INTO ov, nv;
+  SELECT ov, nv;
+END|
+--error ER_PARSE_ERROR
+CREATE PROCEDURE p_ins()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  DECLARE vs vsql_array.ARRAY('type=int64,max_size=8');
+  INSERT INTO t VALUES (5, 3, 50), (6, 3, 60) RETURNING id, v INTO ids, vs;
+  SELECT ids, vs;
+END|
+--error ER_PARSE_ERROR
+CREATE PROCEDURE p_ins_sel()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  INSERT INTO t SELECT id + 100, 9, v FROM t WHERE d = 3 ORDER BY id
+    RETURNING id INTO ids;
+  SELECT ids;
+END|
+--error ER_PARSE_ERROR
+CREATE PROCEDURE p_repl()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  DECLARE vs vsql_array.ARRAY('type=int64,max_size=8');
+  REPLACE INTO t VALUES (5, 3, 500), (7, 3, 70) RETURNING id, v INTO ids, vs;
+  SELECT ids, vs;
+END|
+CREATE PROCEDURE p_i32_range()
+BEGIN
+  DECLARE vs vsql_array.ARRAY('type=int32,max_size=8');
+  DELETE FROM t WHERE d = 4 ORDER BY id RETURNING v INTO vs;
+END|
+CREATE PROCEDURE p_i32_edge()
+BEGIN
+  DECLARE vs vsql_array.ARRAY('type=int32,max_size=8');
+  DELETE FROM t WHERE d = 5 ORDER BY id RETURNING v INTO vs;
+  SELECT vs;
+END|
+CREATE PROCEDURE p_double()
+BEGIN
+  DECLARE vs vsql_array.ARRAY('type=double,max_size=8');
+  DELETE FROM t WHERE d = 1 ORDER BY id RETURNING v INTO vs;
+END|
+CREATE PROCEDURE p_more_cols()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  DELETE FROM t WHERE d = 1 ORDER BY id RETURNING id, v INTO ids;
+END|
+CREATE PROCEDURE p_more_targets()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  DECLARE vs vsql_array.ARRAY('type=int64,max_size=8');
+  DELETE FROM t WHERE d = 1 ORDER BY id RETURNING id INTO ids, vs;
+END|
+CREATE PROCEDURE p_twice()
+BEGIN
+  DECLARE i INT DEFAULT 0;
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  WHILE i < 2 DO
+    DELETE FROM t WHERE d = 6 + i ORDER BY id RETURNING id INTO ids;
+    SELECT i, ids;
+    SET i = i + 1;
+  END WHILE;
+END|
+CREATE PROCEDURE p_dyn()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  PREPARE s FROM 'DELETE FROM t WHERE d = 8 ORDER BY id RETURNING id INTO ids';
+END|
+CREATE PROCEDURE p_rollback()
+BEGIN
+  DECLARE ids vsql_array.ARRAY('type=int64,max_size=8');
+  START TRANSACTION;
+  DELETE FROM t WHERE d = 1 ORDER BY id RETURNING id INTO ids;
+  ROLLBACK;
+  SELECT ids;
+  SELECT id, d, v FROM t WHERE d = 1 ORDER BY id;
+END|
+DELIMITER ;|
+
+--echo # UPDATE ... RETURNING new value and OLD_VALUE into arrays.
+CALL p_upd(1);
+--echo # Same, called again (second execution of the same statement).
+CALL p_upd(1);
+--echo # OLD_VALUE first in the list.
+CALL p_upd_old_first(2);
+SELECT * FROM t ORDER BY id;
+
+--echo # INSERT/REPLACE ... RETURNING ... INTO is not in the grammar (only
+--echo # DELETE and UPDATE take INTO): the three procedures above
+--echo # (INSERT VALUES, INSERT SELECT, REPLACE into arrays) fail to parse.
+SELECT COUNT(*) FROM information_schema.routines
+  WHERE routine_schema = 'test' AND routine_name IN ('p_ins', 'p_ins_sel', 'p_repl');
+
+--echo # int32 array: value above INT32_MAX is an error, DELETE rolled back.
+INSERT INTO t VALUES (10, 4, 2147483647), (11, 4, 2147483648);
+--error ER_UDF_ERROR
+CALL p_i32_range();
+SELECT id, v FROM t WHERE d = 4 ORDER BY id;
+--echo # int32 array: value below INT32_MIN is an error, DELETE rolled back.
+UPDATE t SET v = -2147483649 WHERE id = 11;
+--error ER_UDF_ERROR
+CALL p_i32_range();
+SELECT id, v FROM t WHERE d = 4 ORDER BY id;
+--echo # int32 array: INT32_MIN and INT32_MAX fit.
+INSERT INTO t VALUES (12, 5, -2147483648), (13, 5, 2147483647);
+CALL p_i32_edge();
+
+--echo # type=double target: error, DELETE rolled back.
+--error ER_UDF_ERROR
+CALL p_double();
+SELECT COUNT(*) FROM t WHERE d = 1;
+
+--echo # More RETURNING columns than targets.
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+CALL p_more_cols();
+--echo # More targets than RETURNING columns.
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+CALL p_more_targets();
+SELECT COUNT(*) FROM t WHERE d = 1;
+
+--echo # Same statement executed twice in one CALL (second run: empty array).
+INSERT INTO t VALUES (20, 6, 1), (21, 6, 2);
+CALL p_twice();
+
+--echo # Dynamic SQL cannot name a procedure variable as INTO target.
+--error ER_SP_UNDECLARED_VAR
+CALL p_dyn();
+
+--echo # ROLLBACK after a successful collect: array kept, rows back.
+CALL p_rollback();
+
+DROP PROCEDURE p_upd;
+DROP PROCEDURE p_upd_old_first;
+DROP PROCEDURE p_i32_range;
+DROP PROCEDURE p_i32_edge;
+DROP PROCEDURE p_double;
+DROP PROCEDURE p_more_cols;
+DROP PROCEDURE p_more_targets;
+DROP PROCEDURE p_twice;
+DROP PROCEDURE p_dyn;
+DROP PROCEDURE p_rollback;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_array;

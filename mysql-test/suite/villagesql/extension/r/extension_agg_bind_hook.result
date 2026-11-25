@@ -1,0 +1,47 @@
+INSTALL EXTENSION vsql_array;
+CREATE TABLE src (id INT PRIMARY KEY, x INT, d DOUBLE);
+INSERT INTO src VALUES (1, 10, 1.5), (2, 20, 2.5);
+# Matching parameters: accepted.
+CREATE PROCEDURE p_bind()
+BEGIN
+DECLARE v64 vsql_array.ARRAY('type=int64,max_size=1024');
+DECLARE v32 vsql_array.ARRAY('type=int32,max_size=1024');
+DECLARE vd vsql_array.ARRAY('type=double,max_size=1024');
+DECLARE vc vsql_array.ARRAY('type=int64,max_size=1024');
+SELECT vsql_array.array_agg(x), vsql_array.array_agg_int32(x),
+vsql_array.array_agg_double(d), vsql_array.array_collect(x)
+INTO v64, v32, vd, vc FROM src;
+SELECT v64, v32, vd, vc;
+END//
+# Other element type: refused.
+CREATE PROCEDURE p_bind_wrong_type()
+BEGIN
+DECLARE v vsql_array.ARRAY('type=int64,max_size=1024');
+SELECT vsql_array.array_agg_int32(x) INTO v FROM src;
+END//
+# Other max_size: refused.
+CREATE PROCEDURE p_bind_wrong_size()
+BEGIN
+DECLARE v vsql_array.ARRAY('type=double,max_size=1023');
+SELECT vsql_array.array_agg_double(d) INTO v FROM src;
+END//
+CALL p_bind();
+v64	v32	vd	vc
+[10,20]	[10,20]	[1.5,2.5]	[10,20]
+CALL p_bind_wrong_type();
+ERROR HY000: Incorrect ARRAY value: cannot implicitly cast string expression. Use explicit conversion for column 'v' at row 1
+CALL p_bind_wrong_size();
+ERROR HY000: Incorrect ARRAY value: cannot implicitly cast string expression. Use explicit conversion for column 'v' at row 1
+# Same through a table column.
+CREATE TABLE t32 (a vsql_array.ARRAY('type=int32,max_size=1024'));
+INSERT INTO t32 SELECT vsql_array.array_agg_int32(x) FROM src;
+INSERT INTO t32 SELECT vsql_array.array_agg(x) FROM src;
+ERROR HY000: Incorrect ARRAY value: cannot implicitly cast string expression. Use explicit conversion for column 'a' at row 1
+SELECT * FROM t32;
+a
+[10,20]
+DROP PROCEDURE p_bind;
+DROP PROCEDURE p_bind_wrong_type;
+DROP PROCEDURE p_bind_wrong_size;
+DROP TABLE t32, src;
+UNINSTALL EXTENSION vsql_array;

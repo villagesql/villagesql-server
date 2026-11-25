@@ -1,0 +1,52 @@
+INSTALL EXTENSION vsql_array;
+CREATE TABLE t (id INT PRIMARY KEY, v INT) ENGINE=InnoDB;
+INSERT INTO t VALUES (1,10),(2,20),(3,30);
+CREATE PROCEDURE p_ret(IN lo INT)
+BEGIN
+DECLARE ids vsql_array.ARRAY(1024);
+DELETE FROM t WHERE id >= lo RETURNING id INTO ids;
+SELECT ids;
+END//
+# While the DELETE ... INTO waits for a row lock, it holds a metadata
+# lock on the extension (from the registered collect aggregate).
+START TRANSACTION;
+SELECT id FROM t WHERE id = 3 FOR UPDATE;
+id
+3
+CALL p_ret(3);
+SELECT object_type, object_schema, object_name, lock_type, lock_status
+FROM performance_schema.metadata_locks
+WHERE owner_thread_id <> PS_CURRENT_THREAD_ID()
+AND object_type NOT IN ('TABLE', 'SCHEMA', 'BACKUP LOCK', 'GLOBAL', 'COMMIT')
+ORDER BY object_type, object_name, lock_type;
+object_type	object_schema	object_name	lock_type	lock_status
+EXTENSION	NULL	vsql_array	SHARED	GRANTED
+# UNINSTALL is refused (the procedure uses the type).
+UNINSTALL EXTENSION vsql_array;
+Got one of the listed errors
+ROLLBACK;
+ids
+[3]
+# Cached procedure: called again, UNINSTALL still refused.
+CALL p_ret(2);
+ids
+[2]
+UNINSTALL EXTENSION vsql_array;
+Got one of the listed errors
+SELECT * FROM t ORDER BY id;
+id	v
+1	10
+# Binlog: only the DML row events, nothing about the aggregate.
+CALL p_ret(1);
+ids
+[1]
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (test.t)
+#	#	Delete_rows	#	#	table_id: # flags: STMT_END_F
+#	#	Xid	#	#	COMMIT /* XID */
+# After the procedure is gone, UNINSTALL works.
+DROP PROCEDURE p_ret;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_array;
