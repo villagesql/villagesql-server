@@ -1,0 +1,172 @@
+# vsql_array example extension: ARRAY in stored procedures and the array_agg
+# aggregates.
+#
+# array_agg(INT x)        -> vsql_array.ARRAY('type=int64,max_size=1024')
+# array_agg_int32(INT x)  -> vsql_array.ARRAY('type=int32,max_size=1024')
+# array_agg_double(REAL x)-> vsql_array.ARRAY('type=double,max_size=1024')
+# NULL inputs are skipped; a group with no rows gives NULL; a group whose rows
+# are all NULL gives '[]'; more than 1024 non-NULL inputs is an error. The
+# result type is fixed per function, so the target column or variable must be
+# declared with exactly those parameters (ARRAY(1024) for array_agg).
+
+INSTALL EXTENSION vsql_array;
+
+CREATE TABLE src (id INT PRIMARY KEY, g INT, x INT, big BIGINT, d DOUBLE);
+INSERT INTO src VALUES
+  (1, 1, 10, 3000000000, 1.5),
+  (2, 1, NULL, NULL, NULL),
+  (3, 1, 30, -3000000000, -0.25),
+  (4, 2, 40, 40, 4),
+  (5, 3, NULL, NULL, NULL);
+
+--echo #
+--echo # array_agg in plain SELECT: GROUP BY, NULLs, empty input.
+--echo #
+SELECT g, vsql_array.array_agg(x) AS a, vsql_array.array_agg(big) AS b,
+       vsql_array.array_agg_int32(x) AS a32, vsql_array.array_agg_double(d) AS ad
+FROM src GROUP BY g ORDER BY g;
+--echo # No rows: the result is NULL.
+SELECT vsql_array.array_agg(x) AS a,
+       vsql_array.array_length(vsql_array.array_agg(x)) AS n
+FROM src WHERE id > 100;
+--echo # IS NULL on the aggregate over an empty implicit group is 1, matching
+--echo # the NULL value (server fix in Item_udf_sum::is_null()).
+SELECT vsql_array.array_agg(x) IS NULL AS no_rows_is_null FROM src WHERE id > 100;
+SELECT vsql_array.array_length(vsql_array.array_agg(x)) AS n FROM src;
+--echo # Out of int32 range is an error for array_agg_int32.
+--error ER_UDF_ERROR
+SELECT vsql_array.array_agg_int32(big) FROM src;
+--echo # The aggregate result can be stored in a column of the matching type.
+CREATE TABLE agg_out (g INT PRIMARY KEY, a vsql_array.ARRAY(1024),
+                      ad vsql_array.ARRAY('type=double,max_size=1024'));
+INSERT INTO agg_out
+  SELECT g, vsql_array.array_agg(x), vsql_array.array_agg_double(d)
+  FROM src GROUP BY g;
+SELECT g, a, ad FROM agg_out ORDER BY g;
+--echo # A column with other parameters does not accept it.
+CREATE TABLE agg_small (a vsql_array.ARRAY(10));
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO agg_small SELECT vsql_array.array_agg(x) FROM src;
+DROP TABLE agg_small;
+
+--echo #
+--echo # 1024 non-NULL values are accepted, 1025 are an error.
+--echo #
+SET SESSION cte_max_recursion_depth = 5000;
+CREATE TABLE seq (n INT PRIMARY KEY);
+INSERT INTO seq
+  WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM r WHERE i < 1025)
+  SELECT i FROM r;
+SELECT vsql_array.array_length(vsql_array.array_agg(n)) AS n,
+       vsql_array.array_get(vsql_array.array_agg(n), 1024) AS last
+FROM seq WHERE n <= 1024;
+--echo # NULLs do not count toward the limit.
+SELECT vsql_array.array_length(
+         vsql_array.array_agg(IF(n = 1025, NULL, n))) AS n FROM seq;
+--error ER_UDF_ERROR
+SELECT vsql_array.array_agg(n) FROM seq;
+
+--echo #
+--echo # Stored procedure: DECLARE ARRAY, SELECT array_agg INTO, loop with
+--echo # array_get and array_append.
+--echo #
+delimiter //;
+CREATE PROCEDURE p_loop(IN grp INT)
+BEGIN
+  DECLARE ids vsql_array.ARRAY(1024);
+  DECLARE doubled vsql_array.ARRAY('type=int32,max_size=8');
+  DECLARE i INT DEFAULT 1;
+  DECLARE total BIGINT DEFAULT 0;
+  SELECT vsql_array.array_agg(x) INTO ids FROM src WHERE g = grp;
+  WHILE i <= IFNULL(vsql_array.array_length(ids), 0) DO
+    SET total = total + vsql_array.array_get(ids, i);
+    SET doubled = vsql_array.array_append(doubled, vsql_array.array_get(ids, i) * 2);
+    SET i = i + 1;
+  END WHILE;
+  SELECT grp, ids, ids IS NULL AS ids_null, vsql_array.array_length(ids) AS n,
+         total, doubled;
+END//
+delimiter ;//
+--echo # Several rows with a NULL among them.
+CALL p_loop(1);
+--echo # One row.
+CALL p_loop(2);
+--echo # Rows that are all NULL: empty array.
+CALL p_loop(3);
+--echo # No rows: NULL.
+CALL p_loop(99);
+--echo # Same call again (cached procedure).
+CALL p_loop(1);
+
+--echo # SET from text, from another variable, and element lookups.
+delimiter //;
+CREATE PROCEDURE p_set()
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=double,max_size=4') DEFAULT '[]';
+  DECLARE b vsql_array.ARRAY('type=double,max_size=4');
+  SET a = '[0.5, 2]';
+  SET a = vsql_array.array_append(a, '1e-3');
+  SET b = a;
+  SELECT a, b, a = b AS same, vsql_array.array_get_double(b, 3) AS third,
+         vsql_array.array_contains(b, 2) AS has_2;
+END//
+delimiter ;//
+CALL p_set();
+
+--echo # max_size overflow in a procedure is an error.
+delimiter //;
+CREATE PROCEDURE p_overflow()
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=int32,max_size=2') DEFAULT '[1,2]';
+  SET a = vsql_array.array_append(a, 3);
+  SELECT a;
+END//
+CREATE PROCEDURE p_overflow_text()
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=int32,max_size=2');
+  SET a = '[1,2,3]';
+  SELECT a;
+END//
+CREATE PROCEDURE p_bad_text()
+BEGIN
+  DECLARE a vsql_array.ARRAY('type=int32,max_size=2');
+  SET a = '[1,x]';
+  SELECT a;
+END//
+CREATE PROCEDURE p_agg_wrong_params()
+BEGIN
+  DECLARE a vsql_array.ARRAY(10);
+  SELECT vsql_array.array_agg(x) INTO a FROM src;
+  SELECT a;
+END//
+delimiter ;//
+--error ER_UDF_ERROR
+CALL p_overflow();
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+CALL p_overflow_text();
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+CALL p_bad_text();
+--error ER_VILLAGESQL_GENERIC_ERROR
+CALL p_agg_wrong_params();
+--echo # More than 1024 values into a procedure variable is an error.
+delimiter //;
+CREATE PROCEDURE p_agg_too_many()
+BEGIN
+  DECLARE a vsql_array.ARRAY(1024);
+  SELECT vsql_array.array_agg(n) INTO a FROM seq;
+  SELECT a;
+END//
+delimiter ;//
+--error ER_UDF_ERROR
+CALL p_agg_too_many();
+
+--echo # Clean up.
+DROP PROCEDURE p_loop;
+DROP PROCEDURE p_set;
+DROP PROCEDURE p_overflow;
+DROP PROCEDURE p_overflow_text;
+DROP PROCEDURE p_bad_text;
+DROP PROCEDURE p_agg_wrong_params;
+DROP PROCEDURE p_agg_too_many;
+DROP TABLE agg_out, seq, src;
+UNINSTALL EXTENSION vsql_array;

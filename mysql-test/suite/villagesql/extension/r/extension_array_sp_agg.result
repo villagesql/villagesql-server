@@ -1,0 +1,176 @@
+INSTALL EXTENSION vsql_array;
+CREATE TABLE src (id INT PRIMARY KEY, g INT, x INT, big BIGINT, d DOUBLE);
+INSERT INTO src VALUES
+(1, 1, 10, 3000000000, 1.5),
+(2, 1, NULL, NULL, NULL),
+(3, 1, 30, -3000000000, -0.25),
+(4, 2, 40, 40, 4),
+(5, 3, NULL, NULL, NULL);
+#
+# array_agg in plain SELECT: GROUP BY, NULLs, empty input.
+#
+SELECT g, vsql_array.array_agg(x) AS a, vsql_array.array_agg(big) AS b,
+vsql_array.array_agg_int32(x) AS a32, vsql_array.array_agg_double(d) AS ad
+FROM src GROUP BY g ORDER BY g;
+g	a	b	a32	ad
+1	[10,30]	[3000000000,-3000000000]	[10,30]	[1.5,-0.25]
+2	[40]	[40]	[40]	[4]
+3	[]	[]	[]	[]
+# No rows: the result is NULL.
+SELECT vsql_array.array_agg(x) AS a,
+vsql_array.array_length(vsql_array.array_agg(x)) AS n
+FROM src WHERE id > 100;
+a	n
+NULL	NULL
+# IS NULL on the aggregate over an empty implicit group is 1, matching
+# the NULL value (server fix in Item_udf_sum::is_null()).
+SELECT vsql_array.array_agg(x) IS NULL AS no_rows_is_null FROM src WHERE id > 100;
+no_rows_is_null
+1
+SELECT vsql_array.array_length(vsql_array.array_agg(x)) AS n FROM src;
+n
+3
+# Out of int32 range is an error for array_agg_int32.
+SELECT vsql_array.array_agg_int32(big) FROM src;
+ERROR HY000: VDF error in function 'array_agg_int32': array_agg: value out of range for int32
+# The aggregate result can be stored in a column of the matching type.
+CREATE TABLE agg_out (g INT PRIMARY KEY, a vsql_array.ARRAY(1024),
+ad vsql_array.ARRAY('type=double,max_size=1024'));
+INSERT INTO agg_out
+SELECT g, vsql_array.array_agg(x), vsql_array.array_agg_double(d)
+FROM src GROUP BY g;
+SELECT g, a, ad FROM agg_out ORDER BY g;
+g	a	ad
+1	[10,30]	[1.5,-0.25]
+2	[40]	[4]
+3	[]	[]
+# A column with other parameters does not accept it.
+CREATE TABLE agg_small (a vsql_array.ARRAY(10));
+INSERT INTO agg_small SELECT vsql_array.array_agg(x) FROM src;
+ERROR HY000: Incorrect ARRAY value: cannot implicitly cast string expression. Use explicit conversion for column 'a' at row 1
+DROP TABLE agg_small;
+#
+# 1024 non-NULL values are accepted, 1025 are an error.
+#
+SET SESSION cte_max_recursion_depth = 5000;
+CREATE TABLE seq (n INT PRIMARY KEY);
+INSERT INTO seq
+WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM r WHERE i < 1025)
+SELECT i FROM r;
+SELECT vsql_array.array_length(vsql_array.array_agg(n)) AS n,
+vsql_array.array_get(vsql_array.array_agg(n), 1024) AS last
+FROM seq WHERE n <= 1024;
+n	last
+1024	1024
+# NULLs do not count toward the limit.
+SELECT vsql_array.array_length(
+vsql_array.array_agg(IF(n = 1025, NULL, n))) AS n FROM seq;
+n
+1024
+SELECT vsql_array.array_agg(n) FROM seq;
+ERROR HY000: VDF error in function 'array_agg': array_agg: more than max_size (1024) non-NULL values
+#
+# Stored procedure: DECLARE ARRAY, SELECT array_agg INTO, loop with
+# array_get and array_append.
+#
+CREATE PROCEDURE p_loop(IN grp INT)
+BEGIN
+DECLARE ids vsql_array.ARRAY(1024);
+DECLARE doubled vsql_array.ARRAY('type=int32,max_size=8');
+DECLARE i INT DEFAULT 1;
+DECLARE total BIGINT DEFAULT 0;
+SELECT vsql_array.array_agg(x) INTO ids FROM src WHERE g = grp;
+WHILE i <= IFNULL(vsql_array.array_length(ids), 0) DO
+SET total = total + vsql_array.array_get(ids, i);
+SET doubled = vsql_array.array_append(doubled, vsql_array.array_get(ids, i) * 2);
+SET i = i + 1;
+END WHILE;
+SELECT grp, ids, ids IS NULL AS ids_null, vsql_array.array_length(ids) AS n,
+total, doubled;
+END//
+# Several rows with a NULL among them.
+CALL p_loop(1);
+grp	ids	ids_null	n	total	doubled
+1	[10,30]	0	2	40	[20,60]
+# One row.
+CALL p_loop(2);
+grp	ids	ids_null	n	total	doubled
+2	[40]	0	1	40	[80]
+# Rows that are all NULL: empty array.
+CALL p_loop(3);
+grp	ids	ids_null	n	total	doubled
+3	[]	0	0	0	NULL
+# No rows: NULL.
+CALL p_loop(99);
+grp	ids	ids_null	n	total	doubled
+99	NULL	1	NULL	0	NULL
+# Same call again (cached procedure).
+CALL p_loop(1);
+grp	ids	ids_null	n	total	doubled
+1	[10,30]	0	2	40	[20,60]
+# SET from text, from another variable, and element lookups.
+CREATE PROCEDURE p_set()
+BEGIN
+DECLARE a vsql_array.ARRAY('type=double,max_size=4') DEFAULT '[]';
+DECLARE b vsql_array.ARRAY('type=double,max_size=4');
+SET a = '[0.5, 2]';
+SET a = vsql_array.array_append(a, '1e-3');
+SET b = a;
+SELECT a, b, a = b AS same, vsql_array.array_get_double(b, 3) AS third,
+vsql_array.array_contains(b, 2) AS has_2;
+END//
+CALL p_set();
+a	b	same	third	has_2
+[0.5,2,0.001]	[0.5,2,0.001]	1	0.001	1
+# max_size overflow in a procedure is an error.
+CREATE PROCEDURE p_overflow()
+BEGIN
+DECLARE a vsql_array.ARRAY('type=int32,max_size=2') DEFAULT '[1,2]';
+SET a = vsql_array.array_append(a, 3);
+SELECT a;
+END//
+CREATE PROCEDURE p_overflow_text()
+BEGIN
+DECLARE a vsql_array.ARRAY('type=int32,max_size=2');
+SET a = '[1,2,3]';
+SELECT a;
+END//
+CREATE PROCEDURE p_bad_text()
+BEGIN
+DECLARE a vsql_array.ARRAY('type=int32,max_size=2');
+SET a = '[1,x]';
+SELECT a;
+END//
+CREATE PROCEDURE p_agg_wrong_params()
+BEGIN
+DECLARE a vsql_array.ARRAY(10);
+SELECT vsql_array.array_agg(x) INTO a FROM src;
+SELECT a;
+END//
+CALL p_overflow();
+ERROR HY000: VDF error in function 'array_append': array_append: result would exceed max_size (2)
+CALL p_overflow_text();
+ERROR HY000: Incorrect ARRAY value: '[1,2,3]' for column 'a' at row 1
+CALL p_bad_text();
+ERROR HY000: Incorrect ARRAY value: '[1,x]' for column 'a' at row 1
+CALL p_agg_wrong_params();
+ERROR HY000: Incorrect ARRAY value: cannot implicitly cast string expression. Use explicit conversion for column 'a' at row 1
+# More than 1024 values into a procedure variable is an error.
+CREATE PROCEDURE p_agg_too_many()
+BEGIN
+DECLARE a vsql_array.ARRAY(1024);
+SELECT vsql_array.array_agg(n) INTO a FROM seq;
+SELECT a;
+END//
+CALL p_agg_too_many();
+ERROR HY000: VDF error in function 'array_agg': array_agg: more than max_size (1024) non-NULL values
+# Clean up.
+DROP PROCEDURE p_loop;
+DROP PROCEDURE p_set;
+DROP PROCEDURE p_overflow;
+DROP PROCEDURE p_overflow_text;
+DROP PROCEDURE p_bad_text;
+DROP PROCEDURE p_agg_wrong_params;
+DROP PROCEDURE p_agg_too_many;
+DROP TABLE agg_out, seq, src;
+UNINSTALL EXTENSION vsql_array;
