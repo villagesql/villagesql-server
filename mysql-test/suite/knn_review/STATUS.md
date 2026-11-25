@@ -33,7 +33,7 @@ Review suite for the custom-index work in PRs #1640 to #1656 (/27 to /43;
   - KNN-21 → #1392
   - KNN-23 → #1382
 - Open, not filed:
-  - KNN-4, 5, 7, 8, 10, 20, 22
+  - KNN-4, 5, 7, 8, 10, 20, 22, 30, 31
   - KNN-29: after a restart, purge of HNSW entries deleted before it makes
     other rows unreachable; every KNN read then returns too few rows. Still
     on /43 with hnsw /37. Without the restart (delete/hnsw_purge_locking) or

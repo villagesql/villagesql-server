@@ -43,6 +43,9 @@ mark the issue fixed here.
 | KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | 🟡 known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress, hnsw_purge_then_restart |
 | KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | 🟢 fixed by #1656 | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
 | KNN-29 | After a restart, purge of HNSW entries deleted before it makes other rows unreachable | 🔴 open | delete/hnsw_purge_restart |
+| KNN-30 | A KNN scan crashes on a prepared statement parameter that is not a valid SVECTOR | 🔴 open | select_correctness/hnsw_bad_query_param |
+| KNN-31 | Purge run again after a restart asserts on the HNSW entry of a row that reused the slot | 🔴 open | delete/hnsw_purge_again_after_restart |
+| KNN-32 | A primary key UPDATE that waits for a lock delete-marks the old row's column store values twice | 🔴 open | locking/hnsw_pk_update_lock_wait_rollback, hnsw_pk_update_lock_wait_commit |
 
 ## Not implemented yet
 
@@ -768,3 +771,88 @@ still not implemented on /40.
 - Expected: purge after the restart removes the old entries and leaves the
   other rows reachable, as it does without the restart.
 - Wrong results (too few rows) for every KNN read, silently and permanently.
+
+## KNN-30: A KNN scan crashes on a prepared statement parameter that is not a valid SVECTOR
+
+- Seen on: tomas/stress-knn-20261125 (main 4de59d0e772 with the /43 stack)
+  with vsql-vector deb/hnsw_index/38 (deddb66), debug build. Found by pstress
+  (vsql_vector workload).
+- Repro: HNSW index on an SVECTOR(4) column.
+  `PREPARE p FROM 'SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, ?) LIMIT 3'`,
+  `SET @v = '[1,2,3]'` (or `'not a vector'`), `EXECUTE p USING @v`: the server
+  asserts `thd->is_error() || thd->killed` in Sql_cmd_dml::execute
+  (sql_select.cc:827).
+- With `IGNORE INDEX (idx_v)` the same EXECUTE fails with `Incorrect
+  vsql_vector.SVECTOR(4) value: '[1,2,3]' for parameter '?'`. A literal or a
+  user variable in place of `?` fails cleanly too. The KNN test extension's
+  KVECTOR (not a parameterized type) fails cleanly with the same prepared
+  statement.
+- The EXECUTE runs Sql_cmd_dml::execute twice (the second time through the
+  reprepare path); the second execute_inner() returns failure with no error
+  set.
+- Expected: the parameter's error, as with the index ignored.
+
+## KNN-31: Purge run again after a restart asserts on the HNSW entry of a row that reused the slot
+
+- Seen on: tomas/stress-knn-20261125 (main 4de59d0e772 with the /43 stack)
+  with vsql-vector deb/hnsw_index/38 (deddb66), debug build. Found by pstress
+  (vsql_vector workload): in each of the first three server lives, purge
+  asserted on vv2 right after the first restart.
+- Repro: HNSW index on the standard 8 rows. `DELETE FROM t WHERE id = 4`,
+  `innodb_purge_run_now` until purge_del_mark_records goes up, then
+  `innodb_purge_stop_now` and `INSERT INTO t VALUES (9, ...)`. Kill and
+  restart. Purge processes the delete of row 4 again (its undo log was not
+  truncated yet) and asserts:
+  `tried to purge non-delete-marked record in index idx_v`, then
+  `Assertion failure: row0purge.cc:537`. 3 of 3 runs by script, and the MTR
+  test.
+- The tuple purge searches for and the record it finds have the same first
+  field (n_cmp=1) but a different primary key: row 4's entry and row 9's.
+  In the pstress binlog, row 268 of vv2 had a vector at reference page 0x15
+  slot 0x2b, was deleted, and two seconds later row 271 was updated to a
+  vector at the same reference.
+- The test extension's kvec_l2_btree index (REF_LOOKUP, column store) does
+  not assert with the same steps.
+- Expected: purge that runs again for a delete leaves the entry of another
+  row alone, as InnoDB purge does for its own secondary indexes.
+- In the same pstress runs, another vsql-vector assertion appeared that may
+  come from the same slot reuse (not shown yet): `slot_index < max_num_recs`
+  (data_page.cc:279), in recovery and, on 2026-11-25, also in SELECTs that
+  read a vector with no restart before them. The other one seen with it,
+  `Record is already marked as deleted` (data_page.cc:310), is KNN-32.
+
+## KNN-32: A primary key UPDATE that waits for a lock delete-marks the old row's column store values twice
+
+- Seen on: tomas/stress-knn-20261125 (main with the /43 stack), debug
+  build, vsql-vector. Found by pstress (vsql_vector workload, 6 crashes in 35
+  trials on 2026-11-25), always on `UPDATE vsql.vv2 SET id = id + 100000
+  WHERE id = @vv_id`.
+- Repro: session 1 inserts id 100 and keeps its transaction open. Session 2
+  runs `UPDATE t SET id = 100 WHERE id = 1` and waits for the lock on the
+  new key. When session 1 commits or rolls back, session 2 asserts:
+  `Record is already marked as deleted` (vsql-vector data_page.cc:310,
+  `set_record_delete`, from `Custom_column::mark_delete` in
+  `row_upd_clust_rec_by_insert`). 2 of 2 tests.
+- Cause: in `row_upd_clust_rec_by_insert` (row0upd.cc) the call
+  `Custom_column::mark_delete(..., node->row, true)` comes after the
+  `switch (node->state)`. When `row_ins_clust_index_entry` returns
+  `DB_LOCK_WAIT`, the state becomes `UPD_NODE_INSERT_CLUSTERED` and InnoDB
+  calls the function again after the wait. Upstream code skips its
+  delete-mark of the clustered record on that call (and when the record is
+  already delete-marked, `goto check_fk`), but the column store mark runs
+  every time. The call came with #195 (957d5499262), so main has it too.
+- The test extension's KVECTOR column store does not notice: its
+  `kvec_col_mark_delete` writes the delete trx id again, so
+  locking/pk_update_lock_wait_rollback and pk_update_lock_wait_commit pass.
+  vsql-vector asserts only in debug builds.
+- Fix: delete-mark the column store values only in the call that
+  delete-marks the clustered record. Set a flag in the
+  `UPD_NODE_UPDATE_CLUSTERED` case after `btr_cur_del_mark_set_clust_rec`
+  succeeds, and call `mark_delete` after `mtr_commit` only when it is set
+  (`mark_impl` starts its own mtr, so the call stays outside the page
+  latch). The `UPD_NODE_INSERT_CLUSTERED` retry and the already
+  delete-marked path (`goto check_fk`) then skip it, as they skip the
+  clustered delete-mark.
+- Expected: after the wait the UPDATE succeeds (session 1 rolled back) or
+  fails with ER_DUP_ENTRY and leaves the row as it was (session 1
+  committed).

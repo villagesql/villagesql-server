@@ -1,0 +1,34 @@
+# A row of a table with an HNSW index (vsql-vector) is deleted and purged, and a
+# row inserted after it reuses its vector slot. The server is killed before the
+# purged undo log is truncated, so after the restart purge processes the delete
+# again. It must leave the new row's entry alone: the restarted server keeps
+# running, and KNN reads find the new row before and after purge.
+
+--let $knn_issue = KNN-31 Purge run again after a restart asserts on the HNSW entry of a row that reused the slot
+--source suite/knn_review/include/known_issue.inc
+
+--source include/have_debug.inc
+
+SET GLOBAL innodb_monitor_enable = 'purge_del_mark_records';
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+--let $purged = `SELECT count FROM information_schema.innodb_metrics WHERE name = 'purge_del_mark_records'`
+DELETE FROM t WHERE id = 4;
+SET GLOBAL innodb_purge_run_now = ON;
+--let $wait_condition = SELECT count > $purged FROM information_schema.innodb_metrics WHERE name = 'purge_del_mark_records'
+--source include/wait_condition.inc
+SET GLOBAL innodb_purge_stop_now = ON;
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0.1]');
+--source include/kill_and_restart_mysqld.inc
+--echo # After the restart
+SELECT COUNT(*) AS n FROM t;
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+--source include/villagesql/wait_innodb_history_purged.inc
+--echo # Purged
+SELECT id FROM t ORDER BY vsql_vector.l2_distance(v, '[1,0,0,0]') LIMIT 3;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;
+SET GLOBAL innodb_monitor_disable = 'purge_del_mark_records';
+SET GLOBAL innodb_monitor_reset = 'purge_del_mark_records';
