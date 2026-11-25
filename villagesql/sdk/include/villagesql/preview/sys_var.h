@@ -114,6 +114,15 @@ class SysVarChange {
 //   sv::make_int("threshold_ms", "Threshold", &g_threshold, 1000, 0, 3600000)
 //       .on_change<&my_on_change>()
 //
+// To keep the value from SQL users without SENSITIVE_VARIABLES_OBSERVER, such
+// as for a password or an API token, chain .sensitive():
+//
+//   sv::make_str("api_token", "Token for the remote API", &g_api_token, "")
+//       .sensitive()
+//
+// Read a sensitive variable with SysVarCapability::get(). See
+// vef_sys_var_desc_t::sensitive for what MySQL does with it.
+//
 // The callback runs while the server holds its global system-variable lock, so
 // it must stay short and non-blocking. Reading or writing another of this
 // extension's variables through its storage pointer is safe and immediately
@@ -154,6 +163,7 @@ struct SysVarDescriptor {
     } enumeration;
   };
   vef_sys_var_on_change_func_t on_change_fn = nullptr;
+  bool is_sensitive = false;
 
   template <void (*Fn)(SysVarChange)>
   constexpr SysVarDescriptor on_change() const {
@@ -161,6 +171,13 @@ struct SysVarDescriptor {
     copy.on_change_fn = [](const vef_sys_var_change_t *c) {
       Fn(SysVarChange(c));
     };
+    return copy;
+  }
+
+  // Marks the variable SENSITIVE.
+  constexpr SysVarDescriptor sensitive() const {
+    SysVarDescriptor copy = *this;
+    copy.is_sensitive = true;
     return copy;
   }
 };
@@ -199,6 +216,7 @@ class SysVarCapability
       descs_[i].comment = descs[i].comment;
       descs_[i].type = static_cast<vef_var_type_t>(descs[i].type);
       descs_[i].on_change = descs[i].on_change_fn;
+      descs_[i].sensitive = descs[i].is_sensitive;
       switch (descs[i].type) {
         case BOOL:
           descs_[i].boolean.value_ptr = descs[i].boolean.value_ptr;
