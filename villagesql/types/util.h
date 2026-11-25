@@ -125,6 +125,18 @@ extern bool AcquireOrCreateTypeContext(const TypeDescriptor *descriptor,
                                        MEM_ROOT &mem_root,
                                        const TypeContext *&result);
 
+// Resolves a (possibly extension-qualified) type name with these parameters
+// to its TypeContext, creating the context if needed. The common case, a
+// context that already exists, needs only the victionary read lock; creating
+// one takes the write lock. Returns false on success and true on failure; an
+// unknown type is success with result nullptr. The mem_root scopes the cleanup
+// of the TypeContext. Used by function binding; declared here for unit tests.
+extern bool ResolveTypeToContext(std::string_view extension_name,
+                                 std::string_view type_name,
+                                 const TypeParameters &parameters,
+                                 MEM_ROOT &mem_root,
+                                 const TypeContext *&result);
+
 // Verify that the storage engine is InnoDB; otherwise, report an error naming
 // the operation ("create table", "alter table").
 // Returns false on success and true on error.

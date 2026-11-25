@@ -16,6 +16,9 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <future>
+
 #include "mysql/strings/m_ctype.h"
 #include "sql/mysqld.h"
 #include "sql/strfunc.h"
@@ -23,6 +26,7 @@
 #include "unittest/gunit/test_utils.h"
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/types/util.h"
 
 namespace villagesql_unittest {
 
@@ -2440,6 +2444,60 @@ TEST_F(VictionaryClientTest, SpParamOnlyHasUncommittedOnSpParams) {
   }
 
   client_->rollback_all_tables(fake_thd);
+}
+
+// Resolving a type whose TypeContext already exists takes only the read
+// lock: it completes while another thread holds the read lock. If the
+// read-lock lookup always missed, the resolution would fall through to the
+// write lock and wait until the other thread let go.
+TEST_F(VictionaryClientTest, ResolveExistingTypeContextUnderReadLock) {
+  THD *fake_thd = reinterpret_cast<THD *>(0x9d10);
+  constexpr auto kNoLockWaitLimit = std::chrono::seconds(10);
+
+  villagesql::TypeDescriptor desc(
+      villagesql::TypeDescriptorKey("READLOCK_TYPE", "readlock_ext", "1.0"),
+      VEF_PROTOCOL_1, /*extension_protocol=*/VEF_PROTOCOL_1, 0, 8, 64,
+      0,                  // max_persisted_length
+      LengthKind::Fixed,  // length_kind
+      villagesql::EncodeFunction(test_encode),
+      villagesql::DecodeFunction(test_decode),
+      villagesql::CompareFunction(test_compare));
+  {
+    auto guard = client_->get_write_lock();
+    ASSERT_FALSE(client_->type_descriptors().MarkForInsertion(
+        *fake_thd, std::move(desc)));
+  }
+  client_->commit_all_tables(fake_thd);
+
+  MEM_ROOT mem_root(PSI_NOT_INSTRUMENTED, 1024);
+  const villagesql::TypeParameters params;
+
+  // First resolution creates the TypeContext (write lock).
+  const villagesql::TypeContext *created = nullptr;
+  ASSERT_FALSE(villagesql::ResolveTypeToContext(
+      "readlock_ext", "READLOCK_TYPE", params, mem_root, created));
+  ASSERT_NE(created, nullptr);
+
+  // Second resolution of the same type and parameters, while another thread
+  // holds the read lock.
+  const villagesql::TypeContext *found = nullptr;
+  bool error = true;
+  std::future<void> done;
+  std::future_status status;
+  {
+    auto guard = client_->get_read_lock();
+    done = std::async(std::launch::async, [&]() {
+      error = villagesql::ResolveTypeToContext("readlock_ext", "READLOCK_TYPE",
+                                               params, mem_root, found);
+    });
+    status = done.wait_for(kNoLockWaitLimit);
+  }  // read lock released: a blocked resolution can now finish
+  done.get();
+  EXPECT_EQ(status, std::future_status::ready);
+  EXPECT_FALSE(error);
+  EXPECT_EQ(found, created);
+
+  mem_root.Clear();
 }
 
 }  // namespace villagesql_unittest
