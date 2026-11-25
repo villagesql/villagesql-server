@@ -104,10 +104,10 @@ class MaybeParams {
 // TODO(villagesql-beta): remove this restriction.
 //
 // Thread-safe: a cache hit takes no lock and writes no shared memory, so
-// concurrent VDF calls on many cores do not slow each other down (a shared
-// lock here cost 38% of all server CPU at 192 connections on 88 vCPUs: every
-// lock and unlock is an atomic write to the same cache line). Only a miss
-// takes a mutex. Entries are only evicted when the extension is uninstalled
+// concurrent VDF calls on many cores do not slow each other down. Even a
+// shared lock writes the lock word on every lock and unlock, so every caller
+// would write the same cache line. Only a miss takes a mutex. Entries are
+// only evicted when the extension is uninstalled
 // because type parameters are immutable per type instantiation. Also the ABI
 // does not currently have a mechanism to know when a type is no longer used.
 template <typename T>
@@ -115,6 +115,20 @@ class TypeParamsCache {
  public:
   using ParseFn = T (*)(const std::map<std::string, std::string> &);
   using ToStringsFn = void (*)(const T &, std::map<std::string, std::string> &);
+
+  TypeParamsCache() = default;
+  TypeParamsCache(const TypeParamsCache &) = delete;
+  TypeParamsCache &operator=(const TypeParamsCache &) = delete;
+  ~TypeParamsCache() {
+    for (auto &head : buckets_) {
+      const Node *n = head.load(std::memory_order_relaxed);
+      while (n != nullptr) {
+        const Node *next = n->next;
+        delete n;
+        n = next;
+      }
+    }
+  }
 
   // Binds the parse function used by the no-arg get() overload. Called once
   // during extension initialization (vef_register), before any VDF calls.
@@ -179,6 +193,8 @@ class TypeParamsCache {
   // by insert_mu_. The bucket count is fixed: a table that never rehashes
   // needs no reader/writer coordination. Chains only grow past one node when
   // an extension is used with more distinct parameter strings than buckets.
+  // A lookup compares the key with each node in its chain, so raise
+  // kBucketCount if a type is used with many hundreds of parameter strings.
   struct Node {
     Node(std::string k, T v, const Node *n)
         : key(std::move(k)), value(std::move(v)), next(n) {}
@@ -214,22 +230,6 @@ class TypeParamsCache {
     return node->value;
   }
 
- public:
-  TypeParamsCache() = default;
-  TypeParamsCache(const TypeParamsCache &) = delete;
-  TypeParamsCache &operator=(const TypeParamsCache &) = delete;
-  ~TypeParamsCache() {
-    for (auto &head : buckets_) {
-      const Node *n = head.load(std::memory_order_relaxed);
-      while (n != nullptr) {
-        const Node *next = n->next;
-        delete n;
-        n = next;
-      }
-    }
-  }
-
- private:
   static std::string key_from_map(
       const std::map<std::string, std::string> &params) {
     // One ',' between each pair of entries.
