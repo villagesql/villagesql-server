@@ -88,8 +88,6 @@ static const char *ER_INCOMPARABLE_TYPES =
 static const char *ER_INCOMPATIBLE_TYPES =
     "Cannot compare values of incompatible types '%s' and '%s'";
 
-// Verify that the backing Field's length matches the TypeContext's
-// field_buffer_length.
 // The TypeContext key of a type with these parameters. The table-open, read
 // lock and write lock paths all build it here, so their keys cannot drift
 // apart (a drifted key would make the read-lock lookup always miss and fall
@@ -102,6 +100,8 @@ static TypeContextKey MakeTypeContextKey(const TypeDescriptor &descriptor,
   return TypeContextKey(type_descriptor_key, parameters);
 }
 
+// Verify that the backing Field's length matches the TypeContext's
+// field_buffer_length.
 static bool CheckFieldLengthMatchesType(const Field *field,
                                         const TypeContext *tc) {
   if (should_assert_if_false(static_cast<int64_t>(field->field_length) ==
@@ -479,11 +479,10 @@ bool AcquireOrCreateTypeContext(const TypeDescriptor *descriptor,
 // Returns false on success and true on failure. If the type isn't known the
 // function will return false (success), but the result will be nullptr. The
 // mem_root is used to scope the cleanup of the TypeContext.
-static bool ResolveTypeToContext(std::string_view extension_name,
-                                 std::string_view type_name,
-                                 const TypeParameters &parameters,
-                                 MEM_ROOT &mem_root,
-                                 const TypeContext *&result) {
+bool ResolveTypeToContext(std::string_view extension_name,
+                          std::string_view type_name,
+                          const TypeParameters &parameters, MEM_ROOT &mem_root,
+                          const TypeContext *&result) {
   result = nullptr;
 
   auto &vclient = VictionaryClient::instance();
