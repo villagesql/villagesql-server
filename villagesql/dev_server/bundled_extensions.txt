@@ -23,17 +23,17 @@
 #   /Users/me/src/vsql-ai my-feature-branch
 #
 # Comments and blank lines are ignored.
-https://github.com/villagesql/vsql-ai main abi=dev
+https://github.com/villagesql/vsql-ai main
 https://github.com/villagesql/vsql-boolean main
-https://github.com/villagesql/vsql-crypto main abi=dev
+https://github.com/villagesql/vsql-crypto main
 https://github.com/villagesql/vsql-currency main build=cargo abi=stable bundle=false
 https://github.com/villagesql/vsql-fuzzystrmatch main
 https://github.com/villagesql/vsql-trgm main
 https://github.com/villagesql/vsql-cube main
 https://github.com/villagesql/vsql-http main
 https://github.com/villagesql/vsql-network-address main
-https://github.com/villagesql/vsql-oauth2 main abi=dev
-https://github.com/villagesql/vsql-rest main abi=dev
+https://github.com/villagesql/vsql-oauth2 main
+https://github.com/villagesql/vsql-rest main
 https://github.com/villagesql/vsql-uuid main
 https://github.com/villagesql/vsql-vector main bundle=false
 https://github.com/villagesql/vsql-rust-sdk main build=cargo path=examples/vsql_rational abi=stable bundle=false
