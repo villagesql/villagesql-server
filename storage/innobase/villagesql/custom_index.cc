@@ -688,7 +688,12 @@ static void trim_extra_fields(dict_index_t *index) {
 
 dberr_t Custom_index::load(dict_index_t *new_index,
                            const dict_index_t *old_index) {
-  if (!is_custom(old_index)) return DB_SUCCESS;
+  if (!is_custom(old_index)) {
+    // Opened without a custom index context (recovery, or a table opened only
+    // to drop it): attach() set just the flag. Carry it to the cached index.
+    new_index->is_custom_index = old_index->is_custom_index;
+    return DB_SUCCESS;
+  }
   Custom_index *old_custom_index = old_index->custom_index;
 
   dberr_t err =
@@ -742,7 +747,9 @@ dberr_t Custom_index::load_storage(dict_index_t *new_index) {
         << "Error loading custom index storage: " << error_msg;
     return DB_VILLAGESQL_ERROR;
   }
-  ut_ad(new_index->page == FIL_NULL || new_index->has_mapping_btree());
+  // The root page is not checked here: an index opened from the data
+  // dictionary is added to the cache before its root page is read
+  // (dd_fill_one_dict_index passes 0). dd_open_table_one checks it once set.
 
   storage->ref = custom_index->storage_ref();
   custom_index->set_storage_ctx(storage);

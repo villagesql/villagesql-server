@@ -5225,9 +5225,15 @@ dict_table_t *dd_open_table_one(dd::cache::Dictionary_client *client,
     }
 
     ut_ad(root > 1);
-    ut_ad(index->type & DICT_FTS || root != FIL_NULL ||
-          villagesql::innodb::Custom_index::is_custom(index) ||
+    // VillageSQL: is_custom_index, not Custom_index::is_custom(): at recovery
+    // the custom index context is not loaded yet, only the flag is set.
+    ut_ad(index->type & DICT_FTS || root != FIL_NULL || index->is_custom_index ||
           dict_table_is_discarded(m_table));
+    // VillageSQL: a custom index has a root page exactly when it has a
+    // mapping B-tree. Checked once the context is loaded (not at recovery).
+    ut_ad(!villagesql::innodb::Custom_index::is_custom(index) ||
+          dict_table_is_discarded(m_table) ||
+          (root != FIL_NULL) == index->has_mapping_btree());
     ut_ad(id != 0);
     index->page = root;
     index->space = sid;
