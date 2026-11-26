@@ -1,0 +1,123 @@
+# A vsql::sys_var variable can be marked SENSITIVE. MySQL then keeps its value
+# from SQL users without SENSITIVE_VARIABLES_OBSERVER, while the extension
+# still reads it through SYS_VARS.get().
+#
+# vsql_sys_var_sensitive_test declares:
+#   api_token  STR, sensitive
+#   plain      INT, not sensitive
+# and read_token() / write_token(), which read and write api_token through
+# SYS_VARS.get() / SYS_VARS.set(), read_var(), which reads any variable
+# through SYS_VARS.get(), and init_token(), which returns the api_token the
+# extension's on_init read and wrote back unchanged.
+#
+# This test runs without a keyring, so SET PERSIST stores the value in
+# plaintext with a warning, and the server logs an error that it cannot
+# encrypt it.
+
+call mtr.add_suppression("Persisting SENSITIVE variables in encrypted form requires keyring component loaded through manifest file.");
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_sys_var_sensitive_test;
+
+CREATE USER u_plain@localhost, u_obs@localhost;
+GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO u_plain@localhost;
+GRANT SYSTEM_VARIABLES_ADMIN, SENSITIVE_VARIABLES_OBSERVER ON *.*
+  TO u_obs@localhost;
+
+--echo # root holds SENSITIVE_VARIABLES_OBSERVER
+SET GLOBAL vsql_sys_var_sensitive_test.api_token = 'secret-1';
+SELECT @@global.vsql_sys_var_sensitive_test.api_token;
+
+--connect (plain, localhost, u_plain,,)
+--echo # Without SENSITIVE_VARIABLES_OBSERVER the value cannot be read
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SELECT @@global.vsql_sys_var_sensitive_test.api_token;
+
+--echo # and the variable is left out of the listings
+SHOW GLOBAL VARIABLES LIKE 'vsql_sys_var_sensitive_test.%';
+SELECT VARIABLE_NAME FROM performance_schema.global_variables
+  WHERE VARIABLE_NAME LIKE 'vsql_sys_var_sensitive_test.%'
+  ORDER BY VARIABLE_NAME;
+
+--echo # nor can it be set
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET GLOBAL vsql_sys_var_sensitive_test.api_token = 'plain';
+
+--echo # The variable that is not sensitive is unaffected
+SET GLOBAL vsql_sys_var_sensitive_test.plain = 5;
+SELECT @@global.vsql_sys_var_sensitive_test.plain;
+
+--echo # The extension reads the value whoever is connected
+SELECT vsql_sys_var_sensitive_test.read_token() AS token;
+--disconnect plain
+
+--connect (obs, localhost, u_obs,,)
+--echo # With SENSITIVE_VARIABLES_OBSERVER the value can be read and set
+SELECT @@global.vsql_sys_var_sensitive_test.api_token;
+SHOW GLOBAL VARIABLES LIKE 'vsql_sys_var_sensitive_test.%';
+SELECT VARIABLE_NAME FROM performance_schema.global_variables
+  WHERE VARIABLE_NAME LIKE 'vsql_sys_var_sensitive_test.%'
+  ORDER BY VARIABLE_NAME;
+
+--echo # A value longer than the first read buffer reaches the extension whole
+SET GLOBAL vsql_sys_var_sensitive_test.api_token = REPEAT('x', 3000);
+SELECT LENGTH(vsql_sys_var_sensitive_test.read_token()) AS token_length;
+--disconnect obs
+
+--connection default
+--echo # So does a long value of a variable the extension did not register
+SET @orig_init_replica = @@GLOBAL.init_replica;
+SET GLOBAL init_replica = REPEAT('y', 3000);
+SELECT LENGTH(vsql_sys_var_sensitive_test.read_var('mysql_server',
+  'init_replica')) AS init_replica_length;
+SET GLOBAL init_replica = @orig_init_replica;
+
+--echo # The extension writes the value itself, whoever is connected
+SELECT vsql_sys_var_sensitive_test.write_token('rotated') AS err;
+SELECT vsql_sys_var_sensitive_test.read_token() AS token;
+--connect (plain, localhost, u_plain,,)
+SELECT vsql_sys_var_sensitive_test.write_token('rotated-by-plain') AS err;
+SELECT vsql_sys_var_sensitive_test.read_token() AS token;
+--disconnect plain
+--connection default
+SELECT @@global.vsql_sys_var_sensitive_test.api_token;
+
+--echo # Without a keyring, SET PERSIST stores the value in plaintext and warns
+SET PERSIST vsql_sys_var_sensitive_test.api_token = 'persisted-secret';
+
+--let MYSQLD_DATADIR = `SELECT @@datadir`
+--echo # mysqld-auto.cnf holds the value
+--perl
+my $file = "$ENV{'MYSQLD_DATADIR'}/mysqld-auto.cnf";
+open(my $fh, '<', $file) or die "Cannot open $file: $!";
+my $text = do { local $/; <$fh> };
+close($fh);
+print "api_token persisted: ",
+  ($text =~ /vsql_sys_var_sensitive_test\.api_token/ ? "yes" : "no"), "\n";
+EOF
+
+--echo # Restart with the extension installed: the persisted value is applied
+--let $veb_dir = `SELECT @@veb_dir`
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+SELECT @@global.vsql_sys_var_sensitive_test.api_token;
+SELECT vsql_sys_var_sensitive_test.read_token() AS token;
+--echo # on_init read and wrote the value at startup, before any session existed
+SELECT vsql_sys_var_sensitive_test.init_token() AS init_token;
+
+--echo # UNINSTALL removes the persisted value from mysqld-auto.cnf
+DROP USER u_plain@localhost, u_obs@localhost;
+UNINSTALL EXTENSION vsql_sys_var_sensitive_test;
+--perl
+my $file = "$ENV{'MYSQLD_DATADIR'}/mysqld-auto.cnf";
+open(my $fh, '<', $file) or die "Cannot open $file: $!";
+my $text = do { local $/; <$fh> };
+close($fh);
+print "api_token persisted: ",
+  ($text =~ /vsql_sys_var_sensitive_test\.api_token/ ? "yes" : "no"), "\n";
+EOF
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

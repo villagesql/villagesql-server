@@ -58,13 +58,16 @@ void unregister_one_sys_var(std::string_view extension_name,
 //
 // component_name: extension name, or "mysql_server" for built-in variables.
 // name:           variable name without the component prefix.
+// force_sensitive_access: true reads a SENSITIVE variable whatever the
+//                 session's privileges. False applies MySQL's check, which
+//                 requires SENSITIVE_VARIABLES_OBSERVER.
 // val:            on success, set to a newly allocated buffer holding the value
 //                 as a null-terminated string; caller must free with free().
 // val_len:        on success, set to the string length (excluding null).
 //
 // Returns false on success, true on error.
-bool get_variable(const char *component_name, const char *name, void **val,
-                  size_t *val_len);
+bool get_variable(const char *component_name, const char *name,
+                  bool force_sensitive_access, void **val, size_t *val_len);
 
 // Set the value of a system variable.
 //

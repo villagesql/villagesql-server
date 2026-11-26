@@ -17,6 +17,8 @@
 #include "villagesql/services/preview/sys_var.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <iterator>
 #include <memory>
 #include <mutex>
@@ -25,12 +27,18 @@
 #include <vector>
 
 #include "my_sys.h"
+#include "my_thread.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
+#include "sql/auth/auth_common.h"
+#include "sql/auth/sql_security_ctx.h"
 #include "sql/persisted_variable.h"
+#include "sql/sql_class.h"
+#include "sql/sql_lex.h"
 #include "sql/sql_plugin_var.h"
+#include "sql/sql_thd_internal_api.h"
 #include "villagesql/include/error.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/sys_var.h"
 #include "villagesql/services/plugin_registry.h"
@@ -38,8 +46,10 @@
 
 namespace villagesql::services {
 
-// Forward declaration: set_variable for the vtable, defined below after
-// g_sys_vars (which it needs to look up the variable type).
+// Forward declarations for the vtable, defined below after g_sys_vars, which
+// they need to look the variable up.
+static bool sys_var_get(const char *component_name, const char *name,
+                        void **val, size_t *val_len);
 static bool sys_var_set(const char *component_name, const char *name,
                         const char *scope, const char *val);
 static bool sys_var_set_int(const char *component_name, const char *name,
@@ -47,9 +57,8 @@ static bool sys_var_set_int(const char *component_name, const char *name,
 
 namespace {
 
-static vef_preview_sys_var_t g_sys_var_vtable{VEF_PREVIEW_SYS_VAR_ABI_VERSION,
-                                              get_variable, sys_var_set,
-                                              sys_var_set_int};
+static vef_preview_sys_var_t g_sys_var_vtable{
+    VEF_PREVIEW_SYS_VAR_ABI_VERSION, sys_var_get, sys_var_set, sys_var_set_int};
 
 // A registered system variable together with the extension it belongs to, so
 // we can unregister it on extension uninstall, and with its type so
@@ -224,6 +233,102 @@ static std::optional<vef_var_type_t> registered_var_type(
   return std::nullopt;
 }
 
+// Reads a variable. One that an extension registered is read without the
+// SENSITIVE check: that keeps the value from SQL users without
+// SENSITIVE_VARIABLES_OBSERVER, not from extension code, which has to read the
+// secret it was configured with whoever is connected, or with no connection at
+// all. Any other variable is read under MySQL's rules.
+static bool sys_var_get(const char *component_name, const char *name,
+                        void **val, size_t *val_len) {
+  return get_variable(component_name, name,
+                      registered_var_type(component_name, name).has_value(),
+                      val, val_len);
+}
+
+// Serializes the extension's own writes. Each ExtensionSetThd grants its
+// privileges to kExtensionSetUser and revokes them when it goes away, and
+// MySQL does not count the grants, so one write ending would strip the
+// privileges from another still running. A write blocked on another lock
+// holds it for up to the 5 second lock_wait_timeout set below.
+std::mutex g_extension_set_mutex;
+
+// The account the extension's own writes run as. Upstream's internal THDs
+// share "sys_session". A separate account keeps the extra privilege below
+// from reaching them. Nothing reserves this name. An account created with it
+// would hold the privileges during a write and lose them after it.
+// TODO(villagesql-production): reserve this account name, or create it locked
+// at install, so no admin-created account can share it.
+constexpr const char *kExtensionSetUser = "villagesql.sys_var";
+
+// The internal THD the extension's own writes run under, passed to the
+// update service. Given no THD, the service creates one much like it, but
+// without SENSITIVE_VARIABLES_OBSERVER, and a SENSITIVE variable cannot be
+// looked up without that privilege. Hold g_extension_set_mutex for its whole
+// lifetime. Errors raised on it are copied to the calling session's THD, if
+// there is one, when it is destroyed.
+// TODO(villagesql-rebase): once upstream fixes MySQL Bug #121923 and Bug
+// #121943 (Storing_auto_THD ends the mysys state of a thread that has it but
+// no THD, such as the main thread at startup), pass no THD to the update
+// service again and drop ExtensionSetThd, kExtensionSetUser and
+// g_extension_set_mutex.
+class ExtensionSetThd {
+ public:
+  ExtensionSetThd()
+      : m_previous_thd(current_thd), m_end_thread(!my_thread_is_inited()) {
+    if (m_end_thread) my_thread_init();
+    m_thd = create_internal_thd();
+    m_thd->set_system_user(false);
+    m_thd->set_connection_admin(false);
+    lex_start(m_thd);
+    const std::vector<std::string> privileges = {
+        "SYSTEM_VARIABLES_ADMIN", "PERSIST_RO_VARIABLES_ADMIN",
+        "SENSITIVE_VARIABLES_OBSERVER"};
+    Security_context_factory factory(
+        m_thd, kExtensionSetUser, "localhost", Default_local_authid(m_thd),
+        Grant_temporary_dynamic_privileges(m_thd, privileges),
+        Grant_temporary_static_privileges(m_thd, 0),
+        Drop_temporary_dynamic_privileges(privileges));
+    m_ctx = factory.create();
+    if (m_ctx != nullptr) m_thd->set_security_context(m_ctx.get());
+    m_thd->real_id = my_thread_self();
+    // The update service gives its own THD this timeout, so a SET blocked on
+    // another lock fails rather than holding LOCK_system_variables_hash.
+    m_thd->variables.lock_wait_timeout = 5;
+  }
+
+  ~ExtensionSetThd() {
+    if (m_previous_thd != nullptr) {
+      Diagnostics_area *prev_da = m_previous_thd->get_stmt_da();
+      Diagnostics_area *curr_da = m_thd->get_stmt_da();
+      if (curr_da->is_error())
+        prev_da->set_error_status(curr_da->mysql_errno(),
+                                  curr_da->message_text(),
+                                  curr_da->returned_sqlstate());
+      prev_da->copy_sql_conditions_from_da(m_previous_thd, curr_da);
+    }
+    m_thd->free_items();
+    lex_end(m_thd->lex);
+    m_ctx.reset(nullptr);
+    destroy_internal_thd(m_thd);
+    if (m_end_thread) my_thread_end();
+    if (m_previous_thd != nullptr) m_previous_thd->store_globals();
+  }
+
+  ExtensionSetThd(const ExtensionSetThd &) = delete;
+  ExtensionSetThd &operator=(const ExtensionSetThd &) = delete;
+
+  // The THD, or nullptr if its security context could not be created.
+  THD *get() const { return m_ctx != nullptr ? m_thd : nullptr; }
+
+ private:
+  THD *const m_previous_thd;
+  // Whether this object initialized the thread's mysys state, and so ends it.
+  // The main thread at startup has that state but no THD.
+  const bool m_end_thread;
+  THD *m_thd;
+  Sctx_ptr<Security_context> m_ctx;
+};
+
 // Sets a non-INT variable through mysql_system_variable_update_string.
 // VEF_VAR_STR, VEF_VAR_BOOL, VEF_VAR_DOUBLE and VEF_VAR_ENUM all take a
 // string (an enum is set by its name, which the server maps to the TYPE_LIB
@@ -264,7 +369,11 @@ static bool sys_var_set(const char *component_name, const char *name,
                                          "utf8mb3") &&
           !str_conv->convert_from_buffer(&h_value, val, strlen(val),
                                          "utf8mb3")) {
-        result = update_svc->set(nullptr, scope, h_base, h_name, h_value);
+        std::lock_guard<std::mutex> set_lock(g_extension_set_mutex);
+        ExtensionSetThd set_thd;
+        if (set_thd.get() != nullptr)
+          result =
+              update_svc->set(set_thd.get(), scope, h_base, h_name, h_value);
       }
 
       if (h_base) str_factory->destroy(h_base);
@@ -308,7 +417,11 @@ static bool sys_var_set_int(const char *component_name, const char *name,
                                          strlen(component_name), "utf8mb3") &&
           !str_conv->convert_from_buffer(&h_name, name, strlen(name),
                                          "utf8mb3")) {
-        result = update_svc->set_signed(nullptr, scope, h_base, h_name, val);
+        std::lock_guard<std::mutex> set_lock(g_extension_set_mutex);
+        ExtensionSetThd set_thd;
+        if (set_thd.get() != nullptr)
+          result =
+              update_svc->set_signed(set_thd.get(), scope, h_base, h_name, val);
       }
 
       if (h_base) str_factory->destroy(h_base);
@@ -350,6 +463,7 @@ bool on_populate_sys_var(const PopulateContext &ctx,
   for (uint32_t i = 0; i < list->var_count; i++) {
     const vef_sys_var_desc_t *v = list->vars[i];
     int flags = PLUGIN_VAR_RQCMDARG;
+    if (v->sensitive) flags |= PLUGIN_VAR_SENSITIVE;
     void *check_arg = nullptr;
     void *value_ptr = nullptr;
 
@@ -528,30 +642,39 @@ void on_depopulate_sys_var(const DepopulateContext &ctx) {
       ctx.thd != nullptr) {
     Persisted_variables_cache *pvc = Persisted_variables_cache::get_instance();
     if (pvc != nullptr) {
-      // Get the set of persisted plugin/component variables once. We check
-      // membership before calling reset_persisted_variables to avoid the
-      // warning that MySQL emits when the variable is not in the persisted
-      // config file (reset_persisted_variables with if_exists=true warns
-      // rather than errors, but we want complete silence for variables that
-      // were never persisted).
+      // Get the sets of persisted plugin/component variables once. A
+      // SENSITIVE variable is persisted in its own set. We check membership
+      // before calling reset_persisted_variables to avoid the warning that
+      // MySQL emits when the variable is not in the persisted config file
+      // (reset_persisted_variables with if_exists=true warns rather than
+      // errors, but we want complete silence for variables that were never
+      // persisted).
       Persisted_variables_uset *plugin_vars =
           pvc->get_persisted_dynamic_plugin_variables();
+      Persisted_variables_uset *sensitive_plugin_vars =
+          pvc->get_persisted_dynamic_sensitive_plugin_variables();
       for (const RegisteredSysVar &rv : retired) {
         std::string full_name = rv.extension_name + "." + rv.var_name;
-        if (plugin_vars != nullptr) {
-          // SET PERSIST, RESET PERSIST and INSTALL EXTENSION change the set
-          // under its lock, so walk it under the lock too. It is released
+        if (plugin_vars != nullptr && sensitive_plugin_vars != nullptr) {
+          // SET PERSIST, RESET PERSIST and INSTALL EXTENSION change the sets
+          // under their lock, so walk them under the lock too. It is released
           // before reset_persisted_variables, which takes it itself.
           bool persisted;
           {
             std::lock_guard<Persisted_variables_cache> guard(*pvc);
-            persisted = std::ranges::any_of(
-                *plugin_vars, [&full_name](const st_persist_var &v) {
-                  // Lets a test change the set while this loop walks it; see
-                  // sys_var_depopulate_persisted_lookup.test.
-                  DEBUG_SYNC_C("vef_sys_var_persisted_lookup");
-                  return v.key == full_name;
-                });
+            persisted =
+                std::ranges::any_of(
+                    *plugin_vars,
+                    [&full_name](const st_persist_var &v) {
+                      // Lets a test change the set while this loop walks it;
+                      // see sys_var_depopulate_persisted_lookup.test.
+                      DEBUG_SYNC_C("vef_sys_var_persisted_lookup");
+                      return v.key == full_name;
+                    }) ||
+                std::ranges::any_of(*sensitive_plugin_vars,
+                                    [&full_name](const st_persist_var &v) {
+                                      return v.key == full_name;
+                                    });
           }
           if (!persisted) continue;
         }

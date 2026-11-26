@@ -173,6 +173,10 @@ class Persisted_variables_cache final {
     Get persisted dynamic plugin/component variables
   */
   Persisted_variables_uset *get_persisted_dynamic_plugin_variables();
+  // VillageSQL: persisted SENSITIVE plugin/component variables, with no
+  // privilege check. UNINSTALL EXTENSION uses it to find the values it must
+  // remove.
+  Persisted_variables_uset *get_persisted_dynamic_sensitive_plugin_variables();
   /**
     Get SENSITIVE persisted variables
   */

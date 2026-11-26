@@ -2330,6 +2330,11 @@ Persisted_variables_cache::get_persisted_dynamic_plugin_variables() {
   return &m_persisted_dynamic_plugin_variables;
 }
 
+Persisted_variables_uset *
+Persisted_variables_cache::get_persisted_dynamic_sensitive_plugin_variables() {
+  return &m_persisted_dynamic_sensitive_plugin_variables;
+}
+
 /*
   Get SENSITIVE persisted variables
 */
