@@ -2201,6 +2201,8 @@ class Item_udf_func : public Item_func {
   // VillageSQL: Returns the VDF function descriptor, for matching against an
   // index profile's declared functions.
   const vef_func_desc_t *vdf_func_desc() const { return udf.vdf_func_desc(); }
+  // VillageSQL: The VDF's handler once fixed, else nullptr
+  villagesql::vdf::vdf_handler *vdf() const { return udf.vdf(); }
   enum Functype functype() const override { return UDF_FUNC; }
   table_map get_initial_pseudo_tables() const override {
     return m_non_deterministic ? RAND_TABLE_BIT : 0;

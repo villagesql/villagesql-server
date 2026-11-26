@@ -6,10 +6,12 @@ CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
 
 INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
 
-# For now, this is a parse error, just like many other CASTs
-# (e.g. VARCHAR is unsupported as a cast)
---error ER_PARSE_ERROR
+# A CAST to the value's own custom type leaves it unchanged
 SELECT id, CAST(val AS COMPLEX) FROM t_complex WHERE id = 1;
+
+# A CAST from a string is not a conversion; use COMPLEX::from_string
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST('(1.0,2.0)' AS COMPLEX);
 
 DROP TABLE t_complex;
 

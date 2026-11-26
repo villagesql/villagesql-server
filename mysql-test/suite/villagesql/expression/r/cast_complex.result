@@ -1,5 +1,5 @@
 SELECT CAST('(1.0,2.0)' AS COMPLEX);
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'COMPLEX)' at line 1
+ERROR HY000: Cannot CAST a value that is not of a custom type AS vsql_complex.COMPLEX
 SELECT CONVERT('(1.0,2.0)', COMPLEX);
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'COMPLEX)' at line 1
 CREATE TABLE t1 (val COMPLEX);

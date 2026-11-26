@@ -1,5 +1,8 @@
 CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
 INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
 SELECT id, CAST(val AS COMPLEX) FROM t_complex WHERE id = 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'COMPLEX) FROM t_complex WHERE id = 1' at line 1
+id	CAST(val AS COMPLEX)
+1	(1,2)
+SELECT CAST('(1.0,2.0)' AS COMPLEX);
+ERROR HY000: Cannot CAST a value that is not of a custom type AS vsql_complex.COMPLEX
 DROP TABLE t_complex;

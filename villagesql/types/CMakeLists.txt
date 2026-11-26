@@ -15,6 +15,7 @@
 
 SET(VILLAGESQL_TYPES_SOURCES
   from_string_inference.cc
+  item_custom_cast.cc
   type_decoder.cc
   type_encoder.cc
   type_function.cc

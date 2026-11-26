@@ -516,6 +516,23 @@ void vdf_handler::accumulate(bool *null_value) {
   }
 }
 
+bool vdf_handler::adopt_return_type_context(
+    Item_result_field *func, const villagesql::TypeContext *target) {
+  assert(m_return_type_context != nullptr &&
+         m_return_type_context->is_unknown());
+  func->set_type_context(target);
+  m_return_type_context = target;
+  // As in fix_fields: the buffer and the item's width follow the type.
+  const int64_t buffer_len = target->field_buffer_length();
+  if (buffer_len > 0) {
+    if (MaybeResizeBuffer(static_cast<size_t>(buffer_len))) return true;
+    func->max_length = static_cast<uint32>(buffer_len);
+  }
+  m_resolved_result_buffer = m_result_buffer;
+  m_resolved_result_buffer_size = m_result_buffer_size;
+  return false;
+}
+
 void vdf_handler::cleanup() {
   if (m_active) RunPostrun();
   m_active = false;

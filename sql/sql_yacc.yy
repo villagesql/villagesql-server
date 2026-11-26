@@ -173,6 +173,7 @@ Note: YYTHD is passed as an argument to yyparse(), and subsequently to yylex().
 #include "thr_lock.h"
 #include "violite.h"
 #include "sql/tablesample.h"
+#include "villagesql/types/item_custom_cast.h"
 #include "villagesql/types/pt_custom_type.h"
 #include "villagesql/sql/util.h"
 
@@ -2169,6 +2170,8 @@ void warn_on_deprecated_user_defined_collation(
 %type <int_type> int_type
 
 %type <type> spatial_type type
+
+%type <type> custom_type /* VILLAGESQL */
 
 %type <numeric_type> real_type numeric_type
 
@@ -7121,7 +7124,12 @@ type:
           {
             $$= NEW_PTN PT_json_type(@$);
           }
-        | IDENT_sys %prec PREFER_PARENTHESES
+        | custom_type
+        ;
+
+// VillageSQL: a custom type, in a column definition or a CAST.
+custom_type:
+          IDENT_sys %prec PREFER_PARENTHESES
           {
             // Custom data type with no length or parameters: TYPE
             $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, {}, $1);
@@ -10541,6 +10549,12 @@ simple_expr:
         | CAST_SYM '(' expr AS cast_type opt_array_cast ')'
           {
             $$= create_func_cast(YYTHD, @$, $3, $5, $6);
+            if ($$ == nullptr)
+              MYSQL_YYABORT;
+          }
+        | CAST_SYM '(' expr AS custom_type ')' /* VILLAGESQL */
+          {
+            $$= villagesql::MakeCustomCast(YYTHD, @$, $3, $5);
             if ($$ == nullptr)
               MYSQL_YYABORT;
           }

@@ -53,6 +53,13 @@ class vdf_handler {
   // cleanup: Call postrun and reset state
   void cleanup();
 
+  // Give a call whose custom return type has unknown parameters the known
+  // type `target`, e.g. TYPE::from_string(s) under CAST(... AS TYPE(params)).
+  // Each call then gets target's parameters. Called after fix_fields. Returns
+  // true on allocation failure.
+  bool adopt_return_type_context(Item_result_field *func,
+                                 const villagesql::TypeContext *target);
+
   // Aggregate methods - called by udf_handler for aggregate VDFs
   void clear();
   void accumulate(bool *null_value);

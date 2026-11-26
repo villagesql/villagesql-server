@@ -1,0 +1,107 @@
+# CAST(expr AS TYPE[(params)]) for a custom type tells the server the
+# parameters of a value of that type. It does not convert:
+#   - TYPE::from_string(...) with unknown parameters gets the target's
+#     parameters, and parses each row with them;
+#   - a value of the same type and parameters is unchanged;
+#   - another type, other parameters, or a string is an error.
+
+--source include/villagesql/install_complex_extension.inc
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE src (id INT PRIMARY KEY, a TVECTOR(2));
+INSERT INTO src VALUES (1, '[1,2]'), (2, '[3.5,-4]');
+CREATE TABLE docs (id INT PRIMARY KEY, emb VARCHAR(100));
+INSERT INTO docs VALUES (1, '[1,2]'), (2, '[3,4]'), (3, '[5,6,7]');
+
+--echo #
+--echo # from_string of a value per row takes the target's parameters
+--echo #
+SELECT id, CAST(TVECTOR::from_string(emb) AS TVECTOR(2)) AS v
+FROM docs ORDER BY id;
+SELECT id, tvector_dim(CAST(TVECTOR::from_string(emb) AS TVECTOR(2))) AS d
+FROM docs ORDER BY id;
+SELECT id,
+       CAST(TVECTOR::from_string(emb)
+            AS TVECTOR('dimension=3,type=double')) AS v
+FROM docs ORDER BY id;
+
+--echo # Without the CAST, the parameters are unknown
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id, tvector_dim(TVECTOR::from_string(emb)) FROM docs;
+
+--echo #
+--echo # Into a column with other parameters: float in src, double in dd
+--echo #
+CREATE TABLE dd (id INT PRIMARY KEY, v TVECTOR('dimension=2,type=double'));
+INSERT INTO dd
+  SELECT id, CAST(TVECTOR::from_string(TVECTOR::to_string(a))
+                  AS TVECTOR('dimension=2,type=double'))
+  FROM src;
+SELECT id, v, tvector_dim(v) AS d FROM dd ORDER BY id;
+
+--echo # The same through UPDATE
+CREATE TABLE c (id INT PRIMARY KEY, s VARCHAR(50), v TVECTOR(2));
+INSERT INTO c (id, s) VALUES (1, '[1,2]'), (2, '[3,4]');
+UPDATE c SET v = CAST(TVECTOR::from_string(s) AS TVECTOR(2));
+SELECT id, v FROM c ORDER BY id;
+
+--echo #
+--echo # A value with the same parameters is unchanged
+--echo #
+SELECT id, CAST(a AS TVECTOR(2)) AS a FROM src ORDER BY id;
+SELECT id, CAST(a AS vsql_tvector.TVECTOR('dimension=2,type=float')) AS a
+FROM src ORDER BY id;
+CREATE TABLE tc (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO tc VALUES (1, '(1,2)'), (2, NULL);
+SELECT id, CAST(c AS COMPLEX) AS c FROM tc ORDER BY id;
+SELECT id, CAST(COMPLEX::from_string('(3,4)') AS COMPLEX) AS c FROM tc
+ORDER BY id;
+
+--echo #
+--echo # Errors
+--echo #
+--echo # Other parameters: CAST does not convert
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST(a AS TVECTOR('dimension=2,type=double')) FROM src;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST(a AS TVECTOR(3)) FROM src;
+--echo # A constant's parameters are known from the constant
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST(TVECTOR::from_string('[1,2,3]') AS TVECTOR(2));
+--echo # Another custom type
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST(c AS COMPLEX2) FROM tc;
+--echo # A value that is not of a custom type
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST(emb AS TVECTOR(2)) FROM docs;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST('[1,2]' AS TVECTOR(2));
+--echo # Not a type
+--error ER_PARSE_ERROR
+SELECT CAST(a AS no_such_type) FROM src;
+--echo # CAST of a custom value to a built-in type is still refused
+--error ER_WRONG_USAGE
+SELECT CAST(a AS CHAR) FROM src;
+
+--echo #
+--echo # A prepared statement, run twice
+--echo #
+PREPARE stmt FROM
+  'SELECT id, CAST(TVECTOR::from_string(emb) AS TVECTOR(2)) AS v
+   FROM docs WHERE id < 3 ORDER BY id';
+EXECUTE stmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+--echo #
+--echo # A view stores the CAST and reads it back
+--echo #
+CREATE VIEW vw AS
+  SELECT id, CAST(TVECTOR::from_string(emb) AS TVECTOR(2)) AS v FROM docs;
+SHOW CREATE VIEW vw;
+SELECT id, v FROM vw ORDER BY id;
+DROP VIEW vw;
+
+DROP TABLE src, docs, dd, c, tc;
+UNINSTALL EXTENSION vsql_tvector;
+--source include/villagesql/uninstall_complex_extension.inc

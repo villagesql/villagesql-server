@@ -179,6 +179,9 @@ class udf_handler {
     return is_vdf() ? u_d->vdf_func_desc : nullptr;
   }
 
+  // For a VDF, its handler once fix_fields has run; nullptr otherwise.
+  villagesql::vdf::vdf_handler *vdf() const { return m_vdf; }
+
   // Set `item`'s data type for a STRING- or BINARY-returning VDF result, and
   // set the runtime result charset to match (utf8mb4 for STRING, binary for
   // BINARY), so the String returned by val_str() carries the same charset the

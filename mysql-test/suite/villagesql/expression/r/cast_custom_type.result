@@ -1,0 +1,139 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE src (id INT PRIMARY KEY, a TVECTOR(2));
+INSERT INTO src VALUES (1, '[1,2]'), (2, '[3.5,-4]');
+CREATE TABLE docs (id INT PRIMARY KEY, emb VARCHAR(100));
+INSERT INTO docs VALUES (1, '[1,2]'), (2, '[3,4]'), (3, '[5,6,7]');
+#
+# from_string of a value per row takes the target's parameters
+#
+SELECT id, CAST(TVECTOR::from_string(emb) AS TVECTOR(2)) AS v
+FROM docs ORDER BY id;
+id	v
+1	[1,2]
+2	[3,4]
+3	NULL
+Warnings:
+Warning	3200	VDF error in function 'TVECTOR::from_string': tvector_from_string: dimension mismatch
+SELECT id, tvector_dim(CAST(TVECTOR::from_string(emb) AS TVECTOR(2))) AS d
+FROM docs ORDER BY id;
+id	d
+1	2
+2	2
+3	NULL
+Warnings:
+Warning	3200	VDF error in function 'TVECTOR::from_string': tvector_from_string: dimension mismatch
+SELECT id,
+CAST(TVECTOR::from_string(emb)
+AS TVECTOR('dimension=3,type=double')) AS v
+FROM docs ORDER BY id;
+id	v
+1	NULL
+2	NULL
+3	[5,6,7]
+Warnings:
+Warning	3200	VDF error in function 'TVECTOR::from_string': tvector_from_string: dimension mismatch
+Warning	3200	VDF error in function 'TVECTOR::from_string': tvector_from_string: dimension mismatch
+# Without the CAST, the parameters are unknown
+SELECT id, tvector_dim(TVECTOR::from_string(emb)) FROM docs;
+ERROR HY000: Cannot initialize function 'tvector_dim': argument 1 must be a TVECTOR or a constant vector literal
+#
+# Into a column with other parameters: float in src, double in dd
+#
+CREATE TABLE dd (id INT PRIMARY KEY, v TVECTOR('dimension=2,type=double'));
+INSERT INTO dd
+SELECT id, CAST(TVECTOR::from_string(TVECTOR::to_string(a))
+AS TVECTOR('dimension=2,type=double'))
+FROM src;
+SELECT id, v, tvector_dim(v) AS d FROM dd ORDER BY id;
+id	v	d
+1	[1,2]	2
+2	[3.5,-4]	2
+# The same through UPDATE
+CREATE TABLE c (id INT PRIMARY KEY, s VARCHAR(50), v TVECTOR(2));
+INSERT INTO c (id, s) VALUES (1, '[1,2]'), (2, '[3,4]');
+UPDATE c SET v = CAST(TVECTOR::from_string(s) AS TVECTOR(2));
+SELECT id, v FROM c ORDER BY id;
+id	v
+1	[1,2]
+2	[3,4]
+#
+# A value with the same parameters is unchanged
+#
+SELECT id, CAST(a AS TVECTOR(2)) AS a FROM src ORDER BY id;
+id	a
+1	[1,2]
+2	[3.5,-4]
+SELECT id, CAST(a AS vsql_tvector.TVECTOR('dimension=2,type=float')) AS a
+FROM src ORDER BY id;
+id	a
+1	[1,2]
+2	[3.5,-4]
+CREATE TABLE tc (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO tc VALUES (1, '(1,2)'), (2, NULL);
+SELECT id, CAST(c AS COMPLEX) AS c FROM tc ORDER BY id;
+id	c
+1	(1,2)
+2	NULL
+SELECT id, CAST(COMPLEX::from_string('(3,4)') AS COMPLEX) AS c FROM tc
+ORDER BY id;
+id	c
+1	(3,4)
+2	(3,4)
+#
+# Errors
+#
+# Other parameters: CAST does not convert
+SELECT CAST(a AS TVECTOR('dimension=2,type=double')) FROM src;
+ERROR HY000: Cannot CAST vsql_tvector.TVECTOR(2) AS vsql_tvector.TVECTOR('dimension=2,type=double')
+SELECT CAST(a AS TVECTOR(3)) FROM src;
+ERROR HY000: Cannot CAST vsql_tvector.TVECTOR(2) AS vsql_tvector.TVECTOR(3)
+# A constant's parameters are known from the constant
+SELECT CAST(TVECTOR::from_string('[1,2,3]') AS TVECTOR(2));
+ERROR HY000: Cannot CAST vsql_tvector.TVECTOR(3) AS vsql_tvector.TVECTOR(2)
+# Another custom type
+SELECT CAST(c AS COMPLEX2) FROM tc;
+ERROR HY000: Cannot CAST vsql_complex.COMPLEX AS vsql_complex.COMPLEX2
+# A value that is not of a custom type
+SELECT CAST(emb AS TVECTOR(2)) FROM docs;
+ERROR HY000: Cannot CAST a value that is not of a custom type AS vsql_tvector.TVECTOR(2)
+SELECT CAST('[1,2]' AS TVECTOR(2));
+ERROR HY000: Cannot CAST a value that is not of a custom type AS vsql_tvector.TVECTOR(2)
+# Not a type
+SELECT CAST(a AS no_such_type) FROM src;
+ERROR 42000: Expected a type or a custom type instead of "no_such_type" near 'no_such_type) FROM src' at line 1
+# CAST of a custom value to a built-in type is still refused
+SELECT CAST(a AS CHAR) FROM src;
+ERROR HY000: Incorrect usage of cast_as_char and TVECTOR
+#
+# A prepared statement, run twice
+#
+PREPARE stmt FROM
+'SELECT id, CAST(TVECTOR::from_string(emb) AS TVECTOR(2)) AS v
+   FROM docs WHERE id < 3 ORDER BY id';
+EXECUTE stmt;
+id	v
+1	[1,2]
+2	[3,4]
+EXECUTE stmt;
+id	v
+1	[1,2]
+2	[3,4]
+DEALLOCATE PREPARE stmt;
+#
+# A view stores the CAST and reads it back
+#
+CREATE VIEW vw AS
+SELECT id, CAST(TVECTOR::from_string(emb) AS TVECTOR(2)) AS v FROM docs;
+SHOW CREATE VIEW vw;
+View	Create View	character_set_client	collation_connection
+vw	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vw` AS select `docs`.`id` AS `id`,cast(vsql_tvector.TVECTOR::from_string(`docs`.`emb`) as `vsql_tvector`.`TVECTOR`('dimension=2,type=float')) AS `v` from `docs`	utf8mb4	utf8mb4_0900_ai_ci
+SELECT id, v FROM vw ORDER BY id;
+id	v
+1	[1,2]
+2	[3,4]
+3	NULL
+Warnings:
+Warning	3200	VDF error in function 'TVECTOR::from_string': tvector_from_string: dimension mismatch
+DROP VIEW vw;
+DROP TABLE src, docs, dd, c, tc;
+UNINSTALL EXTENSION vsql_tvector;

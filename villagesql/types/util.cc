@@ -67,6 +67,7 @@
 #include "villagesql/schema/tmp_metadata.h"
 #include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/types/item_custom_cast.h"
 #include "villagesql/types/type_decoder.h"
 #include "villagesql/types/type_encoder.h"
 
@@ -1759,6 +1760,13 @@ bool IsFuncAllowedWithCustom(THD *thd [[maybe_unused]], Item_func *func,
       // A stored function's parameters are typed: each argument is checked
       // when it is stored into its parameter, as for a procedure.
       return true;
+    case Item_func::TYPECAST_FUNC:
+      // CAST(custom AS custom_type) checks its argument while resolving; a
+      // CAST to a built-in type stays blocked.
+      if (dynamic_cast<Item_func_custom_cast *>(func) != nullptr) return true;
+      my_error(ER_WRONG_USAGE, MYF(0), func->func_name(),
+               tc.type_name().c_str());
+      return false;
     // Allow pass-through functions that don't interpret the custom value
     case Item_func::ISNULL_FUNC:
     case Item_func::ISNOTNULL_FUNC:

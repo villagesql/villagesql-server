@@ -1,13 +1,15 @@
 # Test CAST/CONVERT with COMPLEX type
 # Grammar: CAST(expr AS type); CONVERT(expr, type)
-# Explicit CAST to/from COMPLEX is NOT supported
+# CAST AS COMPLEX accepts only a COMPLEX value: it does not convert. CONVERT
+# to COMPLEX and CAST from COMPLEX to a built-in type are not supported.
 
 --source include/villagesql/install_complex_extension.inc
 
-# String to Complex - CAST AS COMPLEX is a parse error (not a valid CAST target)
---error ER_PARSE_ERROR
+# String to Complex - not a conversion CAST does; use COMPLEX::from_string
+--error ER_VILLAGESQL_GENERIC_ERROR
 SELECT CAST('(1.0,2.0)' AS COMPLEX);
 
+# CONVERT AS COMPLEX is a parse error (not a valid CONVERT target)
 --error ER_PARSE_ERROR
 SELECT CONVERT('(1.0,2.0)', COMPLEX);
 
