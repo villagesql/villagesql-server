@@ -25,12 +25,14 @@
 #include <vector>
 
 #include "my_sys.h"
+#include "my_thread.h"
 #include "mysql/components/my_service.h"
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/components/services/mysql_string.h"
 #include "mysql/components/services/mysql_system_variable.h"
 #include "sql/current_thd.h"
 #include "sql/server_component/mysql_system_variable_bits.h"
+#include "sql/server_component/storing_auto_thd.h"
 #include "sql/set_var.h"
 #include "villagesql/include/error.h"
 #include "villagesql/services/plugin_registry.h"
@@ -71,11 +73,46 @@ static void one_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
   on_change(var_name_copy.c_str(), new_val);
 }
 
+// A temporary internal THD for a caller with no session, with the privileges
+// of upstream's internal THDs. Unlike Storing_auto_THD, it ends the thread's
+// mysys state only if it initialized it: the main thread at startup has that
+// state but no THD, and ending it there breaks the next THD the thread uses.
+// TODO(villagesql-rebase): once upstream reads a SENSITIVE variable with no
+// THD without dereferencing it, and Storing_auto_THD no longer ends the mysys
+// state of a thread that has it but no THD, drop NoSessionThd.
+class NoSessionThd {
+ public:
+  NoSessionThd() : m_end_thread(!my_thread_is_inited()) {
+    if (m_end_thread) my_thread_init();
+    m_thd = create_internal_thd_ctx(m_ctx);
+  }
+
+  ~NoSessionThd() {
+    destroy_internal_thd_ctx(m_thd, m_ctx);
+    if (m_end_thread) my_thread_end();
+  }
+
+  NoSessionThd(const NoSessionThd &) = delete;
+  NoSessionThd &operator=(const NoSessionThd &) = delete;
+
+  THD *get() const { return m_thd; }
+
+ private:
+  const bool m_end_thread;
+  THD *m_thd;
+  Sctx_ptr<Security_context> m_ctx;
+};
+
 }  // namespace
 
 bool get_variable(const char *component_name, const char *name,
                   bool force_sensitive_access, void **val, size_t *val_len) {
+  // A SENSITIVE variable's lookup dereferences the THD, so a caller with no
+  // session, such as an extension's on_init at startup, reads under a
+  // temporary internal THD.
+  std::optional<NoSessionThd> no_session_thd;
   THD *thd = current_thd;
+  if (thd == nullptr) thd = no_session_thd.emplace().get();
   // Built-in variables have no prefix.
   const char *prefix =
       strcmp(component_name, "mysql_server") == 0 ? "" : component_name;
@@ -85,7 +122,8 @@ bool get_variable(const char *component_name, const char *name,
       force_sensitive_access ? Force_sensitive_system_variable_access::YES
                              : Force_sensitive_system_variable_access::NO;
   // get_variable_value() fails when the value does not fit, and sets len to
-  // the size needed, so a second attempt with that size reads any value.
+  // the size needed, so a second attempt with that size reads the value
+  // unless it grew in between.
   std::string buf(1024, '\0');
   for (int attempt = 0; attempt < 2; ++attempt) {
     size_t len = buf.size();

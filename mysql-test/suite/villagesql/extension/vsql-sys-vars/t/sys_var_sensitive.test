@@ -6,8 +6,9 @@
 #   api_token  STR, sensitive
 #   plain      INT, not sensitive
 # and read_token() / write_token(), which read and write api_token through
-# SYS_VARS.get() / SYS_VARS.set(), and read_var(), which reads any variable
-# through SYS_VARS.get().
+# SYS_VARS.get() / SYS_VARS.set(), read_var(), which reads any variable
+# through SYS_VARS.get(), and init_token(), which returns the api_token the
+# extension's on_init read and wrote back unchanged.
 #
 # This test runs without a keyring, so SET PERSIST stores the value in
 # plaintext with a warning, and the server logs an error that it cannot
@@ -103,6 +104,8 @@ EOF
 
 SELECT @@global.vsql_sys_var_sensitive_test.api_token;
 SELECT vsql_sys_var_sensitive_test.read_token() AS token;
+--echo # on_init read and wrote the value at startup, before any session existed
+SELECT vsql_sys_var_sensitive_test.init_token() AS init_token;
 
 --echo # UNINSTALL removes the persisted value from mysqld-auto.cnf
 DROP USER u_plain@localhost, u_obs@localhost;

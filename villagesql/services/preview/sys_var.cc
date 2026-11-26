@@ -256,6 +256,8 @@ std::mutex g_extension_set_mutex;
 // share "sys_session". A separate account keeps the extra privilege below
 // from reaching them. Nothing reserves this name. An account created with it
 // would hold the privileges during a write and lose them after it.
+// TODO(villagesql-production): reserve this account name, or create it locked
+// at install, so no admin-created account can share it.
 constexpr const char *kExtensionSetUser = "villagesql.sys_var";
 
 // The internal THD the extension's own writes run under, passed to the
@@ -264,13 +266,15 @@ constexpr const char *kExtensionSetUser = "villagesql.sys_var";
 // looked up without that privilege. Hold g_extension_set_mutex for its whole
 // lifetime. Errors raised on it are copied to the calling session's THD, if
 // there is one, when it is destroyed.
-// TODO(villagesql-rebase): once upstream fixes MySQL Bug #121923, pass no THD
-// to the update service again and drop ExtensionSetThd, kExtensionSetUser and
-// g_extension_set_mutex.
+// TODO(villagesql-rebase): once upstream fixes MySQL Bug #121923, and
+// Storing_auto_THD no longer ends the mysys state of a thread that has it but
+// no THD (the main thread at startup), pass no THD to the update service again
+// and drop ExtensionSetThd, kExtensionSetUser and g_extension_set_mutex.
 class ExtensionSetThd {
  public:
-  ExtensionSetThd() : m_previous_thd(current_thd) {
-    if (m_previous_thd == nullptr) my_thread_init();
+  ExtensionSetThd()
+      : m_previous_thd(current_thd), m_end_thread(!my_thread_is_inited()) {
+    if (m_end_thread) my_thread_init();
     m_thd = create_internal_thd();
     m_thd->set_system_user(false);
     m_thd->set_connection_admin(false);
@@ -305,10 +309,8 @@ class ExtensionSetThd {
     lex_end(m_thd->lex);
     m_ctx.reset(nullptr);
     destroy_internal_thd(m_thd);
-    if (m_previous_thd == nullptr)
-      my_thread_end();
-    else
-      m_previous_thd->store_globals();
+    if (m_end_thread) my_thread_end();
+    if (m_previous_thd != nullptr) m_previous_thd->store_globals();
   }
 
   ExtensionSetThd(const ExtensionSetThd &) = delete;
@@ -319,6 +321,9 @@ class ExtensionSetThd {
 
  private:
   THD *const m_previous_thd;
+  // Whether this object initialized the thread's mysys state, and so ends it.
+  // The main thread at startup has that state but no THD.
+  const bool m_end_thread;
   THD *m_thd;
   Sctx_ptr<Security_context> m_ctx;
 };

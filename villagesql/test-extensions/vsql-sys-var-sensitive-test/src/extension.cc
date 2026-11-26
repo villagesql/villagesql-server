@@ -30,7 +30,8 @@
 // read_token() and write_token() read and write api_token through
 // SYS_VARS.get() and SYS_VARS.set(), which the extension can do whoever is
 // connected. read_var(component, name) reads any variable through
-// SYS_VARS.get().
+// SYS_VARS.get(). init_token() returns the api_token that on_init read and
+// wrote back, which at server startup happens before any session exists.
 
 #include <string>
 
@@ -48,6 +49,30 @@ static auto SYS_VARS = sv::make_capability({
         .sensitive(),
     sv::make_int("plain", "Not sensitive", &g_plain, 1, 0, 1000),
 });
+
+// The api_token on_init read, and whether on_init both read it and wrote it
+// back unchanged.
+static std::string g_init_token;
+static bool g_init_token_ok = false;
+
+static void on_init_hook() {
+  g_init_token_ok =
+      !SYS_VARS.get("vsql_sys_var_sensitive_test", "api_token", g_init_token) &&
+      !SYS_VARS.set("vsql_sys_var_sensitive_test", "api_token", nullptr,
+                    g_init_token);
+}
+
+static void on_deinit_hook() {}
+
+// Returns the api_token on_init read, or NULL if the read or the write back
+// failed.
+void init_token_impl(StringResult out) {
+  if (!g_init_token_ok) {
+    out.set_null();
+    return;
+  }
+  out.set(g_init_token);
+}
 
 // Returns api_token, or NULL if the read failed.
 void read_token_impl(StringResult out) {
@@ -92,6 +117,8 @@ void write_token_impl(StringArg value, IntResult out) {
 
 VEF_GENERATE_ENTRY_POINTS(make_extension()
                               .with(SYS_VARS)
+                              .on_init<&on_init_hook>()
+                              .on_deinit<&on_deinit_hook>()
                               .func(make_func<&read_token_impl>("read_token")
                                         .returns(STRING)
                                         .no_params()
@@ -99,6 +126,10 @@ VEF_GENERATE_ENTRY_POINTS(make_extension()
                               .func(make_func<&write_token_impl>("write_token")
                                         .returns(INT)
                                         .param(STRING)
+                                        .build())
+                              .func(make_func<&init_token_impl>("init_token")
+                                        .returns(STRING)
+                                        .no_params()
                                         .build())
                               .func(make_func<&read_var_impl>("read_var")
                                         .returns(STRING)
