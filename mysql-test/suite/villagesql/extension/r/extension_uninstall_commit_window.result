@@ -1,3 +1,5 @@
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
 #
 # CREATE FUNCTION with a COMPLEX parameter waits for the UNINSTALL and
 # fails once it commits
@@ -18,6 +20,8 @@ installed
 0
 SET DEBUG_SYNC = 'RESET';
 INSTALL EXTENSION vsql_complex;
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
 #
 # PREPARE of a statement calling vsql_complex VDFs waits for the
 # UNINSTALL and fails once it commits
@@ -36,6 +40,78 @@ installed
 0
 SET DEBUG_SYNC = 'RESET';
 INSTALL EXTENSION vsql_complex;
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+#
+# CREATE FUNCTION RETURNS COMPLEX, CREATE PROCEDURE with a COMPLEX
+# variable and a call under LOCK TABLES wait for the UNINSTALL and fail
+# once it commits
+#
+CREATE TABLE t1 (i INT);
+INSERT INTO t1 VALUES (1);
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+UNINSTALL EXTENSION vsql_complex;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+CREATE FUNCTION f_ret() RETURNS COMPLEX DETERMINISTIC RETURN '(1,2)';
+CREATE PROCEDURE p_decl() BEGIN DECLARE v COMPLEX; SET v = '(1,2)'; END;
+LOCK TABLES t1 READ;
+SELECT complex_abs(COMPLEX::from_string('(3,4)')) AS a FROM t1;
+SET DEBUG_SYNC = 'now SIGNAL go';
+ERROR HY000: Custom type 'COMPLEX' from extension 'vsql_complex' version 'VERSION' not found
+ERROR HY000: Custom type 'COMPLEX' from extension 'vsql_complex' version 'VERSION' not found
+ERROR HY000: Extension 'vsql_complex' not found for custom function 'FUNCTION'
+UNLOCK TABLES;
+SELECT COUNT(*) AS routines FROM INFORMATION_SCHEMA.ROUTINES
+WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME IN ('f_ret', 'p_decl');
+routines
+0
+SET DEBUG_SYNC = 'RESET';
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+#
+# A stored function that calls vsql_complex VDFs does not wait for the
+# UNINSTALL: its statements run in prelocked mode, which takes no
+# extension lock (see the TODO in sql_lex.cc)
+#
+CREATE FUNCTION f_body() RETURNS DOUBLE DETERMINISTIC
+RETURN complex_abs(COMPLEX::from_string('(3,4)'));
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+UNINSTALL EXTENSION vsql_complex;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+SELECT f_body() AS a;
+a
+5
+SET DEBUG_SYNC = 'now SIGNAL go';
+DROP FUNCTION f_body;
+SET DEBUG_SYNC = 'RESET';
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+#
+# An INSTALL of the same version queued behind the UNINSTALL gets its X
+# lock before the waiting CREATE FUNCTION gets its S lock. The CREATE
+# FUNCTION fails: its type is gone, though one with the same name is
+# installed again.
+#
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+UNINSTALL EXTENSION vsql_complex;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1;
+INSTALL EXTENSION vsql_complex;
+SET DEBUG_SYNC = 'now SIGNAL go';
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+ERROR HY000: Custom type 'COMPLEX' from extension 'vsql_complex' version 'VERSION' not found
+SELECT COUNT(*) AS routines FROM INFORMATION_SCHEMA.ROUTINES
+WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME = 'f_arg';
+routines
+0
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE EXTENSION_NAME = 'vsql_complex';
+installed
+1
+SET DEBUG_SYNC = 'RESET';
 #
 # UNINSTALL fails after its checks: the CREATE FUNCTION and the PREPARE
 # that waited for it succeed
@@ -61,4 +137,5 @@ WHERE EXTENSION_NAME = 'vsql_complex';
 installed
 1
 DROP FUNCTION f_arg;
+DROP TABLE t1;
 SET DEBUG_SYNC = 'RESET';

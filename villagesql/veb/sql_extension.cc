@@ -112,6 +112,7 @@ static bool check_extension_admin(THD *thd) {
 //   while determining the set of extensions that must be locked.
 // - This locking order is deadlock-safe, provided the uninstall command does
 //   not itself execute any DDL on dependent objects.
+// TODO(villagesql-performance): use IX instead of S MDL locks
 bool Sql_cmd_install_extension::execute(THD *thd) {
   // INSTALL EXTENSION and ALTER EXTENSION ... UPDATE VERSION both route
   // through here; a single privilege gate covers both.

@@ -1676,24 +1676,22 @@ bool Metadata_modifier::process_calls(
 }
 
 // Locks the extensions of the custom types a routine uses and checks that the
-// types are still installed, as table DDL does for its columns. The names are
-// copied first: an UNINSTALL that commits while this waits frees the types.
+// types are still installed, as table DDL does for its columns. Only the
+// TypeContext keys are read: an UNINSTALL that commits before the lock frees
+// the descriptors, while the routine's references keep the TypeContexts and
+// their keys alive. The check is on identity, as an INSTALL of the same version
+// can commit between the UNINSTALL and the lock.
+// TODO(villagesql-general): record the types at parse and resolve them after
+// the extension lock, as MySQL does for tables and routines. UNINSTALL's in-use
+// check would then cover routine DDL, and this check would not be needed.
 static bool lock_and_check_routine_types(
     THD *thd, const std::vector<const TypeContext *> &types) {
-  struct Type_name {
-    std::string type, extension, version;
-  };
-  std::vector<Type_name> names;
-  for (const TypeContext *tc : types) {
-    names.push_back(
-        {tc->type_name(), tc->extension_name(), tc->extension_version()});
-  }
-
   MDL_request_list mdl_requests;
   std::unordered_set<std::string> seen_extensions;
-  for (const Type_name &name : names) {
-    if (add_extension_lock_request(thd, name.extension, seen_extensions,
-                                   mdl_requests)) {
+  for (const TypeContext *tc : types) {
+    if (add_extension_lock_request(thd,
+                                   tc->key().descriptor_key().extension_name(),
+                                   seen_extensions, mdl_requests)) {
       return true;
     }
   }
@@ -1704,12 +1702,13 @@ static bool lock_and_check_routine_types(
 
   auto &vclient = VictionaryClient::instance();
   auto guard = vclient.get_read_lock();
-  for (const Type_name &name : names) {
-    const TypeDescriptorKey key(name.type, name.extension, name.version);
-    if (vclient.type_descriptors().get_committed(key) == nullptr) {
+  for (const TypeContext *tc : types) {
+    if (vclient.type_contexts().get_committed(tc->key()) != tc) {
+      const TypeDescriptorKey &key = tc->key().descriptor_key();
       villagesql_error(
           "Custom type '%s' from extension '%s' version '%s' not found", MYF(0),
-          name.type.c_str(), name.extension.c_str(), name.version.c_str());
+          key.type_name().c_str(), key.extension_name().c_str(),
+          key.extension_version().c_str());
       return true;
     }
   }
