@@ -148,6 +148,8 @@ void VictionaryClient::commit_all_tables(THD *thd) {
 
   auto guard = get_write_lock();
 
+  const bool changes_type_descriptors = m_type_descriptors.has_uncommitted(thd);
+
   m_properties.commit(thd);
   m_columns.commit(thd);
   m_sp_params.commit(thd);
@@ -161,6 +163,16 @@ void VictionaryClient::commit_all_tables(THD *thd) {
   m_custom_index_columns.commit(thd);
   m_index_type_descriptors.commit(thd);
   m_index_profile_descriptors.commit(thd);
+
+  // A TypeContext holds a raw pointer to its TypeDescriptor. Remove the ones
+  // whose descriptor this commit deleted, including those created after the
+  // deletion was marked, which nothing marked for deletion.
+  if (changes_type_descriptors) {
+    m_type_contexts.erase_committed_if([this](const TypeContext &tc) {
+      return m_type_descriptors.get_committed(tc.key().descriptor_key()) !=
+             tc.descriptor();
+    });
+  }
 }
 
 void VictionaryClient::rollback_all_tables(THD *thd) {
