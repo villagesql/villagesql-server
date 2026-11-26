@@ -77,9 +77,9 @@ static void one_var_update_trampoline(MYSQL_THD, SYS_VAR *, void *val_ptr,
 // of upstream's internal THDs. Unlike Storing_auto_THD, it ends the thread's
 // mysys state only if it initialized it: the main thread at startup has that
 // state but no THD, and ending it there breaks the next THD the thread uses.
-// TODO(villagesql-rebase): once upstream reads a SENSITIVE variable with no
-// THD without dereferencing it, and Storing_auto_THD no longer ends the mysys
-// state of a thread that has it but no THD, drop NoSessionThd.
+// TODO(villagesql-rebase): once upstream fixes MySQL Bug #121942 (a SENSITIVE
+// variable read with no THD dereferences it) and Bug #121943 (Storing_auto_THD
+// ends the mysys state of a thread that has it but no THD), drop NoSessionThd.
 class NoSessionThd {
  public:
   NoSessionThd() : m_end_thread(!my_thread_is_inited()) {

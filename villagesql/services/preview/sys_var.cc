@@ -266,10 +266,11 @@ constexpr const char *kExtensionSetUser = "villagesql.sys_var";
 // looked up without that privilege. Hold g_extension_set_mutex for its whole
 // lifetime. Errors raised on it are copied to the calling session's THD, if
 // there is one, when it is destroyed.
-// TODO(villagesql-rebase): once upstream fixes MySQL Bug #121923, and
-// Storing_auto_THD no longer ends the mysys state of a thread that has it but
-// no THD (the main thread at startup), pass no THD to the update service again
-// and drop ExtensionSetThd, kExtensionSetUser and g_extension_set_mutex.
+// TODO(villagesql-rebase): once upstream fixes MySQL Bug #121923 and Bug
+// #121943 (Storing_auto_THD ends the mysys state of a thread that has it but
+// no THD, such as the main thread at startup), pass no THD to the update
+// service again and drop ExtensionSetThd, kExtensionSetUser and
+// g_extension_set_mutex.
 class ExtensionSetThd {
  public:
   ExtensionSetThd()
