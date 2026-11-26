@@ -1,0 +1,54 @@
+# UNINSTALL EXTENSION marks the extension's TypeContexts for deletion and then
+# writes the system tables and commits. A statement that parses one of the
+# extension's types in between creates a new TypeContext that UNINSTALL did not
+# mark. It stays in the victionary after the commit and points at the freed
+# TypeDescriptor. Once the extension is installed again, parsing the type finds
+# that TypeContext and reads the freed descriptor.
+#
+# The uninstall_extension_before_commit sync point parks UNINSTALL after it
+# marks its entries and writes the system tables. The CREATE PROCEDURE parses
+# DECLARE v COMPLEX, which creates the TypeContext, and then fails because the
+# procedure exists, so it leaves nothing behind.
+#
+# Expected: after INSTALL, statements that use COMPLEX work.
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+--source include/villagesql/install_complex_extension.inc
+
+CREATE PROCEDURE p_decl() BEGIN END;
+
+connect (con_uninstall,localhost,root,,test);
+SET DEBUG_SYNC = 'uninstall_extension_before_commit SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+delimiter |;
+--error ER_SP_ALREADY_EXISTS
+CREATE PROCEDURE p_decl() BEGIN DECLARE v COMPLEX; SET v = '(1,2)'; END|
+delimiter ;|
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--reap
+
+connection default;
+SET DEBUG_SYNC = 'RESET';
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE EXTENSION_NAME = 'vsql_complex';
+INSTALL EXTENSION vsql_complex;
+
+CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1;
+SELECT f_arg('(1,2)') AS f;
+CREATE TABLE t1 (c COMPLEX);
+INSERT INTO t1 VALUES ('(3,4)');
+SELECT c, complex_abs(c) AS a FROM t1;
+
+DROP TABLE t1;
+DROP FUNCTION f_arg;
+DROP PROCEDURE p_decl;
+disconnect con_uninstall;
+--source include/villagesql/uninstall_complex_extension.inc
+--source include/wait_until_count_sessions.inc
