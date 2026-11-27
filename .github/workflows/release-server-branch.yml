@@ -73,10 +73,15 @@ jobs:
     uses: ./.github/workflows/build-server-branch.yml
     with:
       ref: ${{ inputs.ref }}
-      runner: ${{ toJSON(matrix.runner) }}
-      os: ${{ matrix.os }}
       platform: ${{ matrix.platform }}
       release_build: ${{ inputs.release_build }}
+      build-type: release
+      os: ${{ matrix.os }}
+      runner: ${{ toJSON(matrix.runner) }}
+      bundled_extensions: true
+      run_unit_tests: true
+      run_integration_tests: true
+      upload_sdk: true
 
   attach-release-artifacts:
     name: Attach Release Artifacts
