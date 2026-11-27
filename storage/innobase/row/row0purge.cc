@@ -615,11 +615,11 @@ static inline void row_purge_remove_sec_if_poss(
     // Simulates a custom index entry purge that did not happen, leaving both
     // the extension entry and its mapping B-tree record.
     DBUG_EXECUTE_IF("villagesql_skip_custom_index_purge", return;);
-    bool is_key_null = false;
-    dberr_t err = Custom_index::purge(index, node, entry, &is_key_null);
+    bool skip_index = false;
+    dberr_t err = Custom_index::purge(index, node, entry, &skip_index);
     // Failures are logged by Custom_index::purge(). Continue to purge the
     // mapping B-tree record, if the index has one for this entry.
-    if (err != DB_SUCCESS || !index->has_mapping_btree() || is_key_null) {
+    if (err != DB_SUCCESS || skip_index) {
       ut_ad(err == DB_SUCCESS);
       return;
     }
