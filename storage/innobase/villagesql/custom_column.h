@@ -145,10 +145,16 @@ class Custom_column {
   // 3. Tables with the DICT_TF2_RESURRECT_PREPARED flag are resurrected in the
   //    dict cache but lack custom column metadata.
   // 4. After the extension system initializes, load_all() is called from
-  //    innobase_dict_cache_reset_tables_and_tablespaces() to populate custom
-  //    column comparison functions for these resurrected tables. This ensures
-  //    resurrected tables are fully initialized before normal use.
+  //    load_resurrected() to populate custom column comparison functions for
+  //    these resurrected tables. This ensures resurrected tables are fully
+  //    initialized before normal use.
+  //
+  // The function is idempotent: already loaded columns and indexes are
+  // skipped, so it may be called more than once for the same table.
   static void load_all(dict_table_t *table);
+
+  // Load custom column and index information for resurrected tables.
+  static void load_resurrected();
 
   // Creates the extended column storage for a table.
   // @param table The table for which to create storage.
