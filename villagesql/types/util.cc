@@ -1930,6 +1930,20 @@ void RemoveTmpTableMetadata(THD *thd, TABLE *table) {
   RemoveTmpTableMetadata(thd, table->s->db.str, table->s->table_name.str);
 }
 
+TmpMetadata::Columns TakeTmpTableMetadata(THD *thd, TABLE *table) {
+  if (thd->villagesql_tmp_metadata == nullptr) return {};
+  return thd->villagesql_tmp_metadata->extract_table(table->s->db.str,
+                                                     table->s->table_name.str);
+}
+
+void RestoreTmpTableMetadata(THD *thd, TmpMetadata::Columns &&columns) {
+  if (columns.empty()) return;
+  if (!thd->villagesql_tmp_metadata) {
+    thd->villagesql_tmp_metadata = std::make_unique<TmpMetadata>();
+  }
+  thd->villagesql_tmp_metadata->restore(std::move(columns));
+}
+
 bool PrepareAlterCustomFields(THD *thd, const Alter_info *alter_info,
                               const HA_CREATE_INFO *create_info) {
   thd->villagesql_alter_custom_fields.clear();

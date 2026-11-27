@@ -1,4 +1,5 @@
 /* Copyright (c) 2010, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -65,6 +66,8 @@
 #include "sql/transaction_info.h"
 #include "sql_string.h"
 #include "thr_lock.h"
+
+#include "villagesql/types/util.h"
 
 namespace dd {
 class Table;
@@ -441,6 +444,8 @@ void Sql_cmd_truncate_table::cleanup_temporary(THD *thd, handlerton *hton,
     // Not checking return value since we are cleaning up after a
     // failed open
     rm_temporary_table(thd, hton, saved_path.c_str(), tdef_holder_ptr->get());
+    // VillageSQL: the table is gone, release its custom column types.
+    villagesql::RemoveTmpTableMetadata(thd, table_ref.db, table_ref.table_name);
     m_error = true;
     return;
   }
@@ -683,7 +688,10 @@ void Sql_cmd_truncate_table::truncate_temporary(THD *thd,
                                 tmp_table->s->normalized_path.length};
 
     /* Free TABLE and TABLE_SHARE but don't delete table. */
+    // VillageSQL: keep the custom column types for the reopen.
+    auto custom_columns = villagesql::TakeTmpTableMetadata(thd, tmp_table);
     close_temporary_table(thd, tmp_table, true, false);
+    villagesql::RestoreTmpTableMetadata(thd, std::move(custom_columns));
 
     /*
       We must use normalized_path since for temporary tables it

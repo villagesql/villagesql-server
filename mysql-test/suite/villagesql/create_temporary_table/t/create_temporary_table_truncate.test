@@ -1,0 +1,43 @@
+# TRUNCATE TABLE on a temporary table keeps its custom-type columns: a plain
+# and a parameterized type keep their type, accept and reject values as before,
+# and still block UNINSTALL until the table is dropped.
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/install_tvector_extension.inc
+
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX, v TVECTOR(3));
+INSERT INTO t VALUES (1, '(1,2)', '[1,2,3]');
+
+CREATE TEMPORARY TABLE tt (id INT, c COMPLEX, v TVECTOR(3));
+INSERT INTO tt SELECT id, c, v FROM t;
+
+TRUNCATE TABLE tt;
+SHOW CREATE TABLE tt;
+INSERT INTO tt SELECT id, c, v FROM t;
+INSERT INTO tt VALUES (2, '(3,4)', '[4,5,6]');
+SELECT id, c, v FROM tt ORDER BY id;
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO tt VALUES (3, '(5,6)', '[1,2]');
+
+--echo # A second TRUNCATE
+TRUNCATE TABLE tt;
+SHOW CREATE TABLE tt;
+INSERT INTO tt SELECT id, c, v FROM t;
+SELECT id, c, v FROM tt ORDER BY id;
+
+--echo # OPTIMIZE TABLE rebuilds the table
+OPTIMIZE TABLE tt;
+SHOW CREATE TABLE tt;
+INSERT INTO tt VALUES (2, '(3,4)', '[4,5,6]');
+SELECT id, c, v FROM tt ORDER BY id;
+
+DROP TABLE t;
+
+--echo # The truncated table still blocks UNINSTALL
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+DROP TEMPORARY TABLE tt;
+
+--source include/villagesql/uninstall_tvector_extension.inc
+--source include/villagesql/uninstall_complex_extension.inc

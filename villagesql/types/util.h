@@ -31,6 +31,7 @@
 #include "sql/sql_array.h"
 #include "sql_string.h"
 #include "villagesql/schema/descriptor/type_context.h"
+#include "villagesql/schema/tmp_metadata.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
 class Create_field;
@@ -153,6 +154,12 @@ extern bool AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
 extern void RemoveTmpTableMetadata(THD *thd, const std::string &db,
                                    const std::string &table_name);
 extern void RemoveTmpTableMetadata(THD *thd, TABLE *table);
+
+// Take the session metadata entries of a temporary table out of the session
+// map, keeping their references, so that closing the table does not remove
+// them. Put them back with RestoreTmpTableMetadata before reopening the table.
+extern TmpMetadata::Columns TakeTmpTableMetadata(THD *thd, TABLE *table);
+extern void RestoreTmpTableMetadata(THD *thd, TmpMetadata::Columns &&columns);
 
 // Populate thd->villagesql_alter_custom_fields with pointers to custom-typed
 // Create_fields from alter_info->create_list. Called from create_table_impl
