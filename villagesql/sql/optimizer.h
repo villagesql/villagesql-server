@@ -17,6 +17,9 @@
 #ifndef VILLAGESQL_SQL_OPTIMIZER_H_
 #define VILLAGESQL_SQL_OPTIMIZER_H_
 
+#include <cstdint>
+#include <limits>
+
 #include "my_base.h"
 #include "sql/sql_bitmap.h"
 
@@ -31,6 +34,10 @@ struct TABLE;
 
 namespace villagesql {
 namespace optimizer {
+
+// The largest limit of a KNN scan. The scan descriptor holds the limit in 32
+// bits, so the optimizer does not choose a KNN scan for a larger limit.
+constexpr ha_rows MAX_KNN_LIMIT = std::numeric_limits<uint32_t>::max();
 
 // Check whether `order` can be satisfied by a KNN scan on a KNN-capable index
 // in `map` of `table`, subject to the LIMIT `select_limit` (HA_POS_ERROR if
