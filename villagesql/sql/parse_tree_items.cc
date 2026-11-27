@@ -94,13 +94,17 @@ static void emit_type_method_error(std::string_view ext_name,
 // Intrinsic default function should not be callable. For a parameterized
 // types, the parameters are needed to resolve the default value.
 // The type's parameters are unknown during SQL call. Thus, SQL call is blocked.
-static void emit_not_callable_error(std::string_view ext_name,
+// A cast function is reached only through CAST, which finds it by its types.
+static void emit_not_callable_error(const villagesql::FuncDescriptor &desc,
+                                    std::string_view ext_name,
                                     const LEX_STRING &func) {
-  villagesql_error(
-      "Function '%.*s.%.*s' supplies the intrinsic default for a custom type "
-      "and cannot be called directly",
-      MYF(0), static_cast<int>(ext_name.length()), ext_name.data(),
-      static_cast<int>(func.length), func.str);
+  villagesql_error(desc.is_cast_function()
+                       ? "Function '%.*s.%.*s' is a cast function; use CAST "
+                         "to call it"
+                       : "Function '%.*s.%.*s' supplies the intrinsic default "
+                         "for a custom type and cannot be called directly",
+                   MYF(0), static_cast<int>(ext_name.length()), ext_name.data(),
+                   static_cast<int>(func.length), func.str);
 }
 
 bool try_itemize_custom_vdf(Parse_context *pc, const LEX_STRING &extension_name,
@@ -125,7 +129,7 @@ bool try_itemize_custom_vdf(Parse_context *pc, const LEX_STRING &extension_name,
   }
 
   if (!func_desc->is_callable_from_sql()) {
-    emit_not_callable_error(to_string_view(extension_name), func);
+    emit_not_callable_error(*func_desc, to_string_view(extension_name), func);
     *error = true;
     return true;
   }
@@ -186,7 +190,7 @@ bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
   const std::string &ext_name = vdf_desc->extension_name();
 
   if (!vdf_desc->is_callable_from_sql()) {
-    emit_not_callable_error(ext_name, func);
+    emit_not_callable_error(*vdf_desc, ext_name, func);
     *error = true;
     return true;
   }

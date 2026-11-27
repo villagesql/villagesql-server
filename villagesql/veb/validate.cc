@@ -23,6 +23,8 @@
 #include <set>
 #include <string>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "sql/field.h"
 #include "sql/sql_const.h"
@@ -31,6 +33,7 @@
 #include "villagesql/schema/descriptor/index_profile_descriptor.h"
 #include "villagesql/schema/descriptor/index_type_descriptor.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/index.h"
 #include "villagesql/sdk/include/villagesql/abi/preview/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
@@ -69,6 +72,85 @@ static Item_result vef_type_to_item_result(const vef_type_t &type) {
     default:
       return STRING_RESULT;
   }
+}
+
+// Returns the type `name` among the types this extension registers, or
+// nullptr.
+static const TypeDescriptor *find_registered_type(
+    const std::vector<TypeDescriptor> &types, const char *name) {
+  if (name == nullptr) return nullptr;
+  const std::string canonical = canonical_type_name(name);
+  for (const TypeDescriptor &type : types) {
+    if (canonical_type_name(type.type_name()) == canonical) return &type;
+  }
+  return nullptr;
+}
+
+// A cast function is reached only through CAST(x AS T), which finds it by its
+// (argument type, return type) pair, so it must have exactly one argument and
+// be the only cast function for that pair. A STRING or BINARY argument already
+// has its route to a custom type, T::from_string and T::from_binary. The hook
+// is required when either type is parameterized, because the result's
+// parameters must be known before any row is read. Returns true and fills
+// error_out when a rule is broken.
+static bool check_cast_function(
+    const vef_func_desc_t &func_desc, const std::vector<TypeDescriptor> &types,
+    std::set<std::pair<std::string, std::string>> &cast_pairs,
+    std::string &error_out) {
+  const std::string func_name(func_desc.name);
+  const vef_signature_t &signature = *func_desc.signature;
+  if (signature.param_count != 1) {
+    error_out = "cast function '" + func_name + "' must take one argument";
+    return true;
+  }
+  const vef_type_t &source = signature.params[0];
+  if (source.id == VEF_TYPE_STRING || source.id == VEF_TYPE_BINARY) {
+    error_out = "cast function '" + func_name +
+                "' cannot take a STRING or BINARY argument; those reach a "
+                "custom type through its from_string or from_binary";
+    return true;
+  }
+  const TypeDescriptor *target =
+      signature.return_type.id == VEF_TYPE_CUSTOM
+          ? find_registered_type(types, signature.return_type.custom_type)
+          : nullptr;
+  if (target == nullptr) {
+    error_out = "cast function '" + func_name +
+                "' must return a custom type of this extension";
+    return true;
+  }
+  if (!func_desc.deterministic) {
+    error_out = "cast function '" + func_name + "' must be deterministic";
+    return true;
+  }
+  const TypeDescriptor *source_type =
+      source.id == VEF_TYPE_CUSTOM
+          ? find_registered_type(types, source.custom_type)
+          : nullptr;
+  if (source.id == VEF_TYPE_CUSTOM && source_type == nullptr) {
+    error_out =
+        "cast function '" + func_name + "' must take a type of this extension";
+    return true;
+  }
+  const bool parameterized =
+      target->is_parameterized() ||
+      (source_type != nullptr && source_type->is_parameterized());
+  if (parameterized && func_desc.bind_and_check_types == nullptr) {
+    error_out = "cast function '" + func_name +
+                "' needs a bind_and_check_types hook, because its types have "
+                "parameters";
+    return true;
+  }
+  const std::string source_key =
+      source_type != nullptr ? canonical_type_name(source_type->type_name())
+                             : std::to_string(source.id);
+  if (!cast_pairs.emplace(source_key, canonical_type_name(target->type_name()))
+           .second) {
+    error_out = "cast function '" + func_name +
+                "' converts the same types as another cast function";
+    return true;
+  }
+  return false;
 }
 
 std::optional<ValidatedRegistration> parse_extension_registration(
@@ -156,6 +238,8 @@ std::optional<ValidatedRegistration> parse_extension_registration(
   }
 
   if (reg != nullptr && reg->func_count > 0) {
+    // (argument type, return type) of each cast function seen so far.
+    std::set<std::pair<std::string, std::string>> cast_pairs;
     LogVSQL(INFORMATION_LEVEL, "Validating %d VDFs from extension '%s'",
             reg->func_count, extension_name.c_str());
 
@@ -182,12 +266,25 @@ std::optional<ValidatedRegistration> parse_extension_registration(
         }
       }
 
+      // cast_function was added in PROTOCOL_6.
+      const bool is_cast_function =
+          ext_reg.negotiated_protocol >= VEF_PROTOCOL_6 &&
+          func_desc->cast_function;
+      if (is_cast_function && check_cast_function(*func_desc, result.types,
+                                                  cast_pairs, error_out)) {
+        LogVSQL(ERROR_LEVEL, "Extension '%s': %s", extension_name.c_str(),
+                error_out.c_str());
+        return std::nullopt;
+      }
+
       Item_result return_type =
           vef_type_to_item_result(func_desc->signature->return_type);
       FuncKey key(func_name, extension_name);
       result.funcs.push_back(FuncDescriptor(key, extension_version, func_desc,
                                             ext_reg.negotiated_protocol,
                                             return_type));
+      // CAST is the only way to call a cast function.
+      if (is_cast_function) result.funcs.back().set_not_callable_from_sql();
     }
   }
 

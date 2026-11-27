@@ -307,6 +307,7 @@ struct FuncWithMetadata {
         buffer_size(0),
         max_result_length(0),
         deterministic(false),
+        cast_function(false),
         is_varargs(false),
         check_params_cache_bound(nullptr),
         check_signature(nullptr),
@@ -323,6 +324,7 @@ struct FuncWithMetadata {
   size_t buffer_size;
   size_t max_result_length;
   bool deterministic;
+  bool cast_function;
   // When true, the function accepts a variable number of arguments. The
   // server skips argument validation and delegates to prerun. num_params
   // and param_types are unused (a varargs StaticFuncDesc has NumParams == 0).
@@ -1275,6 +1277,7 @@ struct StaticFuncDesc {
   size_t buffer_size_;
   size_t max_result_length_;
   bool deterministic_;
+  bool cast_function_;
   bool is_varargs_;
   bool (*check_params_cache_bound_)();
   const char *(*check_signature_)(const vef_type_t *, size_t,
@@ -1291,8 +1294,10 @@ struct StaticFuncDesc {
   }
   // Varargs reads args->values (protocol-3 pointer-array layout) without a
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
-  // bind_and_check_types and VEF_TYPE_BINARY exist from VEF_PROTOCOL_5.
+  // bind_and_check_types and VEF_TYPE_BINARY exist from VEF_PROTOCOL_5,
+  // cast_function from VEF_PROTOCOL_6.
   constexpr vef_protocol_t required_protocol() const {
+    if (cast_function_) return VEF_PROTOCOL_6;
     if (max_result_length_ > 0 || bind_ != nullptr || uses_binary()) {
       return VEF_PROTOCOL_5;
     }
@@ -1309,6 +1314,7 @@ struct StaticFuncDesc {
   constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr size_t max_result_length() const { return max_result_length_; }
   constexpr bool deterministic() const { return deterministic_; }
+  constexpr bool cast_function() const { return cast_function_; }
   constexpr auto check_params_cache_bound() const -> bool (*)() {
     return check_params_cache_bound_;
   }
@@ -1338,6 +1344,7 @@ struct StaticFuncDesc {
         buffer_size_(meta.buffer_size),
         max_result_length_(meta.max_result_length),
         deterministic_(meta.deterministic),
+        cast_function_(meta.cast_function),
         is_varargs_(meta.is_varargs),
         check_params_cache_bound_(meta.check_params_cache_bound),
         check_signature_(meta.check_signature),

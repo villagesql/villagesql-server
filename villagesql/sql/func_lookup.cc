@@ -22,6 +22,7 @@
 #include "my_alloc.h"
 #include "sql/sql_udf.h"
 #include "villagesql/schema/descriptor/func_descriptor.h"
+#include "villagesql/schema/identifier_names.h"
 #include "villagesql/schema/victionary_client.h"
 
 namespace villagesql {
@@ -121,6 +122,40 @@ const FuncDescriptor *find_func_unqualified(std::string_view func_name,
   }
 
   return victionary.funcs().acquire(results[0]->key(), cleanup_scope);
+}
+
+const FuncDescriptor *find_cast_function(std::string_view target_ext,
+                                         std::string_view target_type,
+                                         std::string_view source_type,
+                                         int source_id,
+                                         MEM_ROOT &cleanup_scope) {
+  VictionaryClient &victionary = VictionaryClient::instance();
+  if (!victionary.is_initialized()) return nullptr;
+
+  const std::string target = canonical_type_name(std::string{target_type});
+  const std::string source = canonical_type_name(std::string{source_type});
+  auto lock = victionary.get_read_lock();
+  for (const FuncDescriptor *func : victionary.funcs().get_all_committed()) {
+    if (!func->is_cast_function() || func->extension_name() != target_ext) {
+      continue;
+    }
+    // Loading the extension checked the shape: one argument, a custom return
+    // type (check_cast_function in veb/validate.cc).
+    const vef_signature_t &signature = *func->func_desc()->signature;
+    if (canonical_type_name(signature.return_type.custom_type) != target) {
+      continue;
+    }
+    const vef_type_t &param = signature.params[0];
+    const bool source_matches =
+        source_type.empty()
+            ? param.id == source_id
+            : param.id == VEF_TYPE_CUSTOM &&
+                  canonical_type_name(param.custom_type) == source;
+    if (source_matches) {
+      return victionary.funcs().acquire(func->key(), cleanup_scope);
+    }
+  }
+  return nullptr;
 }
 
 udf_func *make_udf_func_from_vdf(const FuncDescriptor *desc,

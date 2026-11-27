@@ -448,6 +448,87 @@ void tarray_concat(vsql::CustomArgWith<TarrayParams> a,
   out.set_length(total);
 }
 
+// Cast function: TARRAY -> TARRAY of float elements, reached only through
+// CAST(a AS TARRAY('type=float,...')). Each element is converted to float;
+// the element count, and so max_size, stays.
+void tarray_as_float(vsql::CustomArgWith<TarrayParams> in,
+                     vsql::CustomResultWith<TarrayParams> out) {
+  if (in.is_null()) {
+    out.set_null();
+    return;
+  }
+  const TarrayParams &p = in.params();
+  const unsigned char *d = in.value().data();
+  const size_t count =
+      in.value().size() / static_cast<size_t>(p.bytes_per_elem);
+  const size_t out_len = count * static_cast<size_t>(kElemFloat);
+  auto buf = out.buffer();
+  if (buf.size() < out_len) {
+    out.error("tarray_as_float: output buffer too small");
+    return;
+  }
+  for (size_t i = 0; i < count; i++) {
+    float v = 0;
+    switch (p.elem_type) {
+      case TarrayElemType::kInt16:
+        v = load_i16(d + i * kElemInt16);
+        break;
+      case TarrayElemType::kFloat:
+        v = load_f32(d + i * kElemFloat);
+        break;
+      case TarrayElemType::kDouble:
+        v = static_cast<float>(load_d64(d + i * kElemDouble));
+        break;
+    }
+    store_f32(buf.data() + i * kElemFloat, v);
+  }
+  out.set_length(out_len);
+}
+
+// The result keeps the argument's max_size, with float elements.
+void tarray_as_float_bind(vsql::BindArgs args, vsql::BindResult out) {
+  const TarrayParams *p = args.at(0).params<TarrayParams>();
+  if (p == nullptr) {
+    out.error("argument 1 must be a TARRAY with known parameters");
+    return;
+  }
+  TarrayParams result = *p;
+  result.bytes_per_elem = kElemFloat;
+  result.elem_type = TarrayElemType::kFloat;
+  out.set_return(result);
+}
+
+// Cast function: INT -> a one-element TARRAY of int16, reached only through
+// CAST(n AS TARRAY(...)). A value out of int16 range is an error.
+void tarray_from_int(vsql::IntArg in,
+                     vsql::CustomResultWith<TarrayParams> out) {
+  if (in.is_null()) {
+    out.set_null();
+    return;
+  }
+  const long long v = in.value();
+  if (v < INT16_MIN || v > INT16_MAX) {
+    out.warning("tarray_from_int: value out of int16 range");
+    return;
+  }
+  auto buf = out.buffer();
+  if (buf.size() < static_cast<size_t>(kElemInt16)) {
+    out.error("tarray_from_int: output buffer too small");
+    return;
+  }
+  store_i16(buf.data(), static_cast<int16_t>(v));
+  out.set_length(static_cast<size_t>(kElemInt16));
+}
+
+// An INT has no parameters, so the result's are fixed: int16, one element.
+void tarray_from_int_bind(vsql::BindArgs, vsql::BindResult out) {
+  TarrayParams result;
+  result.bytes_per_elem = kElemInt16;
+  result.elem_type = TarrayElemType::kInt16;
+  result.max_size = 1;
+  out.set_return(result);
+}
+
 static constexpr const char kTarrayTypeName[] = "TARRAY";
 
 constexpr auto TARRAY =
@@ -466,16 +547,31 @@ constexpr auto TARRAY =
 
 using namespace vsql;
 
-VEF_GENERATE_ENTRY_POINTS(make_extension()
-                              .type(TARRAY)
-                              .func(make_func<&tarray_dim>("tarray_dim")
-                                        .returns(INT)
-                                        .param(TARRAY)
-                                        .deterministic()
-                                        .build())
-                              .func(make_func<&tarray_concat>("tarray_concat")
-                                        .returns(TARRAY)
-                                        .param(TARRAY)
-                                        .param(TARRAY)
-                                        .deterministic()
-                                        .build()))
+VEF_GENERATE_ENTRY_POINTS(
+    make_extension()
+        .type(TARRAY)
+        .func(make_func<&tarray_dim>("tarray_dim")
+                  .returns(INT)
+                  .param(TARRAY)
+                  .deterministic()
+                  .build())
+        .func(make_func<&tarray_concat>("tarray_concat")
+                  .returns(TARRAY)
+                  .param(TARRAY)
+                  .param(TARRAY)
+                  .deterministic()
+                  .build())
+        .func(make_func<&tarray_as_float>("tarray_as_float")
+                  .returns(TARRAY)
+                  .param(TARRAY)
+                  .bind_and_check_types<&tarray_as_float_bind>()
+                  .deterministic()
+                  .cast_function()
+                  .build())
+        .func(make_func<&tarray_from_int>("tarray_from_int")
+                  .returns(TARRAY)
+                  .param(INT)
+                  .bind_and_check_types<&tarray_from_int_bind>()
+                  .deterministic()
+                  .cast_function()
+                  .build()))

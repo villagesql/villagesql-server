@@ -1,0 +1,101 @@
+INSTALL EXTENSION vsql_tarray_test;
+CREATE TABLE a16 (id INT PRIMARY KEY, a TARRAY('type=int16,max_size=3'));
+INSERT INTO a16 VALUES (1, '[1,2,3]'), (2, '[-4,5]'), (3, NULL);
+#
+# TARRAY of int16 to TARRAY of float, from a column
+SELECT id, TARRAY::to_string(CAST(a AS TARRAY('type=float,max_size=3'))) AS f
+FROM a16 ORDER BY id;
+id	f
+1	[1,2,3]
+2	[-4,5]
+3	NULL
+SELECT id, tarray_dim(CAST(a AS TARRAY('type=float,max_size=3'))) AS d
+FROM a16 ORDER BY id;
+id	d
+1	3
+2	2
+3	NULL
+# Stored into a column of the result's type
+CREATE TABLE af (id INT PRIMARY KEY, f TARRAY('type=float,max_size=3'));
+INSERT INTO af SELECT id, CAST(a AS TARRAY('type=float,max_size=3')) FROM a16;
+SELECT id, TARRAY::to_string(f) AS f FROM af ORDER BY id;
+id	f
+1	[1,2,3]
+2	[-4,5]
+3	NULL
+# Same parameters: CAST has nothing to convert
+SELECT id, TARRAY::to_string(CAST(a AS TARRAY('type=int16,max_size=3'))) AS a
+FROM a16 ORDER BY id;
+id	a
+1	[1,2,3]
+2	[-4,5]
+3	NULL
+# The target must match what the cast function returns
+SELECT CAST(a AS TARRAY('type=float,max_size=5')) FROM a16;
+ERROR HY000: Cannot CAST vsql_tarray_test.TARRAY('max_size=3,type=int16') AS vsql_tarray_test.TARRAY('max_size=5,type=float'): cast function 'tarray_as_float' returns vsql_tarray_test.TARRAY('max_size=3,type=float')
+SELECT CAST(a AS TARRAY('type=double,max_size=3')) FROM a16;
+ERROR HY000: Cannot CAST vsql_tarray_test.TARRAY('max_size=3,type=int16') AS vsql_tarray_test.TARRAY('max_size=3,type=double'): cast function 'tarray_as_float' returns vsql_tarray_test.TARRAY('max_size=3,type=float')
+#
+# INT to TARRAY
+SELECT TARRAY::to_string(CAST(7 AS TARRAY('type=int16,max_size=1'))) AS t;
+t
+[7]
+SELECT id, TARRAY::to_string(CAST(id AS TARRAY('type=int16,max_size=1'))) AS t
+FROM a16 ORDER BY id;
+id	t
+1	[1]
+2	[2]
+3	[3]
+# Out of int16 range: NULL and a warning
+SELECT TARRAY::to_string(CAST(70000 AS TARRAY('type=int16,max_size=1'))) AS t;
+t
+NULL
+Warnings:
+Warning	3200	VDF error in function 'tarray_from_int': tarray_from_int: value out of int16 range
+# No cast function from REAL
+SELECT CAST(1.5e0 AS TARRAY('type=int16,max_size=1'));
+ERROR HY000: Cannot CAST a value that is not of a custom type AS vsql_tarray_test.TARRAY('max_size=1,type=int16')
+# A string goes through TARRAY::from_string, not a cast function
+SELECT CAST('[1]' AS TARRAY('type=int16,max_size=1'));
+ERROR HY000: Cannot CAST a value that is not of a custom type AS vsql_tarray_test.TARRAY('max_size=1,type=int16')
+#
+# A cast function cannot be called by name
+SELECT tarray_as_float(a) FROM a16;
+ERROR HY000: Function 'vsql_tarray_test.tarray_as_float' is a cast function; use CAST to call it
+SELECT vsql_tarray_test.tarray_from_int(1);
+ERROR HY000: Function 'vsql_tarray_test.tarray_from_int' is a cast function; use CAST to call it
+#
+# Prepared statement, run twice
+PREPARE s FROM
+'SELECT id, TARRAY::to_string(CAST(a AS TARRAY(''type=float,max_size=3'')))
+     AS f FROM a16 ORDER BY id';
+EXECUTE s;
+id	f
+1	[1,2,3]
+2	[-4,5]
+3	NULL
+EXECUTE s;
+id	f
+1	[1,2,3]
+2	[-4,5]
+3	NULL
+DEALLOCATE PREPARE s;
+# A ? argument has no type at PREPARE, so no cast function matches yet
+PREPARE s FROM
+'SELECT TARRAY::to_string(CAST(? AS TARRAY(''type=int16,max_size=1''))) AS t';
+ERROR HY000: Cannot CAST a value that is not of a custom type AS vsql_tarray_test.TARRAY('max_size=1,type=int16')
+#
+# A view keeps the CAST
+CREATE VIEW v AS
+SELECT id, CAST(a AS TARRAY('type=float,max_size=3')) AS f FROM a16;
+SHOW CREATE VIEW v;
+View	Create View	character_set_client	collation_connection
+v	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v` AS select `a16`.`id` AS `id`,cast(`a16`.`a` as `vsql_tarray_test`.`TARRAY`('max_size=3,type=float')) AS `f` from `a16`	utf8mb4	utf8mb4_0900_ai_ci
+SELECT id, TARRAY::to_string(f) AS f FROM v ORDER BY id;
+id	f
+1	[1,2,3]
+2	[-4,5]
+3	NULL
+DROP VIEW v;
+DROP TABLE a16, af;
+UNINSTALL EXTENSION vsql_tarray_test;

@@ -1,0 +1,80 @@
+# CAST(x AS T) calls the cast function that T's extension declares for x's
+# type. vsql_tarray_test declares two:
+#   - tarray_as_float: TARRAY -> TARRAY of float, keeping max_size;
+#   - tarray_from_int: INT -> TARRAY of one int16 element.
+# A cast function's bind_and_check_types hook decides the result's
+# parameters; the CAST target must match them.
+
+INSTALL EXTENSION vsql_tarray_test;
+
+CREATE TABLE a16 (id INT PRIMARY KEY, a TARRAY('type=int16,max_size=3'));
+INSERT INTO a16 VALUES (1, '[1,2,3]'), (2, '[-4,5]'), (3, NULL);
+
+--echo #
+--echo # TARRAY of int16 to TARRAY of float, from a column
+SELECT id, TARRAY::to_string(CAST(a AS TARRAY('type=float,max_size=3'))) AS f
+  FROM a16 ORDER BY id;
+SELECT id, tarray_dim(CAST(a AS TARRAY('type=float,max_size=3'))) AS d
+  FROM a16 ORDER BY id;
+
+--echo # Stored into a column of the result's type
+CREATE TABLE af (id INT PRIMARY KEY, f TARRAY('type=float,max_size=3'));
+INSERT INTO af SELECT id, CAST(a AS TARRAY('type=float,max_size=3')) FROM a16;
+SELECT id, TARRAY::to_string(f) AS f FROM af ORDER BY id;
+
+--echo # Same parameters: CAST has nothing to convert
+SELECT id, TARRAY::to_string(CAST(a AS TARRAY('type=int16,max_size=3'))) AS a
+  FROM a16 ORDER BY id;
+
+--echo # The target must match what the cast function returns
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST(a AS TARRAY('type=float,max_size=5')) FROM a16;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST(a AS TARRAY('type=double,max_size=3')) FROM a16;
+
+--echo #
+--echo # INT to TARRAY
+SELECT TARRAY::to_string(CAST(7 AS TARRAY('type=int16,max_size=1'))) AS t;
+SELECT id, TARRAY::to_string(CAST(id AS TARRAY('type=int16,max_size=1'))) AS t
+  FROM a16 ORDER BY id;
+--echo # Out of int16 range: NULL and a warning
+SELECT TARRAY::to_string(CAST(70000 AS TARRAY('type=int16,max_size=1'))) AS t;
+
+--echo # No cast function from REAL
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST(1.5e0 AS TARRAY('type=int16,max_size=1'));
+--echo # A string goes through TARRAY::from_string, not a cast function
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT CAST('[1]' AS TARRAY('type=int16,max_size=1'));
+
+--echo #
+--echo # A cast function cannot be called by name
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT tarray_as_float(a) FROM a16;
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_tarray_test.tarray_from_int(1);
+
+--echo #
+--echo # Prepared statement, run twice
+PREPARE s FROM
+  'SELECT id, TARRAY::to_string(CAST(a AS TARRAY(''type=float,max_size=3'')))
+     AS f FROM a16 ORDER BY id';
+EXECUTE s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # A ? argument has no type at PREPARE, so no cast function matches yet
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM
+  'SELECT TARRAY::to_string(CAST(? AS TARRAY(''type=int16,max_size=1''))) AS t';
+
+--echo #
+--echo # A view keeps the CAST
+CREATE VIEW v AS
+  SELECT id, CAST(a AS TARRAY('type=float,max_size=3')) AS f FROM a16;
+SHOW CREATE VIEW v;
+SELECT id, TARRAY::to_string(f) AS f FROM v ORDER BY id;
+DROP VIEW v;
+
+DROP TABLE a16, af;
+UNINSTALL EXTENSION vsql_tarray_test;

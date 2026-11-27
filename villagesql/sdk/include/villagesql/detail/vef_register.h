@@ -59,6 +59,15 @@ template <typename T>
 struct has_bind<T, std::void_t<decltype(std::declval<const T &>().bind())>>
     : std::true_type {};
 
+// Same idiom for cast_function(): only the typed builder can mark a cast
+// function.
+template <typename T, typename = void>
+struct has_cast_function : std::false_type {};
+template <typename T>
+struct has_cast_function<
+    T, std::void_t<decltype(std::declval<const T &>().cast_function())>>
+    : std::true_type {};
+
 template <typename FuncData, size_t Index>
 __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     const FuncData &func_data) {
@@ -97,6 +106,11 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
     desc.bind_and_check_types = func_data.bind();
   } else {
     desc.bind_and_check_types = nullptr;
+  }
+  if constexpr (has_cast_function<FuncData>::value) {
+    desc.cast_function = func_data.cast_function();
+  } else {
+    desc.cast_function = false;
   }
 
   return &desc;

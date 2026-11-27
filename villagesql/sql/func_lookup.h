@@ -65,6 +65,22 @@ const FuncDescriptor *find_func_unqualified(std::string_view func_name,
                                             MEM_ROOT &cleanup_scope,
                                             std::string *ambiguous_extensions);
 
+// Find the cast function of extension target_ext that converts a value to its
+// type target_type. The value is either of the custom type source_type (of
+// the same extension, the only one a cast function can take), or, when
+// source_type is empty, of the built-in VEF type source_id.
+// Like find_func(), the descriptor stays valid until cleanup_scope is cleared.
+//
+// TODO(villagesql-performance): this scans every VDF; index cast functions
+// by their type pair if CAST on custom types becomes common.
+//
+// Returns: Pointer to FuncDescriptor, or nullptr if there is none.
+const FuncDescriptor *find_cast_function(std::string_view target_ext,
+                                         std::string_view target_type,
+                                         std::string_view source_type,
+                                         int source_id,
+                                         MEM_ROOT &cleanup_scope);
+
 // Create a udf_func wrapper from a FuncDescriptor.
 // This creates a udf_func structure compatible with the existing UDF handling
 // code, allocated on the provided MEM_ROOT.

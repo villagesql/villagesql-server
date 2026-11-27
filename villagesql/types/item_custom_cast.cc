@@ -16,6 +16,7 @@
 #include "villagesql/types/item_custom_cast.h"
 
 #include <cstdint>
+#include <string>
 
 #include "mysql/strings/m_ctype.h"
 #include "mysqld_error.h"
@@ -24,10 +25,14 @@
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
 #include "sql/sql_show.h"
+#include "sql/sql_udf.h"
 #include "sql_string.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/descriptor/func_descriptor.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/sql/func_lookup.h"
 #include "villagesql/vdf/vdf_handler.h"
 
 namespace villagesql {
@@ -57,9 +62,112 @@ bool LengthFits(const TypeContext &tc, size_t length) {
   return length == static_cast<size_t>(tc.persisted_length());
 }
 
+// Returns the extension's cast function that converts arg to target, or
+// nullptr. CAST's own cases come first: a value of target's type that has, or
+// can take, target's parameters needs none. A cast function takes only a type
+// of its own extension, or an INT or REAL; a string goes through
+// T::from_string.
+const FuncDescriptor *FindCastFunction(THD *thd, Item *arg,
+                                       const TypeContext &target) {
+  const TypeContext *source = arg->get_type_context();
+  if (source != nullptr) {
+    if (source->is_assignable_with(target) ||
+        source->extension_name() != target.extension_name()) {
+      return nullptr;
+    }
+    return find_cast_function(target.extension_name(), target.type_name(),
+                              source->type_name(), VEF_TYPE_CUSTOM,
+                              *thd->mem_root);
+  }
+  int source_id;
+  switch (arg->result_type()) {
+    case INT_RESULT:
+      source_id = VEF_TYPE_INT;
+      break;
+    case REAL_RESULT:
+    case DECIMAL_RESULT:
+      source_id = VEF_TYPE_REAL;
+      break;
+    default:
+      return nullptr;
+  }
+  return find_cast_function(target.extension_name(), target.type_name(), {},
+                            source_id, *thd->mem_root);
+}
+
+// The type of arg, for error messages.
+std::string SourceName(const Item *arg) {
+  if (const TypeContext *source = arg->get_type_context()) {
+    return source->qualified_name();
+  }
+  switch (arg->result_type()) {
+    case INT_RESULT:
+      return "INT";
+    case REAL_RESULT:
+      return "REAL";
+    case DECIMAL_RESULT:
+      return "DECIMAL";
+    default:
+      return "STRING";
+  }
+}
+
 }  // namespace
 
+bool Item_func_custom_cast::fix_fields(THD *thd, Item **ref) {
+  assert(!fixed);
+  // The argument's type decides whether a cast function converts it.
+  if (!args[0]->fixed && args[0]->fix_fields(thd, &args[0])) return true;
+  const FuncDescriptor *cast_function =
+      FindCastFunction(thd, args[0], *m_target);
+  if (cast_function == nullptr) return super::fix_fields(thd, ref);
+  return fix_cast_function_call(thd, cast_function);
+}
+
+bool Item_func_custom_cast::fix_cast_function_call(
+    THD *thd, const FuncDescriptor *cast_function) {
+  udf_func *udf = make_udf_func_from_vdf(cast_function, *thd->mem_root);
+  if (udf == nullptr) return true;
+  m_cast_call = new (thd->mem_root) udf_handler(udf);
+  if (m_cast_call == nullptr) return true;
+  // As in Item_udf_func::fix_fields(): the handler calls resolve_type(), then
+  // runs the hook, which sets this item's type context to the result's.
+  if (m_cast_call->fix_fields(thd, this, arg_count, args) || thd->is_error()) {
+    return true;
+  }
+  used_tables_cache = m_cast_call->used_tables_cache;
+
+  const TypeContext *result = get_type_context();
+  if (result == nullptr || result->is_unknown()) {
+    villagesql_error(
+        "Cannot CAST %s AS %s: cast function '%s' did not decide the "
+        "parameters of its result",
+        MYF(0), SourceName(args[0]).c_str(), m_target->qualified_name().c_str(),
+        cast_function->function_name().c_str());
+    return true;
+  }
+  if (!result->is_compatible_with(*m_target)) {
+    villagesql_error("Cannot CAST %s AS %s: cast function '%s' returns %s",
+                     MYF(0), SourceName(args[0]).c_str(),
+                     m_target->qualified_name().c_str(),
+                     cast_function->function_name().c_str(),
+                     result->qualified_name().c_str());
+    return true;
+  }
+  set_data_type_string(static_cast<uint32>(m_target->field_buffer_length()),
+                       &my_charset_bin);
+  set_type_context(m_target);
+  fixed = true;
+  return false;
+}
+
 bool Item_func_custom_cast::resolve_type(THD *) {
+  if (m_cast_call != nullptr) {
+    // Called by m_cast_call's fix_fields before its hook runs; the hook's
+    // result sets the type in fix_cast_function_call().
+    set_data_type_string(args[0]->max_length, &my_charset_bin);
+    return false;
+  }
   Item *arg = args[0];
   const TypeContext *source = arg->get_type_context();
   if (source == nullptr) {
@@ -99,6 +207,11 @@ bool Item_func_custom_cast::resolve_type(THD *) {
 
 String *Item_func_custom_cast::val_str(String *str) {
   assert(fixed);
+  if (m_cast_call != nullptr) {
+    String *res = m_cast_call->val_str(str, &str_value);
+    null_value = res == nullptr;
+    return res;
+  }
   String *res = args[0]->val_str(str);
   if (res == nullptr) {
     null_value = true;
@@ -116,6 +229,11 @@ String *Item_func_custom_cast::val_str(String *str) {
   }
   null_value = false;
   return res;
+}
+
+void Item_func_custom_cast::cleanup() {
+  if (m_cast_call != nullptr) m_cast_call->cleanup();
+  super::cleanup();
 }
 
 void Item_func_custom_cast::print(const THD *thd, String *str,

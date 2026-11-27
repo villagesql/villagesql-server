@@ -226,6 +226,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.cast_function_ = cast_function_;
     next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
@@ -251,6 +252,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.cast_function_ = cast_function_;
     next.bind_ = bind_;
     return next;
   }
@@ -272,6 +274,7 @@ class FuncBuilder {
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.cast_function_ = cast_function_;
     next.bind_ = bind_;
     return next;
   }
@@ -314,6 +317,20 @@ class FuncBuilder {
     return *this;
   }
 
+  // Marks the function as a cast function: CAST(x AS T) calls it to convert x,
+  // a value of the function's one parameter type, to T, the function's return
+  // type. The server rejects it at load unless it takes one parameter that is
+  // not STRING or BINARY (those go through T::from_string and
+  // T::from_binary), returns a custom type of this extension, is
+  // deterministic, and has a bind_and_check_types hook when either type is
+  // parameterized. It is not callable by name from SQL. Requires
+  // VEF_PROTOCOL_6.
+  constexpr FuncBuilder<Func, NumParams, Mode, HasPrerun> &cast_function(
+      bool c = true) {
+    cast_function_ = c;
+    return *this;
+  }
+
   // Install a type binding/checking hook. Called at resolution time, before
   // any row is read, to work out the return type's parameters (and, where
   // needed, individual arguments' parameters) when the built-in rules cannot.
@@ -350,6 +367,7 @@ class FuncBuilder {
     next.prerun_ = &detail::typed_prerun_wrapper<Hook>;
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
+    next.cast_function_ = cast_function_;
     next.bind_ = bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
@@ -468,6 +486,7 @@ class FuncBuilder {
     meta.buffer_size = buffer_size_;
     meta.max_result_length = max_result_length_;
     meta.deterministic = deterministic_;
+    meta.cast_function = cast_function_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = detail::to_vef_type(param_types_[i]);
     }
@@ -485,6 +504,7 @@ class FuncBuilder {
         prerun_(nullptr),
         postrun_(nullptr),
         deterministic_(false),
+        cast_function_(false),
         bind_(nullptr) {}
 
   const char *name_;
@@ -495,6 +515,7 @@ class FuncBuilder {
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   bool deterministic_;
+  bool cast_function_;
   vef_bind_types_func_t bind_;
 
   template <auto F, size_t M, ParamMode N, bool HP>

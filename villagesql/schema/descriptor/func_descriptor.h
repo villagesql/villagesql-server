@@ -134,6 +134,14 @@ class FuncDescriptor {
   bool is_callable_from_sql() const { return callable_from_sql_; }
   void set_not_callable_from_sql() { callable_from_sql_ = false; }
 
+  // True for a VDF that CAST calls to convert its one argument to its return
+  // type. The field exists only as of VEF_PROTOCOL_6; older descriptors are
+  // shorter, so the read is guarded on the descriptor's own protocol.
+  bool is_cast_function() const {
+    return func_desc_ != nullptr && func_desc_->protocol >= VEF_PROTOCOL_6 &&
+           func_desc_->cast_function;
+  }
+
  private:
   FuncKey key_;
 

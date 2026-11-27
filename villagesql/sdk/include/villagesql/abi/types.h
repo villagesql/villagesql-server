@@ -220,7 +220,9 @@ typedef enum : unsigned int {
                    //   declare an encode from its binary form.
                    // + to_binary_vdf_name on vef_type_desc_t: a type may
                    //   declare a decode to its binary form.
-  VEF_PROTOCOL_6,  // Under development, not stable.
+  VEF_PROTOCOL_6,  // Under development, not stable. Adds:
+                   // + cast_function on vef_func_desc_t: a VDF that CAST
+                   //   calls to convert a value to the VDF's return type.
 } vef_protocol_t;
 
 // This is the protocol version of these headers: the version the server
@@ -901,6 +903,14 @@ typedef struct {
   // and compute the return type's parameters, bypassing the built-in
   // disambiguation rules. See vef_bind_types_func_t.
   vef_bind_types_func_t bind_and_check_types;
+
+  // protocol >= VEF_PROTOCOL_6
+  // If true, this VDF converts its one argument to its return type, a custom
+  // type of this extension, and CAST(x AS T) calls it when x has the
+  // argument's type and T is the return type. It cannot be called by name
+  // from SQL. Its bind_and_check_types hook decides the result's parameters,
+  // and the CAST target must match them.
+  bool cast_function;
 } vef_func_desc_t;
 
 // =============================================================================
