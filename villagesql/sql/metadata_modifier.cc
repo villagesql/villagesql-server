@@ -20,6 +20,7 @@
 #include <map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "sql/create_field.h"
 #include "sql/field.h"
@@ -887,6 +888,34 @@ bool Metadata_modifier::remove_all_indexes(THD *thd [[maybe_unused]],
   return false;
 }
 
+// Adds an S request on the extension ext_name to mdl_requests, once per
+// extension. Statements that use an extension's types or functions take it,
+// so the X lock of INSTALL, UNINSTALL and ALTER EXTENSION waits for them.
+static bool add_extension_lock_request(
+    THD *thd, const std::string &ext_name,
+    std::unordered_set<std::string> &seen_extensions,
+    MDL_request_list &mdl_requests) {
+  if (ext_name.empty() ||
+      seen_extensions.contains(canonical_extension_name(ext_name))) {
+    return false;  // Already processed or empty
+  }
+
+  ExtensionKey ext_key(ext_name);
+  const std::string &normalized_name = ext_key.str();
+
+  MDL_request *new_request = new (thd->mem_root) MDL_request;
+  if (should_assert_if_null(new_request)) {
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(MDL_request));
+    return true;
+  }
+
+  MDL_REQUEST_INIT(new_request, MDL_key::EXTENSION, "", normalized_name.c_str(),
+                   MDL_SHARED, MDL_STATEMENT);
+  mdl_requests.push_front(new_request);
+  seen_extensions.insert(canonical_extension_name(ext_name));
+  return false;
+}
+
 bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   if (should_assert_if_null(thd)) {
     villagesql_error(error_uninitialized_session, MYF(0));
@@ -896,27 +925,9 @@ bool Metadata_modifier::lock_extensions_shared(THD *thd) {
   MDL_request_list mdl_requests;
   std::unordered_set<std::string> seen_extensions;
 
-  // Lambda to add MDL request for an extension (if not already added)
   auto add_mdl_request = [&](const std::string &ext_name) -> bool {
-    if (ext_name.empty() ||
-        seen_extensions.contains(canonical_extension_name(ext_name))) {
-      return false;  // Already processed or empty
-    }
-
-    ExtensionKey ext_key(ext_name);
-    const std::string &normalized_name = ext_key.str();
-
-    MDL_request *new_request = new (thd->mem_root) MDL_request;
-    if (should_assert_if_null(new_request)) {
-      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(MDL_request));
-      return true;
-    }
-
-    MDL_REQUEST_INIT(new_request, MDL_key::EXTENSION, "",
-                     normalized_name.c_str(), MDL_SHARED, MDL_STATEMENT);
-    mdl_requests.push_front(new_request);
-    seen_extensions.insert(canonical_extension_name(ext_name));
-    return false;
+    return add_extension_lock_request(thd, ext_name, seen_extensions,
+                                      mdl_requests);
   };
 
   for (const ColumnEntry &entry : to_add_) {
@@ -1663,8 +1674,49 @@ bool Metadata_modifier::add_functions(
 bool Metadata_modifier::process_calls(
     THD *thd, SQL_I_List<Croutine_hash_entry> &croutines_list) {
   Metadata_modifier modifier;
-  if (modifier.add_functions(croutines_list) || modifier.lock_and_apply(thd)) {
+  if (modifier.add_functions(croutines_list)) return true;
+  if (modifier.to_call_.empty()) return false;
+  // Calls change no system tables: lock the extensions and check that the
+  // functions are still installed, which also works under LOCK TABLES.
+  return modifier.lock_extensions_shared(thd) || modifier.validate_entries();
+}
+
+// Locks the extensions of the custom types a routine uses and checks that the
+// types are still installed, as table DDL does for its columns. Only the
+// TypeContext keys are read: an UNINSTALL that commits before the lock frees
+// the descriptors, while the routine's references keep the TypeContexts and
+// their keys alive. The check is on identity, as an INSTALL of the same version
+// can commit between the UNINSTALL and the lock.
+// TODO(villagesql-general): record the types at parse and resolve them after
+// the extension lock, as MySQL does for tables and routines. UNINSTALL's in-use
+// check would then cover routine DDL, and this check would not be needed.
+static bool lock_and_check_routine_types(
+    THD *thd, const std::vector<const TypeContext *> &types) {
+  MDL_request_list mdl_requests;
+  std::unordered_set<std::string> seen_extensions;
+  for (const TypeContext *tc : types) {
+    if (add_extension_lock_request(thd,
+                                   tc->key().descriptor_key().extension_name(),
+                                   seen_extensions, mdl_requests)) {
+      return true;
+    }
+  }
+  if (thd->mdl_context.acquire_locks(&mdl_requests,
+                                     thd->variables.lock_wait_timeout)) {
     return true;
+  }
+
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_read_lock();
+  for (const TypeContext *tc : types) {
+    if (vclient.type_contexts().get_committed(tc->key()) != tc) {
+      const TypeDescriptorKey &key = tc->key().descriptor_key();
+      villagesql_error(
+          "Custom type '%s' from extension '%s' version '%s' not found", MYF(0),
+          key.type_name().c_str(), key.extension_name().c_str(),
+          key.extension_version().c_str());
+      return true;
+    }
   }
   return false;
 }
@@ -1678,6 +1730,20 @@ bool PersistCustomSpParams(THD *thd, sp_head *sp) {
 
   List<Create_field> field_def_lst;
   root_ctx->retrieve_field_definitions(&field_def_lst);
+
+  std::vector<const TypeContext *> types;
+  {
+    List_iterator_fast<Create_field> it(field_def_lst);
+    Create_field *cdef;
+    while ((cdef = it++)) {
+      if (cdef->custom_type_context) types.push_back(cdef->custom_type_context);
+    }
+    if (sp->m_type == enum_sp_type::FUNCTION && sp->m_return_type_context_ref) {
+      types.push_back(sp->m_return_type_context_ref.get());
+    }
+  }
+  if (types.empty()) return false;
+  if (lock_and_check_routine_types(thd, types)) return true;
 
   bool any_custom = false;
   {

@@ -1,0 +1,307 @@
+# UNINSTALL EXTENSION holds an X lock on the extension from its start to its
+# commit. Statements that use the extension's types or functions take an S
+# lock on it, so a statement that starts while UNINSTALL runs its checks,
+# writes the system tables and commits waits for it. It then fails if the
+# UNINSTALL committed, and goes on if it rolled back. The
+# uninstall_after_victionary_checks sync point parks UNINSTALL after its
+# in-use and dependency checks.
+#
+# Covers CREATE FUNCTION with a parameter or a return value of the extension's
+# type, CREATE PROCEDURE with a variable of the type, PREPARE of a statement
+# without tables that calls the extension's functions, a call under LOCK
+# TABLES, and an INSTALL of the same version that queues behind the UNINSTALL.
+# A call in a stored function body does not wait yet.
+#
+# Expected: nothing that uses the extension survives a committed UNINSTALL,
+# and nothing fails because of an UNINSTALL that rolled back.
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+--source include/villagesql/install_complex_extension.inc
+# Creates the COMPLEX TypeContext before UNINSTALL marks the extension's
+# entries, so statements parsed during an UNINSTALL use that one (#1680).
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+
+connect (con_uninstall,localhost,root,,test);
+connect (con_ddl,localhost,root,,test);
+connect (con_ps,localhost,root,,test);
+connect (con_lock,localhost,root,,test);
+
+--echo #
+--echo # CREATE FUNCTION with a COMPLEX parameter waits for the UNINSTALL and
+--echo # fails once it commits
+--echo #
+connection con_uninstall;
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+
+connection con_ddl;
+--send CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1
+
+connection default;
+let $wait_condition =
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = 'Waiting for extension metadata lock'
+    AND info LIKE 'CREATE FUNCTION f_arg%';
+--source include/wait_condition.inc
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--reap
+
+connection con_ddl;
+--replace_regex /version '[^']*'/version 'VERSION'/
+--error ER_VILLAGESQL_GENERIC_ERROR
+--reap
+
+connection default;
+SELECT COUNT(*) AS routines FROM INFORMATION_SCHEMA.ROUTINES
+  WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME = 'f_arg';
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE EXTENSION_NAME = 'vsql_complex';
+SET DEBUG_SYNC = 'RESET';
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+
+--echo #
+--echo # PREPARE of a statement calling vsql_complex VDFs waits for the
+--echo # UNINSTALL and fails once it commits
+--echo #
+connection con_uninstall;
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+
+connection con_ps;
+--send PREPARE s FROM 'SELECT complex_abs(COMPLEX::from_string(''(3,4)'')) AS a'
+
+connection default;
+let $wait_condition =
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = 'Waiting for extension metadata lock'
+    AND info LIKE 'PREPARE s%';
+--source include/wait_condition.inc
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--reap
+
+connection con_ps;
+--replace_regex /custom function '[^']*'/custom function 'FUNCTION'/
+--error ER_VILLAGESQL_GENERIC_ERROR
+--reap
+--error ER_UNKNOWN_STMT_HANDLER
+EXECUTE s;
+
+connection default;
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE EXTENSION_NAME = 'vsql_complex';
+SET DEBUG_SYNC = 'RESET';
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+
+--echo #
+--echo # CREATE FUNCTION RETURNS COMPLEX, CREATE PROCEDURE with a COMPLEX
+--echo # variable and a call under LOCK TABLES wait for the UNINSTALL and fail
+--echo # once it commits
+--echo #
+CREATE TABLE t1 (i INT);
+INSERT INTO t1 VALUES (1);
+
+connection con_uninstall;
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+
+connection con_ddl;
+--send CREATE FUNCTION f_ret() RETURNS COMPLEX DETERMINISTIC RETURN '(1,2)'
+
+connection con_ps;
+--send CREATE PROCEDURE p_decl() BEGIN DECLARE v COMPLEX; SET v = '(1,2)'; END
+
+connection con_lock;
+LOCK TABLES t1 READ;
+--send SELECT complex_abs(COMPLEX::from_string('(3,4)')) AS a FROM t1
+
+connection default;
+let $wait_condition =
+  SELECT COUNT(*) = 3 FROM information_schema.processlist
+  WHERE state = 'Waiting for extension metadata lock';
+--source include/wait_condition.inc
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--reap
+
+connection con_ddl;
+--replace_regex /version '[^']*'/version 'VERSION'/
+--error ER_VILLAGESQL_GENERIC_ERROR
+--reap
+
+connection con_ps;
+--replace_regex /version '[^']*'/version 'VERSION'/
+--error ER_VILLAGESQL_GENERIC_ERROR
+--reap
+
+connection con_lock;
+--replace_regex /custom function '[^']*'/custom function 'FUNCTION'/
+--error ER_VILLAGESQL_GENERIC_ERROR
+--reap
+UNLOCK TABLES;
+
+connection default;
+SELECT COUNT(*) AS routines FROM INFORMATION_SCHEMA.ROUTINES
+  WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME IN ('f_ret', 'p_decl');
+SET DEBUG_SYNC = 'RESET';
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+
+--echo #
+--echo # A stored function that calls vsql_complex VDFs does not wait for the
+--echo # UNINSTALL: its statements run in prelocked mode, which takes no
+--echo # extension lock (see the TODO in sql_lex.cc)
+--echo #
+CREATE FUNCTION f_body() RETURNS DOUBLE DETERMINISTIC
+  RETURN complex_abs(COMPLEX::from_string('(3,4)'));
+
+connection con_uninstall;
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+
+connection con_ps;
+SELECT f_body() AS a;
+
+connection default;
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--reap
+
+connection default;
+DROP FUNCTION f_body;
+SET DEBUG_SYNC = 'RESET';
+INSTALL EXTENSION vsql_complex;
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+
+--echo #
+--echo # An INSTALL of the same version queued behind the UNINSTALL gets its X
+--echo # lock before the waiting CREATE FUNCTION gets its S lock. The CREATE
+--echo # FUNCTION fails: its type is gone, though one with the same name is
+--echo # installed again.
+--echo #
+connection con_uninstall;
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+
+connection con_ddl;
+--send CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1
+
+connection default;
+let $wait_condition =
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = 'Waiting for extension metadata lock'
+    AND info LIKE 'CREATE FUNCTION f_arg%';
+--source include/wait_condition.inc
+
+connection con_lock;
+--send INSTALL EXTENSION vsql_complex
+
+connection default;
+let $wait_condition =
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = 'Waiting for extension metadata lock'
+    AND info LIKE 'INSTALL EXTENSION%';
+--source include/wait_condition.inc
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--reap
+
+connection con_lock;
+--reap
+CREATE TABLE t_tc (c COMPLEX);
+DROP TABLE t_tc;
+
+connection con_ddl;
+--replace_regex /version '[^']*'/version 'VERSION'/
+--error ER_VILLAGESQL_GENERIC_ERROR
+--reap
+
+connection default;
+SELECT COUNT(*) AS routines FROM INFORMATION_SCHEMA.ROUTINES
+  WHERE ROUTINE_SCHEMA = 'test' AND ROUTINE_NAME = 'f_arg';
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE EXTENSION_NAME = 'vsql_complex';
+SET DEBUG_SYNC = 'RESET';
+
+--echo #
+--echo # UNINSTALL fails after its checks: the CREATE FUNCTION and the PREPARE
+--echo # that waited for it succeed
+--echo #
+connection con_uninstall;
+SET SESSION DEBUG = '+d,uninstall_fail_write';
+SET DEBUG_SYNC = 'uninstall_after_victionary_checks SIGNAL checked WAIT_FOR go';
+--send UNINSTALL EXTENSION vsql_complex
+
+connection default;
+SET DEBUG_SYNC = 'now WAIT_FOR checked';
+
+connection con_ddl;
+--send CREATE FUNCTION f_arg(x COMPLEX) RETURNS INT DETERMINISTIC RETURN 1
+
+connection con_ps;
+--send PREPARE s FROM 'SELECT complex_abs(COMPLEX::from_string(''(3,4)'')) AS a'
+
+connection default;
+let $wait_condition =
+  SELECT COUNT(*) = 2 FROM information_schema.processlist
+  WHERE state = 'Waiting for extension metadata lock';
+--source include/wait_condition.inc
+SET DEBUG_SYNC = 'now SIGNAL go';
+
+connection con_uninstall;
+--error ER_VILLAGESQL_GENERIC_ERROR
+--reap
+SET SESSION DEBUG = '-d,uninstall_fail_write';
+
+connection con_ddl;
+--reap
+
+connection con_ps;
+--reap
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+connection default;
+SELECT f_arg('(1,2)') AS f;
+SELECT COUNT(*) AS installed FROM INFORMATION_SCHEMA.EXTENSIONS
+  WHERE EXTENSION_NAME = 'vsql_complex';
+DROP FUNCTION f_arg;
+DROP TABLE t1;
+
+disconnect con_uninstall;
+disconnect con_ddl;
+disconnect con_ps;
+disconnect con_lock;
+SET DEBUG_SYNC = 'RESET';
+--source include/villagesql/uninstall_complex_extension.inc
+--source include/wait_until_count_sessions.inc

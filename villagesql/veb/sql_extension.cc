@@ -102,14 +102,17 @@ static bool check_extension_admin(THD *thd) {
 // - An X (exclusive) lock is acquired when installing or uninstalling
 //   an extension. This is the lock taken in the install/uninstall path
 //   immediately after acquiring the global read lock and backup lock.
-// - To protect against concurrent uninstall, DDL operations that add or
-//   remove columns of extension-defined types acquire an S (shared) MDL
-//   lock on the extension (see Metadata_modifier::lock_extensions_shared).
+// - To protect against concurrent uninstall, statements that use an
+//   extension's types or functions acquire an S (shared) MDL lock on the
+//   extension: DDL that adds or removes columns of its types, routine DDL
+//   with parameters of its types, and calls of its functions (see
+//   Metadata_modifier::lock_extensions_shared).
 // - DDL acquires the S lock on extensions after acquiring the table and
 //   other required object locks. This ensures the table is not being altered
 //   while determining the set of extensions that must be locked.
 // - This locking order is deadlock-safe, provided the uninstall command does
 //   not itself execute any DDL on dependent objects.
+// TODO(villagesql-performance): use IX instead of S MDL locks
 bool Sql_cmd_install_extension::execute(THD *thd) {
   // INSTALL EXTENSION and ALTER EXTENSION ... UPDATE VERSION both route
   // through here; a single privilege gate covers both.
@@ -1017,8 +1020,12 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
     return end_transaction(thd, true);
   }
 
+  // After the in-use and dependency checks, before the commit.
+  DEBUG_SYNC_C("uninstall_after_victionary_checks");
+
   // Phase 2: write tables
-  if (victionary.write_all_uncommitted_entries(thd)) {
+  if (DBUG_EVALUATE_IF("uninstall_fail_write", true, false) ||
+      victionary.write_all_uncommitted_entries(thd)) {
     villagesql_error("Failed to delete extension '%s'", MYF(0),
                      extension_name.c_str());
     return end_transaction(thd, true);
