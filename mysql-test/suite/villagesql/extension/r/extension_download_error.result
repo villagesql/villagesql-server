@@ -1,0 +1,9 @@
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+call mtr.add_suppression("VillageSQL: Error installing extension: 'download_test' from 'invalid://example[.]invalid/test[.]veb'$");
+INSTALL EXTENSION download_test FROM 'invalid://example.invalid/test.veb';
+GET DIAGNOSTICS CONDITION 1 @message = MESSAGE_TEXT;
+SELECT @message = 'Extension downloads require a build with curl support'
+    OR @message = "Failed to download extension 'download_test'"
+    AS expected_error;
+expected_error
+1

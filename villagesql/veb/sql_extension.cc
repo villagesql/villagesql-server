@@ -15,8 +15,14 @@
  */
 
 #include "villagesql/veb/sql_extension.h"
+#include <string_view>
 
+#ifdef VILLAGESQL_HAVE_CURL
+#include <curl/curl.h>
+#endif
 #include <cctype>
+#include <cstdio>
+#include <filesystem>
 #include <string>
 #include <tuple>
 
@@ -78,6 +84,11 @@ bool load_veb_and_so(THD *thd, const std::string &extension_name,
                      std::string &sha256_hash,
                      villagesql::services::LoadReason load_reason =
                          villagesql::services::LoadReason::kInstall);
+
+#ifdef VILLAGESQL_HAVE_CURL
+bool download_veb(std::string_view ext_name, std::string_view extension_source,
+                  std::string_view veb_dir);
+#endif
 }  // namespace
 
 // Guards the extension DDL (INSTALL / UNINSTALL / ALTER EXTENSION). These
@@ -369,10 +380,28 @@ bool Sql_cmd_install_extension::execute_update_version(THD *thd) {
 }
 
 bool Sql_cmd_install_extension::execute_install(THD *thd) {
+  std::string extension_name(m_name.str, m_name.length);
+
+  if (m_download_extension) {
+#ifdef VILLAGESQL_HAVE_CURL
+    std::string extension_source(m_source.str, m_source.length);
+
+    if (download_veb(extension_name + ".veb", extension_source, opt_veb_dir)) {
+      LogVSQL(ERROR_LEVEL, "Error installing extension: '%s' from '%s'",
+              extension_name.c_str(), extension_source.c_str());
+      villagesql_error("Failed to download extension '%s'", MYF(0),
+                       extension_name.c_str());
+      return true;
+    }
+#else
+    villagesql_error("Extension downloads require a build with curl support",
+                     MYF(0));
+    return true;
+#endif
+  }
+
   // We do not replicate the INSTALL EXTENSION statement
   const Disable_binlog_guard binlog_guard(thd);
-
-  std::string extension_name(m_name.str, m_name.length);
 
   // INSTALL EXTENSION is DDL-like (modifies system tables), so we follow the
   // INSTALL PLUGIN pattern: disable autocommit to prevent premature commits
@@ -697,6 +726,39 @@ bool load_veb_and_so(THD *thd, const std::string &extension_name,
   return false;
 }
 
+#ifdef VILLAGESQL_HAVE_CURL
+size_t write_data(void *ptr, size_t size, size_t nmemb, FILE *stream) {
+  return fwrite(ptr, 1, size * nmemb, stream);
+}
+
+bool download_veb(std::string_view ext_name, std::string_view src,
+                  std::string_view veb_dir) {
+  CURL *curl = curl_easy_init();
+  if (!curl) return true;
+
+  std::filesystem::path dst = veb_dir;
+  dst /= ext_name;
+
+  FILE *fp = fopen(dst.c_str(), "wb");
+  if (!fp) {
+    curl_easy_cleanup(curl);
+    return true;
+  }
+
+  const std::string url(src);
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+  CURLcode res = curl_easy_perform(curl);
+
+  fclose(fp);
+  curl_easy_cleanup(curl);
+
+  return !(res == CURLE_OK);
+}
+#endif
 }  // namespace
 
 namespace villagesql {
