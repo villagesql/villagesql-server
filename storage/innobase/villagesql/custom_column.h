@@ -271,13 +271,14 @@ class Custom_column {
   // @param src_len Length of the source buffer.
   // @param[out] trx_ref If not nullptr, set to the transaction reference
   // returned by the storage interface's select().
-  // @param[out] delete_mark If not nullptr, set to whether the storage
-  // interface's select() reports the entry as deleted.
+  // @param[out] delete_trx_ref If not nullptr, set to the transaction
+  // reference that marked the entry as deleted, or 0 if the storage interface's
+  // select() reports the entry as not deleted.
   // @return DB_SUCCESS or an error code.
   static dberr_t fetch(const dict_table_t *table, const dict_col_t *col,
                        byte *dest, ulint dest_len, const byte *src,
                        ulint src_len, TrxRef *trx_ref = nullptr,
-                       bool *delete_mark = nullptr);
+                       TrxRef *delete_trx_ref = nullptr);
 
   // Stores an extended column in MySQL true-VARCHAR format: length prefix,
   // REF, and payload fetched from extended storage.
