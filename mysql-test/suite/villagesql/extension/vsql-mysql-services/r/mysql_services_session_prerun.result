@@ -1,0 +1,63 @@
+INSTALL EXTENSION vsql_mysql_services_session_test;
+SELECT vsql_mysql_services_session_test.session_schema();
+ERROR HY000: Can't initialize function 'session_schema'; requires a default schema; run USE <schema> first
+SELECT vsql_mysql_services_session_test.session_priv_user() AS user_without_schema;
+user_without_schema
+root@localhost
+SELECT vsql_mysql_services_session_test.session_schema() AS session_schema,
+DATABASE() AS db,
+vsql_mysql_services_session_test.session_priv_user() AS session_priv_user,
+CURRENT_USER() AS current_user_;
+session_schema	db	session_priv_user	current_user_
+test	test	root@localhost	root@localhost
+SELECT vsql_mysql_services_session_test.session_priv_user() AS per_row
+FROM (VALUES ROW(1), ROW(2), ROW(3)) AS t;
+per_row
+root@localhost
+root@localhost
+root@localhost
+CREATE DATABASE db2;
+USE db2;
+SELECT vsql_mysql_services_session_test.session_schema() AS after_use;
+after_use
+db2
+USE test;
+PREPARE stmt FROM 'SELECT vsql_mysql_services_session_test.session_schema() AS ps_schema';
+EXECUTE stmt;
+ps_schema
+test
+USE db2;
+EXECUTE stmt;
+ps_schema
+test
+USE test;
+DEALLOCATE PREPARE stmt;
+CREATE USER definer_u@localhost, caller_u@localhost;
+GRANT EXECUTE ON test.* TO definer_u@localhost, caller_u@localhost;
+GRANT SELECT ON db2.* TO caller_u@localhost;
+CREATE DEFINER = definer_u@localhost FUNCTION test.definer_user()
+RETURNS VARCHAR(300) READS SQL DATA SQL SECURITY DEFINER
+RETURN vsql_mysql_services_session_test.session_priv_user();
+CREATE DEFINER = definer_u@localhost FUNCTION test.invoker_user()
+RETURNS VARCHAR(300) READS SQL DATA SQL SECURITY INVOKER
+RETURN vsql_mysql_services_session_test.session_priv_user();
+CREATE DEFINER = definer_u@localhost FUNCTION test.routine_schema()
+RETURNS VARCHAR(300) READS SQL DATA SQL SECURITY DEFINER
+RETURN vsql_mysql_services_session_test.session_schema();
+SELECT test.definer_user() AS definer_call, test.invoker_user() AS invoker_call;
+definer_call	invoker_call
+definer_u@localhost	caller_u@localhost
+SELECT test.definer_user() AS definer_second_call;
+definer_second_call
+definer_u@localhost
+USE db2;
+SELECT test.routine_schema() AS routine_schema,
+vsql_mysql_services_session_test.session_schema() AS caller_schema;
+routine_schema	caller_schema
+test	db2
+DROP FUNCTION test.definer_user;
+DROP FUNCTION test.invoker_user;
+DROP FUNCTION test.routine_schema;
+DROP USER definer_u@localhost, caller_u@localhost;
+DROP DATABASE db2;
+UNINSTALL EXTENSION vsql_mysql_services_session_test;
