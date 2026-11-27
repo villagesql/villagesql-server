@@ -1,0 +1,7 @@
+{
+  "name": "vsql_bad_collect_not_agg_test",
+  "version": "0.0.1",
+  "description": "Bad-registration test: a type names a scalar VDF as its collect aggregate. INSTALL EXTENSION must fail.",
+  "author": "VillageSQL Community",
+  "license": "GPL-2.0"
+}

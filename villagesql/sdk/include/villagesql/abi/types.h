@@ -220,7 +220,11 @@ typedef enum : unsigned int {
                    //   declare an encode from its binary form.
                    // + to_binary_vdf_name on vef_type_desc_t: a type may
                    //   declare a decode to its binary form.
-  VEF_PROTOCOL_6,  // Under development, not stable.
+  VEF_PROTOCOL_6,  // Under development, not stable. Adds:
+                   // + collect_aggregate_vdf_name on vef_type_desc_t: a type
+                   //   may name the aggregate VDF the server uses to collect
+                   //   many rows into one value of the type (RETURNING ...
+                   //   INTO an array variable).
 } vef_protocol_t;
 
 // This is the protocol version of these headers: the version the server
@@ -1081,6 +1085,20 @@ typedef struct {
   //
   // Read only when protocol >= VEF_PROTOCOL_5.
   const char *to_binary_vdf_name;
+
+  // OPTIONAL: Name of an aggregate VDF (from this extension's funcs[]) that
+  // collects one value per row into a single value of this type. The server
+  // uses it for DML ... RETURNING a, b INTO v1, v2 when v1/v2 are variables of
+  // this type: per RETURNING column it runs the aggregate's clear once, its
+  // accumulate once per returned row (argument = that column's value) and its
+  // result once at the end, with the result typed as the target variable
+  // (its resolved type parameters), then assigns the result to the variable.
+  // The named VDF must be an aggregate with exactly one argument that returns
+  // CUSTOM(this type). NULL means the type cannot be a multi-row INTO target.
+  //
+  // Read only when protocol >= VEF_PROTOCOL_6. Appended after
+  // to_binary_vdf_name so earlier offsets are unchanged.
+  const char *collect_aggregate_vdf_name;
 } vef_type_desc_t;
 
 // Forward declaration so vef_required_capability_t can reference it.

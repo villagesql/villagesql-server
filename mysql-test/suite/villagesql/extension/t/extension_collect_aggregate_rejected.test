@@ -1,0 +1,40 @@
+# Test that INSTALL EXTENSION fails when a type names a collect aggregate
+# (VEF_PROTOCOL_6, collect_aggregate_vdf_name) that is not usable, as rejected
+# by the v5 type register (build_type_descriptor_v5):
+#   - vsql_bad_collect_missing_test: the named VDF does not exist;
+#   - vsql_bad_collect_not_agg_test: the named VDF exists but is a scalar
+#     function, not a one-argument aggregate returning the type.
+
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("collect_aggregate_vdf_name");
+
+--echo # The named collect aggregate does not exist
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_bad_collect_missing_test;
+
+--echo # The named collect aggregate is a scalar function
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_bad_collect_not_agg_test;
+
+--echo # Verify neither extension was installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name IN ('vsql_bad_collect_missing_test',
+                         'vsql_bad_collect_not_agg_test');
+
+--echo # Verify the error log names both reasons
+--perl
+use strict;
+my $error_log = $ENV{'MYSQLTEST_VARDIR'} . "/log/mysqld.1.err";
+open(FILE, "$error_log") or die("Unable to open error log: $error_log");
+my ($missing, $not_agg) = (0, 0);
+while (<FILE>) {
+  $missing = 1 if /collect_aggregate_vdf_name 'no_such_collect' not found/;
+  $not_agg = 1
+    if /collect_aggregate_vdf_name 'not_an_aggregate' must be an aggregate VDF with one argument returning 'BAD_COLLECT_NOT_AGG'/;
+}
+close(FILE);
+die "Expected the 'not found' rejection in the error log" unless $missing;
+die "Expected the 'must be an aggregate VDF' rejection in the error log"
+  unless $not_agg;
+print "Found both collect aggregate rejection messages in the error log\n";
+EOF
