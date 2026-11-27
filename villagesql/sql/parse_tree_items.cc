@@ -16,8 +16,10 @@
 
 #include "villagesql/sql/parse_tree_items.h"
 
+#include <set>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "lex_string.h"
 #include "sql/item_create.h"
@@ -67,21 +69,69 @@ static void emit_type_method_error(std::string_view ext_name,
     return;
   }
 
-  static const char *valid_methods[] = {"from_string", "to_string", "compare",
-                                        "hash"};
+  std::set<std::string> type_exts;
+  bool types_use_protocol_1 = true;
+  for (const auto *t : results) {
+    type_exts.insert(villagesql::canonical_extension_name(t->extension_name()));
+    if (t->protocol() != VEF_PROTOCOL_1) types_use_protocol_1 = false;
+  }
+
+  const std::string type_prefix =
+      villagesql::canonical_extension_name(type_name) + "::";
+  const std::string canonical_method =
+      villagesql::canonical_extension_name(method_name);
+  std::set<std::string> valid_methods;
+
+  for (const auto *f : victionary.funcs().get_all_committed()) {
+    if (!f->is_callable_from_sql() ||
+        f->key().str().compare(0, type_prefix.size(), type_prefix) != 0) {
+      continue;
+    }
+
+    const std::string extension_name =
+        villagesql::canonical_extension_name(f->extension_name());
+    const std::string method =
+        villagesql::canonical_extension_name(f->function_name())
+            .substr(type_prefix.size());
+
+    if (type_exts.contains(extension_name)) {
+      valid_methods.insert(method);
+    }
+  }
+
   bool is_valid_method = false;
-  for (const char *m : valid_methods) {
-    if (method_name == m) {
+  for (const auto &m : valid_methods) {
+    if (canonical_method == m) {
       is_valid_method = true;
       break;
     }
   }
 
   if (!is_valid_method) {
-    villagesql_error(
-        "Unknown method '%s' for type '%s'. Valid methods: from_string, "
-        "to_string, compare, hash",
-        MYF(0), method_name.c_str(), type_name.c_str());
+    const std::string head =
+        "Unknown method '" + method_name + "' for type '" + type_name + "'";
+    const size_t budget = MYSQL_ERRMSG_SIZE - 1 > head.size()
+                              ? MYSQL_ERRMSG_SIZE - 1 - head.size()
+                              : 0;
+
+    const std::vector<std::string> method_list{valid_methods.begin(),
+                                               valid_methods.end()};
+    const std::string methods = join_names_bounded(method_list, budget);
+
+    if (methods.empty()) {
+      if (types_use_protocol_1) {
+        villagesql_error(
+            "Type '%s' method '%s' does not support '::' syntax "
+            "(not registered with a '::' name)",
+            MYF(0), type_name.c_str(), method_name.c_str());
+      } else {
+        villagesql_error("%s", MYF(0), head.c_str());
+      }
+    } else {
+      villagesql_error("%s%s", MYF(0), (head + ". Valid methods: ").c_str(),
+                       methods.c_str());
+    }
+
     return;
   }
 
@@ -93,7 +143,8 @@ static void emit_type_method_error(std::string_view ext_name,
 
 // Intrinsic default function should not be callable. For a parameterized
 // types, the parameters are needed to resolve the default value.
-// The type's parameters are unknown during SQL call. Thus, SQL call is blocked.
+// The type's parameters are unknown during SQL call. Thus, SQL call is
+// blocked.
 static void emit_not_callable_error(std::string_view ext_name,
                                     const LEX_STRING &func) {
   villagesql_error(
@@ -208,4 +259,82 @@ bool try_itemize_unqualified_vdf(Parse_context *pc, const LEX_STRING &func,
   }
 
   return true;
+}
+
+constexpr std::string_view separator = ", ";
+constexpr std::string_view suffixPrefix = ", and ";
+constexpr std::string_view suffixPostfix = " more methods";
+
+// Length of ", and N more methods", or 0 when nothing is omitted.
+size_t omitted_suffix_len(size_t omitted_count) {
+  if (omitted_count == 0) return 0;
+  return suffixPrefix.size() + std::to_string(omitted_count).size() +
+         suffixPostfix.size();
+}
+
+// Length of the first `name_count` names joined with the separator.
+size_t joined_len(const std::vector<std::string> &names, size_t name_count) {
+  if (name_count == 0) return 0;
+  size_t total_len = separator.size() * (name_count - 1);
+  for (size_t index = 0; index < name_count; ++index) {
+    total_len += names[index].size();
+  }
+  return total_len;
+}
+
+std::string join_first(const std::vector<std::string> &names,
+                       size_t name_count) {
+  std::string result;
+  result.reserve(joined_len(names, name_count));
+  for (size_t index = 0; index < name_count; ++index) {
+    if (index > 0) result += separator;
+    result += names[index];
+  }
+  return result;
+}
+
+// Largest number of leading names that fit in `budget` together with the
+// "and N more methods" suffix.
+size_t max_names_that_fit(const std::vector<std::string> &names,
+                          size_t budget) {
+  const size_t total_names = names.size();
+  size_t used_len = 0;
+  size_t best_count = 0;
+
+  for (size_t candidate_count = 1; candidate_count <= total_names;
+       ++candidate_count) {
+    const size_t newest_name_len = names[candidate_count - 1].size();
+    const size_t separator_len = candidate_count > 1 ? separator.size() : 0;
+    used_len += separator_len + newest_name_len;
+
+    const size_t omitted_count = total_names - candidate_count;
+    if (used_len + omitted_suffix_len(omitted_count) > budget) break;
+
+    best_count = candidate_count;
+  }
+  return best_count;
+}
+
+std::string join_names_bounded(const std::vector<std::string> &names,
+                               size_t budget) {
+  if (names.empty() || budget == 0) return {};
+
+  const size_t total_names = names.size();
+
+  // Everything fits: no truncation needed.
+  if (joined_len(names, total_names) <= budget) {
+    return join_first(names, total_names);
+  }
+
+  const size_t shown_count = max_names_that_fit(names, budget);
+
+  // Not even one name fits alongside the suffix.
+  if (shown_count == 0) {
+    std::string fallback = std::to_string(total_names) + " not listed";
+    return fallback.size() <= budget ? fallback : std::string{};
+  }
+
+  const size_t omitted_count = total_names - shown_count;
+  return join_first(names, shown_count) + std::string(suffixPrefix) +
+         std::to_string(omitted_count) + std::string(suffixPostfix);
 }
