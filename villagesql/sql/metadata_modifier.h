@@ -162,10 +162,18 @@ class Metadata_modifier {
 
   // Returns true if there are custom column or index entries to process.
   bool has_entries() const {
-    return !to_add_.empty() || !to_remove_.empty() || !to_rename_.empty() ||
-           !to_call_.empty() || !to_add_indexes_.empty() ||
-           !to_add_index_columns_.empty() || !to_remove_indexes_.empty() ||
-           !to_remove_index_columns_.empty() || !to_rename_indexes_.empty();
+    return has_staged_modifications() || !to_call_.empty();
+  }
+
+  // True when any to_* list other than to_call_ has entries to stage in the
+  // victionary. This is the one list of the staging lists: update it when
+  // adding one (a list missing here is never staged by statements that stage
+  // only that list).
+  bool has_staged_modifications() const {
+    return !to_remove_.empty() || !to_rename_.empty() || !to_add_.empty() ||
+           !to_remove_index_columns_.empty() || !to_remove_indexes_.empty() ||
+           !to_add_indexes_.empty() || !to_add_index_columns_.empty() ||
+           !to_rename_indexes_.empty();
   }
 
  private:
@@ -259,7 +267,8 @@ class Metadata_modifier {
   size_t existing_custom_count_ = 0;
   // Pair of (new_entry, old_key) where old_key is the key of the old entry
   std::vector<std::pair<ColumnEntry, ColumnKey>> to_rename_;
-  // Custom functions to be called
+  // Custom functions to be called (not staged in the victionary; see
+  // has_staged_modifications() for the staging lists)
   std::vector<Croutine_entry> to_call_;
   // Custom index entries staged for insertion
   std::vector<IndexEntry> to_add_indexes_;

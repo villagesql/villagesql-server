@@ -1123,6 +1123,11 @@ bool Metadata_modifier::mark_victionary_modifications(THD *thd,
 
   marked_column = false;
   marked_index = false;
+
+  // Statements that only call extension functions reach this point with
+  // to_call_ entries and nothing to stage. Skip the global write lock then.
+  if (!has_staged_modifications()) return false;
+
   auto guard = vclient.get_write_lock();
 
   // 1. Process removals.
