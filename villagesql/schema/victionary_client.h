@@ -461,6 +461,16 @@ class SystemTableMap {
     m_uncommitted.erase(thd);
   }
 
+  // Removes the committed entries for which pred returns true. References
+  // already handed out keep their entries alive.
+  // Requires write lock
+  template <typename Pred>
+  void erase_committed_if(Pred pred) {
+    assert_write_lock_held();
+    std::erase_if(m_committed,
+                  [&](const auto &item) { return pred(*item.second); });
+  }
+
   // A position in this THD's uncommitted operations. rollback_to() discards
   // the operations marked after it and keeps the earlier ones.
   struct SavepointPosition {
