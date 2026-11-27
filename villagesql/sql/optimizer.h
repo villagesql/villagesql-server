@@ -20,13 +20,27 @@
 #include "my_base.h"
 #include "sql/sql_bitmap.h"
 
+struct AccessPath;
 class Item;
 class JOIN_TAB;
 class ORDER_with_src;
+class THD;
+struct KnnScanInfo;
+struct ORDER;
 struct TABLE;
 
 namespace villagesql {
 namespace optimizer {
+
+// Check whether `order` can be satisfied by a KNN scan on a KNN-capable index
+// in `map` of `table`, subject to the LIMIT `select_limit` (HA_POS_ERROR if
+// none), the isolation level and the binlog format. Does not depend on a JOIN,
+// so it is also used by single-table UPDATE and DELETE. On success, sets
+// `*key_nr` to the index number and `*query_point` to the constant argument
+// of the ordering function, and returns true.
+bool find_knn_order_key(THD *thd, TABLE *table, const ORDER *order,
+                        const Key_map *map, ha_rows select_limit, int *key_nr,
+                        Item **query_point);
 
 // Check whether a KNN-capable index can satisfy the requested `ORDER BY`
 // without requiring filesort. `ref_key` identifies the index currently
@@ -41,6 +55,21 @@ bool try_knn_order(JOIN_TAB *tab, ORDER_with_src &order, int ref_key,
                    const Key_map *map, ha_rows select_limit, bool no_changes,
                    int *order_idx);
 
+// Single-table UPDATE/DELETE variant of try_knn_order(), called from
+// get_index_for_order(). Does nothing if `knn_scan_info` is nullptr or a range
+// scan was chosen. On success, fills `*knn_scan_info` so that the caller can
+// build a KNN scan, sets `*key` to the index number and returns true.
+bool try_knn_order(TABLE *table, ORDER_with_src *order, ha_rows limit,
+                   const AccessPath *range_scan, KnnScanInfo *knn_scan_info,
+                   uint *key);
+
+// Creates the KNN scan access path for index `key` from the `knn_scan_info`
+// filled by try_knn_order(), for both the JOIN executor and single-table
+// UPDATE/DELETE.
+AccessPath *new_knn_scan_path(THD *thd, TABLE *table, uint key,
+                              const KnnScanInfo *knn_scan_info,
+                              bool count_examined_rows);
+
 // Returns true if `item` is, after unwrapping refs, a call to a VDF declared
 // deterministic by the extension author. Such VDFs are potential candidates
 // for KNN index optimization.
@@ -50,10 +79,11 @@ bool is_deterministic_vdf(const Item *item);
 // range and index merge access do not consider them for WHERE predicates.
 // If `all` is true (hypergraph optimizer, which does not support custom
 // indexes), every custom index is removed. Otherwise only those that do not
-// advertise HA_READ_RANGE are removed. Must be called after index hints have
-// been applied. The order-by and group-by key maps are left untouched:
-// ordering is governed by HA_READ_ORDER (via Field::part_of_sortkey) and KNN
-// ordering.
+// advertise HA_READ_RANGE are removed. Under SERIALIZABLE, which a custom index
+// cannot support, every custom index is removed from all three key maps.
+// Otherwise the order-by and group-by key maps are left untouched: ordering is
+// governed by HA_READ_ORDER (via Field::part_of_sortkey) and KNN ordering.
+// Must be called after index hints have been applied.
 void disable_custom_keys_for_query(TABLE *table, bool all);
 
 }  // namespace optimizer

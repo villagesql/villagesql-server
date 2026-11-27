@@ -17,12 +17,16 @@
 #include "villagesql/sql/optimizer.h"
 
 #include <algorithm>
+#include <cassert>
 
+#include "sql/current_thd.h"
 #include "sql/field.h"
 #include "sql/handler.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
+#include "sql/join_optimizer/access_path.h"
 #include "sql/key.h"
+#include "sql/sql_opt_exec_shared.h"
 #include "sql/sql_optimizer.h"
 #include "sql/sql_select.h"
 #include "sql/table.h"
@@ -126,6 +130,32 @@ int find_knn_capable_key(const Field *field, const Key_map *map,
 
 }  // namespace
 
+bool try_knn_order(TABLE *table, ORDER_with_src *order, ha_rows limit,
+                   const AccessPath *range_scan, KnnScanInfo *knn_scan_info,
+                   uint *key) {
+  if (knn_scan_info == nullptr || range_scan != nullptr) return false;
+
+  int key_nr = -1;
+  Item *query_point = nullptr;
+  if (!find_knn_order_key(current_thd, table, order->order,
+                          &table->keys_in_use_for_order_by, limit, &key_nr,
+                          &query_point))
+    return false;
+
+  *knn_scan_info = KnnScanInfo{query_point, limit, /*limit_is_exact=*/false};
+  *key = key_nr;
+  return true;
+}
+
+AccessPath *new_knn_scan_path(THD *thd, TABLE *table, uint key,
+                              const KnnScanInfo *knn_scan_info,
+                              bool count_examined_rows) {
+  assert(knn_scan_info != nullptr);
+  return NewIndexKnnScanAccessPath(
+      thd, table, key, knn_scan_info->query_point, knn_scan_info->limit,
+      knn_scan_info->limit_is_exact, count_examined_rows);
+}
+
 bool is_deterministic_vdf(const Item *item) {
   item = item->real_item();
   if (item->type() != Item::FUNC_ITEM) return false;
@@ -137,61 +167,77 @@ bool is_deterministic_vdf(const Item *item) {
 }
 
 void disable_custom_keys_for_query(TABLE *table, bool all) {
+  // A custom index cannot provide the range locks needed by SERIALIZABLE, so
+  // it is not used for any access under that isolation level.
+  const bool serializable = current_thd->tx_isolation == ISO_SERIALIZABLE;
   for (uint key_nr = 0; key_nr < table->s->keys; ++key_nr) {
     if (table->key_info[key_nr].custom_index_context == nullptr) continue;
-    if (all || !(table->file->index_flags(key_nr, 0, true) & HA_READ_RANGE))
+    if (all || serializable ||
+        !(table->file->index_flags(key_nr, 0, true) & HA_READ_RANGE))
       table->keys_in_use_for_query.clear_bit(key_nr);
+    if (serializable) {
+      table->keys_in_use_for_order_by.clear_bit(key_nr);
+      table->keys_in_use_for_group_by.clear_bit(key_nr);
+    }
   }
 }
 
-bool try_knn_order(JOIN_TAB *tab, ORDER_with_src &order, int ref_key,
-                   const Key_map *map, ha_rows select_limit, bool no_changes,
-                   int *order_idx) {
+bool find_knn_order_key(THD *thd, TABLE *table, const ORDER *order,
+                        const Key_map *map, ha_rows select_limit, int *key_nr,
+                        Item **query_point) {
   // KNN requires a limit.
   if (select_limit == HA_POS_ERROR) return false;
 
-  // A KNN scan produces a top-K ranked order; GROUP BY aggregates and can
-  // reorder/collapse rows afterward, so it cannot be combined with a KNN
-  // scan used to satisfy ordering.
-  if (!tab->join()->group_list.empty()) return false;
-
   // KNN scans are not supported under SERIALIZABLE isolation because KNN
   // indexes cannot provide the required range-locking guarantees.
-  const enum_tx_isolation isolation = tab->join()->thd->tx_isolation;
+  const enum_tx_isolation isolation = thd->tx_isolation;
   if (isolation == ISO_SERIALIZABLE) return false;
 
   // A locking read using a KNN scan is unsafe for statement based replication,
   // but the logging format is decided before optimization and cannot be
   // changed here. So do not use KNN for locking reads logged as statements.
-  const THD *thd = tab->join()->thd;
-  if (tab->table()->reginfo.lock_type != TL_READ &&
+  if (table->reginfo.lock_type != TL_READ &&
       !thd->is_current_stmt_binlog_format_row() &&
       !thd->is_current_stmt_binlog_disabled())
     return false;
+
+  // ORDER direction must be ASC, and there must be a single ORDER BY
+  // expression: a KNN scan produces one ranked order, with no secondary
+  // sort key.
+  if (order == nullptr || order->next != nullptr) return false;
+  if (order->direction == ORDER_DESC) return false;
+
+  // The ORDER BY expression must be a deterministic VDF call with
+  // one field reference and one constant argument, returning REAL.
+  Item_field *field_arg = nullptr;
+  const auto *order_call =
+      knn_order_call(thd, *order->item, &field_arg, query_point);
+  if (order_call == nullptr) return false;
+
+  // The ordered field must have a KNN-capable index whose profile
+  // declares `order_call` as one of its functions.
+  *key_nr = find_knn_capable_key(field_arg->field, map, order_call);
+  return *key_nr >= 0;
+}
+
+bool try_knn_order(JOIN_TAB *tab, ORDER_with_src &order, int ref_key,
+                   const Key_map *map, ha_rows select_limit, bool no_changes,
+                   int *order_idx) {
+  // A KNN scan produces a top-K ranked order; GROUP BY aggregates and can
+  // reorder/collapse rows afterward, so it cannot be combined with a KNN
+  // scan used to satisfy ordering.
+  if (!tab->join()->group_list.empty()) return false;
 
   // TODO(villagesql-indexing): Consider replacing the existing index plan with
   // KNN based on cost analysis, similar to test_if_cheaper_ordering() called
   // from test_if_skip_sort_order().
   if (ref_key >= 0) return false;
 
-  // ORDER direction must be ASC, and there must be a single ORDER BY
-  // expression: a KNN scan produces one ranked order, with no secondary
-  // sort key.
-  if (order.order == nullptr || order.order->next != nullptr) return false;
-  if (order.order->direction == ORDER_DESC) return false;
-
-  // The ORDER BY expression must be a deterministic VDF call with
-  // one field reference and one constant argument, returning REAL.
-  Item_field *field_arg = nullptr;
+  int key_nr = -1;
   Item *query_point_arg = nullptr;
-  const auto *order_call = knn_order_call(tab->join()->thd, *order.order->item,
-                                          &field_arg, &query_point_arg);
-  if (order_call == nullptr) return false;
-
-  // The ordered field must have a KNN-capable index whose profile
-  // declares `order_call` as one of its functions.
-  const int key_nr = find_knn_capable_key(field_arg->field, map, order_call);
-  if (key_nr < 0) return false;
+  if (!find_knn_order_key(tab->join()->thd, tab->table(), order.order, map,
+                          select_limit, &key_nr, &query_point_arg))
+    return false;
 
   if (no_changes) return true;
 

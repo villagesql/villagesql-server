@@ -119,6 +119,7 @@
 #include "sql/visible_fields.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "villagesql/sql/optimizer.h"
 
 class COND_EQUAL;
 
@@ -580,10 +581,11 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
   bool reverse = false;
   bool used_key_is_modified = false;
   uint used_index;
+  KnnScanInfo knn_scan_info{};
   {
     ORDER_with_src order_src(order, ESC_ORDER_BY, /*const_optimized=*/true);
     used_index = get_index_for_order(&order_src, table, limit, range_scan,
-                                     &need_sort, &reverse);
+                                     &need_sort, &reverse, &knn_scan_info);
     if (range_scan != nullptr) {
       // May have been changed by get_index_for_order().
       type = calc_join_type(range_scan);
@@ -732,6 +734,10 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
                                           /*table_ref=*/nullptr,
                                           /*position=*/nullptr,
                                           /*count_examined_rows=*/false);
+        } else if (knn_scan_info.query_point != nullptr) {
+          path = villagesql::optimizer::new_knn_scan_path(
+              thd, table, used_index, &knn_scan_info,
+              /*count_examined_rows=*/false);
         } else {
           empty_record(table);
           path = NewIndexScanAccessPath(thd, table, used_index,
