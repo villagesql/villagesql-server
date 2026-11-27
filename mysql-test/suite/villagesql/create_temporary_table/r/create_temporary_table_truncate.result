@@ -1,0 +1,55 @@
+CREATE TABLE t (id INT PRIMARY KEY, c COMPLEX, v TVECTOR(3));
+INSERT INTO t VALUES (1, '(1,2)', '[1,2,3]');
+CREATE TEMPORARY TABLE tt (id INT, c COMPLEX, v TVECTOR(3));
+INSERT INTO tt SELECT id, c, v FROM t;
+TRUNCATE TABLE tt;
+SHOW CREATE TABLE tt;
+Table	Create Table
+tt	CREATE TEMPORARY TABLE `tt` (
+  `id` int DEFAULT NULL,
+  `c` vsql_complex.COMPLEX DEFAULT NULL,
+  `v` vsql_tvector.TVECTOR(3) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO tt SELECT id, c, v FROM t;
+INSERT INTO tt VALUES (2, '(3,4)', '[4,5,6]');
+SELECT id, c, v FROM tt ORDER BY id;
+id	c	v
+1	(1,2)	[1,2,3]
+2	(3,4)	[4,5,6]
+INSERT INTO tt VALUES (3, '(5,6)', '[1,2]');
+ERROR HY000: Incorrect TVECTOR value: '[1,2]' for column 'v' at row 1
+# A second TRUNCATE
+TRUNCATE TABLE tt;
+SHOW CREATE TABLE tt;
+Table	Create Table
+tt	CREATE TEMPORARY TABLE `tt` (
+  `id` int DEFAULT NULL,
+  `c` vsql_complex.COMPLEX DEFAULT NULL,
+  `v` vsql_tvector.TVECTOR(3) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO tt SELECT id, c, v FROM t;
+SELECT id, c, v FROM tt ORDER BY id;
+id	c	v
+1	(1,2)	[1,2,3]
+# OPTIMIZE TABLE rebuilds the table
+OPTIMIZE TABLE tt;
+Table	Op	Msg_type	Msg_text
+test.tt	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.tt	optimize	status	OK
+SHOW CREATE TABLE tt;
+Table	Create Table
+tt	CREATE TEMPORARY TABLE `tt` (
+  `id` int DEFAULT NULL,
+  `c` vsql_complex.COMPLEX DEFAULT NULL,
+  `v` vsql_tvector.TVECTOR(3) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO tt VALUES (2, '(3,4)', '[4,5,6]');
+SELECT id, c, v FROM tt ORDER BY id;
+id	c	v
+1	(1,2)	[1,2,3]
+2	(3,4)	[4,5,6]
+DROP TABLE t;
+# The truncated table still blocks UNINSTALL
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': type 'COMPLEX' is currently in use
+DROP TEMPORARY TABLE tt;

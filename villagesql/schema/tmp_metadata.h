@@ -33,6 +33,9 @@ namespace villagesql {
 */
 class TmpMetadata {
  public:
+  // Map from normalized ColumnKey string to owned TypeContext reference.
+  using Columns = std::map<std::string, std::shared_ptr<const TypeContext>>;
+
   TmpMetadata() = default;
 
   // Insert or update the TypeContext for a temporary column. The shared_ptr
@@ -53,23 +56,34 @@ class TmpMetadata {
 
   // Delete all metadata for a specific temporary table.
   void delete_table(const std::string &db_name, const std::string &table_name) {
+    extract_table(db_name, table_name);
+  }
+
+  // Remove all metadata for a specific temporary table and return it, still
+  // holding its TypeContext references, so it can be put back with restore().
+  Columns extract_table(const std::string &db_name,
+                        const std::string &table_name) {
     ColumnKeyPrefix prefix(db_name, table_name);
     const std::string &prefix_str = prefix.str();
 
+    Columns extracted;
     for (auto it = m_columns.begin(); it != m_columns.end();) {
       if (it->first.starts_with(prefix_str)) {
-        it = m_columns.erase(it);
+        extracted.insert(m_columns.extract(it++));
       } else {
         ++it;
       }
     }
+    return extracted;
   }
+
+  // Put back metadata returned by extract_table().
+  void restore(Columns &&columns) { m_columns.merge(columns); }
 
   bool empty() const { return m_columns.empty(); }
 
  private:
-  // Map from normalized ColumnKey string to owned TypeContext reference.
-  std::map<std::string, std::shared_ptr<const TypeContext>> m_columns;
+  Columns m_columns;
 };
 
 }  // namespace villagesql
