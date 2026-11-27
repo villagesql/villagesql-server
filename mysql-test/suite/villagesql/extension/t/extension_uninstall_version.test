@@ -14,12 +14,12 @@ UNINSTALL EXTENSION vsql_simple VERSION '9.9.9';
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 --echo # UNINSTALL with matching VERSION succeeds
-UNINSTALL EXTENSION vsql_simple VERSION '0.0.1';
+UNINSTALL EXTENSION vsql_simple VERSION '0.0.2';
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 --echo # UNINSTALL with VERSION when not installed fails as before
 --error ER_VILLAGESQL_GENERIC_ERROR
-UNINSTALL EXTENSION vsql_simple VERSION '0.0.1';
+UNINSTALL EXTENSION vsql_simple VERSION '0.0.2';
 
 --echo # Reinstall, then UNINSTALL without VERSION still works (backward compat)
 INSTALL EXTENSION vsql_simple;

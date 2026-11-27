@@ -5,13 +5,13 @@ description TEXT
 );
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	complex_col	vsql_complex	0.0.2	COMPLEX	{}
 INSERT INTO source_table VALUES (1, '(7.0,8.0)', 'source data');
 CREATE TABLE t1 (LIKE source_table);
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX	{}
-test	t1	complex_col	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	complex_col	vsql_complex	0.0.2	COMPLEX	{}
+test	t1	complex_col	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -29,7 +29,7 @@ id	complex_col	description
 DROP TABLE t1;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX	{}
+test	source_table	complex_col	vsql_complex	0.0.2	COMPLEX	{}
 DROP TABLE source_table;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters

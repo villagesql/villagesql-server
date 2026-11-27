@@ -8,7 +8,7 @@
 # Verify extension was installed by the init-file
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION
-vsql_complex	0.0.1
+vsql_complex	0.0.2
 # Verify extension is functional: create table with COMPLEX type
 CREATE TABLE init_ext_test (id INT, c COMPLEX);
 INSERT INTO init_ext_test VALUES (1, '(3.14,2.71)');

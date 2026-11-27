@@ -6,13 +6,13 @@ name VARCHAR(100)
 );
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test_db	source_complex	complex_field	vsql_complex	0.0.1	COMPLEX	{}
+test_db	source_complex	complex_field	vsql_complex	0.0.2	COMPLEX	{}
 INSERT INTO test_db.source_complex VALUES (1, '(17.0,18.0)', 'qualified');
 CREATE TABLE t1 LIKE test_db.source_complex;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t1	complex_field	vsql_complex	0.0.1	COMPLEX	{}
-test_db	source_complex	complex_field	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	complex_field	vsql_complex	0.0.2	COMPLEX	{}
+test_db	source_complex	complex_field	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -28,7 +28,7 @@ id	complex_field	name
 DROP TABLE t1;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test_db	source_complex	complex_field	vsql_complex	0.0.1	COMPLEX	{}
+test_db	source_complex	complex_field	vsql_complex	0.0.2	COMPLEX	{}
 DROP TABLE test_db.source_complex;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters

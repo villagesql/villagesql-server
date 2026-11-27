@@ -8,7 +8,7 @@ complex_field COMPLEX
 INSERT INTO complex_table VALUES (1, 'test', '(5.0,6.0)');
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test_complex_db2	complex_table	complex_field	vsql_complex	0.0.1	COMPLEX	{}
+test_complex_db2	complex_table	complex_field	vsql_complex	0.0.2	COMPLEX	{}
 USE test;
 DROP DATABASE IF EXISTS test_complex_db2;
 SELECT * FROM villagesql.custom_columns;

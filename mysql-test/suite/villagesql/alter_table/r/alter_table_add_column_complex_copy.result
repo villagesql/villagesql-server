@@ -14,7 +14,7 @@ db_name	table_name	column_name	extension_name	extension_version	type_name	type_p
 ALTER TABLE t1 ADD COLUMN value COMPLEX, ALGORITHM = COPY;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-test	t1	value	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	value	vsql_complex	0.0.2	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (

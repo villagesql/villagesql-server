@@ -4,7 +4,7 @@ call mtr.add_suppression("VEB expansion failed");
 Planted staging directory .tmp.<sha256> with a partial .so
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
-vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+vsql_complex	0.0.2	NULL	NULL	NULL	NULL
 CREATE TABLE test_staged (id INT PRIMARY KEY, c COMPLEX);
 INSERT INTO test_staged VALUES (1, '(1.5,2.5)');
 SELECT id, c FROM test_staged ORDER BY id;
@@ -33,7 +33,7 @@ Staging directories left behind: 0
 # Nothing was destroyed; retry now succeeds
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
-vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+vsql_complex	0.0.2	NULL	NULL	NULL	NULL
 CREATE TABLE test_staged (id INT PRIMARY KEY, c COMPLEX);
 INSERT INTO test_staged VALUES (1, '(1.5,2.5)');
 SELECT id, c FROM test_staged ORDER BY id;

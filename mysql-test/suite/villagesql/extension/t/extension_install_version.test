@@ -10,7 +10,7 @@ INSTALL EXTENSION vsql_simple VERSION '9.9.9';
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 --echo # INSTALL with matching VERSION succeeds
-INSTALL EXTENSION vsql_simple VERSION '0.0.1';
+INSTALL EXTENSION vsql_simple VERSION '0.0.2';
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
 UNINSTALL EXTENSION vsql_simple;
 

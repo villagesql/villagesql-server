@@ -13,8 +13,8 @@ FOREIGN KEY (user_id) REFERENCES users(id)
 );
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
-complex_relationships_db	orders	complex_metadata	vsql_complex	0.0.1	COMPLEX	{}
-complex_relationships_db	users	profile_data	vsql_complex	0.0.1	COMPLEX	{}
+complex_relationships_db	orders	complex_metadata	vsql_complex	0.0.2	COMPLEX	{}
+complex_relationships_db	users	profile_data	vsql_complex	0.0.2	COMPLEX	{}
 INSERT INTO users VALUES (1, 'John', '(1.0,1.0)');
 INSERT INTO orders VALUES (1, 1, '(2.0,3.0)');
 SHOW CREATE TABLE orders;
