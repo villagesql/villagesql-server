@@ -94,11 +94,18 @@ extern bool MaybeInjectCustomIndex(THD *thd, TABLE_SHARE &share, KEY *keyinfo,
 // it. had_custom_params is set to true when the SP has at least one
 // custom-typed param, false when it has none. Returns false on success, true
 // on error.
+// If injected_field_idx is given, it receives the field index of each
+// TypeContext appended to type_refs, in the same order; if generation is
+// given, it receives the victionary generation (VictionaryGeneration()) read
+// under the lock that looked up the params. A caller can keep both to
+// re-attach the same TypeContexts on later calls while the generation is
+// unchanged.
 extern bool InjectCustomSpParams(
     const char *db_name, const char *sp_name, const sp_pcontext *pctx,
     Field **fields, Bounds_checked_array<Item *> var_items,
     std::vector<std::shared_ptr<const TypeContext>> &type_refs,
-    bool *had_custom_params);
+    bool *had_custom_params, std::vector<uint> *injected_field_idx = nullptr,
+    uint64_t *generation = nullptr);
 
 // Builds a parameter string with fully qualified custom type names for all
 // parameters in root_ctx. If any parameter has a custom type, writes the result

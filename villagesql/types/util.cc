@@ -2766,7 +2766,8 @@ bool InjectCustomSpParams(
     const char *db_name, const char *sp_name, const sp_pcontext *pctx,
     Field **fields, Bounds_checked_array<Item *> var_items,
     std::vector<std::shared_ptr<const TypeContext>> &type_refs,
-    bool *had_custom_params) {
+    bool *had_custom_params, std::vector<uint> *injected_field_idx,
+    uint64_t *generation) {
   assert(had_custom_params != nullptr);
 
   // Null db/sp_name means there is nothing to inject — not an error.
@@ -2817,6 +2818,9 @@ bool InjectCustomSpParams(
     // TODO(villagesql-performance): consider ways in which we would not need to
     // grab victionary locks on every call.
     auto guard = vclient.get_read_lock();
+    // Every change to committed entries happens under the write lock, so the
+    // generation read here matches the entries read below.
+    if (generation != nullptr) *generation = VictionaryGeneration();
 
     auto sp_params = vclient.GetCustomSpParamsForSP(std::string(db_name),
                                                     std::string(sp_name));
@@ -2930,6 +2934,9 @@ bool InjectCustomSpParams(
       // the CALL — without this the victionary could drop the refcount to zero
       // and free the TypeContext while the fields still point to it.
       type_refs.push_back(std::move(tc_ref));
+      if (injected_field_idx != nullptr) {
+        injected_field_idx->push_back(m.field_idx);
+      }
     }
     return false;
   };

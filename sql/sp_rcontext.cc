@@ -45,6 +45,7 @@
 #include "sql/sql_list.h"
 #include "sql/sql_tmp_table.h"  // create_tmp_table_from_fields
 #include "template_utils.h"     // delete_container_pointers
+#include "villagesql/schema/victionary_client.h"
 #include "villagesql/types/util.h"
 
 class Query_expression;
@@ -150,18 +151,76 @@ bool sp_rcontext::maybe_inject_custom_sp_params() {
 
   if (!m_var_table) return false;
 
+  // Fast path for an SP with custom-typed params: re-attach the TypeContexts
+  // a previous CALL injected, if nothing in the victionary has changed since
+  // and every one of them still exists. Same effect as the injection below,
+  // without its locks, lookup, name matching and type-parameter parsing.
+  if (sp->m_vsql_custom_params_state == sp_head::VSQL_SP_PARAMS_HAS_CUSTOM &&
+      !sp->m_vsql_custom_params_cache.empty() &&
+      sp->m_vsql_custom_params_gen == villagesql::VictionaryGeneration() &&
+      !reattach_cached_custom_sp_params()) {
+    return false;
+  }
+
   bool had_custom_params = false;
+  const size_t refs_before = m_custom_type_refs.size();
+  std::vector<uint> injected_field_idx;
+  uint64_t generation = 0;
   bool err = villagesql::InjectCustomSpParams(
       sp->m_db.str, sp->m_name.str, m_root_parsing_ctx, m_var_table->field,
-      m_var_items, m_custom_type_refs, &had_custom_params);
+      m_var_items, m_custom_type_refs, &had_custom_params, &injected_field_idx,
+      &generation);
 
   if (!err) {
     sp->m_vsql_custom_params_state = had_custom_params
                                          ? sp_head::VSQL_SP_PARAMS_HAS_CUSTOM
                                          : sp_head::VSQL_SP_PARAMS_NO_CUSTOM;
+    // Remember what was injected for the next CALL of this sp_head.
+    sp->m_vsql_custom_params_cache.clear();
+    sp->m_vsql_custom_params_gen = 0;
+    if (had_custom_params &&
+        injected_field_idx.size() == m_custom_type_refs.size() - refs_before) {
+      sp->m_vsql_custom_params_cache.reserve(injected_field_idx.size());
+      for (size_t i = 0; i < injected_field_idx.size(); i++) {
+        sp->m_vsql_custom_params_cache.push_back(
+            {injected_field_idx[i], m_custom_type_refs[refs_before + i]});
+      }
+      sp->m_vsql_custom_params_gen = generation;
+    }
   }
 
   return err;
+}
+
+// VillageSQL: re-attaches the TypeContexts remembered in sp_head (see
+// maybe_inject_custom_sp_params). Returns true, with nothing attached or kept,
+// when one of them no longer exists; the caller then injects them again.
+bool sp_rcontext::reattach_cached_custom_sp_params() {
+  const auto &cache = sp->m_vsql_custom_params_cache;
+  const size_t refs_before = m_custom_type_refs.size();
+  m_custom_type_refs.reserve(refs_before + cache.size());
+  for (const auto &entry : cache) {
+    std::shared_ptr<const villagesql::TypeContext> tc_ref =
+        entry.type_context.lock();
+    if (!tc_ref) {
+      m_custom_type_refs.resize(refs_before);
+      return true;
+    }
+    m_custom_type_refs.push_back(std::move(tc_ref));
+  }
+  // Every TypeContext is held by m_custom_type_refs now; attach them in the
+  // same way InjectCustomSpParams does.
+  Field **fields = m_var_table->field;
+  for (size_t i = 0; i < cache.size(); i++) {
+    const villagesql::TypeContext *tc =
+        m_custom_type_refs[refs_before + i].get();
+    const uint idx = cache[i].field_idx;
+    if (fields[idx]) fields[idx]->set_type_context(tc);
+    if (m_var_items.array() && m_var_items[idx]) {
+      m_var_items[idx]->set_type_context(tc);
+    }
+  }
+  return false;
 }
 
 bool sp_rcontext::init_var_items(THD *thd) {
