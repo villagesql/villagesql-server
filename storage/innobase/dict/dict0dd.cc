@@ -5226,13 +5226,13 @@ dict_table_t *dd_open_table_one(dd::cache::Dictionary_client *client,
 
     ut_ad(root > 1);
     ut_ad(index->type & DICT_FTS || root != FIL_NULL ||
-          villagesql::innodb::Custom_index::is_custom(index) ||
-          dict_table_is_discarded(m_table));
+          index->is_custom_index || dict_table_is_discarded(m_table));
     ut_ad(id != 0);
     index->page = root;
     index->space = sid;
     index->id = id;
     index->trx_id = trx_id;
+    ut_ad(villagesql::innodb::Custom_index::check_root(index));
 
     /** Look up the spatial reference system in the
     dictionary. Since this may cause a table open to read the

@@ -147,6 +147,11 @@ class Custom_index {
   // Returns true if index has Custom_index runtime state.
   static bool is_custom(const dict_index_t *index);
 
+  // Returns true if index's root page is consistent with its storage
+  // properties: a custom index has a root page exactly when it has a mapping
+  // B-tree. Call once the root page is set.
+  static bool check_root(const dict_index_t *index);
+
   // Returns true if index is a KNN custom index.
   static bool is_knn(const dict_index_t *index);
 
