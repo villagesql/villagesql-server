@@ -15,14 +15,98 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <cstddef>
 #include <map>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include <villagesql/abi/types.h>
 #include <villagesql/vsql/type_params.h>
 
 namespace villagesql_unittest {
+
+// TypeParamsCache read without a lock: concurrent first uses of many
+// parameter strings, from several threads in different orders, must give
+// every thread the same entry (same address, right value) per string, keep
+// earlier entries valid while others are inserted, and run parse at most
+// once per thread per string. Run under the thread sanitizer to check the
+// lock-free read path.
+
+namespace {
+
+struct CacheParams {
+  int max_size;
+  std::string type;
+};
+
+std::atomic<long> g_cache_parses{0};
+
+CacheParams ParseCacheParams(const std::map<std::string, std::string> &m) {
+  g_cache_parses.fetch_add(1, std::memory_order_relaxed);
+  return CacheParams{std::stoi(m.at("max_size")), m.at("type")};
+}
+
+}  // namespace
+
+TEST(TypeParamsCacheConcurrentTest, SameEntryPerStringAcrossThreads) {
+  constexpr int kThreads = 8;
+  constexpr int kKeys = 200;  // more than the bucket count: chains are used
+  constexpr int kRounds = 5;
+  g_cache_parses = 0;
+  vsql::TypeParamsCache<CacheParams> cache;
+  cache.bind(&ParseCacheParams);
+
+  std::vector<std::string> sizes(kKeys);
+  for (int k = 0; k < kKeys; ++k) sizes[k] = std::to_string(k + 1);
+  std::vector<std::vector<const CacheParams *>> seen(
+      kThreads, std::vector<const CacheParams *>(kKeys, nullptr));
+  std::atomic<bool> bad{false};
+  std::vector<std::thread> threads;
+  for (int t = 0; t < kThreads; ++t) {
+    threads.emplace_back([&, t] {
+      for (int round = 0; round < kRounds; ++round) {
+        for (int i = 0; i < kKeys; ++i) {
+          const int k = (i * 7 + t * 13 + round) % kKeys;
+          const char *keys[2] = {"max_size", "type"};
+          const char *values[2] = {sizes[k].c_str(), "int32"};
+          vef_type_params_t raw{};
+          raw.keys = keys;
+          raw.values = values;
+          raw.count = 2;
+          const CacheParams &p = cache.get(raw);
+          if (p.max_size != k + 1 || p.type != "int32") bad = true;
+          if (seen[t][k] == nullptr) {
+            seen[t][k] = &p;
+          } else if (seen[t][k] != &p) {
+            bad = true;
+          }
+        }
+      }
+    });
+  }
+  for (std::thread &th : threads) th.join();
+
+  EXPECT_FALSE(bad.load());
+  for (int t = 1; t < kThreads; ++t) {
+    for (int k = 0; k < kKeys; ++k) EXPECT_EQ(seen[t][k], seen[0][k]);
+  }
+  EXPECT_GE(g_cache_parses.load(), kKeys);
+  EXPECT_LE(g_cache_parses.load(), static_cast<long>(kKeys) * kThreads);
+
+  // Unsorted raw params and the map overload reach the same entry.
+  const char *keys[2] = {"type", "max_size"};
+  const char *values[2] = {"int32", "7"};
+  vef_type_params_t raw{};
+  raw.keys = keys;
+  raw.values = values;
+  raw.count = 2;
+  EXPECT_EQ(&cache.get(raw), seen[0][6]);
+  const std::map<std::string, std::string> m{{"max_size", "7"},
+                                             {"type", "int32"}};
+  EXPECT_EQ(&cache.get(m, &ParseCacheParams), seen[0][6]);
+}
 
 // ===========================================================================
 // write_params_to

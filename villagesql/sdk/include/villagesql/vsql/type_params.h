@@ -17,6 +17,8 @@
 #define VILLAGESQL_VSQL_TYPE_PARAMS_H
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cassert>
 #include <cstring>
 #include <map>
@@ -101,15 +103,32 @@ class MaybeParams {
 // parse function.
 // TODO(villagesql-beta): remove this restriction.
 //
-// Thread-safe: concurrent readers do not block each other. Entries are only
-// evicted when the extension is uninstalled because type parameters are
-// immutable per type instantiation. Also the ABI does not currently have
+// Thread-safe: a cache hit takes no lock and writes no shared memory, so
+// concurrent VDF calls on many cores do not slow each other down. Even a
+// shared lock writes the lock word on every lock and unlock, so every caller
+// would write the same cache line. Only a miss takes a mutex. Entries are
+// only evicted when the extension is uninstalled, because type parameters
+// are immutable per type instantiation. Also the ABI does not currently have
 // a mechanism to know when a type is no longer used.
 template <typename T>
 class TypeParamsCache {
  public:
   using ParseFn = T (*)(const std::map<std::string, std::string> &);
   using ToStringsFn = void (*)(const T &, std::map<std::string, std::string> &);
+
+  TypeParamsCache() = default;
+  TypeParamsCache(const TypeParamsCache &) = delete;
+  TypeParamsCache &operator=(const TypeParamsCache &) = delete;
+  ~TypeParamsCache() {
+    for (auto &head : buckets_) {
+      const Node *n = head.load(std::memory_order_relaxed);
+      while (n != nullptr) {
+        const Node *next = n->next;
+        delete n;
+        n = next;
+      }
+    }
+  }
 
   // Binds the parse function used by the no-arg get() overload. Called once
   // during extension initialization (vef_register), before any VDF calls.
@@ -164,25 +183,51 @@ class TypeParamsCache {
  private:
   ParseFn parse_fn_ = nullptr;
   ToStringsFn to_strings_fn_ = nullptr;
-  mutable std::shared_mutex mu_;
-  // Values are heap-allocated so their addresses remain stable across rehashes.
-  // A rehash moves the unordered_map buckets, not the pointed-to T objects,
-  // so const T& references returned to callers are never invalidated.
-  std::unordered_map<std::string, std::unique_ptr<T>> cache_;
+
+  // Insert-only hash table that is read without a lock. A node is fully built
+  // before it is published at the head of its bucket chain, and it is never
+  // changed or freed until the cache itself is destroyed (extension unload).
+  // So a reader only does atomic loads and follows immutable pointers, and
+  // the const T& references returned to callers are never invalidated.
+  // Inserts are rare (once per distinct parameter string) and are serialized
+  // by insert_mu_. The bucket count is fixed: a table that never rehashes
+  // needs no reader/writer coordination. Chains only grow past one node when
+  // an extension is used with more distinct parameter strings than buckets.
+  // A lookup compares the key with each node in its chain, so raise
+  // kBucketCount if a type is used with many hundreds of parameter strings.
+  struct Node {
+    Node(std::string k, T v, const Node *n)
+        : key(std::move(k)), value(std::move(v)), next(n) {}
+    const std::string key;
+    const T value;
+    const Node *const next;
+  };
+  static constexpr size_t kBucketCount = 64;
+  std::array<std::atomic<const Node *>, kBucketCount> buckets_{};
+  std::mutex insert_mu_;
+
+  static size_t bucket_of(const std::string &key) {
+    return std::hash<std::string>{}(key) % kBucketCount;
+  }
 
   const T *lookup(const std::string &key) const {
-    std::shared_lock lock(mu_);
-    auto it = cache_.find(key);
-    if (it != cache_.end()) return it->second.get();
+    for (const Node *n =
+             buckets_[bucket_of(key)].load(std::memory_order_acquire);
+         n != nullptr; n = n->next) {
+      if (n->key == key) return &n->value;
+    }
     return nullptr;
   }
 
   const T &insert(std::string key, T value) {
-    std::unique_lock lock(mu_);
+    std::lock_guard<std::mutex> lock(insert_mu_);
     // Re-check: another thread may have inserted while we waited for the lock.
-    auto [it, inserted] =
-        cache_.emplace(std::move(key), std::make_unique<T>(std::move(value)));
-    return *it->second;
+    if (const T *hit = lookup(key)) return *hit;
+    std::atomic<const Node *> &head = buckets_[bucket_of(key)];
+    const Node *node = new Node(std::move(key), std::move(value),
+                                head.load(std::memory_order_relaxed));
+    head.store(node, std::memory_order_release);
+    return node->value;
   }
 
   static std::string key_from_map(
