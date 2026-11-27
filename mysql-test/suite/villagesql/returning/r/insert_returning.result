@@ -1,0 +1,32 @@
+#
+# INSERT ... RETURNING
+#
+CREATE TABLE t1(id INT PRIMARY KEY AUTO_INCREMENT, v VARCHAR(10));
+INSERT INTO t1(v) VALUES('a') RETURNING id, v, UPPER(v);
+id	v	UPPER(v)
+1	a	A
+INSERT INTO t1(id, v) VALUES(2, 'b'), (3, 'c') RETURNING *;
+id	v
+2	b
+3	c
+INSERT INTO t1 SET id=4, v='d' RETURNING id AS new_id, v;
+new_id	v
+4	d
+PREPARE stmt FROM "INSERT INTO t1(id, v) VALUES(5, 'e') RETURNING id, v";
+EXECUTE stmt;
+id	v
+5	e
+DEALLOCATE PREPARE stmt;
+CREATE TABLE t2 LIKE t1;
+INSERT INTO t2 SELECT * FROM t1 WHERE id IN (1, 2) ORDER BY id RETURNING id, v;
+id	v
+1	a
+2	b
+CREATE TABLE dup(id INT PRIMARY KEY, v VARCHAR(10));
+INSERT INTO dup VALUES(1, 'old');
+INSERT INTO dup VALUES(1, 'new') AS new_row
+ON DUPLICATE KEY UPDATE v=new_row.v
+RETURNING dup.id, dup.v;
+id	v
+1	new
+DROP TABLE dup, t2, t1;

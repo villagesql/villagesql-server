@@ -1,0 +1,78 @@
+DROP DATABASE IF EXISTS mysqltest;
+DROP USER IF EXISTS mysqltest_1@localhost;
+DROP TABLE IF EXISTS t1;
+SET @global_sql_mode_save= @@global.sql_mode;
+SET @session_sql_mode_save= @@session.sql_mode;
+SET GLOBAL sql_mode='';
+SET SESSION sql_mode='';
+CREATE TABLE t1 (a INT, b VARCHAR(32));
+INSERT INTO t1 VALUES
+(7,'ggggggg'), (1,'a'), (3,'ccc'), (4,'dddd'), (1,'A'),
+(2,'BB'), (4,'DDDD'), (5,'EEEEE'), (7,'GGGGGGG'), (2,'bb');
+CREATE USER mysqltest_1@localhost;
+CREATE DATABASE mysqltest;
+CREATE TABLE mysqltest.t1 SELECT * FROM t1;
+GRANT DELETE ON mysqltest.* TO mysqltest_1@localhost;
+GRANT SELECT(b) ON mysqltest.t1 TO mysqltest_1@localhost;
+GRANT SELECT ON test.* TO mysqltest_1@localhost;
+DELETE FROM mysqltest.t1 WHERE a=2 RETURNING b;
+ERROR 42000: SELECT command denied to user 'mysqltest_1'@'localhost' for column 'a' in table 't1'
+DELETE FROM mysqltest.t1 RETURNING b;
+b
+A
+BB
+DDDD
+EEEEE
+GGGGGGG
+a
+bb
+ccc
+dddd
+ggggggg
+SELECT * FROM mysqltest.t1;
+a	b
+INSERT INTO mysqltest.t1 SELECT * FROM t1;
+GRANT SELECT(a) ON mysqltest.t1 TO mysqltest_1@localhost;
+DELETE FROM mysqltest.t1 WHERE a=2 RETURNING b;
+b
+BB
+bb
+SELECT * FROM mysqltest.t1;
+a	b
+1	A
+1	a
+3	ccc
+4	DDDD
+4	dddd
+5	EEEEE
+7	GGGGGGG
+7	ggggggg
+INSERT INTO mysqltest.t1 SELECT * FROM t1;
+CREATE VIEW mysqltest.v1(a) AS SELECT a FROM mysqltest.t1;
+GRANT SELECT, INSERT ON mysqltest.t1 TO mysqltest_1@localhost;
+DELETE FROM mysqltest.v1;
+SELECT * FROM mysqltest.t1;
+a	b
+INSERT INTO mysqltest.t1 SELECT * FROM t1;
+DELETE FROM mysqltest.v1 RETURNING a;
+ERROR 42000: SELECT command denied to user 'mysqltest_1'@'localhost' for table 'v1'
+GRANT SELECT ON mysqltest.* TO mysqltest_1@localhost;
+DELETE FROM mysqltest.v1 RETURNING a;
+a
+1
+1
+2
+2
+3
+4
+4
+5
+7
+7
+SELECT * FROM mysqltest.t1;
+a	b
+DROP DATABASE mysqltest;
+DROP USER mysqltest_1@localhost;
+DROP TABLE t1;
+SET GLOBAL sql_mode=@global_sql_mode_save;
+SET SESSION sql_mode=@session_sql_mode_save;

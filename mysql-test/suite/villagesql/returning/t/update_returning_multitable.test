@@ -1,0 +1,48 @@
+--echo #
+--echo # Multi-table (JOINed) UPDATE ... RETURNING
+--echo #
+--echo # RETURNING is supported for a JOINed UPDATE when exactly one table is
+--echo # updated. The RETURNING list may reference columns of the joined
+--echo # (non-updated) tables. It works whether the updated table is updated on
+--echo # the fly (immediate) or via the buffered two-pass path: this test's tiny
+--echo # tables produce the immediate plan; update_returning_buffered covers the
+--echo # buffered plan (large inner updated table, the NEWORD shape). Only a
+--echo # genuine multi-TARGET update (more than one updated table) is rejected.
+--echo #
+
+CREATE TABLE stock(s_i_id INT PRIMARY KEY, s_qty INT, s_dist CHAR(4));
+CREATE TABLE item(i_id INT PRIMARY KEY, i_price DECIMAL(6,2));
+INSERT INTO stock VALUES (1, 100, 'aaaa'), (2, 200, 'bbbb'), (3, 300, 'cccc');
+INSERT INTO item VALUES (1, 9.99), (2, 5.55), (3, 1.01);
+
+--echo # --- JOINed UPDATE: only `stock` is updated; RETURNING reads the new
+--echo # --- stock value AND the joined item price. Rows come back to the client.
+--sorted_result
+UPDATE stock JOIN item ON item.i_id = stock.s_i_id
+SET s_qty = s_qty - 10
+WHERE stock.s_i_id <= 2
+RETURNING s_i_id, s_qty AS new_qty, OLD_VALUE(s_qty) AS old_qty,
+          i_price, s_dist;
+
+--echo # --- Same JOINed UPDATE, captured INTO JSON, then re-expanded with
+--echo # --- JSON_TABLE (the NEWORD producer/consumer shape).
+UPDATE stock JOIN item ON item.i_id = stock.s_i_id
+SET s_qty = s_qty - 10
+WHERE stock.s_i_id = 3
+RETURNING s_i_id, s_qty AS new_qty, i_price, s_dist INTO JSON @lines;
+SELECT s_i_id, new_qty, price, dist
+FROM JSON_TABLE(@lines, '$[*]' COLUMNS(
+       s_i_id  INT          PATH '$.s_i_id',
+       new_qty INT          PATH '$.new_qty',
+       price   DECIMAL(6,2) PATH '$.i_price',
+       dist    CHAR(4)      PATH '$.s_dist')) jt
+ORDER BY s_i_id;
+
+--echo # --- A genuinely multi-table update (both tables written) is still
+--echo # --- rejected with RETURNING.
+--error ER_NOT_SUPPORTED_YET
+UPDATE stock JOIN item ON item.i_id = stock.s_i_id
+SET s_qty = s_qty - 1, i_price = i_price + 1
+RETURNING s_i_id;
+
+DROP TABLE stock, item;

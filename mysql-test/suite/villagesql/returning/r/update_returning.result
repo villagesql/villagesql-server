@@ -1,0 +1,39 @@
+#
+# UPDATE ... RETURNING
+#
+CREATE TABLE t1(id INT PRIMARY KEY, a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES(1, 10, 'aa'), (2, 20, 'bb'), (3, 30, 'cc');
+UPDATE t1 SET a=a+10 WHERE id <= 2 ORDER BY id
+RETURNING id, a, OLD_VALUE(a) AS old_a, b;
+id	a	old_a	b
+1	20	10	aa
+2	30	20	bb
+CREATE TRIGGER t1_bu BEFORE UPDATE ON t1
+FOR EACH ROW SET NEW.b=UPPER(NEW.b);
+UPDATE t1 SET b='z' WHERE id=3
+RETURNING id, b, OLD_VALUE(b) AS old_b;
+id	b	old_b
+3	Z	cc
+DROP TRIGGER t1_bu;
+PREPARE stmt FROM
+"UPDATE t1 SET a=a+1 WHERE id=2 RETURNING id, a, OLD_VALUE(a) AS old_a";
+EXECUTE stmt;
+id	a	old_a
+2	31	30
+DEALLOCATE PREPARE stmt;
+UPDATE t1 SET a=NULL WHERE id=1
+RETURNING OLD_VALUE(a) AS old, a AS new;
+old	new
+20	NULL
+# Interleaving OLD_VALUE(a) with the new value of the same column, and
+# reading the old value more than once, must not leave the field pointing
+# at the old-row image: each item reads its own image independently.
+UPDATE t1 SET a=100 WHERE id=2
+RETURNING a AS new1, OLD_VALUE(a) AS old1, a AS new2, OLD_VALUE(a) AS old2;
+new1	old1	new2	old2
+100	31	100	31
+SELECT OLD_VALUE(a) FROM t1;
+ERROR HY000: Incorrect usage of OLD_VALUE and non-UPDATE
+UPDATE t1 SET a=1 RETURNING OLD_VALUE(nope);
+ERROR 42S22: Unknown column 'nope' in 'field list'
+DROP TABLE t1;
