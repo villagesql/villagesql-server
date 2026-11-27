@@ -227,6 +227,7 @@ class FuncBuilder {
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
     next.bind_ = bind_;
+    next.has_bind_ = has_bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -252,6 +253,7 @@ class FuncBuilder {
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
     next.bind_ = bind_;
+    next.has_bind_ = has_bind_;
     return next;
   }
 
@@ -273,6 +275,7 @@ class FuncBuilder {
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
     next.bind_ = bind_;
+    next.has_bind_ = has_bind_;
     return next;
   }
 
@@ -334,6 +337,7 @@ class FuncBuilder {
                   "bind_and_check_types<Hook>(): Hook must be void(BindArgs, "
                   "BindResult). Raw ABI signatures are not accepted.");
     bind_ = &detail::typed_bind_wrapper<Hook>;
+    has_bind_ = true;
     return *this;
   }
 
@@ -351,6 +355,7 @@ class FuncBuilder {
     next.postrun_ = postrun_;
     next.deterministic_ = deterministic_;
     next.bind_ = bind_;
+    next.has_bind_ = has_bind_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -463,6 +468,7 @@ class FuncBuilder {
     meta.prerun = prerun_;
     meta.postrun = postrun_;
     meta.bind = bind_;
+    meta.has_bind = has_bind_;
     meta.return_type = detail::to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
@@ -485,7 +491,8 @@ class FuncBuilder {
         prerun_(nullptr),
         postrun_(nullptr),
         deterministic_(false),
-        bind_(nullptr) {}
+        bind_(nullptr),
+        has_bind_(false) {}
 
   const char *name_;
   const char *return_type_;
@@ -496,6 +503,7 @@ class FuncBuilder {
   vef_postrun_func_t postrun_;
   bool deterministic_;
   vef_bind_types_func_t bind_;
+  bool has_bind_;
 
   template <auto F, size_t M, ParamMode N, bool HP>
   friend class FuncBuilder;

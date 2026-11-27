@@ -310,7 +310,8 @@ struct FuncWithMetadata {
         is_varargs(false),
         check_params_cache_bound(nullptr),
         check_signature(nullptr),
-        bind(nullptr) {}
+        bind(nullptr),
+        has_bind(false) {}
 
   vef_vdf_func_t f;
   vef_prerun_func_t prerun;
@@ -331,6 +332,7 @@ struct FuncWithMetadata {
   const char *(*check_signature)(const vef_type_t *, size_t,
                                  const vef_type_t &);
   vef_bind_types_func_t bind;
+  bool has_bind;
 };
 
 // Extracts the params type P from a type operation function pointer,
@@ -1280,6 +1282,10 @@ struct StaticFuncDesc {
   const char *(*check_signature_)(const vef_type_t *, size_t,
                                   const vef_type_t &);
   vef_bind_types_func_t bind_;
+  // Set together with bind_. required_protocol() reads this instead of
+  // comparing bind_ to nullptr. This comparison is rejected by GCC
+  // in a constant expression when sanitizers are enabled.
+  bool has_bind_;
 
   constexpr const char *name() const { return name_; }
   // For varargs: reports VEF_PARAM_VARARGS so materialize_func_desc writes
@@ -1293,7 +1299,7 @@ struct StaticFuncDesc {
   // protocol-1 fallback, so a varargs VDF cannot run on protocol 1.
   // bind_and_check_types and VEF_TYPE_BINARY exist from VEF_PROTOCOL_5.
   constexpr vef_protocol_t required_protocol() const {
-    if (max_result_length_ > 0 || bind_ != nullptr || uses_binary()) {
+    if (max_result_length_ > 0 || has_bind_ || uses_binary()) {
       return VEF_PROTOCOL_5;
     }
     return is_varargs_ ? VEF_PROTOCOL_3 : VEF_PROTOCOL_1;
@@ -1325,6 +1331,7 @@ struct StaticFuncDesc {
   constexpr vef_vdf_clear_func_t clear() const { return clear_; }
   constexpr vef_vdf_accumulate_func_t accumulate() const { return accumulate_; }
   constexpr vef_bind_types_func_t bind() const { return bind_; }
+  constexpr bool has_bind() const { return has_bind_; }
 
   constexpr StaticFuncDesc(const char *name, const FuncWithMetadata &meta)
       : name_(name),
@@ -1341,7 +1348,8 @@ struct StaticFuncDesc {
         is_varargs_(meta.is_varargs),
         check_params_cache_bound_(meta.check_params_cache_bound),
         check_signature_(meta.check_signature),
-        bind_(meta.bind) {
+        bind_(meta.bind),
+        has_bind_(meta.has_bind) {
     for (size_t i = 0; i < NumParams && i < meta.num_params; ++i) {
       params_[i] = meta.param_types[i];
     }
