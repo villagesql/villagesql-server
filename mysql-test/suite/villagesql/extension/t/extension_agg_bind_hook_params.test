@@ -1,0 +1,48 @@
+# AggFuncBuilder::bind_and_check_types<Hook>() (SDK): an aggregate VDF can
+# declare a bind hook that sets its return type's parameters.
+#
+# Fixture: vsql_test_only.lenparam_count(INT) counts non-NULL rows and returns
+# LENIENT_PARAM_TYPE. Its argument is INT, so no built-in rule can give the
+# result parameters; its hook sets length=7. The checks below show the result
+# carries that parameter, directly, through a table and a typed variable, and
+# through PREPARE/EXECUTE (where the hook runs at every EXECUTE).
+
+INSTALL EXTENSION vsql_test_only;
+
+CREATE TABLE src (id INT PRIMARY KEY, x INT);
+INSERT INTO src VALUES (1, 10), (2, NULL), (3, 30);
+
+--echo # The aggregate runs: two non-NULL rows.
+SELECT vsql_test_only.lenparam_count(x) AS c FROM src;
+
+--echo # The result type carries the parameter the hook set (length=7).
+CREATE TABLE t_ctas AS SELECT vsql_test_only.lenparam_count(x) AS c FROM src;
+SHOW CREATE TABLE t_ctas;
+SELECT c FROM t_ctas;
+
+--echo # A variable with the same parameters accepts the value.
+delimiter //;
+CREATE PROCEDURE p_same()
+BEGIN
+  DECLARE v vsql_test_only.LENIENT_PARAM_TYPE('length=7');
+  SELECT vsql_test_only.lenparam_count(x) INTO v FROM src;
+  SELECT v;
+END//
+delimiter ;//
+CALL p_same();
+
+--echo # Grouped: one result per group, each with the hook's parameters.
+SELECT id > 1 AS g, vsql_test_only.lenparam_count(x) AS c
+  FROM src GROUP BY g ORDER BY g;
+
+--echo # Through PREPARE/EXECUTE, executed twice.
+PREPARE s FROM 'SELECT vsql_test_only.lenparam_count(x) AS c FROM src WHERE id <= ?';
+SET @n = 1;
+EXECUTE s USING @n;
+SET @n = 3;
+EXECUTE s USING @n;
+DEALLOCATE PREPARE s;
+
+DROP PROCEDURE p_same;
+DROP TABLE t_ctas, src;
+UNINSTALL EXTENSION vsql_test_only;

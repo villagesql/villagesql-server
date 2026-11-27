@@ -1,0 +1,47 @@
+INSTALL EXTENSION vsql_test_only;
+CREATE TABLE src (id INT PRIMARY KEY, x INT);
+INSERT INTO src VALUES (1, 10), (2, NULL), (3, 30);
+# The aggregate runs: two non-NULL rows.
+SELECT vsql_test_only.lenparam_count(x) AS c FROM src;
+c
+(2)
+# The result type carries the parameter the hook set (length=7).
+CREATE TABLE t_ctas AS SELECT vsql_test_only.lenparam_count(x) AS c FROM src;
+SHOW CREATE TABLE t_ctas;
+Table	Create Table
+t_ctas	CREATE TABLE `t_ctas` (
+  `c` vsql_test_only.LENIENT_PARAM_TYPE(7) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT c FROM t_ctas;
+c
+(2)
+# A variable with the same parameters accepts the value.
+CREATE PROCEDURE p_same()
+BEGIN
+DECLARE v vsql_test_only.LENIENT_PARAM_TYPE('length=7');
+SELECT vsql_test_only.lenparam_count(x) INTO v FROM src;
+SELECT v;
+END//
+CALL p_same();
+v
+(2)
+# Grouped: one result per group, each with the hook's parameters.
+SELECT id > 1 AS g, vsql_test_only.lenparam_count(x) AS c
+FROM src GROUP BY g ORDER BY g;
+g	c
+0	(1)
+1	(1)
+# Through PREPARE/EXECUTE, executed twice.
+PREPARE s FROM 'SELECT vsql_test_only.lenparam_count(x) AS c FROM src WHERE id <= ?';
+SET @n = 1;
+EXECUTE s USING @n;
+c
+(1)
+SET @n = 3;
+EXECUTE s USING @n;
+c
+(2)
+DEALLOCATE PREPARE s;
+DROP PROCEDURE p_same;
+DROP TABLE t_ctas, src;
+UNINSTALL EXTENSION vsql_test_only;
