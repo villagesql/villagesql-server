@@ -2085,6 +2085,8 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <index_with_param> index_with_option
 %type <index_with_params> index_with_option_list
+%type <ulong_num> index_with_integer
+%type <lexer.lex_str> index_with_decimal
 
 %type <alter_table_algorithm> alter_algorithm_option_value
         alter_algorithm_option
@@ -7894,13 +7896,22 @@ index_with_option_list:
         ;
 
 index_with_option:
-          ident EQ ulong_num
+          ident EQ index_with_integer
           {
             $$= NEW_PTN IndexWithParam();
             if (!$$) MYSQL_YYABORT;
             $$->key= to_lex_cstring($1);
             $$->value.num= $3;
             $$->is_string= false;
+          }
+        | ident EQ index_with_decimal
+          {
+            // A decimal is passed as written, the same as a quoted value.
+            $$= NEW_PTN IndexWithParam();
+            if (!$$) MYSQL_YYABORT;
+            $$->key= to_lex_cstring($1);
+            $$->value.str= to_lex_cstring($3);
+            $$->is_string= true;
           }
         | ident EQ TEXT_STRING_sys
           {
@@ -7918,6 +7929,19 @@ index_with_option:
             $$->value.str= to_lex_cstring($3);
             $$->is_string= true;
           }
+        ;
+
+// A whole number. Unlike ulong_num, a decimal or float is not truncated to one.
+index_with_integer:
+          NUM           { int error; $$= (ulong) my_strtoll10($1.str, nullptr, &error); }
+        | HEX_NUM       { $$= (ulong) my_strtoll($1.str, nullptr, 16); }
+        | LONG_NUM      { int error; $$= (ulong) my_strtoll10($1.str, nullptr, &error); }
+        | ULONGLONG_NUM { int error; $$= (ulong) my_strtoll10($1.str, nullptr, &error); }
+        ;
+
+index_with_decimal:
+          DECIMAL_NUM
+        | FLOAT_NUM
         ;
 
 /*

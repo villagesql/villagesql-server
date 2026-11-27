@@ -1,0 +1,39 @@
+# An unquoted decimal or float value in a custom index WITH (...) clause
+# reaches the extension's options parser as written, the same as the quoted
+# value.
+
+--disable_query_log
+call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* VillageSQL: Error parsing custom index options");
+--enable_query_log
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+--echo # The parser takes the value as written
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw)
+  WITH (label = 1.5);
+SHOW CREATE TABLE t;
+DROP INDEX idx ON t;
+
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw)
+  WITH (label = 2.5e3);
+SHOW CREATE TABLE t;
+DROP INDEX idx ON t;
+
+--echo # M must be an integer, so a decimal is rejected, quoted or not
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = '16.5');
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16.5);
+
+--echo # An integer is unchanged
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

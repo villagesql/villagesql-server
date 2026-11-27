@@ -3,7 +3,7 @@
 # Covers:
 #   - USING EXTENDED(type_name)             -- unqualified type
 #   - USING EXTENDED(extension.type_name)   -- qualified extension.type
-#   - WITH (key = ulong_num)                -- numeric parameter
+#   - WITH (key = integer)                  -- numeric parameter
 #   - WITH (key = 'string')                 -- quoted string parameter
 #   - WITH (key = ident)                    -- unquoted identifier parameter
 #   - WITH (k1 = v1, k2 = v2, ...)         -- multiple parameters
@@ -30,7 +30,7 @@ SHOW CREATE TABLE t;
 DROP TABLE t;
 CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
 
-# USING EXTENDED + WITH -- numeric parameter (ulong_num path)
+# USING EXTENDED + WITH -- numeric parameter
 CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16);
 SHOW CREATE TABLE t;
 

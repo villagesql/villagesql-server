@@ -1,0 +1,45 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+# The parser takes the value as written
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw)
+WITH (label = 1.5);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`label` = '1.5')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP INDEX idx ON t;
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw)
+WITH (label = 2.5e3);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`label` = '2.5e3')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP INDEX idx ON t;
+# M must be an integer, so a decimal is rejected, quoted or not
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = '16.5');
+ERROR HY000: InnoDB: Custom type operation failed. See server error log for details.
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16.5);
+ERROR HY000: InnoDB: Custom type operation failed. See server error log for details.
+# An integer is unchanged
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int NOT NULL,
+  `a` vsql_index_test.dummy_type_vector DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx` (`a` `vsql_index_test`.`dummy_profile_hnsw_l2`) USING EXTENDED(`vsql_index_test`.`dummy_index_hnsw`) WITH (`m` = 16)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
