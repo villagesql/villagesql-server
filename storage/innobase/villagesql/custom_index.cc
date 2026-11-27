@@ -48,6 +48,7 @@
 #include "storage/innobase/include/row0row.h"
 #include "storage/innobase/include/row0sel.h"
 #include "storage/innobase/include/row0vers.h"
+#include "storage/innobase/include/trx0sys.h"
 #include "storage/innobase/include/univ.i"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/index_context.h"
@@ -373,6 +374,14 @@ static bool vef_index_trx_is_visible_impl(vef_index_ref_t index_ref,
                                index->table->name);
 }
 
+// Checks whether the read-write transaction trx_ref (a transaction id) is
+// still active.
+static bool vef_index_trx_is_active_impl(vef_index_ref_t,
+                                         vef_storage_trx_ref_t trx_ref) {
+  if (trx_ref == 0) return false;
+  return trx_rw_is_active(static_cast<trx_id_t>(trx_ref), false) != nullptr;
+}
+
 // Calls intf.parse to validate the WITH (...) parameters. Allocates the
 // options struct on index->heap, writes the parsed result into it, and sets
 // *options_out to point to it. No-op (leaves *options_out unchanged) when
@@ -422,6 +431,7 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->helper_fn = vef_index_helper_fn_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
   ctx->trx_is_visible_fn = vef_index_trx_is_visible_impl;
+  ctx->trx_is_active_fn = vef_index_trx_is_active_impl;
   ctx->key_is_desc_fn = vef_index_key_is_desc_impl;
   ctx->options = nullptr;
   ctx->is_unique = dict_index_is_unique(index) ? 1 : 0;
