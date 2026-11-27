@@ -7122,9 +7122,15 @@ type_conversion_status Item_string::save_in_field_inner(Field *field,
 
     // Now re-cache the new version. The repertoire must match the encoded
     // bytes, not the original literal.
-    fixed = false;
-    init(encoded->ptr(), encoded->length(), &my_charset_bin,
-         collation.derivation, my_charset_repertoire(&my_charset_bin));
+    // The encoded bytes are in the field's TypeEncoder buffer, which lives on
+    // the field's table and can be freed before this Item: e.g. a stored
+    // routine's DEFAULT literal outlives the variable table of the CALL that
+    // encoded it. Keep a private copy. The literal's name is left unchanged.
+    if (str_value.copy(encoded->ptr(), encoded->length(), &my_charset_bin))
+      return TYPE_ERR_OOM;
+    collation.set(&my_charset_bin, collation.derivation,
+                  my_charset_repertoire(&my_charset_bin));
+    max_length = static_cast<uint32>(encoded->length());
   }
   String *result = val_str(&str_value);
   return save_str_value_in_field(field, result);

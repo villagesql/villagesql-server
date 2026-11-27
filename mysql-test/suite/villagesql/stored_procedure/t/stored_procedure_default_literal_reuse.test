@@ -1,0 +1,103 @@
+# A text literal saved into a custom-type field is encoded once and the
+# literal keeps the encoded bytes. They must stay valid as long as the
+# literal: a stored routine's DEFAULT literal outlives the variable table of
+# the CALL that encoded it, and a prepared statement's literal outlives the
+# table it was first stored into (FLUSH TABLES between executions). Every
+# CALL and EXECUTE below must return the same value as the first one.
+
+INSTALL EXTENSION vsql_complex;
+INSTALL EXTENSION vsql_tarray_test;
+
+--echo #
+--echo # Stored procedure, COMPLEX variable with a DEFAULT literal.
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_c()
+BEGIN
+  DECLARE c COMPLEX DEFAULT '(1.5,2.5)';
+  SELECT c;
+END//
+delimiter ;//
+CALL p_c();
+CALL p_c();
+CALL p_c();
+CALL p_c();
+CALL p_c();
+
+--echo #
+--echo # Stored procedure, COMPLEX variable with a DEFAULT literal, modified.
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_a()
+BEGIN
+  DECLARE a COMPLEX DEFAULT '(1,2)';
+  SELECT a;
+  SET a = '(7,8)';
+  SELECT a;
+END//
+delimiter ;//
+CALL p_a();
+CALL p_a();
+CALL p_a();
+CALL p_a();
+
+--echo #
+--echo # Stored procedure, parameterized TARRAY variables with DEFAULT literals,
+--echo # one of them modified.
+--echo #
+
+delimiter //;
+CREATE PROCEDURE p_t()
+BEGIN
+  DECLARE a vsql_tarray_test.TARRAY('type=int16,max_size=16') DEFAULT '[1,2]';
+  DECLARE e vsql_tarray_test.TARRAY('type=int16,max_size=16') DEFAULT '[3]';
+  SET a = vsql_tarray_test.tarray_concat(a, e);
+  SELECT a, vsql_tarray_test.tarray_dim(a) AS len;
+END//
+delimiter ;//
+CALL p_t();
+CALL p_t();
+CALL p_t();
+CALL p_t();
+
+--echo #
+--echo # Stored function, called once per row.
+--echo #
+
+delimiter //;
+CREATE FUNCTION f_c(n INT) RETURNS INT DETERMINISTIC
+BEGIN
+  DECLARE c COMPLEX DEFAULT '(3.0,4.0)';
+  RETURN n;
+END//
+delimiter ;//
+CREATE TABLE t_n (n INT PRIMARY KEY);
+INSERT INTO t_n VALUES (1), (2), (3), (4);
+SELECT n, f_c(n) AS r FROM t_n ORDER BY n;
+DROP TABLE t_n;
+
+--echo #
+--echo # Prepared INSERT of a literal into a custom column, FLUSH TABLES between
+--echo # executions.
+--echo #
+
+CREATE TABLE t_c (id INT AUTO_INCREMENT PRIMARY KEY, c COMPLEX);
+PREPARE s FROM 'INSERT INTO t_c (c) VALUES (''(5.5,6.5)'')';
+EXECUTE s;
+FLUSH TABLES;
+EXECUTE s;
+FLUSH TABLES;
+EXECUTE s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT id, c FROM t_c ORDER BY id;
+DROP TABLE t_c;
+
+DROP PROCEDURE p_c;
+DROP PROCEDURE p_a;
+DROP PROCEDURE p_t;
+DROP FUNCTION f_c;
+UNINSTALL EXTENSION vsql_tarray_test;
+UNINSTALL EXTENSION vsql_complex;
