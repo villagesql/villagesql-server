@@ -146,41 +146,24 @@ std::vector<const SpParamEntry *> VictionaryClient::GetCustomSpParamsForSP(
 void VictionaryClient::commit_all_tables(THD *thd) {
   if (!m_initialized.load() || !thd) return;
 
+  // Every transaction commit reaches this point. Without pending operations
+  // there is nothing to apply, so do not take the global write lock.
+  if (!has_uncommitted_operations()) return;
+
   auto guard = get_write_lock();
 
-  m_properties.commit(thd);
-  m_columns.commit(thd);
-  m_sp_params.commit(thd);
-  m_extensions.commit(thd);
-  m_type_descriptors.commit(thd);
-  m_extension_descriptors.commit(thd);
-  m_type_contexts.commit(thd);
-  m_funcs.commit(thd);
-  m_index_contexts.commit(thd);
-  m_custom_indexes.commit(thd);
-  m_custom_index_columns.commit(thd);
-  m_index_type_descriptors.commit(thd);
-  m_index_profile_descriptors.commit(thd);
+  for_each_table([&](auto &table) { table.commit(thd); });
 }
 
 void VictionaryClient::rollback_all_tables(THD *thd) {
   if (!m_initialized.load() || !thd) return;
 
+  // See commit_all_tables(): nothing pending means nothing to discard.
+  if (!has_uncommitted_operations()) return;
+
   auto guard = get_write_lock();
 
-  m_properties.rollback(thd);
-  m_columns.rollback(thd);
-  m_sp_params.rollback(thd);
-  m_extensions.rollback(thd);
-  m_type_descriptors.rollback(thd);
-  m_extension_descriptors.rollback(thd);
-  m_type_contexts.rollback(thd);
-  m_funcs.rollback(thd);
-  m_index_contexts.rollback(thd);
-  m_custom_indexes.rollback(thd);
-  m_custom_index_columns.rollback(thd);
-  m_index_type_descriptors.rollback(thd);
-  m_index_profile_descriptors.rollback(thd);
+  for_each_table([&](auto &table) { table.rollback(thd); });
 }
 
 VictionaryClient::Savepoint VictionaryClient::savepoint_all_tables(
@@ -397,19 +380,7 @@ void VictionaryClient::clear_all_tables() {
 
   auto guard = get_write_lock();
 
-  m_properties.clear();
-  m_columns.clear();
-  m_sp_params.clear();
-  m_extensions.clear();
-  m_type_descriptors.clear();
-  m_extension_descriptors.clear();
-  m_type_contexts.clear();
-  m_funcs.clear();
-  m_index_contexts.clear();
-  m_custom_indexes.clear();
-  m_custom_index_columns.clear();
-  m_index_type_descriptors.clear();
-  m_index_profile_descriptors.clear();
+  for_each_table([&](auto &table) { table.clear(); });
 
   LogVSQL(INFORMATION_LEVEL, "Cleared all system table metadata");
 }
