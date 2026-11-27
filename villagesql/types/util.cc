@@ -88,6 +88,18 @@ static const char *ER_INCOMPARABLE_TYPES =
 static const char *ER_INCOMPATIBLE_TYPES =
     "Cannot compare values of incompatible types '%s' and '%s'";
 
+// The TypeContext key of a type with these parameters. The table-open, read
+// lock and write lock paths all build it here, so their keys cannot drift
+// apart (a drifted key would make the read-lock lookup always miss and fall
+// back to the write lock).
+static TypeContextKey MakeTypeContextKey(const TypeDescriptor &descriptor,
+                                         const TypeParameters &parameters) {
+  TypeDescriptorKey type_descriptor_key(descriptor.type_name(),
+                                        descriptor.extension_name(),
+                                        descriptor.extension_version());
+  return TypeContextKey(type_descriptor_key, parameters);
+}
+
 // Verify that the backing Field's length matches the TypeContext's
 // field_buffer_length.
 static bool CheckFieldLengthMatchesType(const Field *field,
@@ -204,7 +216,8 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
                      validation_error.c_str());
     return true;
   }
-  TypeContextKey type_context_key(type_descriptor_key, parameters);
+  TypeContextKey type_context_key =
+      MakeTypeContextKey(*type_descriptor, parameters);
 
   const TypeContext *tc = vclient.type_contexts().acquire_or_create(
       type_context_key, share.mem_root, type_descriptor);
@@ -420,10 +433,7 @@ bool acquire_or_create_type_context_locked(VictionaryClient &vclient,
     return true;
   }
 
-  TypeDescriptorKey type_descriptor_key(descriptor->type_name(),
-                                        descriptor->extension_name(),
-                                        descriptor->extension_version());
-  TypeContextKey type_context_key(type_descriptor_key, parameters);
+  TypeContextKey type_context_key = MakeTypeContextKey(*descriptor, parameters);
 
   result = vclient.type_contexts().acquire_or_create(type_context_key, mem_root,
                                                      descriptor);
@@ -469,15 +479,41 @@ bool AcquireOrCreateTypeContext(const TypeDescriptor *descriptor,
 // Returns false on success and true on failure. If the type isn't known the
 // function will return false (success), but the result will be nullptr. The
 // mem_root is used to scope the cleanup of the TypeContext.
-static bool ResolveTypeToContext(std::string_view extension_name,
-                                 std::string_view type_name,
-                                 const TypeParameters &parameters,
-                                 MEM_ROOT &mem_root,
-                                 const TypeContext *&result) {
+bool ResolveTypeToContext(std::string_view extension_name,
+                          std::string_view type_name,
+                          const TypeParameters &parameters, MEM_ROOT &mem_root,
+                          const TypeContext *&result) {
   result = nullptr;
 
   auto &vclient = VictionaryClient::instance();
   const TypeDescriptor *type_descriptor = nullptr;
+
+  // Hot path (read lock): a TypeContext is created once per (type, parameters)
+  // and afterwards only looked up, so the common case needs no write lock.
+  // Taking the write lock here serialized every statement that binds an
+  // extension function or typed argument (same read-first pattern as
+  // InjectCustomSpParams).
+  {
+    auto read_guard = vclient.get_read_lock();
+    if (resolve_type_descriptor_locked(vclient, extension_name, type_name,
+                                       type_descriptor)) {
+      return true;
+    }
+
+    // The type didn't resolve, which isn't a failure here. It probably is to
+    // the caller, but they will see result is nullptr.
+    if (type_descriptor == nullptr) return false;
+
+    TypeContextKey type_context_key =
+        MakeTypeContextKey(*type_descriptor, parameters);
+    result = vclient.type_contexts().acquire(type_context_key, mem_root);
+    if (result != nullptr) return false;
+  }
+
+  // Cold path (write lock): the TypeContext does not exist yet, or the hot
+  // path could not register it. The descriptor pointer is only valid while a
+  // lock is held, so resolve it again before creating the context.
+  type_descriptor = nullptr;
   auto guard = vclient.get_write_lock();
 
   if (resolve_type_descriptor_locked(vclient, extension_name, type_name,
