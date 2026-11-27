@@ -551,7 +551,8 @@ typedef void (*vef_type_index_scan_end_func_t)(vef_index_cursor_ref_t *cursor);
 
 // One key=value parameter from a WITH (...) clause on a custom index.
 // Both strings are null-terminated. Numeric literal values (e.g. M = 16) are
-// represented as their decimal string ("16").
+// represented as their decimal string ("16"). A decimal or float value is
+// passed as written (k1 = 1.5 gives "1.5").
 typedef struct {
   const char *key;
   const char *value;
