@@ -177,6 +177,16 @@ typedef bool (*vef_index_trx_is_visible_fn)(vef_index_ref_t index_ref,
 typedef bool (*vef_index_trx_is_active_fn)(vef_index_ref_t index_ref,
                                            vef_storage_trx_ref_t trx_ref);
 
+// Return the name (vef_index_profile_reg_t.name) of the index profile bound to
+// the index key column at key_pos, as the extension registered it. key_pos is
+// the 0-based index key column. The string remains valid for the lifetime of
+// the loaded index storage. A profile is always registered by the extension
+// that implements its index type, so the index can map the name to its own
+// implementation of the profile's functions, e.g. a native distance kernel
+// instead of calling helper_fn.
+typedef const char *(*vef_index_profile_name_fn)(vef_index_ref_t index_ref,
+                                                 uint32_t key_pos);
+
 // Index context passed by the server to every extension function. The pointer
 // remains valid for the lifetime of the loaded index storage; the extension
 // may cache it inside its storage or cursor state.
@@ -201,6 +211,9 @@ typedef struct {
 
   // Index profile helper call interface. Always non-NULL.
   vef_index_profile_fn helper_fn;
+
+  // Get the name of the profile bound to an index key column. Always non-NULL.
+  vef_index_profile_name_fn profile_name_fn;
 
   // Get maximum key storage length. Always non-NULL.
   vef_index_max_key_len_fn key_len_fn;
