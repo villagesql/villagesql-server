@@ -1214,7 +1214,7 @@ void CheckIndexProfileFuncNorm() {
   static_assert(d.num_params() != VEF_PARAM_VARARGS,
                 "varargs VDFs are not supported as index profile functions "
                 "or helpers");
-  static_assert(d.bind() == nullptr,
+  static_assert(!d.has_bind(),
                 "index profile function/helper must not use "
                 "bind_and_check_types() -- it is invoked directly, without "
                 "the type-binding step");
