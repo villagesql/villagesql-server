@@ -112,6 +112,11 @@ class Custom_column {
   static bool alter_add_drop_with_extended_storage(
       const Alter_inplace_info *ha_alter_info, const TABLE *table);
 
+  // Reports an error and returns true if table has a column with extended
+  // storage. Called for a table with compressed pages, which extended storage
+  // does not support.
+  static bool check_compressed(const TABLE *table);
+
   // Compare two values using the registered compare implementation.
   int compare(const unsigned char *data1, size_t len1,
               const unsigned char *data2, size_t len2) const;

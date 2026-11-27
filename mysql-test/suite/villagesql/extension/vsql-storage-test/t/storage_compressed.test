@@ -1,0 +1,79 @@
+# A column kept in extension column storage, in a ROW_FORMAT=COMPRESSED table.
+# The first INSERT asserted in buf_page_get_gen() (buf0buf.cc: !found ||
+# page_size.equals_to(space_page_size)) when it loaded a column storage page.
+# Found by pstress (types workload, STORED_INT).
+#
+# Extended column storage does not support compressed pages, so a table with
+# compressed pages and a column with extended storage is refused.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_storage_test;
+
+--echo # CREATE TABLE with compressed pages
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ROW_FORMAT=COMPRESSED;
+SHOW WARNINGS;
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) KEY_BLOCK_SIZE=2;
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT)
+  ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ROW_FORMAT=COMPRESSED
+  PARTITION BY HASH (id) PARTITIONS 2;
+
+--echo # A compressed general tablespace
+CREATE TABLESPACE ts1 ADD DATAFILE 'ts1.ibd' FILE_BLOCK_SIZE = 8192;
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT)
+  TABLESPACE ts1 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+DROP TABLESPACE ts1;
+
+--echo # ALTER TABLE to compressed pages. Without an explicit ROW_FORMAT,
+--echo # KEY_BLOCK_SIZE alone makes the table compressed.
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT);
+INSERT INTO t1 VALUES (1, '42');
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 ROW_FORMAT=COMPRESSED;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 ROW_FORMAT=COMPRESSED, ALGORITHM=INPLACE;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 ROW_FORMAT=COMPRESSED, ALGORITHM=COPY;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 KEY_BLOCK_SIZE=4;
+SELECT id, n FROM t1;
+DROP TABLE t1;
+
+--echo # Adding a column with extended storage to a compressed table
+CREATE TABLE t2 (id INT PRIMARY KEY) ROW_FORMAT=COMPRESSED;
+INSERT INTO t2 VALUES (1);
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t2 ADD COLUMN n STORED_INT;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t2 ADD COLUMN n STORED_INT, ALGORITHM=INPLACE;
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t2 ADD COLUMN n STORED_INT, ALGORITHM=COPY;
+SHOW CREATE TABLE t2;
+DROP TABLE t2;
+
+--echo # KEY_BLOCK_SIZE ignored with innodb_strict_mode=OFF: the table is not
+--echo # compressed, so it is allowed
+SET SESSION innodb_strict_mode = OFF;
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT)
+  ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=4;
+SET SESSION innodb_strict_mode = DEFAULT;
+INSERT INTO t1 VALUES (1, '42');
+SELECT id, n FROM t1;
+SELECT ROW_FORMAT FROM INFORMATION_SCHEMA.INNODB_TABLES
+  WHERE NAME = 'test/t1';
+DROP TABLE t1;
+
+--echo # Without compressed pages
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ROW_FORMAT=DYNAMIC;
+INSERT INTO t1 VALUES (1, '42');
+SELECT id, n FROM t1;
+DROP TABLE t1;
+
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

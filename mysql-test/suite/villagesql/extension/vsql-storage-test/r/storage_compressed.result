@@ -1,0 +1,82 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_storage_test;
+# CREATE TABLE with compressed pages
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ROW_FORMAT=COMPRESSED;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+SHOW WARNINGS;
+Level	Code	Message
+Error	3219	ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+Error	1031	Table storage engine for 't1' doesn't have this option
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) KEY_BLOCK_SIZE=2;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT)
+ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ROW_FORMAT=COMPRESSED
+PARTITION BY HASH (id) PARTITIONS 2;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+# A compressed general tablespace
+CREATE TABLESPACE ts1 ADD DATAFILE 'ts1.ibd' FILE_BLOCK_SIZE = 8192;
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT)
+TABLESPACE ts1 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+DROP TABLESPACE ts1;
+# ALTER TABLE to compressed pages. Without an explicit ROW_FORMAT,
+# KEY_BLOCK_SIZE alone makes the table compressed.
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT);
+INSERT INTO t1 VALUES (1, '42');
+ALTER TABLE t1 ROW_FORMAT=COMPRESSED;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+ALTER TABLE t1 ROW_FORMAT=COMPRESSED, ALGORITHM=INPLACE;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+ALTER TABLE t1 ROW_FORMAT=COMPRESSED, ALGORITHM=COPY;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+ALTER TABLE t1 KEY_BLOCK_SIZE=4;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+SELECT id, n FROM t1;
+id	n
+1	42
+DROP TABLE t1;
+# Adding a column with extended storage to a compressed table
+CREATE TABLE t2 (id INT PRIMARY KEY) ROW_FORMAT=COMPRESSED;
+INSERT INTO t2 VALUES (1);
+ALTER TABLE t2 ADD COLUMN n STORED_INT;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+ALTER TABLE t2 ADD COLUMN n STORED_INT, ALGORITHM=INPLACE;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+ALTER TABLE t2 ADD COLUMN n STORED_INT, ALGORITHM=COPY;
+ERROR HY000: ROW_FORMAT=COMPRESSED is not supported for column 'n' with extended storage.
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED
+DROP TABLE t2;
+# KEY_BLOCK_SIZE ignored with innodb_strict_mode=OFF: the table is not
+# compressed, so it is allowed
+SET SESSION innodb_strict_mode = OFF;
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT)
+ROW_FORMAT=DYNAMIC KEY_BLOCK_SIZE=4;
+Warnings:
+Warning	1478	InnoDB: ignoring KEY_BLOCK_SIZE=4 as ROW_FORMAT is not COMPRESSED.
+SET SESSION innodb_strict_mode = DEFAULT;
+INSERT INTO t1 VALUES (1, '42');
+SELECT id, n FROM t1;
+id	n
+1	42
+SELECT ROW_FORMAT FROM INFORMATION_SCHEMA.INNODB_TABLES
+WHERE NAME = 'test/t1';
+ROW_FORMAT
+Dynamic
+DROP TABLE t1;
+# Without compressed pages
+CREATE TABLE t1 (id INT PRIMARY KEY, n STORED_INT) ROW_FORMAT=DYNAMIC;
+INSERT INTO t1 VALUES (1, '42');
+SELECT id, n FROM t1;
+id	n
+1	42
+DROP TABLE t1;
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

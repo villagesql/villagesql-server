@@ -13758,6 +13758,12 @@ bool create_table_info_t::innobase_table_flags() {
     zip_ssize = 0;
   }
 
+  // VillageSQL: extended column storage does not support compressed pages.
+  if (zip_ssize != 0 &&
+      villagesql::innodb::Custom_column::check_compressed(m_form)) {
+    return false;
+  }
+
   if (is_temp) {
     m_flags2 |= DICT_TF2_TEMPORARY;
 
