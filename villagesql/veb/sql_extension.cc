@@ -35,6 +35,7 @@
 #include "sql/lock.h"
 #include "sql/mdl.h"
 #include "sql/protocol_callback.h"
+#include "sql/sp_cache.h"
 #include "sql/sql_backup_lock.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
@@ -978,6 +979,18 @@ bool Sql_cmd_uninstall_extension::execute(THD *thd) {
     return true;
   }
   DEBUG_SYNC_C("uninstall_after_extension_lock");
+
+  // A routine in this session's routine cache keeps references to the
+  // extension's functions and types even after the routine was dropped (for
+  // example by DROP DATABASE): the cache removes an obsolete routine only at
+  // the next lookup of that routine. Such references would make the checks
+  // below report the extension as in use. Clear this session's routine caches
+  // first; they are refilled on the next CALL. Not when running inside a
+  // routine, where clearing would free the routine being executed.
+  if (thd->sp_runtime_ctx == nullptr) {
+    sp_cache_clear(&thd->sp_proc_cache);
+    sp_cache_clear(&thd->sp_func_cache);
+  }
 
   // Start transaction
   const Disable_autocommit_guard autocommit_guard(thd);

@@ -1,0 +1,45 @@
+#
+# Case 1: the reproducer from #1559 (DROP DATABASE of a called routine).
+#
+INSTALL EXTENSION vsql_complex;
+CREATE DATABASE d1;
+CREATE PROCEDURE d1.p(IN c COMPLEX) SELECT complex_real(c) AS r;
+CALL d1.p('(1.0,2.0)');
+r
+1
+DROP DATABASE d1;
+UNINSTALL EXTENSION vsql_complex;
+#
+# Case 2: DROP PROCEDURE and DROP FUNCTION of called routines that use
+# an extension function, then UNINSTALL in the same session.
+#
+INSTALL EXTENSION vsql_complex;
+CREATE PROCEDURE p2() SELECT complex_real('(3.0,4.0)') AS r;
+CREATE FUNCTION f2() RETURNS DOUBLE DETERMINISTIC
+RETURN complex_imag('(3.0,4.0)');
+CALL p2();
+r
+3
+SELECT f2();
+f2()
+4
+DROP PROCEDURE p2;
+DROP FUNCTION f2;
+UNINSTALL EXTENSION vsql_complex;
+#
+# Case 3: a routine that still exists does not block UNINSTALL because
+# it was cached, and it works again after the extension is installed
+# again (the cleared cache is refilled on the next CALL).
+#
+INSTALL EXTENSION vsql_complex;
+CREATE PROCEDURE p3() SELECT complex_real('(5.0,6.0)') AS r;
+CALL p3();
+r
+5
+UNINSTALL EXTENSION vsql_complex;
+INSTALL EXTENSION vsql_complex;
+CALL p3();
+r
+5
+DROP PROCEDURE p3;
+UNINSTALL EXTENSION vsql_complex;
