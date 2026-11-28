@@ -207,7 +207,12 @@ still not implemented on /40.
   scan and the LIMIT needs more rows (window functions, and likely also
   aggregation, DISTINCT, GROUP BY, HAVING; those return correct results in
   this suite).
-- Main returns 8 (PR #1370's test: 5 of 5 rows).
+- Now also seen on main 589e7e43088: the KNN scan returns `1 2` / `4 2`,
+  IGNORE INDEX `1 8` / `4 8`. The bug was on main before, but hidden: the
+  test extension returned every hit and ignored the exact limit. #1651 made it
+  stop at an exact limit, which shows the bug. `knn_limit_is_exact()` in
+  villagesql/sql/optimizer.cc checks DISTINCT (added by #1651) but not window
+  functions.
 - Wrong results, silently.
 
 ## KNN-8: A HAVING clause stops the KNN scan (plan only, rows correct)
