@@ -1,0 +1,26 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_slow_query_log;
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+SET GLOBAL vsql_slow_query_log.encoding_details = ON;
+SET GLOBAL vsql_slow_query_log.log_file = 'MYSQLTEST_VARDIR/tmp/vsql_charset.log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+636166E9
+636166C3A9
+636166C3A9
+CREATE PROCEDURE change_charset(IN label VARCHAR(30)) SET NAMES latin1;
+CALL change_charset('encoding_probe_café');
+SET NAMES utf8mb4;
+DROP PROCEDURE change_charset;
+SELECT missing_column AS encoding_probe_failed;
+ERROR 42S22: Unknown column 'missing_column' in 'field list'
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+latin1_swedish_ci query=53454C454354204845582827636166E9272920415320656E636F64696E675F70726F62655F6C6174696E program_charset=latin1_swedish_ci program=6D7973716C
+latin1_swedish_ci query=534554204E414D455320757466386D6234202F2A20656E636F64696E675F70726F62655F6368616E6765202A2F program_charset=latin1_swedish_ci program=6D7973716C
+utf8mb4_0900_ai_ci query=53454C454354204845582827636166C3A9272920415320656E636F64696E675F70726F62655F75746638 program_charset=latin1_swedish_ci program=6D7973716C
+binary query=53454C454354204845582827636166C3A9272920415320656E636F64696E675F70726F62655F7072657061726564 program_charset=latin1_swedish_ci program=6D7973716C
+binary query=53454C454354204845582827636166C3A9272920415320656E636F64696E675F70726F62655F7072657061726564 program_charset=latin1_swedish_ci program=6D7973716C
+utf8mb4_0900_ai_ci query=43414C4C206368616E67655F636861727365742827656E636F64696E675F70726F62655F636166C3A92729 program_charset=utf8mb4_0900_ai_ci program=6D7973716C74657374
+utf8mb4_0900_ai_ci query=53454C454354206D697373696E675F636F6C756D6E20415320656E636F64696E675F70726F62655F6661696C6564 program_charset=utf8mb4_0900_ai_ci program=6D7973716C74657374
+UNINSTALL EXTENSION vsql_slow_query_log;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

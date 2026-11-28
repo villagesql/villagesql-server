@@ -1,0 +1,50 @@
+# Statement events preserve bytes and the encoding that belongs to those bytes.
+--let $slow_log = $MYSQLTEST_VARDIR/tmp/vsql_charset.log
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_slow_query_log;
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+SET GLOBAL vsql_slow_query_log.encoding_details = ON;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SET GLOBAL vsql_slow_query_log.log_file = '$slow_log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+
+# Write actual latin1 and UTF-8 bytes, independently of the test file's charset.
+--perl
+use strict;
+use warnings;
+open my $f, '>:raw', "$ENV{MYSQLTEST_VARDIR}/tmp/charset_queries.sql" or die $!;
+print $f "SELECT HEX('caf\xE9') AS encoding_probe_latin;\n";
+print $f "SET NAMES utf8mb4 /* encoding_probe_change */;\n";
+print $f "SELECT HEX('caf\xC3\xA9') AS encoding_probe_utf8;\n";
+print $f "PREPARE p FROM \"SELECT HEX('caf\xC3\xA9') AS encoding_probe_prepared\";\n";
+print $f "SET NAMES latin1; EXECUTE p; DEALLOCATE PREPARE p;\n";
+close $f;
+EOF
+--exec $MYSQL --default-character-set=latin1 --comments --batch --skip-column-names < $MYSQLTEST_VARDIR/tmp/charset_queries.sql
+# A stored routine must restore the caller's query metadata as well as its text.
+CREATE PROCEDURE change_charset(IN label VARCHAR(30)) SET NAMES latin1;
+CALL change_charset('encoding_probe_café');
+SET NAMES utf8mb4;
+DROP PROCEDURE change_charset;
+--error ER_BAD_FIELD_ERROR
+SELECT missing_column AS encoding_probe_failed;
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+
+# Show only the marked statements, with raw bytes in hex for portable results.
+--perl
+use strict;
+use warnings;
+open my $f, '<:raw', "$ENV{MYSQLTEST_VARDIR}/tmp/vsql_charset.log" or die $!;
+while (<$f>) {
+  next unless /^# Encoding: (\S+) query=([0-9A-F]*) program_charset=(\S+) program=([0-9A-F]*)/;
+  my ($cs, $hex, $attr_cs, $attr_hex) = ($1, $2, $3, $4);
+  my $query = pack('H*', $hex);
+  next unless $query =~ /encoding_probe/;
+  print "$cs query=$hex program_charset=$attr_cs program=$attr_hex\n";
+}
+EOF
+UNINSTALL EXTENSION vsql_slow_query_log;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+--remove_file $slow_log
+--remove_file $MYSQLTEST_VARDIR/tmp/charset_queries.sql

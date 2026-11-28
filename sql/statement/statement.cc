@@ -1,4 +1,5 @@
 /* Copyright (c) 2023, 2026, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -357,6 +358,7 @@ class PFS_query_text_handler_raii {
     m_thd = thd;
 
     m_saved_query_string = thd->query();
+    m_saved_query_charset = thd->query_charset();
     thd->set_query(new_query->c_str(), new_query->length());
 
     if (thd->rewritten_query().length() > 0) {
@@ -379,7 +381,7 @@ class PFS_query_text_handler_raii {
   }
 
   ~PFS_query_text_handler_raii() {
-    m_thd->set_query(m_saved_query_string);
+    m_thd->set_query(m_saved_query_string, m_saved_query_charset);
 
     if (m_saved_rewritten_query.length() > 0) {
       m_thd->swap_rewritten_query(m_saved_rewritten_query);
@@ -395,6 +397,7 @@ class PFS_query_text_handler_raii {
  private:
   THD *m_thd{nullptr};
   LEX_CSTRING m_saved_query_string;
+  const CHARSET_INFO *m_saved_query_charset;
   String m_saved_rewritten_query;
   bool m_saved_safe_to_display{false};
 };
