@@ -32,3 +32,7 @@ release/0.0.7 vsql-cube 0.0.8
 # vsql-vector main moved to the extended preview index_builder API
 # (villagesql-server #1472–#1484, vsql-vector #85–#90), which 0.0.8 lacks.
 release/0.0.8 vsql-vector 0.0.1
+
+# vsql-rest main expects a sys_var value longer than 1024 bytes to be read in
+# full (vsql-rest#33, villagesql-server #1674), which 0.0.8 lacks.
+release/0.0.8 vsql-rest 0.0.12
