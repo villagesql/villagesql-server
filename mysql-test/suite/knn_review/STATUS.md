@@ -35,7 +35,10 @@ Review suite for the custom-index work in PRs #1640 to #1656 (/27 to /43;
   - KNN-23 → #1382
   - KNN-30 → fix in #1675
 - Open, not filed:
-  - KNN-4, 5, 7, 8, 10, 20, 22, 31, 32, 33
+  - KNN-4, 5, 7, 8, 10, 20, 22, 31, 32, 33, 34
+- KNN-7 and KNN-34 (window and DISTINCT under a KNN LIMIT) and KNN-24 share
+  a cause: with HNSW, the scan returns at most LIMIT entries even when the
+  server marks the limit not exact (#1398).
 - Known behaviour, tuning planned: KNN-27 (with HNSW, after purge a KNN query
   can return wrong rows or too few rows; also with 8 rows, about one round in
   20 to 60 of delete/hnsw_purge_locking_stress). delete/hnsw_purge_locking
