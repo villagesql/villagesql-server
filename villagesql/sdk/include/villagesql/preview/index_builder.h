@@ -451,6 +451,13 @@ class Index {
                                     ERROR_MSG_SIZE);
   }
 
+  // Returns the name the bound profile was registered with in
+  // make_index_profile(), for the key column at key_pos. The index can use it
+  // to pick its own implementation of the profile's functions.
+  const char *profile_name(uint32_t key_pos) const {
+    return ctx_->profile_name_fn(ctx_->index_ref, key_pos);
+  }
+
   // Checks whether the key column at key_pos is sorted in descending order.
   bool is_key_desc(uint32_t key_pos) const {
     return ctx_->key_is_desc_fn(ctx_->index_ref, key_pos);

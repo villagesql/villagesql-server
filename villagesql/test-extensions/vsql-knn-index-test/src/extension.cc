@@ -450,6 +450,9 @@ using IdxCtx = Index::StorageCtx<KVecIndexCtx>;
 static std::atomic<long long> g_scan_begin_count{0};
 static std::atomic<long long> g_scan_fetch_count{0};
 static std::atomic<long long> g_insert_count{0};
+// Scans that ranked entries with the index's own distance code, picked by
+// the bound profile's name, instead of calling the profile's helper.
+static std::atomic<long long> g_native_scan_count{0};
 // Number of entries currently held by all indexes, delete-marked ones included.
 // Not reset: insert, purge and drop keep it exact.
 static std::atomic<long long> g_entry_count{0};
@@ -702,6 +705,14 @@ static bool kvec_ref_purge(IdxCtx *ctx, const Index & /*index*/,
   return false;
 }
 
+// The kvec_native index type has an L2 and a cosine profile. Its scan reads
+// the bound profile's name and computes that metric itself (see kvec_begin),
+// which is how an index replaces per-call helper dispatch with its own kernel.
+// Other profiles rank through the profile's distance helper.
+static constexpr const char kKVecIndexNative[] = "kvec_native";
+static constexpr const char kKVecProfileNativeL2[] = "kvec_profile_native_l2";
+static constexpr const char kKVecProfileNativeCos[] = "kvec_profile_native_cos";
+
 // fn_id the L2 distance helper is registered under (with_helper<...>(1)).
 static constexpr uint32_t kDistanceHelperFnId = 1;
 // fn_id of the ORDER profile function (with_function<...>(1, Order)); a KNN
@@ -729,7 +740,24 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
   // The query key is a full persisted KVECTOR value [ref placeholder][floats].
   const IndexScanKey::KeyPartData &query = scan_key[0];
 
-  // Rank every stored col_ref by exact L2 distance, computed by dispatching the
+  double (*native_distance)(const unsigned char *, const unsigned char *) =
+      nullptr;
+  const char *profile_name = index.profile_name(kKeyPos);
+  if (strcmp(profile_name, kKVecProfileNativeL2) == 0) {
+    native_distance = l2_distance_floats;
+  } else if (strcmp(profile_name, kKVecProfileNativeCos) == 0) {
+    native_distance = cosine_distance_floats;
+  }
+  if (native_distance != nullptr) {
+    if (query.length < kFieldSize) {
+      snprintf(err, err_len, "kvec_l2: query key too short");
+      return true;
+    }
+    ++g_native_scan_count;
+  }
+
+  // Rank every stored col_ref by exact distance. A kvec_native profile's
+  // metric is computed here; otherwise it is computed by dispatching the
   // registered profile HELPER VDF (index.helper) -- exercising the real
   // protocol-3 profile dispatch on server-resolved column data.
   struct Hit {
@@ -784,7 +812,15 @@ static bool kvec_begin(IdxCtx *ctx, const Index &index, MtrCtx::Ref /*mctx*/,
     // helper_fn an error return is a separate ABI change; until then a failing
     // helper silently corrupts the ordering.
     double d = 0.0;
-    index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
+    if (native_distance != nullptr) {
+      if (raw.length < kFieldSize) {
+        snprintf(err, err_len, "kvec_l2: stored value too short");
+        return true;
+      }
+      d = native_distance(query.data + kRefSize, stored.data() + kRefSize);
+    } else {
+      index.helper<double>(kKeyPos, kDistanceHelperFnId, &d, query, stored_val);
+    }
     hits.push_back(Hit{entry.ref, &entry.pkey, entry.key_ref, entry.trx,
                        entry.delete_trx, d});
   }
@@ -1047,6 +1083,36 @@ static constexpr auto KVEC_STORE_COS_INDEX =
         .build();
 // clang-format on
 
+// clang-format off
+static constexpr auto KVEC_STORE_NATIVE_INDEX =
+    make_index_type<kKVecIndexNative, KVecIndexCtx>()
+        .lifecycle()
+            .create<&kvec_create>()
+            .load<&kvec_load>()
+            .drop<&kvec_drop>()
+
+        .dml()
+            .insert<&kvec_insert>()
+            .mark_delete<&kvec_mark_delete>()
+            .purge<&kvec_purge>()
+
+        .scan()
+            .begin<&kvec_begin>()
+            .position<&kvec_position>()
+            .fetch<&kvec_fetch>()
+            .validate<&kvec_validate>()
+            .save<&kvec_save>()
+            .restore<&kvec_restore>()
+            .end<&kvec_end>()
+
+        .global()
+            .capabilities(Index::Support::KNN)
+            .storage_props(Index::Storage::HAS_COLUMN_REF |
+                           Index::Storage::HAS_ROW_REF)
+
+        .build();
+// clang-format on
+
 // ============================================================================
 // Distance function + profile
 // ============================================================================
@@ -1071,6 +1137,9 @@ static void kvec_l2_distance_fn(vsql::CustomArg a, vsql::CustomArg b,
 static void kvec_scan_begin_count(vsql::IntResult out) {
   out.set(g_scan_begin_count.load());
 }
+static void kvec_native_scan_count(vsql::IntResult out) {
+  out.set(g_native_scan_count.load());
+}
 static void kvec_scan_fetch_count(vsql::IntResult out) {
   out.set(g_scan_fetch_count.load());
 }
@@ -1089,6 +1158,7 @@ static void kvec_reset_counters(vsql::IntResult out) {
   g_scan_begin_count.store(0);
   g_scan_fetch_count.store(0);
   g_insert_count.store(0);
+  g_native_scan_count.store(0);
   out.set(0);
 }
 
@@ -1189,6 +1259,24 @@ static const auto KVEC_COS_PROFILE =
         .ordering(Index::Ordering::ASC)
         .build();
 
+static const auto KVEC_NATIVE_L2_PROFILE =
+    make_index_profile(kKVecProfileNativeL2)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexNative)
+        .with_function<KVEC_L2_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_L2_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
+static const auto KVEC_NATIVE_COS_PROFILE =
+    make_index_profile(kKVecProfileNativeCos)
+        .for_type(kKVectorType)
+        .using_index(kKVecIndexNative)
+        .with_function<KVEC_COS_FN>(1, FunctionKind::Order)
+        .with_helper<KVEC_COS_HELPER_FN>(1)
+        .ordering(Index::Ordering::ASC)
+        .build();
+
 // ============================================================================
 // Extension entry point
 // ============================================================================
@@ -1199,11 +1287,14 @@ static auto COLUMN_STORE =
 static auto INDEX_TYPE = IndexTypeCapability()
                              .index_type(KVEC_STORE_INDEX)
                              .index_type(KVEC_STORE_REF_INDEX)
-                             .index_type(KVEC_STORE_COS_INDEX);
+                             .index_type(KVEC_STORE_COS_INDEX)
+                             .index_type(KVEC_STORE_NATIVE_INDEX);
 static auto INDEX_PROFILE = IndexProfileCapability()
                                 .index_profile(KVEC_L2_PROFILE)
                                 .index_profile(KVEC_L2_REF_PROFILE)
-                                .index_profile(KVEC_COS_PROFILE);
+                                .index_profile(KVEC_COS_PROFILE)
+                                .index_profile(KVEC_NATIVE_L2_PROFILE)
+                                .index_profile(KVEC_NATIVE_COS_PROFILE);
 
 using namespace vsql;
 
@@ -1224,6 +1315,10 @@ VEF_GENERATE_ENTRY_POINTS(
                   .no_params()
                   .build())
         .func(make_func<&kvec_scan_fetch_count>("kvec_scan_fetch_count")
+                  .returns(INT)
+                  .no_params()
+                  .build())
+        .func(make_func<&kvec_native_scan_count>("kvec_native_scan_count")
                   .returns(INT)
                   .no_params()
                   .build())

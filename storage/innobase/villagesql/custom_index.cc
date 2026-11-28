@@ -208,6 +208,12 @@ static void vef_index_helper_fn_impl(vef_index_ref_t index_ref,
                         &IndexProfileDescriptor::helpers, args, nargs, result);
 }
 
+static const char *vef_index_profile_name_impl(vef_index_ref_t index_ref,
+                                               uint32_t key_pos) {
+  const auto *index = static_cast<const dict_index_t *>(index_ref);
+  return index->custom_index->profile_for_key(key_pos)->profile_name().c_str();
+}
+
 // Maximum storage length in bytes for the key_pos'th column.
 static uint32_t vef_index_max_key_len_impl(vef_index_ref_t index_ref,
                                            uint32_t key_pos, bool is_primary) {
@@ -431,6 +437,7 @@ static dberr_t init_index_ctx(dict_index_t *index) {
   ctx->num_primary_key_columns = primary_key_columns(index);
   ctx->profile_fn = vef_index_profile_fn_impl;
   ctx->helper_fn = vef_index_helper_fn_impl;
+  ctx->profile_name_fn = vef_index_profile_name_impl;
   ctx->key_len_fn = vef_index_max_key_len_impl;
   ctx->trx_is_visible_fn = vef_index_trx_is_visible_impl;
   ctx->trx_is_active_fn = vef_index_trx_is_active_impl;
