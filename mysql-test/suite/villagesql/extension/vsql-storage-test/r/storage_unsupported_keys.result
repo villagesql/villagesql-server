@@ -1,0 +1,51 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_storage_test;
+CREATE TABLE t1 (id INT PRIMARY KEY, grp INT, n STORED_INT);
+INSERT INTO t1 VALUES
+(1, 1, '10'), (2, 1, '20'), (3, 2, '10'), (4, 2, NULL), (5, 3, '30');
+CREATE TABLE t2 (id INT PRIMARY KEY, n STORED_INT);
+INSERT INTO t2 VALUES (1, '10'), (2, '40');
+#
+# In memory
+#
+SET SESSION big_tables = OFF;
+SELECT DISTINCT n FROM t1;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SELECT n, COUNT(*) FROM t1 GROUP BY n;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SELECT n FROM t1 UNION SELECT n FROM t2;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SELECT n FROM t1 INTERSECT SELECT n FROM t2;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SELECT n FROM t1 EXCEPT SELECT n FROM t2;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+#
+# On disk (InnoDB intrinsic)
+#
+SET SESSION big_tables = ON;
+SELECT DISTINCT n FROM t1;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SELECT n, COUNT(*) FROM t1 GROUP BY n;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SELECT n FROM t1 UNION SELECT n FROM t2;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SELECT n FROM t1 INTERSECT SELECT n FROM t2;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SELECT n FROM t1 EXCEPT SELECT n FROM t2;
+ERROR HY000: Type 'vsql_storage_test.STORED_INT' uses column storage, so its values cannot be grouped or deduplicated (GROUP BY, DISTINCT, UNION, INTERSECT, EXCEPT).
+SET SESSION big_tables = DEFAULT;
+#
+# Ordinary indexes on a column-store column
+#
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, KEY (n));
+ERROR HY000: InnoDB: Indexing for types with column storage is supported only with custom index.
+CREATE TABLE t3 (id INT PRIMARY KEY, n STORED_INT, UNIQUE KEY (n));
+ERROR HY000: InnoDB: Indexing for types with column storage is supported only with custom index.
+CREATE INDEX idx_n ON t1 (n);
+ERROR HY000: InnoDB: Indexing for types with column storage is supported only with custom index.
+CREATE TEMPORARY TABLE t3 (id INT PRIMARY KEY, n STORED_INT, KEY (n));
+ERROR HY000: InnoDB: Indexing for types with column storage is supported only with custom index.
+DROP TABLE t1, t2;
+UNINSTALL EXTENSION vsql_storage_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
