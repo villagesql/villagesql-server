@@ -64,6 +64,33 @@ id
 5
 1
 4
+#
+# A parameter KVECTOR rejects as a bad value (wrong element count) fails
+# with the parameter's error through the distance scan, as without the
+# index. A non-number fails both ways too: with the parameter's error
+# without the index, and with the extension's own error through the scan.
+#
+PREPARE pi FROM 'SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+SET @q = '[1,2,3]';
+EXECUTE pi USING @q;
+ERROR HY000: Incorrect vsql_knn_index_test.kvector value: '[1,2,3]' for parameter '?'
+EXECUTE p USING @q;
+ERROR HY000: Incorrect vsql_knn_index_test.kvector value: '[1,2,3]' for parameter '?'
+SET @q = '[1,x,0,0]';
+EXECUTE pi USING @q;
+ERROR HY000: Incorrect vsql_knn_index_test.kvector value: '[1,x,0,0]' for parameter '?'
+EXECUTE p USING @q;
+ERROR HY000: kvector: expected a number
+DEALLOCATE PREPARE pi;
+#
+# The statement still routes and answers correctly after the errors.
+#
+SET @q = '[1,0,0,0]';
+EXECUTE p USING @q;
+id
+1
+4
+5
 DEALLOCATE PREPARE p;
 DEALLOCATE PREPARE pe;
 DROP TABLE t;

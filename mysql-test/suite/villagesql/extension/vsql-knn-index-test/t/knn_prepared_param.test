@@ -59,6 +59,31 @@ EXECUTE p USING @q;
 SET @q = '[3,0,0,0]';
 EXECUTE p USING @q;
 
+--echo #
+--echo # A parameter KVECTOR rejects as a bad value (wrong element count) fails
+--echo # with the parameter's error through the distance scan, as without the
+--echo # index. A non-number fails both ways too: with the parameter's error
+--echo # without the index, and with the extension's own error through the scan.
+--echo #
+PREPARE pi FROM 'SELECT id FROM t IGNORE INDEX (idx_v) ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ?) LIMIT 3';
+SET @q = '[1,2,3]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE pi USING @q;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE p USING @q;
+SET @q = '[1,x,0,0]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE pi USING @q;
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE p USING @q;
+DEALLOCATE PREPARE pi;
+
+--echo #
+--echo # The statement still routes and answers correctly after the errors.
+--echo #
+SET @q = '[1,0,0,0]';
+EXECUTE p USING @q;
+
 DEALLOCATE PREPARE p;
 DEALLOCATE PREPARE pe;
 
