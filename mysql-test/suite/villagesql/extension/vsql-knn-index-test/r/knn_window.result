@@ -1,0 +1,59 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+(30, '[1,0,0,0]'),
+(10, '[0,2,0,0]'),
+(20, '[0,0,3,0]'),
+(4, '[4,0,0,0]'),
+(5, '[0,0,0,5]');
+# A distance expression used as a window sort key.
+SELECT id,
+ROW_NUMBER() OVER (
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')) AS rn
+FROM t ORDER BY id;
+id	rn
+4	4
+5	5
+10	2
+20	3
+30	1
+# The window sees all input rows before the outer KNN ORDER BY and LIMIT.
+SELECT id, COUNT(*) OVER () AS total
+FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 2;
+id	total
+30	5
+10	5
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS scan_begins;
+scan_begins
+1
+SELECT vsql_knn_index_test.kvec_scan_fetch_count() AS scan_fetches;
+scan_fetches
+5
+# A window over the rows returned by an indexed KNN derived table.
+SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+FROM (
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 4
+) AS nearest
+ORDER BY id;
+id	rn
+4	1
+10	2
+20	3
+30	4
+SELECT vsql_knn_index_test.kvec_scan_begin_count() AS scan_begins;
+scan_begins
+1
+SELECT vsql_knn_index_test.kvec_scan_fetch_count() AS scan_fetches;
+scan_fetches
+4
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;
