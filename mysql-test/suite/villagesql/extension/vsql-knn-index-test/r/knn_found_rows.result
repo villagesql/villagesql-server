@@ -1,0 +1,97 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id  INT PRIMARY KEY,
+grp INT,
+v   KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+# Nearest first: 1, 2, 3, 4, 5.
+INSERT INTO t VALUES
+(1, 10, '[1,0,0,0]'),
+(2, 10, '[2,0,0,0]'),
+(3, 20, '[3,0,0,0]'),
+(4, 20, '[4,0,0,0]'),
+(5, 30, '[5,0,0,0]');
+# --- FOUND_ROWS() counts all 5 rows, not the 2 returned ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT SQL_CALC_FOUND_ROWS id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+id
+1
+2
+Warnings:
+Warning	1287	SQL_CALC_FOUND_ROWS is deprecated and will be removed in a future release. Consider using two separate queries instead.
+SELECT FOUND_ROWS();
+FOUND_ROWS()
+5
+Warnings:
+Warning	1287	FOUND_ROWS() is deprecated and will be removed in a future release. Consider using COUNT(*) instead.
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+knn_scans
+0
+SELECT SQL_CALC_FOUND_ROWS id FROM t IGNORE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+id
+1
+2
+Warnings:
+Warning	1287	SQL_CALC_FOUND_ROWS is deprecated and will be removed in a future release. Consider using two separate queries instead.
+SELECT FOUND_ROWS();
+FOUND_ROWS()
+5
+Warnings:
+Warning	1287	FOUND_ROWS() is deprecated and will be removed in a future release. Consider using COUNT(*) instead.
+# --- With an OFFSET: still 5 ---
+SELECT SQL_CALC_FOUND_ROWS id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 2 OFFSET 1;
+id
+2
+3
+Warnings:
+Warning	1287	SQL_CALC_FOUND_ROWS is deprecated and will be removed in a future release. Consider using two separate queries instead.
+SELECT FOUND_ROWS();
+FOUND_ROWS()
+5
+Warnings:
+Warning	1287	FOUND_ROWS() is deprecated and will be removed in a future release. Consider using COUNT(*) instead.
+SELECT SQL_CALC_FOUND_ROWS id FROM t IGNORE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 2 OFFSET 1;
+id
+2
+3
+Warnings:
+Warning	1287	SQL_CALC_FOUND_ROWS is deprecated and will be removed in a future release. Consider using two separate queries instead.
+SELECT FOUND_ROWS();
+FOUND_ROWS()
+5
+Warnings:
+Warning	1287	FOUND_ROWS() is deprecated and will be removed in a future release. Consider using COUNT(*) instead.
+# --- A prepared statement, run twice ---
+PREPARE s FROM 'SELECT SQL_CALC_FOUND_ROWS id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ''[0,0,0,0]'') LIMIT 2';
+Warnings:
+Warning	1287	SQL_CALC_FOUND_ROWS is deprecated and will be removed in a future release. Consider using two separate queries instead.
+EXECUTE s;
+id
+1
+2
+SELECT FOUND_ROWS();
+FOUND_ROWS()
+5
+Warnings:
+Warning	1287	FOUND_ROWS() is deprecated and will be removed in a future release. Consider using COUNT(*) instead.
+EXECUTE s;
+id
+1
+2
+SELECT FOUND_ROWS();
+FOUND_ROWS()
+5
+Warnings:
+Warning	1287	FOUND_ROWS() is deprecated and will be removed in a future release. Consider using COUNT(*) instead.
+DEALLOCATE PREPARE s;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

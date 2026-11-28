@@ -1,0 +1,58 @@
+# SQL_CALC_FOUND_ROWS counts all rows the query would return without LIMIT,
+# so the limit of a KNN scan under it is not exact.
+#
+# The optimizer drops the LIMIT when SQL_CALC_FOUND_ROWS is set, and a KNN
+# scan needs a LIMIT, so the query does not use the KNN scan (knn_scans is 0).
+# If it did and the server claimed an exact limit, FOUND_ROWS() would count
+# only the rows the scan returned. Each query also runs with the index
+# ignored; both have to give the same count.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+CREATE TABLE t (
+  id  INT PRIMARY KEY,
+  grp INT,
+  v   KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+  USING EXTENDED(vsql_knn_index_test.kvec_l2);
+
+--echo # Nearest first: 1, 2, 3, 4, 5.
+INSERT INTO t VALUES
+  (1, 10, '[1,0,0,0]'),
+  (2, 10, '[2,0,0,0]'),
+  (3, 20, '[3,0,0,0]'),
+  (4, 20, '[4,0,0,0]'),
+  (5, 30, '[5,0,0,0]');
+
+--echo # --- FOUND_ROWS() counts all 5 rows, not the 2 returned ---
+SET @begins = vsql_knn_index_test.kvec_scan_begin_count();
+SELECT SQL_CALC_FOUND_ROWS id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+SELECT FOUND_ROWS();
+SELECT vsql_knn_index_test.kvec_scan_begin_count() - @begins AS knn_scans;
+SELECT SQL_CALC_FOUND_ROWS id FROM t IGNORE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]') LIMIT 2;
+SELECT FOUND_ROWS();
+
+--echo # --- With an OFFSET: still 5 ---
+SELECT SQL_CALC_FOUND_ROWS id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 2 OFFSET 1;
+SELECT FOUND_ROWS();
+SELECT SQL_CALC_FOUND_ROWS id FROM t IGNORE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[0,0,0,0]')
+LIMIT 2 OFFSET 1;
+SELECT FOUND_ROWS();
+
+--echo # --- A prepared statement, run twice ---
+PREPARE s FROM 'SELECT SQL_CALC_FOUND_ROWS id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, ''[0,0,0,0]'') LIMIT 2';
+EXECUTE s;
+SELECT FOUND_ROWS();
+EXECUTE s;
+SELECT FOUND_ROWS();
+DEALLOCATE PREPARE s;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -22,6 +22,8 @@ KNOWN_ISSUES = {
     "select_correctness/null_vectors_knn_scan": "KNN-4 A KNN scan skips NULL vectors the plain query fails on",
     "select_correctness/order_function": "KNN-5 A KNN scan ranks by the first ORDER function of the profile",
     "select_correctness/window_under_knn_limit": "KNN-7 A window under a KNN ORDER BY LIMIT sees only LIMIT rows",
+    "select_correctness/hnsw_window_under_knn_limit": "KNN-7 A window under a KNN ORDER BY LIMIT sees only LIMIT rows",
+    "select_correctness/hnsw_distinct_under_knn_limit": "KNN-34 With HNSW, DISTINCT under a KNN ORDER BY LIMIT returns too few rows",
     "select_correctness/hnsw_bad_query_param": "KNN-30 A KNN scan crashes on a prepared statement parameter that is not a valid SVECTOR",
     "select_correctness/svector_read_uncommitted_insert": "KNN-33 A READ UNCOMMITTED read of a row being inserted fetches its SVECTOR from an unset reference",
     "select_plan/having": "KNN-8 A HAVING clause stops the KNN scan",
@@ -2301,6 +2303,36 @@ for hint in ("IGNORE INDEX (idx_v) ", ""):
               error=("ER_VILLAGESQL_GENERIC_ERROR",
                      f"ERROR HY000: Incorrect vsql_vector.SVECTOR(4) value: '{val}' for parameter '?'"))
     t.sql("DEALLOCATE PREPARE p")
+hnsw_uninstall(t)
+tests.append(t)
+
+t = T("select_correctness", "hnsw_window_under_knn_limit", """
+A window under an outer KNN ORDER BY ... LIMIT with an HNSW index
+(vsql-vector): window functions are computed over every row before the ORDER
+BY and LIMIT apply, so COUNT(*) OVER () counts all 8 rows, also with an
+OFFSET. The same queries with the index ignored give the same rows.""")
+hnsw_install(t)
+for hint in ("", "IGNORE INDEX (idx_v) "):
+    t.sql(f"SELECT id, COUNT(*) OVER () AS total FROM t {hint}"
+          f"ORDER BY {HD}(v, '[1,0,0,0]') LIMIT 2",
+          header="id\ttotal", rows=["1\t8", "4\t8"])
+    t.sql(f"SELECT id, COUNT(*) OVER () AS total FROM t {hint}"
+          f"ORDER BY {HD}(v, '[1,0,0,0]') LIMIT 2 OFFSET 1",
+          header="id\ttotal", rows=["4\t8", "8\t8"])
+hnsw_uninstall(t)
+tests.append(t)
+
+t = T("select_correctness", "hnsw_distinct_under_knn_limit", """
+DISTINCT under a KNN ORDER BY ... LIMIT with an HNSW index (vsql-vector).
+Row 9 has the same group and vector as row 1, so DISTINCT collapses them and
+the 3 distinct rows come from the 4 nearest rows: groups 1, 2 and 2. The same
+query with the index ignored gives the same rows.""")
+hnsw_install(t)
+t.sql("INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0]')")
+for hint in ("", "IGNORE INDEX (idx_v) "):
+    t.sql(f"SELECT grp FROM (SELECT DISTINCT grp, {HD}(v, '[1,0,0,0]') AS d "
+          f"FROM t {hint}ORDER BY d LIMIT 3) AS nearest ORDER BY grp",
+          header="grp", rows=["1", "2", "2"])
 hnsw_uninstall(t)
 tests.append(t)
 

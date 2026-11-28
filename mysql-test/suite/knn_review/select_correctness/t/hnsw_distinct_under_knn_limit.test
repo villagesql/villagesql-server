@@ -1,0 +1,17 @@
+# DISTINCT under a KNN ORDER BY ... LIMIT with an HNSW index (vsql-vector).
+# Row 9 has the same group and vector as row 1, so DISTINCT collapses them and
+# the 3 distinct rows come from the 4 nearest rows: groups 1, 2 and 2. The same
+# query with the index ignored gives the same rows.
+
+--let $knn_issue = KNN-34 With HNSW, DISTINCT under a KNN ORDER BY LIMIT returns too few rows
+--source suite/knn_review/include/known_issue.inc
+
+INSTALL EXTENSION vsql_vector;
+CREATE TABLE t (id INT PRIMARY KEY, grp INT, pay VARCHAR(10), v SVECTOR(4), KEY k_grp (grp));
+CREATE INDEX idx_v ON t (v) USING EXTENDED(vsql_vector.hnsw);
+INSERT INTO t VALUES (1, 1, 'a', '[1,0,0,0]'), (2, 1, 'b', '[0,1,0,0]'), (3, 2, 'c', '[0,0,2,0]'), (4, 2, 'd', '[1,1,0,0]'), (5, 3, 'e', '[2.5,0,0,0]'), (6, 3, 'f', '[4,0,0,0]'), (7, 1, 'g', '[0,0,0,3]'), (8, 2, 'h', '[1,0,1.2,0]');
+INSERT INTO t VALUES (9, 1, 'i', '[1,0,0,0]');
+SELECT grp FROM (SELECT DISTINCT grp, vsql_vector.l2_distance(v, '[1,0,0,0]') AS d FROM t ORDER BY d LIMIT 3) AS nearest ORDER BY grp;
+SELECT grp FROM (SELECT DISTINCT grp, vsql_vector.l2_distance(v, '[1,0,0,0]') AS d FROM t IGNORE INDEX (idx_v) ORDER BY d LIMIT 3) AS nearest ORDER BY grp;
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_vector;

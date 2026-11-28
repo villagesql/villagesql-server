@@ -131,6 +131,8 @@ whether it restarts the server, and the known issue it skips for.
 | empty_table | A KNN query on a table with no rows returns nothing, and finds rows inserted later. | test ext |  |  |  |
 | filters | A KNN query with a WHERE clause returns the nearest rows that satisfy it, whatever access the WHERE could use: none, the primary key, or the secondary index on grp. | test ext |  |  |  |
 | hnsw_bad_query_param | A KNN query on an HNSW index (vsql-vector) whose query point is a prepared statement parameter fails with the parameter's error when the value is not a valid SVECTOR(4), as it does with the index ignored. | HNSW |  |  | KNN-30 |
+| hnsw_distinct_under_knn_limit | DISTINCT under a KNN ORDER BY ... LIMIT with an HNSW index (vsql-vector). | HNSW |  |  | KNN-34 |
+| hnsw_window_under_knn_limit | A window under an outer KNN ORDER BY ... LIMIT with an HNSW index (vsql-vector): window functions are computed over every row before the ORDER BY and LIMIT apply, so COUNT(*) OVER () counts all 8 rows, also with an OFFSET. | HNSW |  |  | KNN-7 |
 | hypergraph | KNN queries under the hypergraph optimizer return the same rows. | test ext |  |  |  |
 | index_hints | Index hints on a KNN query do not change its rows: FORCE INDEX and IGNORE INDEX on the KNN index, and FORCE INDEX on the primary key. | test ext |  |  |  |
 | larger_table | On a 300-row table, before and after deleting and updating many rows, a KNN query returns rows at the same distances as the query with the index ignored (squared distances, which are integers here, so ties compare equal). | test ext |  |  |  |

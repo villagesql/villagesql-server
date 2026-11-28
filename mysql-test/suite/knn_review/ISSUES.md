@@ -20,7 +20,7 @@ mark the issue fixed here.
 | KNN-4 | A KNN scan skips NULL vectors the plain query fails on (result depends on the plan) | 🔴 open | select_correctness/null_vectors_knn_scan |
 | KNN-5 | A profile can bind more than one ORDER function; a KNN scan then ranks by the first, not the query's | 🔴 open | select_correctness/order_function |
 | KNN-6 | A RANGE_SCAN custom index rejects an equality read with ER 3219 (end range) | 🟡 avoided by #1649: no range read is planned; range reads still unsupported | select_correctness/range_read |
-| KNN-7 | A window function under a KNN ORDER BY ... LIMIT sees only LIMIT rows (wrong result) | 🔴 open | select_correctness/window_under_knn_limit |
+| KNN-7 | A window function under a KNN ORDER BY ... LIMIT sees only LIMIT rows (wrong result) | 🔴 open | select_correctness/window_under_knn_limit, hnsw_window_under_knn_limit |
 | KNN-8 | A HAVING clause stops the KNN scan (plan only, rows correct) | 🔴 open | select_plan/having |
 | KNN-9 | Unlocking a row rejected by WHERE in a READ COMMITTED locking KNN read crashes | 🟢 fixed by #1646 | locking/unlock_row |
 | KNN-10 | CHECK TABLE reports the KNN index corrupt (0 entries) and marks it corrupted | 🔴 open | ddl/check_table |
@@ -47,6 +47,7 @@ mark the issue fixed here.
 | KNN-31 | Purge run again after a restart asserts on the HNSW entry of a row that reused the slot | 🔴 open | delete/hnsw_purge_again_after_restart |
 | KNN-32 | A primary key UPDATE that waits for a lock delete-marks the old row's column store values twice | 🔴 open | locking/hnsw_pk_update_lock_wait_rollback, hnsw_pk_update_lock_wait_commit |
 | KNN-33 | A READ UNCOMMITTED read of a row being inserted fetches its SVECTOR from an unset reference | 🔴 open | select_correctness/svector_read_uncommitted_insert |
+| KNN-34 | With an HNSW index, DISTINCT under a KNN ORDER BY ... LIMIT returns too few rows | 🔴 open | select_correctness/hnsw_distinct_under_knn_limit |
 
 ## Not implemented yet
 
@@ -213,6 +214,17 @@ still not implemented on /40.
   stop at an exact limit, which shows the bug. `knn_limit_is_exact()` in
   villagesql/sql/optimizer.cc checks DISTINCT (added by #1651) but not window
   functions.
+- With HNSW (vsql-vector main eed4503): `COUNT(*) OVER ()` under `LIMIT 2`
+  gives 2, under `LIMIT 2 OFFSET 1` gives 3; expected 8
+  (select_correctness/hnsw_window_under_knn_limit).
+- Adding `!query_block->has_windows()` to `knn_limit_is_exact()` fixes the
+  test extension, which returns every hit when the limit is not exact (tested,
+  not committed). It does not fix HNSW: vsql-vector's `begin()` ignores
+  `is_limit_exact()` and returns at most LIMIT + OFFSET entries. The ABI says
+  only "0 if more rows may be needed"; nothing requires an index to return
+  more. Same root cause as KNN-24 and KNN-34 (#1398, fetch beyond the limit).
+  Not choosing the KNN scan when the query has a window function would fix
+  it for every index.
 - Wrong results, silently.
 
 ## KNN-8: A HAVING clause stops the KNN scan (plan only, rows correct)
@@ -911,3 +923,24 @@ still not implemented on /40.
   and the row is skipped (row0sel.cc, the comment on TRX_ISO_READ_UNCOMMITTED
   readers); the column store fetch has no such check.
 - Expected: the reader skips the row, as for a BLOB not written yet.
+
+## KNN-34: With an HNSW index, DISTINCT under a KNN ORDER BY ... LIMIT returns too few rows
+
+- Seen on: tomas/knn-review-stack-main (main 589e7e43088) with vsql-vector
+  main (eed4503).
+- Repro: HNSW index on the standard 8 rows, plus row 9 with the same group
+  and vector as row 1. `SELECT grp FROM (SELECT DISTINCT grp,
+  vsql_vector.l2_distance(v, '[1,0,0,0]') AS d FROM t ORDER BY d LIMIT 3)
+  AS nearest ORDER BY grp` returns `1 2`; expected `1 2 2`, which is what the
+  same query returns with the index ignored.
+- Cause: #1651 made the server mark the limit not exact under DISTINCT, so
+  the test extension returns every hit and its version
+  (villagesql/extension/vsql-knn-index-test knn_exact_limit) passes.
+  vsql-vector's `begin()` ignores `is_limit_exact()` and returns at most
+  LIMIT entries (here rows 1, 9 and 4); DISTINCT collapses rows 1 and 9.
+  Same root cause as KNN-24 and the HNSW part of KNN-7 (#1398, fetch beyond
+  the limit).
+- Expected: LIMIT distinct rows when the table has them. Either the index
+  returns more entries when the limit is not exact, or the server does not
+  choose the KNN scan under DISTINCT.
+- Wrong results (too few rows), silently.
