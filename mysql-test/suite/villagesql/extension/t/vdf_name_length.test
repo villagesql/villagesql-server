@@ -1,0 +1,5 @@
+# Test installation of extensions with vdf(s) name length greater than
+# 64 characters.
+
+-- error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_name_test;
