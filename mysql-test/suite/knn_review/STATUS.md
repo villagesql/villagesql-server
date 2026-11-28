@@ -1,11 +1,12 @@
-# knn_review: status (2026-11-11)
+# knn_review: status (2026-11-28)
 
 Review suite for the custom-index work in PRs #1640 to #1656 (/27 to /43;
-/11 to /26 are merged as #1471 to #1486).
+/11 to /26 are merged as #1471 to #1486). All of them are merged to main.
 
-- Branch: `tomas/knn-review-stack-40`. It holds #1640 to #1656, the test extension
-  (`villagesql/test-extensions/vsql-knn-index-test`), this suite, temporary
-  table support and helper_fn_name.
+- Branch: `tomas/knn-review-stack-main`, on main 589e7e43088. It holds the
+  test extension (`villagesql/test-extensions/vsql-knn-index-test`), this
+  suite, temporary table support (#1431) and the bound profile's name
+  (#1691).
 - Issues: `ISSUES.md` (KNN-n, NYI-n). It also explains how a test is skipped
   for a known issue and how to run it anyway (`KNN_REVIEW_ALL=1`).
 - Generator: `knn_review_gen.py`. It writes every .test and its .result, with
@@ -17,7 +18,7 @@ Review suite for the custom-index work in PRs #1640 to #1656 (/27 to /43;
   Its KNOWN_ISSUES dict decides which tests skip for which issue.
 - Coverage: `COVERAGE.md`, one row per test (what it checks, index, debug,
   restart, known issue). The generator writes it with the tests.
-- The tests named `hnsw_*` need vsql-vector deb/hnsw_index/35 (cc56eee): build
+- The tests named `hnsw_*` need vsql-vector main (eed4503 or later): build
   it and put `vsql_vector.veb` in the server's veb directory. All the others
   need only the in-tree test extension.
 - Run all suites (debug build):
@@ -35,10 +36,6 @@ Review suite for the custom-index work in PRs #1640 to #1656 (/27 to /43;
   - KNN-30 → fix in #1675
 - Open, not filed:
   - KNN-4, 5, 7, 8, 10, 20, 22, 31, 32, 33
-  - KNN-29: after a restart, purge of HNSW entries deleted before it makes
-    other rows unreachable; every KNN read then returns too few rows. Still
-    on /43 with hnsw /37. Without the restart (delete/hnsw_purge_locking) or
-    with purge before it (delete/hnsw_purge_then_restart) the reads are full.
 - Known behaviour, tuning planned: KNN-27 (with HNSW, after purge a KNN query
   can return wrong rows or too few rows; also with 8 rows, about one round in
   20 to 60 of delete/hnsw_purge_locking_stress). delete/hnsw_purge_locking
@@ -47,6 +44,9 @@ Review suite for the custom-index work in PRs #1640 to #1656 (/27 to /43;
   record). rollback/hnsw_crash_recovery passes.
 - Fixed by #1656: KNN-28 (rollback at recovery of a prepared transaction that
   changed an HNSW index). Its three tests pass.
+- Fixed on vsql-vector main (eed4503): KNN-29 (after a restart, purge of
+  HNSW entries deleted before it made other rows unreachable).
+  delete/hnsw_purge_restart passes.
 - Fixed by vsql-vector #101: KNN-26 (too few rows with most rows deleted and
   not purged). delete/hnsw_many_deleted passes.
 - KNN-12 is fixed on main by #1544 (merged); #1546 follows it.

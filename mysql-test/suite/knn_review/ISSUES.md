@@ -42,7 +42,7 @@ mark the issue fixed here.
 | KNN-26 | With an HNSW index and most rows deleted, a KNN query returns too few rows | 🟢 fixed by vsql-vector #101 | delete/hnsw_many_deleted |
 | KNN-27 | With an HNSW index, after purge a KNN query can return wrong rows or too few rows | 🟡 known purge behaviour, tuning planned | delete/hnsw_purge_scattered, hnsw_purge_locking, hnsw_purge_locking_stress, hnsw_purge_then_restart |
 | KNN-28 | Rollback at recovery of a prepared transaction that changed an HNSW index fails | 🟢 fixed by #1656 | rollback/hnsw_recovery_prepared_rollback, hnsw_recovery_prepared_rollback_insert, hnsw_recovery_prepared_rollback_delete |
-| KNN-29 | After a restart, purge of HNSW entries deleted before it makes other rows unreachable | 🔴 open | delete/hnsw_purge_restart |
+| KNN-29 | After a restart, purge of HNSW entries deleted before it makes other rows unreachable | 🟢 fixed on vsql-vector main | delete/hnsw_purge_restart |
 | KNN-30 | A KNN scan crashes on a prepared statement parameter that is not a valid SVECTOR | 🔴 open, fix in #1675 | select_correctness/hnsw_bad_query_param |
 | KNN-31 | Purge run again after a restart asserts on the HNSW entry of a row that reused the slot | 🔴 open | delete/hnsw_purge_again_after_restart |
 | KNN-32 | A primary key UPDATE that waits for a lock delete-marks the old row's column store values twice | 🔴 open | locking/hnsw_pk_update_lock_wait_rollback, hnsw_pk_update_lock_wait_commit |
@@ -665,6 +665,11 @@ still not implemented on /40.
 
 ## KNN-27: With an HNSW index, after purge a KNN query can return wrong rows or too few rows
 
+- Still seen on main 589e7e43088 with vsql-vector main (eed4503).
+  delete/hnsw_purge_then_restart passed 6 of 6 runs. hnsw_purge_locking
+  failed 1 of 5 runs, and once in a parallel run. hnsw_purge_scattered failed
+  5 of 5 runs with --repeat (it passed once on its own).
+  hnsw_purge_locking_stress fails.
 - Status: known purge behaviour in vsql-vector; Deb plans to tune it. The
   tests stay as regression checks and skip until then.
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
@@ -746,6 +751,8 @@ still not implemented on /40.
 
 ## KNN-29: After a restart, purge of HNSW entries deleted before it makes other rows unreachable
 
+- Fixed on main 589e7e43088 with vsql-vector main (eed4503).
+  delete/hnsw_purge_restart passes (6 of 6 runs).
 - Seen on: tomas/knn-review-stack-40 (deb/custom-index/42 b9315d6) with
   vsql-vector deb/hnsw_index/33 (ce25b42), debug build. Still seen with
   deb/custom-index/43 (851f84b) and deb/hnsw_index/37 (c91f417), which has
@@ -813,6 +820,8 @@ still not implemented on /40.
 
 ## KNN-31: Purge run again after a restart asserts on the HNSW entry of a row that reused the slot
 
+- Still seen on main 589e7e43088 with vsql-vector main (eed4503): the same
+  assertion in 5 of 6 runs of delete/hnsw_purge_again_after_restart.
 - Seen on: tomas/stress-knn-20261125 (main 4de59d0e772 with the /43 stack)
   with vsql-vector deb/hnsw_index/38 (deddb66), debug build. Found by pstress
   (vsql_vector workload): in each of the first three server lives, purge

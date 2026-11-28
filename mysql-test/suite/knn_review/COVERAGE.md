@@ -41,7 +41,7 @@ whether it restarts the server, and the known issue it skips for.
 | hnsw_purge_again_after_restart | A row of a table with an HNSW index (vsql-vector) is deleted and purged, and a row inserted after it reuses its vector slot. | HNSW | yes | yes | KNN-31 |
 | hnsw_purge_locking | Deletes and a vector update on a table with an HNSW index (vsql-vector) are committed while purge is stopped (debug build); then purge runs. | HNSW | yes |  | KNN-27 |
 | hnsw_purge_locking_stress | delete/hnsw_purge_locking 50 times on one server, each round with a new table and index, and with a plain KNN read next to the locking reads. | HNSW | yes |  | KNN-27 |
-| hnsw_purge_restart | Deletes and a vector update on a table with an HNSW index (vsql-vector) are committed while purge is stopped (debug build), and the server is killed before purge runs. | HNSW | yes | yes | KNN-29 |
+| hnsw_purge_restart | Deletes and a vector update on a table with an HNSW index (vsql-vector) are committed while purge is stopped (debug build), and the server is killed before purge runs. | HNSW | yes | yes |  |
 | hnsw_purge_scattered | With an HNSW index (vsql-vector), KNN reads return the nearest rows after scattered deletes and their purge. 100 rows on a line, v = [id,0,0,0]; every 10th row is deleted. | HNSW | yes |  | KNN-27 |
 | hnsw_purge_then_restart | delete/hnsw_purge_restart with purge before the restart instead of after it. | HNSW | yes | yes | KNN-27 |
 | hnsw_stale_link | With an HNSW index (vsql-vector), no link in the graph points at a node slot or a vector slot that purge has freed, or that a later insert has reused for another node. | HNSW | yes |  |  |

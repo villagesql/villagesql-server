@@ -32,3 +32,6 @@ DROP TABLE t;
 UNINSTALL EXTENSION vsql_vector;
 SET GLOBAL innodb_monitor_disable = 'purge_del_mark_records';
 SET GLOBAL innodb_monitor_reset = 'purge_del_mark_records';
+SET GLOBAL innodb_monitor_enable = default;
+SET GLOBAL innodb_monitor_disable = default;
+SET GLOBAL innodb_monitor_reset = default;

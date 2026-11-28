@@ -33,7 +33,6 @@ KNOWN_ISSUES = {
     "locking/hnsw_current_entry_after_change": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_delete": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
     "locking/hnsw_lock_wait_then_vector_update": "KNN-24 With HNSW, entries a locking KNN read rejects use up the LIMIT",
-    "delete/hnsw_purge_restart": "KNN-29 After a restart, purge of HNSW entries deleted before it makes other rows unreachable",
     "delete/hnsw_purge_scattered": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
     "delete/hnsw_purge_locking": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
     "delete/hnsw_purge_then_restart": "KNN-27 With HNSW, after purge a KNN query can return wrong rows or too few rows",
@@ -2901,6 +2900,9 @@ hknn(t, rows=near(reused))
 hnsw_uninstall(t)
 t.sql("SET GLOBAL innodb_monitor_disable = 'purge_del_mark_records'")
 t.sql("SET GLOBAL innodb_monitor_reset = 'purge_del_mark_records'")
+t.sql("SET GLOBAL innodb_monitor_enable = default")
+t.sql("SET GLOBAL innodb_monitor_disable = default")
+t.sql("SET GLOBAL innodb_monitor_reset = default")
 tests.append(t)
 
 t = T("delete", "hnsw_purge_then_restart", """
